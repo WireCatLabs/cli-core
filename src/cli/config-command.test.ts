@@ -396,6 +396,27 @@ describe("config", () => {
     expect(changesAuthorityAt(program)(["config", "set"])).toBe(true)
   })
 
+  it("**a chosen unassigned list replaces the own user's deals**, and setting it says so", async () => {
+    const tool = { ...app, messenger: false }
+    const own = settingsFor(tool)
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), MESSAGING_STORE: join(root, "w.db") }
+    const note = async (name: string, value: string) => {
+      const streams = captureStreams()
+      const argv = ["work", "config", "set", `crm.example-crm:portal.${name}`, value]
+      expect(
+        await run(argv, { app: tool, commands: () => [configCommand(tool, own)] }, { streams, tty: false, env }),
+      ).toBe(0)
+      return [...streams.stdout, ...streams.stderr].join("\n").replace(/\s+/g, " ")
+    }
+    expect(await note("unassigned", "15")).toContain(
+      "copies only these users' deals and leads, in place of the sign-in's own user's (add your own id to keep yours)",
+    )
+    expect(await note("scope", "mine")).toContain(
+      "only the deals and leads of the unassigned users, or of the sign-in's own user while that list is empty",
+    )
+  })
+
   it("**an agent's shell may tighten a permission but never loosen it** (SEC-116)", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }

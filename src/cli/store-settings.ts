@@ -340,10 +340,14 @@ const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
   if (name === "scope")
     return now === "all"
       ? "store-wide — the next sync of that account copies every deal and lead, listing them all again"
-      : "store-wide — the next sync of that account copies only the deals and leads of the sign-in's own user and " +
-          "of the unassigned users, and marks the others deleted here; contacts and companies stay whole"
+      : "store-wide — the next sync of that account copies only the deals and leads of the unassigned users, or " +
+          "of the sign-in's own user while that list is empty, and marks the others deleted here; contacts and " +
+          "companies stay whole"
   if (name === "unassigned")
-    return "store-wide — with scope mine, the next sync also copies the deals and leads of these users"
+    return (
+      "store-wide — with scope mine, the next sync copies only these users' deals and leads, in place of the " +
+      "sign-in's own user's (add your own id to keep yours), and marks the others deleted here"
+    )
   if (name === "activities")
     return now === "on"
       ? "store-wide — the next sync also reads the activities and tasks on the deals and leads it keeps, from the " +

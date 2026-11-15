@@ -128,17 +128,25 @@ it("keeps two portals' contacts of one id apart", async () => {
   expect(await store.crm.count(PORTAL, "person")).toBe(1)
 })
 
-it("skips and names an item whose stage is not stored or whose money the store refuses", async () => {
+it("skips and names an item whose stage is not stored or whose status is not one, and keeps odd money's deal", async () => {
   const store = await open()
   const saved = await store.crm.saveItems(PORTAL, "deal", [
     { externalId: "d1", title: "Unknown stage", pipeline: "p1", stage: "s9" },
     { externalId: "d2", title: "Odd money", pipeline: "p1", stage: "s1", amount: "10", currency: "XXZ" },
     { externalId: "d3", title: "Fine", pipeline: "p1", stage: "s1" },
+    { externalId: "d4", title: "Odd status", pipeline: "p1", stage: "s1", status: "maybe" as "open" },
   ])
-  expect(saved.saved).toBe(1)
+  expect(saved.saved).toBe(2)
   expect(saved.skipped.map(({ externalId, reason }) => [externalId, reason])).toEqual([
     ["d1", "crm.stage-unknown"],
-    ["d2", "crm.item-invalid"],
+    ["d4", "crm.item-invalid"],
+  ])
+  expect(saved.issues).toEqual([
+    {
+      externalId: "d2",
+      reason: "crm.amount-unkept",
+      message: "the CRM's amount 10 XXZ is not kept: the store keeps no amounts in XXZ",
+    },
   ])
 })
 

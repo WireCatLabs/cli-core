@@ -458,7 +458,11 @@ const OTHERS: Entry[] = [
   validation("pipeline.field", "a pipeline needs a name and at least one stage, each named once"),
   ["pipeline.not-found", "not_found", "no stored pipeline has that name or reference"],
   validation("crm.stage-unknown", "a CRM item stands in a stage the store does not hold; it was not kept"),
-  validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a currency it does not keep"),
+  validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a status it does not know"),
+  validation(
+    "crm.amount-unkept",
+    "a CRM deal's amount is in a currency or with decimals the store cannot hold: the deal is kept without it",
+  ),
   validation("crm.pipeline-required", "the CRM has more than one pipeline of the kind; the command names one"),
   validation("field.unknown", "no custom field of the kind has that code or label; `fields list` lists them"),
   validation("field.ambiguous", "more than one custom field has that label; name one by its code"),
@@ -472,7 +476,7 @@ const OTHERS: Entry[] = [
   ),
   validation(
     "crm.unassigned-dropped",
-    "the CRM does not let this sign-in count a user in unassigned as nobody's; that user's deals are not copied",
+    "the CRM does not let this sign-in choose a user in unassigned; that user's deals are not copied",
   ),
   validation(
     "crm.not-reported",

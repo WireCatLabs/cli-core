@@ -97,6 +97,8 @@ export interface CrmPerson {
    * did not say, and the relationships stored stay.
    */
   organizations?: { externalId: string; primary?: boolean; sourceRole?: string | null }[]
+  /** The CRM user the contact is assigned to: under `mine`, one assigned to a user in scope stays with no deal. */
+  assignee?: string | null
 }
 
 /** A CRM company: it becomes an organization of its own, never one matched by name. */
@@ -181,13 +183,15 @@ export interface CrmActivity {
   on: { kind: DealKind; externalId: string }[]
 }
 
-/** The account's scope settings: `also` are the users whose deals the owner counts as nobody's. */
+/** The account's scope settings: `also` are the users whose deals `mine` copies, in place of the sign-in's own. */
 export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
 
 /**
- * Which deals and leads a sync copies: all, or those with no assignee or assigned to the sign-in's own user (`self`)
- * or to one of `also`. Companies and contacts are what the source lists; under `mine`, a contact no kept deal, lead or
- * company names is removed after a sync that narrowed the copy or listed it again. Ids are normalised (`normalCrmUserId`).
+ * Which deals and leads a sync copies: all, or those with no assignee or assigned to one of `also`, or to the
+ * sign-in's own user (`self`) when `also` is empty: a chosen list leaves `self` out unless it names it. Companies and
+ * contacts are what the source lists; under `mine`, a contact no kept deal, lead or company names, and not assigned
+ * to a user in scope, is removed after a sync that narrowed the copy or listed it again. Ids are normalised
+ * (`normalCrmUserId`).
  */
 export type CrmScope = { mode: "all" } | { mode: "mine"; self: string; also: readonly string[] }
 

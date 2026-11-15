@@ -71,7 +71,10 @@ export const deal = v.strictObject({
   external_id: nullableText,
   /** A CRM copy's assignee, the identity `<account>/user/<id>`. */
   assignee: nullableText,
-  /** A CRM copy's own fields by code; a list field's value is its option's label, `option_id` its id. */
+  /**
+   * A CRM copy's own fields by code; a list field's value is its option's label, `option_id` its id. `amount_note` is
+   * WireCat's own note, not a CRM field: the CRM's amount the store could not keep, and why.
+   */
   provider_metadata: v.record(
     v.string(),
     v.strictObject({

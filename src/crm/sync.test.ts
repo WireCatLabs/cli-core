@@ -2,12 +2,14 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { runBudget } from "../background/budget.js"
+import { type RunBudget, runBudget } from "../background/budget.js"
+import type { CrmItem } from "../domain/crm.js"
 import { openCache } from "../store/open.js"
 import { parseCrmSettingValue } from "../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { type CrmSyncOptions, type CrmSyncReport, crmStatus, parseCrmCursor, syncCrm } from "./index.js"
-import { exampleDeal, examplePerson, fakeCrmSource } from "./testing/index.js"
+import type { CrmCallContext } from "./source.js"
+import { exampleDeal, examplePerson, fakeCrmSource, SALES_PIPELINE } from "./testing/index.js"
 
 const stores: MessageStore[] = []
 afterEach(async () => {
@@ -109,7 +111,7 @@ const scoped = async ({ self = "7", removedInChanges = false } = {}) => {
 }
 const dealOf = (report: CrmSyncReport) => report.synced.find(({ kind }) => kind === "deal")
 
-it("copies the own user's, the unassigned users' and nobody's deals by default, and drops one given away", async () => {
+it("copies the unassigned users' and nobody's deals, not the own user's unless named, and drops one given away", async () => {
   const { source, set, sync, deals } = await scoped()
   source().put("deal", exampleDeal("d1", { assignee: "7" }))
   source().put("deal", exampleDeal("d2", { assignee: "9" }))
@@ -117,13 +119,13 @@ it("copies the own user's, the unassigned users' and nobody's deals by default, 
   source().put("deal", exampleDeal("d4"))
   await set("unassigned", "15")
   expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15"] })
-  expect(await deals()).toEqual(["d1", "d3", "d4"])
-  source().put("deal", exampleDeal("d1", { assignee: "9" }))
-  expect(dealOf(await sync())).toMatchObject({ round: "changes", outOfScope: 1 })
   expect(await deals()).toEqual(["d3", "d4"])
-  source().put("deal", exampleDeal("d1", { assignee: "7" }))
+  source().put("deal", exampleDeal("d3", { assignee: "9" }))
+  expect(dealOf(await sync())).toMatchObject({ round: "changes", outOfScope: 1 })
+  expect(await deals()).toEqual(["d4"])
+  source().put("deal", exampleDeal("d3", { assignee: "15" }))
   await sync()
-  expect(await deals()).toEqual(["d1", "d3", "d4"])
+  expect(await deals()).toEqual(["d3", "d4"])
 })
 
 it("copies no deal of an unassigned user the CRM refuses, says so, and narrows once it does", async () => {
@@ -141,7 +143,7 @@ it("copies no deal of an unassigned user the CRM refuses, says so, and narrows o
     }),
   })
   expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["9", "15"] })
-  expect(await deals()).toEqual(["d1", "d2", "d3"])
+  expect(await deals()).toEqual(["d2", "d3"])
 
   refused = ["9"]
   const report = await sync()
@@ -149,9 +151,9 @@ it("copies no deal of an unassigned user the CRM refuses, says so, and narrows o
   expect(report.issues).toContainEqual({
     kind: "deal",
     reason: "crm.unassigned-dropped",
-    message: `${KEY}.unassigned names user 9, not counted as nobody's: an active employee; their deals and leads are not copied`,
+    message: `${KEY}.unassigned names user 9, not chosen: an active employee; their deals and leads are not copied`,
   })
-  expect(await deals()).toEqual(["d1", "d3"])
+  expect(await deals()).toEqual(["d3"])
 })
 
 it("narrows in the store with no list from the CRM, widens by a full round, and keeps confirmed links", async () => {
@@ -215,8 +217,8 @@ it("takes user ids however the CRM or the owner spells them", async () => {
   source().put("deal", exampleDeal("d1", { assignee: "7" }))
   source().put("deal", exampleDeal("d2", { assignee: "0015" }))
   source().put("deal", exampleDeal("d3", { assignee: "9" }))
-  await set("unassigned", "015")
-  expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15"] })
+  await set("unassigned", "015,07")
+  expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15", "7"] })
   expect(await deals()).toEqual(["d1", "d2"])
 })
 
@@ -346,7 +348,7 @@ it("store status gives each deal and lead kind its saved scope and the one its c
   expect((await scopes()).deal).toEqual({
     setting: "mine",
     explicit: true,
-    applied: { mode: "mine", users: ["15", "7"] },
+    applied: { mode: "mine", users: ["15"] },
   })
 })
 
@@ -384,4 +386,182 @@ it("takes a scope of mine or all and the CRM's user ids as unassigned", () => {
     expect(() => parseCrmSettingValue("unassigned", value as string)).toThrow(
       `numeric user ids, comma-separated: not "${bad}"`,
     )
+})
+
+it("keeps a deal whose money the store cannot hold, with no amount, and says why on the deal and in the answer", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-money-")), "store.db") })
+  stores.push(store)
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "EUR" }))
+  source.put("deal", exampleDeal("brl", { amount: "100", currency: "BRL" }))
+  source.put("deal", exampleDeal("jpy", { amount: "1500.5", currency: "JPY" }))
+  source.put("deal", exampleDeal("usd", { amount: "12.345", currency: "USD" }))
+  source.put("deal", exampleDeal("big", { amount: "1234567890123456", currency: "USD" }))
+  source.put("deal", exampleDeal("neg", { amount: "-5", currency: "USD" }))
+  const report = await syncCrm(source, store, PORTAL)
+  const money = async () =>
+    Object.fromEntries(
+      (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map((one) => [
+        one.externalId,
+        [one.amount, one.currency, one.providerMetadata.amount_note?.value ?? null],
+      ]),
+    )
+  expect(await money()).toEqual({
+    eur: ["100.50", "EUR", null],
+    brl: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 100 BRL is not kept: the store keeps no amounts in BRL$/),
+    ],
+    jpy: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 1500\.5 JPY is not kept: it has more decimals than JPY has$/),
+    ],
+    usd: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 12\.345 USD is not kept: it has more decimals than USD has$/),
+    ],
+    big: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 1234567890123456 USD is not kept: it is too large to keep exactly$/),
+    ],
+    neg: [null, null, "the CRM's amount -5 USD is not kept: it is below zero"],
+  })
+  expect(report.issues.filter(({ reason }) => reason === "crm.item-invalid")).toEqual([])
+  expect(
+    report.issues.filter(({ reason }) => reason === "crm.amount-unkept").map(({ externalId }) => externalId),
+  ).toEqual(["brl", "jpy", "usd", "big", "neg"])
+
+  source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "BRL" }))
+  await syncCrm(source, store, PORTAL)
+  expect((await money()).eur).toEqual([null, null, expect.stringMatching(/100\.50 BRL is not kept/)])
+})
+
+it("reads again a page whose deal in a new stage was skipped because the budget ran out before the pipelines", async () => {
+  for (const pageSize of [10, 2]) {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-stage-cut-")), "store.db") })
+    stores.push(store)
+    const source = fakeCrmSource({ pageSize })
+    source.put("deal", exampleDeal("d1"))
+    source.put("deal", exampleDeal("d2", { stage: "extra" }))
+    source.put("deal", exampleDeal("d3"))
+    let refusing = false
+    const changes = source.changes.bind(source)
+    source.changes = (async (kind, cursor, page, context) => {
+      const answer = await changes(kind, cursor, page, context)
+      if (kind === "deal" && page === undefined) refusing = true
+      return answer
+    }) as typeof source.changes
+    let used = 0
+    const budget: RunBudget = {
+      take: () => {
+        if (refusing) return "requests"
+        used += 1
+        return null
+      },
+      get used() {
+        return used
+      },
+      limit: null,
+      stopped: null,
+    }
+    const cut = await syncCrm(source, store, PORTAL, { budget })
+    expect(cut.issues.find(({ externalId }) => externalId === "d2")?.reason).toBe("crm.stage-unknown")
+
+    source.changes = changes
+    const extra = { externalId: "extra", name: "Extra", position: 5, outcome: "open" as const }
+    source.setPipelines("deal", [{ ...SALES_PIPELINE, stages: [...SALES_PIPELINE.stages, extra] }])
+    await syncCrm(source, store, PORTAL)
+    const listed = (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map(({ externalId }) => externalId)
+    expect([pageSize, listed.sort()]).toEqual([pageSize, ["d1", "d2", "d3"]])
+  }
+})
+
+/**
+ * Lists deals as b24 does under mine (bitrix24-cli src/crm/source.ts `chosenOf`): only the chosen users' ids, and no
+ * changed row of the sign-in's own user unless chosen. The chosen are the `unassigned` users, else the own user.
+ */
+const filteredLikeB24 = (source: ReturnType<typeof fakeCrmSource>) => {
+  const chosen = (context: CrmCallContext | undefined) =>
+    context?.scope?.mode === "mine" ? (context.scope.also.length ? context.scope.also : [context.scope.self]) : null
+  const ids = source.ids?.bind(source) as NonNullable<typeof source.ids>
+  const changes = source.changes.bind(source)
+  const assignees = new Map<string, string | null | undefined>()
+  const put = source.put.bind(source)
+  source.put = ((kind, record) => {
+    if (kind === "deal") assignees.set(record.externalId, (record as CrmItem).assignee)
+    put(kind, record)
+  }) as typeof source.put
+  const kept = (users: readonly string[] | null, id: string) => {
+    const assignee = assignees.get(id)
+    return users === null || assignee == null || users.includes(assignee)
+  }
+  source.ids = async (kind, page, context) => {
+    const listed = await ids(kind, page, context)
+    const users = kind === "deal" ? chosen(context) : null
+    return { ...listed, items: listed.items.filter((id) => kept(users, id)) }
+  }
+  source.changes = (async (kind, cursor, page, context) => {
+    const listed = await changes(kind, cursor, page, context)
+    const users = kind === "deal" ? chosen(context) : null
+    if ("reset" in listed || users === null) return listed
+    return { ...listed, items: listed.items.filter((item) => kept(users, (item as CrmItem).externalId)) }
+  }) as typeof source.changes
+}
+
+it("a held narrowing on a small copy is not undone by the same run's id pass, which lists only the scope's ids", async () => {
+  const { source, set, raw, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d3", "d4", "d5", "d6"]) source().put("deal", exampleDeal(id, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  await raw("scope", undefined)
+  const held = dealOf(await sync({ passEvery: 0 }))
+  expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
+  expect(await deals()).toEqual(["d1", "d2", "d3", "d4", "d5", "d6"])
+})
+
+it("a chosen unassigned list leaves the sign-in's own user out of mine: its deals leave as out of scope", async () => {
+  const { source, set, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2", "d3"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d4", "d5"]) source().put("deal", exampleDeal(id, { assignee: "42" }))
+  await set("scope", "mine")
+  await sync()
+  expect(await deals()).toEqual(["d1", "d2", "d3"])
+  await set("unassigned", "42")
+  const report = await sync({ passEvery: 0 })
+  expect(report.scope).toEqual({ mode: "mine", self: "7", also: ["42"] })
+  expect(dealOf(report)).toMatchObject({ outOfScope: 3, unlisted: 0, pass: "complete" })
+  expect(await deals()).toEqual(["d4", "d5"])
+})
+
+it("under the default mine, a chosen unassigned list that leaves out every stored deal is held, none unlisted", async () => {
+  const { source, set, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2", "d3"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  source().put("deal", exampleDeal("d4", { assignee: "42" }))
+  await sync()
+  await set("unassigned", "42")
+  const report = await sync({ passEvery: 0 })
+  expect(dealOf(report)).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
+  expect(await deals()).toEqual(["d1", "d2", "d3", "d4"])
+})
+
+it("while a narrowing is held, the id pass still marks deleted a deal in the scope the CRM deleted", async () => {
+  const { source, set, raw, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d3", "d4", "d5", "d6"]) source().put("deal", exampleDeal(id, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  await raw("scope", undefined)
+  source().delete("deal", "d2")
+  const held = dealOf(await sync({ passEvery: 0 }))
+  expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 1, pass: "complete" })
+  expect(await deals()).toEqual(["d1", "d3", "d4", "d5", "d6"])
 })

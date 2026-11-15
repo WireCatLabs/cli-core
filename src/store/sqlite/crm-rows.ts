@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CrmItem, CrmPipeline } from "../../domain/crm.js"
 import { type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
-import { currencyOf, minorUnits } from "../../domain/money.js"
+import { currencyOf, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { authorActor } from "./memories.js"
@@ -15,6 +15,37 @@ export interface CrmSkipped {
 }
 
 export const TABLES = { deal: "deals", lead: "leads" } as const
+
+const MONEY_REFUSALS: readonly unknown[] = ["money.currency", "money.amount"]
+
+const amountFault = (item: CrmItem, code: string | null): string => {
+  const text = String(item.amount).trim()
+  const decimal = /^\d+(?:\.(\d+))?$/.exec(text)
+  if (text.startsWith("-")) return "it is below zero"
+  if (!decimal) return "it is not a decimal number"
+  if ((decimal[1] ?? "").length > scaleOf(String(code))) return `it has more decimals than ${code} has`
+  return "it is too large to keep exactly"
+}
+
+/** A deal is never dropped over its money: what the store cannot hold is left out, and the deal says why. */
+const moneyOf = (item: CrmItem) => {
+  if (item.amount == null || item.currency == null) return { currency: null, amount: null, amountNote: null }
+  try {
+    const currency = currencyOf(item.currency)
+    return { currency, amount: minorUnits(String(item.amount), currency), amountNote: null }
+  } catch (error) {
+    const reason = error instanceof CliError ? (error.details as { reason?: unknown } | undefined)?.reason : undefined
+    if (!MONEY_REFUSALS.includes(reason)) throw error
+    const code = textOf(String(item.currency), 10)
+    const why = reason === "money.currency" ? `the store keeps no amounts in ${code}` : amountFault(item, code)
+    return {
+      currency: null,
+      amount: null,
+      amountNote: `the CRM's amount ${textOf(String(item.amount), 40)} ${code} is not kept: ${why}`,
+    }
+  }
+}
+
 /** Who writes a CRM's copies: the sync, not an agent, so `author.kind` is `rule`. */
 export const SOURCE = "crm"
 
@@ -155,7 +186,7 @@ export const crmRowsOver = (context: StoreContext) => {
     item: CrmItem,
     at: number,
     writer: ItemWriter = {},
-  ): CrmSkipped | { id: number } => {
+  ): CrmSkipped | { id: number; amountNote?: string } => {
     const pipeline = pipelineOf(accountId, kind, item.pipeline)
     const stage =
       pipeline &&
@@ -169,11 +200,7 @@ export const crmRowsOver = (context: StoreContext) => {
         message: `${kind} ${item.externalId} stands in stage ${item.stage} of pipeline ${item.pipeline}, which is not stored`,
       }
     const title = textOf(item.title, 200) ?? `${kind} ${item.externalId}`
-    const given = item.amount != null && item.currency != null
-    const currency = given ? currencyOf(item.currency) : null
-    const amount =
-      currency === null ? null : minorUnits(String(item.amount), currency, `${kind} ${item.externalId}'s amount`)
-    if (amount !== null && amount < 0) throw new CliError("validation_error", "an amount is 0 or more")
+    const { currency, amount, amountNote } = moneyOf(item)
     if (item.status != null && !(STAGE_OUTCOMES as readonly string[]).includes(item.status))
       throw new CliError("validation_error", `${kind} ${item.externalId}'s status is open, won or lost`)
     const status = item.status ?? String(stage.outcome)
@@ -196,6 +223,7 @@ export const crmRowsOver = (context: StoreContext) => {
       ...(textOf(item.contactName, 200) ? { contact_name: textOf(item.contactName, 200) } : {}),
       ...(textOf(item.companyName, 200) ? { company_name: textOf(item.companyName, 200) } : {}),
       ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
+      ...(amountNote ? { amount_note: { label: "Amount not kept", value: amountNote } } : {}),
     }
     const values = {
       title,
@@ -276,7 +304,7 @@ export const crmRowsOver = (context: StoreContext) => {
     }
     if (writer.project !== undefined)
       database.prepare(`UPDATE ${table} SET project_id = ? WHERE id = ?`).run(writer.project, id)
-    return { id }
+    return { id, ...(amountNote ? { amountNote } : {}) }
   }
 
   return { savePipeline, saveItemRow }
