@@ -58,7 +58,12 @@ const slot: EntryInput = {
 }
 
 const setup = async (
-  options: { permissions?: Record<string, Level>; extraKeys?: CalendarWrites["extraKeys"]; lock?: string } = {},
+  options: {
+    permissions?: Record<string, Level>
+    extraKeys?: CalendarWrites["extraKeys"]
+    lock?: string
+    conferences?: readonly string[]
+  } = {},
 ) => {
   const store = memoryEventStore()
   const [calendar] = await store.saveCalendars(
@@ -91,7 +96,10 @@ const setup = async (
     ],
     NOW,
   )
-  const writer = fakeCalendarWriter({ now: () => NOW })
+  const writer = fakeCalendarWriter({
+    now: () => NOW,
+    ...(options.conferences ? { conferences: options.conferences } : {}),
+  })
   await store.saveEntries(calendar?.id as number, writer.put("primary", review, series, slot), NOW)
   const home = mkdtempSync(join(tmpdir(), "calendar-writes-"))
   const env = { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home }
@@ -125,7 +133,12 @@ const setup = async (
     {
       app,
       now: () => NOW,
-      writes: { quickAdd: true, move: true, importEvent: true },
+      writes: {
+        quickAdd: true,
+        move: true,
+        importEvent: true,
+        ...(options.conferences ? { conferences: options.conferences } : {}),
+      },
       readFile: async (path) => {
         const text = files.get(path)
         if (text === undefined) throw new CliError("not_found", `no file ${path}`)
@@ -154,6 +167,76 @@ const ALLOW: Record<string, Level> = {
 }
 const create = ["events", "create", "primary", "--title", "Example planning"]
 const at = ["--start-time", "2026-11-02T10:00", "--end-time", "2026-11-02T11:00"]
+
+describe("a meeting link on an event", () => {
+  const conferenceOf = (root: Command, name: string) =>
+    root.commands
+      .find((one) => one.name() === "events")
+      ?.commands.find((one) => one.name() === name)
+      ?.options.find((option) => option.long === "--conference")
+
+  it("is an option only where the writer makes links, with its services as the choices", async () => {
+    expect(conferenceOf((await setup()).program(), "create")).toBeUndefined()
+    const option = conferenceOf((await setup({ conferences: ["google-meet"] })).program(), "update")
+    expect(option?.argChoices).toEqual(["google-meet"])
+  })
+
+  it("is made on create and on its own on update, each with a new request id", async () => {
+    const { cli, writer, store, eventOf, calendarId } = await setup({ conferences: ["google-meet"] })
+    const made = await cli(...create, ...at, "--conference", "google-meet")
+    expect(await store.entry(calendarId, made.operation_id as string)).toMatchObject({
+      joinUrl: expect.stringMatching(/^https:\/\/meet\.example\.com\//u),
+    })
+    await cli("events", "update", `event:${await eventOf("e1")}`, "--conference", "google-meet", "--no-notify")
+    expect(await store.entry(calendarId, "e1")).toMatchObject({ joinUrl: expect.stringContaining("meet.example.com") })
+    expect(writer.conferenceRequests).toHaveLength(2)
+    expect(new Set(writer.conferenceRequests).size).toBe(2)
+    expect(writer.conferenceRequests).not.toContain("e1")
+    expect(writer.conferenceRequests).not.toContain(made.operation_id)
+  })
+
+  it("never replaces a link the event has, and refuses a service the writer does not offer", async () => {
+    const { cli, writer, store, eventOf, calendarId } = await setup({ conferences: ["google-meet"] })
+    await store.saveEntries(
+      calendarId,
+      writer.put("primary", { ...review, externalId: "e2", icalUid: "e2@x", joinUrl: "https://example.com/j/1" }),
+      NOW,
+    )
+    await expect(
+      cli("events", "update", `event:${await eventOf("e2")}`, "--conference", "google-meet", "--no-notify"),
+    ).rejects.toMatchObject({ code: "validation_error", details: { reason: "event.conference-exists" } })
+    expect(writer.conferenceRequests).toEqual([])
+    const plain = await setup({ permissions: ALLOW })
+    const context = {
+      store: plain.store,
+      accountId: 1,
+      writes: {
+        writer: plain.writer,
+        app,
+        settings: () => ({ profile: "work", permissions: ALLOW, permissionSources: {}, sendsPerHour: 30 }),
+      },
+      ask: async () => {},
+      now: NOW,
+      zone: "UTC",
+      names: {
+        notify: "notify",
+        id: "operation_id",
+        calendar: "calendar",
+        series: "series",
+        following: "following",
+        repeat: "repeat",
+        conference: "conference",
+      },
+    }
+    await expect(
+      updateEvent(context, `event:${await plain.eventOf("e1")}`, { conference: "google-meet" }, { notify: false }),
+    ).rejects.toMatchObject({
+      code: "validation_error",
+      message: "this calendar cannot add a meeting link; leave out conference",
+    })
+    expect(plain.writer.calls).toEqual([])
+  })
+})
 
 describe("calendar write commands", () => {
   it("exist only when the CLI passes a writer", () => {
@@ -486,6 +569,7 @@ describe("calendar write commands", () => {
         series: "--series",
         following: "--following",
         repeat: "--repeat",
+        conference: "--conference",
       },
     }
     await expect(
@@ -731,6 +815,7 @@ describe("event ids", () => {
         series: "--series",
         following: "--following",
         repeat: "--repeat",
+        conference: "--conference",
       },
     }
     const fields = { title: "Example planning", startTime: "2026-11-02T10:00", endTime: "2026-11-02T11:00" }

@@ -16,7 +16,13 @@ const run = v.strictObject({
   timezone: v.optional(text),
 })
 const exported = v.union([
-  v.strictObject({ meeting_id: identifier, format: v.picklist(["markdown", "vtt"]), filename: text, content: text }),
+  v.strictObject({
+    meeting_id: identifier,
+    format: v.picklist(["markdown", "vtt"]),
+    filename: text,
+    content: text,
+    untrusted: v.optional(v.array(text)),
+  }),
   v.strictObject({ meeting_id: identifier, format: v.picklist(["markdown", "vtt"]), output: text }),
 ])
 const eventChange = v.strictObject({
@@ -144,6 +150,7 @@ const managedChange = v.strictObject({
       duration_minutes: v.optional(count),
       timezone: v.optional(text),
       agenda: v.optional(text),
+      settings: v.optional(v.record(text, v.union([text, flag]))),
     }),
   ),
   applied: flag,
@@ -159,6 +166,7 @@ const managedChange = v.strictObject({
       join_url: nullableText,
     }),
   ),
+  untrusted: v.optional(v.array(text)),
 })
 const invitation = v.strictObject({ id: identifier, invitation: text, untrusted: v.optional(v.array(text)) })
 
