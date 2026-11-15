@@ -43,6 +43,19 @@ export interface TranscriptInput extends Omit<NewRecord<Transcript>, "meetingId"
   driveFileId?: string
 }
 export const MEETING_DOCUMENT_ROLES = ["transcript", "recording", "notes"] as const
+/**
+ * What Meet and Gemini put in the name of the Google Doc they save, the words drive finds them by. The English names
+ * are the ones in a real Drive; the Russian and Spanish ones are Google's localized forms as best known, not yet seen
+ * in one. Drive's files have no field that marks a document as Meet's, so the name is all there is.
+ */
+export const TRANSCRIPT_WORDS = [
+  "Transcript",
+  "Notes by Gemini",
+  "Транскрипт",
+  "Заметки Gemini",
+  "Transcripción",
+  "Notas de Gemini",
+] as const
 export type MeetingDocumentRole = (typeof MEETING_DOCUMENT_ROLES)[number]
 /**
  * A Drive file the meeting service saved for the meeting: its transcript, its recording or its notes (Meet's

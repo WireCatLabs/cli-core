@@ -5,6 +5,7 @@ import {
   MEETING_FINDINGS_KIND,
   type ParticipantResponse,
   parseMeetingReference,
+  TRANSCRIPT_WORDS,
 } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
@@ -242,6 +243,36 @@ const ROW_MEETINGS = "r.meetings"
 const inRowMeetings = (condition: string) =>
   `EXISTS (SELECT 1 FROM json_each(${ROW_MEETINGS}) rm WHERE ${condition.replaceAll("{m}", "rm.value")})`
 
+/** The meeting's own transcript, or a Drive document Meet named as its transcript or Gemini notes, once imported. */
+const MEETING_TRANSCRIPT = `(EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id = {m} AND t.deleted_at IS NULL
+    AND t.superseded_at IS NULL)
+  OR EXISTS (SELECT 1 FROM links tl JOIN documents td ON td.id = tl.to_id WHERE tl.from_type = 'meeting'
+    AND tl.from_id = {m} AND tl.kind = 'attached' AND tl.to_type = 'document' AND tl.role IN ('transcript', 'notes')
+    AND td.deleted_at IS NULL))`
+
+const literal = (text: string) => `'${text.replaceAll("'", "''")}'`
+
+// LIKE folds ASCII case only, so the lower-cased word also catches a lower-cased Russian title.
+const namedLikeTranscript = (title: string) =>
+  `(${TRANSCRIPT_WORDS.flatMap((word) => [
+    `${title} LIKE ${literal(`%${word}%`)}`,
+    `instr(${title}, ${literal(word.toLowerCase())}) > 0`,
+  ]).join(" OR ")})`
+
+/**
+ * A calendar entry's attachment carries no role, so an imported Drive document counts by the words drive finds
+ * transcripts and Gemini notes by.
+ */
+const EVENT_TRANSCRIPT = `EXISTS (SELECT 1 FROM calendar_entries tc JOIN links tl ON tl.from_type = 'calendar_entry'
+    AND tl.from_id = tc.id AND tl.kind = 'attached' AND tl.to_type = 'document'
+  JOIN documents td ON td.id = tl.to_id WHERE tc.event_id = {e} AND td.deleted_at IS NULL
+    AND ${namedLikeTranscript("td.title")})`
+
+/** One rule for the row's flag and the `has_transcript` filter. */
+const ROW_TRANSCRIPT = `((r.type = 'event' AND ${EVENT_TRANSCRIPT.replaceAll("{e}", "r.id")}) OR ${inRowMeetings(
+  MEETING_TRANSCRIPT,
+)})`
+
 const PHONE_MEETING =
   "(SELECT a.provider FROM meetings km JOIN accounts a ON a.id = km.account_id WHERE km.id = {m}) = 'phone'"
 
@@ -284,12 +315,7 @@ const filtersOf = (database: StoreContext["database"], filter: MeetingListFilter
     params.push(people, people, people)
   }
   if (filter.hasTranscript !== undefined) {
-    clauses.push(
-      `${filter.hasTranscript ? "" : "NOT "}${inRowMeetings(
-        "EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id = {m} AND t.deleted_at IS NULL " +
-          "AND t.superseded_at IS NULL)",
-      )}`,
-    )
+    clauses.push(`${filter.hasTranscript ? "" : "NOT "}${ROW_TRANSCRIPT}`)
   }
   return { sql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params }
 }
@@ -358,7 +384,10 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
   const meetingIds = [...new Set(page.flatMap(({ meetingIds }) => meetingIds))]
   const events = new Map(
     database
-      .prepare("SELECT * FROM events WHERE id IN (SELECT value FROM json_each(?))")
+      .prepare(
+        `SELECT e.*, ${EVENT_TRANSCRIPT.replaceAll("{e}", "e.id")} AS has_transcript FROM events e
+         WHERE e.id IN (SELECT value FROM json_each(?))`,
+      )
       .all(ids(eventIds))
       .map((row) => [Number(row.id), row]),
   )
@@ -383,8 +412,7 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
     database
       .prepare(
         `SELECT m.*, a.provider, a.external_id AS account,
-           EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id = m.id AND t.deleted_at IS NULL
-             AND t.superseded_at IS NULL) AS has_transcript,
+           ${MEETING_TRANSCRIPT.replaceAll("{m}", "m.id")} AS has_transcript,
            EXISTS (SELECT 1 FROM meeting_summaries s WHERE s.meeting_id = m.id) AS has_summary,
            (EXISTS (SELECT 1 FROM attachments ra WHERE ra.attachable_type = 'meeting' AND ra.attachable_id = m.id
                AND (ra.kind IN ('audio', 'video') OR ra.mime LIKE 'audio/%' OR ra.mime LIKE 'video/%'))
@@ -536,7 +564,8 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
       sources,
       participants: [...participants.values()],
       hasRecording: held.some((meeting) => Number(meeting.has_recording) === 1),
-      hasTranscript: held.some((meeting) => Number(meeting.has_transcript) === 1),
+      hasTranscript:
+        Number(event?.has_transcript ?? 0) === 1 || held.some((meeting) => Number(meeting.has_transcript) === 1),
       hasSummary: held.some((meeting) => Number(meeting.has_summary) === 1),
       documents: [...linked.values()],
       seriesId: num(event?.event_series_id),

@@ -476,7 +476,7 @@ export type {
   TranscriptLanguageFill,
   TranscriptRowInput,
 } from "./store.js"
-export { MEETING_DOCUMENT_ROLES, READ_BUDGET_EXCEEDED } from "./store.js"
+export { MEETING_DOCUMENT_ROLES, READ_BUDGET_EXCEEDED, TRANSCRIPT_WORDS } from "./store.js"
 export {
   type MeetingTagChange,
   type MeetingTagChangeItem,

@@ -421,6 +421,72 @@ describe("meetings, calls and events as one row per real meeting", () => {
     }
   })
 
+  it("counts Meet's transcript or Gemini notes as the row's transcript, and no other attached document", async () => {
+    const { store, calendar, zoom, base } = await setup()
+    const drive = String(await store.accounts.saveAccount({ provider: "google-drive", account: "ana" }, { name: null }))
+    const imported = (fileId: string, title: string) =>
+      store.notes.saveFileNote({
+        folderId: drive,
+        path: `${fileId}.md`,
+        title,
+        text: "An invented meeting",
+        frontMatter: { source: "google-drive", fileId },
+      })
+    const event = (title: string, day: string, fileId: string) =>
+      entry(title, {
+        joinUrl: `https://meet.google.com/${fileId}`,
+        startsAt: at(`2026-11-${day}T09:00:00Z`),
+        endsAt: at(`2026-11-${day}T09:30:00Z`),
+        attachments: [{ fileId, title }],
+      })
+    await imported("notes-1", "Design review - Notes by Gemini")
+    await imported("notes-2", "планёрка – заметки gemini")
+    await imported("agenda-1", "Planning agenda")
+    await imported("adhoc-notes", "Ad hoc notes")
+    await store.calendar.saveEntries(
+      calendar,
+      [
+        event("Design review", "03", "notes-1"),
+        event("Планёрка", "04", "notes-2"),
+        event("Planning", "05", "agenda-1"),
+        event("Retro", "06", "not-imported"),
+      ],
+      1,
+    )
+    await store.meetings.saveMeeting({
+      ...base,
+      transcripts: [],
+      meeting: {
+        ...base.meeting,
+        accountId: zoom,
+        externalId: "zoom-adhoc",
+        title: "Ad hoc",
+        joinUrl: "https://us02web.zoom.us/j/987654321",
+        startedAt: at("2026-11-12T15:00:00Z"),
+        endedAt: at("2026-11-12T15:30:00Z"),
+        series: { ...base.meeting.series, externalId: "adhoc" },
+      } as typeof base.meeting,
+      documents: [{ fileId: "adhoc-notes", role: "notes" }],
+    })
+
+    const titles = async (words: string) =>
+      (await listMeetingEntries(store, meetingListRequest(`${month} ${words}`, page).request)).items
+        .map(({ title }) => title)
+        .sort()
+    const withTranscript = ["Ad hoc", "Design review", "Weekly sync", "Планёрка"]
+    expect(await titles("has_transcript:true")).toEqual(withTranscript)
+    const rows = (await listMeetingEntries(store, meetingListRequest(month, page).request)).items
+    expect(
+      rows
+        .filter((row) => row.has_transcript)
+        .map(({ title }) => title)
+        .sort(),
+    ).toEqual(withTranscript)
+    const without = await titles("has_transcript:false")
+    expect(without).toEqual(expect.arrayContaining(["Planning", "Retro"]))
+    expect(without.filter((title) => withTranscript.includes(title as string))).toEqual([])
+  })
+
   it("keeps a meeting that runs into the window on its event's row, though the event ended before it", async () => {
     const { store, zoom, base } = await setup()
     await store.meetings.saveMeeting({
