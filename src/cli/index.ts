@@ -196,6 +196,32 @@ export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
 export { TASK_PAIR_QUERY, TASK_QUERY } from "../services/tasks.js"
 export {
+  defineSetup,
+  type Setup,
+  type SetupCheck,
+  type SetupCheckInput,
+  type SetupDefinition,
+  setupProblems,
+} from "../setup/define.js"
+export {
+  type Asset as SetupAsset,
+  BLOCK_ROLES,
+  BLOCK_TYPES,
+  type Block as SetupBlock,
+  BUILT_IN_ACTIONS,
+  type Condition as SetupCondition,
+  DISPLAY_CLASSES,
+  INPUT_KINDS,
+  SETUP_FORMAT,
+  SETUP_LIMITS,
+  SETUP_PATTERNS,
+  SETUP_VERSION,
+  type SetupDocument,
+  type Step as SetupStep,
+  setupDocumentSchema,
+  setupJsonSchema,
+} from "../setup/document.js"
+export {
   answerStdinOption,
   type Need,
   type SignInSteps,
@@ -706,6 +732,7 @@ export {
   sendsCommand,
   serveCommand,
   serverCommand,
+  setupCommand,
   skillCommand,
   starCommands,
   statsCommand,

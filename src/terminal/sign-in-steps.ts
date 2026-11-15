@@ -31,6 +31,8 @@ export interface SignInStepsOptions {
   /** `--answer-stdin`. */
   answers: boolean
   input?: NodeJS.ReadableStream
+  /** The run's one reader of stdin, when the command read a line of its own first (`setup run`'s answers). */
+  lines?: (signal?: AbortSignal) => Promise<string>
 }
 
 /**
@@ -48,10 +50,16 @@ export interface SignInSteps {
   ask: (need: Need, signal?: AbortSignal) => Promise<string>
 }
 
-export const signInSteps = ({ diagnostic, json, answers, input = process.stdin }: SignInStepsOptions): SignInSteps => {
+export const signInSteps = ({
+  diagnostic,
+  json,
+  answers,
+  input = process.stdin,
+  lines,
+}: SignInStepsOptions): SignInSteps => {
   if (answers && !json) throw new CliError("validation_error", "--answer-stdin needs --json")
   const emit = stepLines(diagnostic, json)
-  const next = answers ? lineReader(input) : undefined
+  const next = answers ? (lines ?? lineReader(input)) : undefined
   return {
     json,
     answers,
@@ -76,7 +84,7 @@ export const signInSteps = ({ diagnostic, json, answers, input = process.stdin }
  * question waits and pauses stdin between them, so a pipe the caller keeps open does not hold the process after the
  * last answer.
  */
-const lineReader = (input: NodeJS.ReadableStream & { ref?: () => void; unref?: () => void }) => {
+export const lineReader = (input: NodeJS.ReadableStream & { ref?: () => void; unref?: () => void }) => {
   const decoder = new StringDecoder("utf8")
   let buffered = ""
   let ended = false

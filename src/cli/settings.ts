@@ -959,9 +959,14 @@ export const settingsFor = <T extends object = Record<never, never>>(
     return added
   }
 
+  /** One profile setting's own schema, for a check of a single value (a setup answer); `undefined` for none. */
+  const settingSchema = (key: string): v.GenericSchema | undefined =>
+    Object.hasOwn(profileEntries, key) ? (profileEntries as Record<string, v.GenericSchema>)[key] : undefined
+
   return {
     resolveSettings,
     configuredProfiles,
+    settingSchema,
     changeSetting,
     migrate,
     declaredSettings,

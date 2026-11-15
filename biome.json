@@ -13,7 +13,8 @@
       "!src/search/snowball",
       "!.worktrees",
       "!.claude",
-      "!config/wirecat"
+      "!config/wirecat",
+      "!test/fixtures/setup-v1/schema.json"
     ]
   },
   "linter": {
