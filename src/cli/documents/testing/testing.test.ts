@@ -257,7 +257,17 @@ const reference = async (source: FakeDocumentSource = fakeDocumentSource(PRINCIP
 describe("documents source contract over the fake provider", () => {
   for (const c of documentSourceContract(() => {
     const source = fakeDocumentSource()
-    return { source, root: "root", isFolder, missing: "gone", change: async () => source.put(fakeFile("c"), "new") }
+    return {
+      source,
+      root: "root",
+      isFolder,
+      missing: "gone",
+      change: async () => source.put(fakeFile("c"), "new"),
+      addNested: async () => {
+        source.put(fakeFile("deep", ["nested"]), "deep text")
+        return { file: "deep", folder: "nested" }
+      },
+    }
   }))
     it(c.name, c.run)
 })
@@ -372,6 +382,24 @@ describe("shared documents commands", () => {
       issues: [{ code: "provider_error", reason: "sync.partial", source: "synthetic-box" }],
     })
     expect(answer.error).toMatchObject({ details: { reason: "sync.partial" } })
+  })
+
+  it("a sync that leaves work for the next one answers partial and names the same sync as its next step", async () => {
+    const cli = await reference()
+    const answer = await cli.run(["sync", "--limit", "1", "--embed"])
+    expect(answer.exit).toBe(0)
+    expect(answer.printed[0]).toMatchObject({
+      item: { complete: false, pending: 1 },
+      meta: { complete: false },
+      next: [{ step: "sync.run", command: "sync", safe_to_auto_execute: true }],
+    })
+    // The same sync again, its --rescan left out: that would start the pass over.
+    expect((answer.printed[0] as { next: { args: object }[] }).next[0]?.args).toEqual({ limit: 1, embed: true })
+    const done = await cli.run(["sync", "--limit", "1"])
+    expect(done.printed[0]).toMatchObject({ item: { complete: true, pending: 0 } })
+    expect((done.printed[0] as { next?: { step: string }[] }).next ?? []).not.toContainEqual(
+      expect.objectContaining({ step: "sync.run", command: "sync", args: { limit: 1 } }),
+    )
   })
 
   it("catalog tree shows the chosen folders and their files after an import", async () => {

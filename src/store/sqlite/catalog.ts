@@ -76,7 +76,8 @@ export const CATALOG_QUERY = defineQuery({
 })
 export interface CatalogQuery {
   ast?: QueryAst
-  parent?: string
+  /** A direct parent's external ID, or several: an entry under any of them. */
+  parent?: string | string[]
   kind?: CatalogInput["kind"]
   mime?: string
   search?: string
@@ -290,7 +291,13 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       const tagSql =
         "SELECT 1 FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
       const tag = (name: string) => canonicalTagNamed(database, name)?.name ?? normalizeTag(name)
-      if (query.parent !== undefined)
+      // Several parents in one json_each per entry: an OR of one EXISTS each read the entry's parents once per parent.
+      if (Array.isArray(query.parent))
+        add(
+          "EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value IN (SELECT value FROM json_each(?)))",
+          JSON.stringify(query.parent.map((parent) => field(parent))),
+        )
+      else if (query.parent !== undefined)
         add("EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value=?)", query.parent)
       if (query.kind !== undefined) add("json_extract(d.metadata, '$.catalog.kind')=?", query.kind)
       if (query.mime !== undefined) add("json_extract(d.metadata, '$.catalog.mime')=?", query.mime)

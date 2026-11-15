@@ -14,6 +14,12 @@ export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
   isDocument?(file: M): boolean
   /** Makes a change on the provider's side (a new or edited file) for the change feed to list; absent skips that check. */
   change?(): Promise<void>
+  /**
+   * Adds a file inside a folder two levels below the root on the provider's side, and names both. A round of changes
+   * lists only the direct children of a folder the feed names, so the feed must name the new file or its own folder;
+   * absent skips that case.
+   */
+  addNested?(): Promise<{ file: string; folder: string }>
   /** An id the provider does not know; absent skips that case. */
   missing?: string
 }
@@ -123,6 +129,17 @@ export const documentSourceContract = <M extends SourceFile>(
       },
     },
   ]
+  cases.push({
+    name: "changes: a file added deep in the tree is named in the feed, itself or by its own folder",
+    async run() {
+      const { source, addNested } = await make()
+      if (!addNested) return
+      const token = await source.startToken()
+      const { file, folder } = await addNested()
+      const named = new Set((await source.changes(token)).items.map((item) => item.id))
+      assert.ok(named.has(file) || named.has(folder), `the feed names ${file} or its folder ${folder}`)
+    },
+  })
   cases.push({
     name: "metadata: an id the provider does not know is not_found",
     async run() {

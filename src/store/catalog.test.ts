@@ -35,6 +35,10 @@ it("stores folders and unread files without inventing content and scopes reads t
   expect(entries.items).toHaveLength(2)
   expect(entries.items.every((e) => e.content === "metadata")).toBe(true)
   expect((await store.catalog.list(account, { parent: "root.md" })).items.map((e) => e.externalId)).toEqual(["item.md"])
+  expect(
+    (await store.catalog.list(account, { parent: ["elsewhere.md", "root.md"] })).items.map((e) => e.externalId),
+  ).toEqual(["item.md"])
+  expect((await store.catalog.list(account, { parent: ["elsewhere.md"] })).items).toEqual([])
   expect(await store.catalog.get(other.id, "item.md")).toBeUndefined()
   expect(await store.catalog.get(account, "missing.md")).toBeUndefined()
 })

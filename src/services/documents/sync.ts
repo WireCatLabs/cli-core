@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { deadlineMargin } from "../../background/budget.js"
 import { catalogFiles } from "../../documents/catalog.js"
 import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSkip } from "../../documents/model.js"
 import { inScope } from "../../documents/scope.js"
-import { changedSince, planDocuments, scopeHash } from "./plan.js"
+import { changedSince, planDocuments, scopeHash, type WalkStop } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
 
 const MAX_PICTURE_BYTES = 25 * 1024 * 1024
 const SAVE_EVERY_MS = 2000
 const SAVE_EVERY_ITEMS = 25
+const SETTLE_MS = 10_000
 const isPicture = (file: SourceFile) => file.mime.startsWith("image/") && file.canDownload
 const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
 export interface SyncResult {
@@ -23,6 +25,12 @@ export interface SyncResult {
   skipped: { id: string; reason: string }[]
   errors: { id: string; code: string; message: string }[]
   coverage: string
+  /** The pass is done: the folder walk finished and no operation is left for another sync. */
+  complete: boolean
+  /** Why this call stopped before the pass's end: its entry bound (`maxEntries`) or its request budget. */
+  stopped?: WalkStop
+  /** A folder walk still under way; the next sync goes on from where this one stopped. */
+  walk?: { folders_left: number; entries: number; listed: number }
 }
 export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M>): Promise<SyncResult> => {
   const {
@@ -56,6 +64,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     pending: 0,
     skipped: [],
     errors: [],
+    complete: true,
     coverage:
       query?.mode === "include"
         ? "selected folders and the files a saved query finds; unsupported files are reported"
@@ -78,27 +87,37 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     if (state.principal !== principal)
       throw new CliError("configuration_error", "sync state belongs to another source account")
     const currentScope = scopeHash(profile.roots, query, options.isDocument !== undefined)
-    const abandoned =
-      state.pending && (state.pending.scope !== currentScope || rescan) ? state.pending.jobs.map((job) => job.id) : []
-    if (state.pending?.scope !== currentScope || rescan) delete state.pending
+    if (state.pending && (state.pending.scope !== currentScope || rescan)) {
+      // Work the new plan cannot see: a file saved to the index before its state was.
+      for (const job of state.pending.jobs)
+        if (!state.documents[job.id]) {
+          await index.remove(profile.principal, job.id)
+          statePort.removeSnapshot(job.id)
+        }
+      delete state.pending
+      // Saved at once: a call the walk cuts short would otherwise find the old batch again and repeat these removals.
+      statePort.save(state)
+    }
+    // A rescan starts the walk over, a saved one included; the cursor is dropped on disk, so the syncs after it
+    // continue the walk until it ends.
     if (rescan) {
       delete state.cursor
       statePort.removeWalk()
+      statePort.save(state)
     }
     if (!state.pending) {
-      state.pending = await planDocuments(
-        options,
-        source,
-        state,
-        profile.roots,
-        limit,
-        profile.picture_search ?? false,
-        abandoned,
-        {
-          read: (scope) => statePort.readWalk(scope),
-          save: (walk) => statePort.saveWalk(walk),
-        },
-      )
+      const plan = await planDocuments(options, source, state, profile.roots, limit, profile.picture_search ?? false, {
+        read: (scope) => statePort.readWalk(scope),
+        save: (walk) => statePort.saveWalk(walk),
+      })
+      if ("walk" in plan) {
+        result.complete = false
+        result.stopped = plan.walk.stopped
+        result.walk = { folders_left: plan.walk.folders_left, entries: plan.walk.entries, listed: plan.walk.listed }
+        result.skipped = state.skipped.map(({ id, reason }) => ({ id, reason }))
+        return result
+      }
+      state.pending = plan.pending
       state.skipped = state.pending.skipped
       statePort.save(state)
       statePort.removeWalk()
@@ -172,6 +191,11 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           await savePictureOf(job.file)
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
+          const stop = options.budget?.take()
+          if (stop) {
+            result.stopped = stop
+            break
+          }
           const content = await source.content(job.id, limit)
           const listed =
             query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))
@@ -227,6 +251,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     }
     flush()
     result.pending = pending.jobs.length
+    result.complete = !pending.jobs.length
     if (!pending.jobs.length) {
       state.cursor = pending.cursor
       state.scope = pending.scope
@@ -237,6 +262,19 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       state.lastSync = new Date(now()).toISOString()
       statePort.save(state)
     }
+    // A reader that cannot write finds the text by its words only once it is indexed; a search that can write does it
+    // itself, so what this bound leaves, or a failure here, is indexed by the next one. Skipped after a stop, and kept
+    // inside the run's deadline less its margin, so the partial answer and its next step still reach the caller.
+    // Real time: `now` may be fixed.
+    const settleFrom = Date.now()
+    const settleUntil = Math.min(
+      settleFrom + SETTLE_MS,
+      options.deadline ? options.deadline.endsAt - deadlineMargin(options.deadline) : Number.POSITIVE_INFINITY,
+    )
+    if (!result.stopped && !options.budget?.stopped && settleUntil > settleFrom)
+      await index
+        .settle?.({ until: () => signal?.aborted === true || Date.now() >= settleUntil })
+        .catch(() => undefined)
     return result
   } finally {
     flush?.()

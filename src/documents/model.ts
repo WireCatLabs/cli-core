@@ -100,6 +100,8 @@ export interface SourceIndex<M extends SourceFile = SourceFile> {
   save(principal: string, content: SourceContent<M>, hash: string): Promise<string>
   remove(principal: string, id: string): Promise<void>
   openPictures(): Promise<PictureWriter>
+  /** Indexes what the sync saved for word search, until `until` says stop; the rest waits for the next search. */
+  settle?(options: { until: () => boolean }): Promise<unknown>
 }
 export interface SourceStatePort<M extends SourceFile = SourceFile> {
   read(): SourceState<M>

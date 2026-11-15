@@ -41,6 +41,9 @@ describe("a documents account past 10 000 entries", () => {
     expect(await ingest.catalog.import("ana@example.com", files)).toEqual({ entries: 10050, retired: 0 })
     const page = await ingest.catalog.list("ana@example.com", { limit: 10, offset: 10040 })
     expect(page.items).toHaveLength(10)
+    const first = await ingest.catalog.get("ana@example.com", "file-0")
+    expect(first?.externalId).toBe("file-0.md")
+    expect(await ingest.catalog.get("ana@example.com", "file-0.md")).toEqual(first)
 
     const last = files[10049] as SourceFile
     const ref = await ingest.save(
