@@ -82,6 +82,7 @@ describe("meeting commands", () => {
     expect(v.parse(itemEnvelopeSchema(meetingDetails), { ...(outputs[1]?.value as object), meta }).item).toMatchObject({
       ref: `meeting:1/${d.meeting.id}`,
       participants: [{ name: "Alice Example" }],
+      attachments: [{ name: "example.txt", url: "https://example.com/file", local_path: null }],
     })
     await run(["meetings", "transcript", String(d.meeting.id), "--jsonl"])
     expect(outputs[2]).toMatchObject({ format: "jsonl" })
@@ -92,6 +93,20 @@ describe("meeting commands", () => {
     await run(["events", "list"])
     expect(outputs[4]).toMatchObject({ value: { items: [] } })
   })
+  it("names a recording's file on this computer, so an app plays only what the store names", async () => {
+    const { run, outputs, store } = await setup()
+    const sample = sampleMeeting()
+    const file = sample.attachments?.[0]
+    if (!file) throw new Error("the sample has a file")
+    const saved = await store.saveMeeting({
+      ...sample,
+      attachments: [{ ...file, kind: "recording", mime: "audio/wav", url: null, localPath: "/rec/out-201.wav" }],
+    })
+    await run(["meetings", "show", String(saved.meeting.id), "--json"])
+    const item = v.parse(itemEnvelopeSchema(meetingDetails), { ...(outputs[0]?.value as object), meta }).item
+    expect(item.attachments).toMatchObject([{ kind: "recording", local_path: "/rec/out-201.wav" }])
+  })
+
   it("pulls and imports through injected sources and file readers", async () => {
     const { run, outputs } = await setup()
     await run(["meetings", "sync", "--since-time", "1970-01-01"])

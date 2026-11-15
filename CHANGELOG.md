@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`meetings show` names a recording's file on this computer.** Each of `attachments` carries `local_path`: the
+  file the store holds for it, or `null` when it stays on the meeting service or the phone system (pbx reading its
+  recordings over SFTP). WireCat Desktop plays a call's recording from it and reads nothing else.
+
 ## 0.667.0 — 15.11.2026
 
 ### Added

@@ -126,6 +126,8 @@ const meetingDetailsEntries = {
       mime: v.nullable(text),
       size: v.nullable(count),
       url: v.nullable(text),
+      /** The file on this computer; `null` when it stays on the service or the phone system (pbx over SFTP). */
+      local_path: v.nullable(text),
     }),
   ),
   /**
@@ -261,6 +263,7 @@ export const meetingDetailsItem = (details: MeetingDetails, owner: MeetingOwner)
       mime: one.mime,
       size: one.size,
       url: one.url,
+      local_path: one.localPath,
     })),
     documents: (details.documents ?? []).map((one) => ({
       file_id: one.fileId,
