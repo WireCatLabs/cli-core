@@ -46,14 +46,18 @@ domain, SQL/transport/vendor imports in services, and private document imports f
    The external id of a source file is `<id>.md` (``externalId: (id) => `${id}.md` ``), in the catalog
    entry, its parents and the saved note alike: the catalog commands strip `.md` to show the source's id.
    The store sets no ceiling on an account's entries; one catalog write takes at most 200 and one
-   list page at most 1000, and a save or a removal reads only its own document. The sync's own
-   bound is the `maxEntries` the CLI passes (drive passes 10 000).
+   list page at most 1000, and a save or a removal reads only its own document. The sync has no
+   total ceiling: `maxEntries` (drive passes 10 000) and `budget` bound one call, and the next
+   sync goes on from there ([Walks over several syncs](#walks-over-several-syncs)).
 3. Supply `SourceStatePort` for validated account-specific checkpoints, discovery walks and
    snapshots. Existing Drive v1 checkpoints remain compatible; no database migration is required.
 4. Acquire the account/profile lock before `syncDocuments` and release it in `finally`. Supply
    `assertHeld`, provider-safe `errorOf`, classification/retry rules and positive bounds. The shared
    engine retains failed work, advances the cursor only after the batch completes and retires
    sources leaving the selected tree. The state account must match the selected principal.
+   `documentIngestion` also gives the index `settle`: at the end of each sync the engine indexes
+   what it saved for word search, for at most 10 s, so a read-only reader finds a page by the
+   words of its text right after the sync. A search that can write indexes the rest itself.
 5. Bind `documentKnowledge` to a collection resolver for the selected principal. Every operation
    checks ownership; notes, facts and memories must also be attached to that document. Replacements
    cannot reach another document/account. Core's existing fact store owns decision transitions.
@@ -68,6 +72,35 @@ collection, so two providers can use the same file ID. The application chooses i
 these services never select the owner's store implicitly. Text changes/removal stale derived
 memories while retaining owner notes and tags. Accepted facts change only through explicit fact
 operations.
+
+## Walks over several syncs
+
+A sync stops before its end and saves where it is; the next sync goes on from there. No size makes it fail.
+
+- **One call is bounded.** A walk lists folders until it has counted `maxEntries` (each listing counts one, plus
+  the entries it returns) or until `budget.take()` says no. The first folder of a call is always listed, so a folder
+  with more children than the bound still moves on. The budget is the run's `RunBudget`
+  ([WC-LIFE-16](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)); the shared `sync` command passes
+  `runBudgetOf(command)` as `budget` in its arguments, and the CLI hands it to `syncDocuments`. The budget is also
+  asked before each file read, and a stop there leaves the rest of the batch pending.
+- **The walk is saved through `saveWalk`** every 2 s and when the call stops: the folders still to list, the
+  folders and files found. Only the fields of `SourceWalk` are used, so a CLI that validates the walk file with a
+  strict schema keeps all of it. A round of changes is saved under the scope `<scope>:changes:<cursor>`, which names
+  the cursor it started from.
+- **The answer says the pass is not done:** `complete: false`, `stopped` (`entries`, `requests`, `deadline`,
+  `cancelled`) and `walk: { folders_left, entries, listed }`. The shared `sync` command answers it as partial
+  (`meta.complete: false`, exit 0) with the next step `sync.run`: the same `sync --limit`, safe to run unasked. A
+  call that listed nothing and saved nothing gets no step.
+- **A changed folder costs its direct children.** In a round of changes, each folder the feed names is listed once;
+  a child folder the last finished pass already held is not listed again, since the feed names what changed below
+  it. A folder new to the scope (new, restored from the trash, or moved in from outside) is walked in full, so the
+  files under a folder moved in are found though Drive's change feed names only the folder. Every page of a source
+  whose pages are folders is listed when it changes.
+- **`--rescan` goes on until it finishes.** It drops the cursor and saves that at once, so the following plain syncs
+  continue the walk. A `--rescan` while a full pass is under way (no cursor yet) continues it too. Work a dropped
+  batch had saved to the index without the state knowing is removed when the batch is dropped.
+- **Not resumable:** one call of a source's `children()` or `changes()`. A folder is listed whole, so a source caps
+  its own listing (drive at 10 000 entries in one folder or one change feed).
 
 ## Verification
 
@@ -158,8 +191,10 @@ CLI's run; the builders honour a global `--dry-run`.
   cuts at `--depth` 200 at a time. Any entry with children can be a root or a branch, so a page with sub-pages
   (`isDocument`, kind `file`) works. An entry in two folders is shown in full once and marked `repeated` at its other
   place. Over 10 000 entries the answer is `catalog.tree-limit`: name a smaller folder or lower `--depth`. The
-  store's `parent` filter scans the account's catalog, so a tree of 1 000 entries in a 12 000-entry account takes
-  some seconds.
+  store's `parent` filter takes one id or several (`parent: [a, b]`, an entry under any of them) and scans the
+  account's catalog once per read; asking about the 1 000 branches of a folder in a 12 000-entry account takes about
+  0.1 s (5.6 s when each parent was its own `OR` clause). `catalog.get` and `catalog.list` of `documentIngestion` take
+  an id with or without the `.md` the entries carry.
 - **`mirrors watch`** polls the connection's `changes`. When the feed cannot go on from its cursor (expired, or
   over its bound), `changes` throws a `listing.too-large` CliError: watch then starts a new feed and checks every
   mirror once.

@@ -233,7 +233,7 @@ describe("provider-neutral document sync", () => {
     const f = await setup()
     await syncDocuments({ ...f.options, max: 1 })
     expect(await syncDocuments({ ...f.options, roots: [], source: undefined })).toMatchObject({
-      removed: 2,
+      removed: 1,
       pending: 0,
     })
     expect(await syncDocuments({ ...f.options, rescan: true })).toMatchObject({ saved: 2 })
@@ -249,9 +249,17 @@ describe("provider-neutral document sync", () => {
     expect(f.state().documents.b?.picture).toBe("saved")
     expect(() => within(file("cycle", ["cycle"]), ["root"], { cycle: file("cycle", ["cycle"]) })).toThrow("cycle")
   })
-  it("refuses incomplete, cyclic and over-budget folder discovery without advancing state", async () => {
+  it("goes on with a walk past its entry bound in the next call, and refuses a cyclic one without advancing state", async () => {
     const f = await setup()
-    await expect(syncDocuments({ ...f.options, maxEntries: 1 })).rejects.toThrow("entry limit")
+    expect(await syncDocuments({ ...f.options, maxEntries: 1 })).toMatchObject({
+      complete: false,
+      stopped: "entries",
+      walk: { folders_left: 1, listed: 1 },
+    })
+    expect(f.state().cursor).toBeUndefined()
+    expect(await syncDocuments({ ...f.options, maxEntries: 1 })).toMatchObject({ complete: true, saved: 2 })
+    expect(vi.mocked(f.source.children).mock.calls.map(([id]) => id)).toEqual(["root", "nested"])
+    await syncDocuments({ ...f.options, rescan: true, maxEntries: 1 })
     const cycle = { ...must(f.files.get("root")), parents: ["nested"] }
     f.files.set("root", cycle)
     await expect(syncDocuments(f.options)).rejects.toThrow("cycle")

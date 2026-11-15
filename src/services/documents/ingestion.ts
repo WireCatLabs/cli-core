@@ -27,6 +27,8 @@ export const documentIngestion = <M extends SourceFile>(
     const found = (await store.notes.folders()).find((item) => item.name === name)
     return found ?? (create ? await store.notes.addFolder({ name, format: "markdown" }) : undefined)
   }
+  // The catalog answers external ids (`<id>.md`), so an id given back as it was answered is found too.
+  const both = (id: string) => [...new Set([options.externalId(id), id])]
   const stale = async (ref: string) => {
     for (const status of ["proposed", "confirmed"] as const) {
       for (let batch = 0; ; batch++) {
@@ -59,7 +61,9 @@ export const documentIngestion = <M extends SourceFile>(
       },
       get: async (principal: string, id: string) => {
         const selected = await folder(principal, false)
-        return selected ? store.catalog.get(selected.id, options.externalId(id)) : undefined
+        if (!selected) return undefined
+        const entry = await store.catalog.get(selected.id, options.externalId(id))
+        return entry ?? (options.externalId(id) === id ? undefined : store.catalog.get(selected.id, id))
       },
       list: async (principal: string, query: CatalogQuery = {}) => {
         const selected = await folder(principal, false)
@@ -71,12 +75,13 @@ export const documentIngestion = <M extends SourceFile>(
           ? store.catalog.list(selected.id, {
               ...query,
               ...(ast ? { ast } : {}),
-              ...(query.parent === undefined ? {} : { parent: options.externalId(query.parent) }),
+              ...(query.parent === undefined ? {} : { parent: [query.parent].flat().flatMap(both) }),
             })
           : { items: [], hasMore: false }
       },
     },
     collection: folder,
+    settle: ({ until }: { until: () => boolean }) => store.notes.indexWritten({ until }),
     save: async (principal: string, content: SourceContent<M>, hash: string) => {
       const selected = await folder(principal, true)
       if (!selected) throw new Error("folder registration failed")

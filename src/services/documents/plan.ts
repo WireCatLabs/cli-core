@@ -25,6 +25,21 @@ interface WalkStore<M extends SourceFile> {
   read: (scope: string) => SourceWalk<M> | undefined
   save: (walk: SourceWalk<M>) => void
 }
+export type WalkStop = "entries" | "requests" | "deadline" | "cancelled"
+/** A folder walk this call stopped before its end, saved for the next sync to go on from. */
+export interface WalkProgress {
+  folders_left: number
+  /** Entries the walk has found over every call so far. */
+  entries: number
+  /** Folders this call listed: 0 means it moved nothing on. */
+  listed: number
+  stopped: WalkStop
+}
+export type Plan<M extends SourceFile> = { pending: NonNullable<SourceState<M>["pending"]> } | { walk: WalkProgress }
+
+// A round of changes is saved under its own scope: a CLI that validates the walk file keeps only the fields it knows,
+// and these say both what the walk is and which cursor it started from.
+const changesScope = (scope: string, cursor: string) => `${scope}:changes:${cursor}`
 
 export const planDocuments = async <M extends SourceFile>(
   options: SyncOptions<M>,
@@ -33,119 +48,70 @@ export const planDocuments = async <M extends SourceFile>(
   roots: string[],
   limit: number,
   pictures: boolean,
-  abandoned: string[] = [],
   walks?: WalkStore<M>,
-): Promise<NonNullable<SourceState<M>["pending"]>> => {
-  const { isFolder, skipReason, retryable, maxEntries: MAX_ENTRIES, errorOf, query } = options
-  const tooManyEntries = () =>
-    options.limitError?.() ?? new CliError("validation_error", `selected folders exceed the ${MAX_ENTRIES} entry limit`)
+): Promise<Plan<M>> => {
+  const { isFolder, skipReason, retryable, maxEntries, errorOf, query, budget } = options
   const scope = scopeHash(roots, query, options.isDocument !== undefined)
   if (!roots.length && query?.mode !== "include")
     return {
-      scope,
-      cursor: state.cursor ?? "",
-      folders: {},
-      skipped: [],
-      jobs: [...new Set([...Object.keys(state.documents), ...abandoned])].map((id) => ({ id, kind: "remove" })),
+      pending: {
+        scope,
+        cursor: state.cursor ?? "",
+        folders: {},
+        skipped: [],
+        jobs: Object.keys(state.documents).map((id) => ({ id, kind: "remove" })),
+      },
     }
   if (!source)
     throw new CliError("configuration_error", "selected folders or a saved query require an authenticated source")
   if (query?.mode === "include" && !query.list)
     throw new CliError("configuration_error", "a query that includes files must list them")
-  // Listed before the walk: a failure here then costs no folder already walked.
-  const found = query?.mode === "include" && query.list ? await query.list() : []
   const initial = !state.cursor || scope !== state.scope
-  const resumed = initial ? walks?.read(scope) : undefined
-  const cursor = initial ? (resumed?.cursor ?? (await source.startToken())) : (state.cursor as string)
+  const resumed = walks?.read(initial ? scope : changesScope(scope, state.cursor as string))
   const folders: Record<string, M> = initial ? {} : structuredClone(state.folders)
   const files = new Map<string, M>(Object.values(state.documents).map((doc) => [doc.metadata.id, doc.metadata]))
   const changed = new Set<string>()
+  // What the walk saves: every file of a full walk, or what a round of changes touched, a removed file as trashed.
+  const delta = new Map<string, M>()
   for (const skipped of state.skipped) if (skipped.file) files.set(skipped.id, skipped.file)
+  if (initial) files.clear()
   const keep = (file: M) => {
     files.set(file.id, file)
     changed.add(file.id)
+    delta.set(file.id, file)
+  }
+  const drop = (id: string) => {
+    const known = files.get(id)
+    if (known) delta.set(id, { ...known, trashed: true })
+    files.delete(id)
   }
   const container = (file: M) => {
     if (options.isDocument?.(file)) keep(file)
   }
-  const visited = new Set<string>()
-  let discovered = 0
-  const crawl = async (folder: M, ancestry = new Set<string>()): Promise<void> => {
-    if (ancestry.has(folder.id)) throw new CliError("invalid_response", "folder traversal contains a cycle")
-    if (visited.has(folder.id)) return
-    visited.add(folder.id)
-    folders[folder.id] = folder
-    for (const file of await source.children(folder.id)) {
-      if (++discovered > MAX_ENTRIES) throw tooManyEntries()
-      if (isFolder(file)) {
-        container(file)
-        await crawl(file, new Set([...ancestry, folder.id]))
-      } else keep(file)
-    }
-  }
-  let finalCursor = cursor
-  if (initial) {
-    files.clear()
-    const walk: SourceWalk<M> = resumed ?? {
+  // A folder the last finished pass walked keeps its subtree: a round lists only its direct children, and the
+  // source's changes name what changed below them. A new, restored or moved-in folder is walked in full.
+  const walked = (id: string) => !initial && state.folders[id] !== undefined && !state.folders[id]?.trashed
+  let walk = resumed
+  let cursor = state.cursor ?? ""
+  if (!walk && initial) {
+    const start = await source.startToken()
+    walk = {
       scope,
-      cursor,
+      cursor: start,
       stack: [...roots].reverse().map((id) => ({ id, ancestry: [] })),
       visited: [],
       folders: {},
       files: [],
       discovered: 0,
     }
-    for (const id of walk.visited) visited.add(id)
-    Object.assign(folders, walk.folders)
-    for (const file of walk.files) {
-      files.set(file.id, file)
-      changed.add(file.id)
-    }
-    discovered = walk.discovered
-    let savedAt = (options.now ?? Date.now)()
-    const record = () => {
-      walks?.save({ ...walk, visited: [...visited], folders, files: [...files.values()], discovered })
-      savedAt = (options.now ?? Date.now)()
-    }
-    try {
-      for (let step = walk.stack.at(-1); step; step = walk.stack.at(-1)) {
-        if (step.ancestry.includes(step.id)) throw new CliError("invalid_response", "folder traversal contains a cycle")
-        if (visited.has(step.id)) {
-          walk.stack.pop()
-          continue
-        }
-        const folder = step.folder ?? (await source.metadata(step.id))
-        if (!step.folder && (!isFolder(folder) || folder.trashed))
-          throw new CliError("validation_error", "configured root is not an accessible folder")
-        if (!step.folder) container(folder)
-        const children = await source.children(folder.id)
-        if (discovered + children.length > MAX_ENTRIES) throw tooManyEntries()
-        discovered += children.length
-        walk.stack.pop()
-        visited.add(folder.id)
-        folders[folder.id] = folder
-        const nested = []
-        for (const file of children)
-          if (isFolder(file)) {
-            container(file)
-            nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
-          } else keep(file)
-        for (const entry of nested.reverse()) walk.stack.push(entry)
-        if ((options.now ?? Date.now)() - savedAt > SAVE_EVERY_MS) record()
-      }
-    } catch (error) {
-      record()
-      throw error
-    }
-  } else {
+  } else if (!walk) {
     const page = await source.changes(cursor)
-    finalCursor = page.cursor
     const latest = new Map(page.items.map((change) => [change.id, change]))
     const entering: M[] = []
     // Apply all ancestry changes before classifying document scope.
     for (const change of latest.values()) {
       if (change.removed || change.file?.trashed) {
-        files.delete(change.id)
+        drop(change.id)
         if (folders[change.id]) folders[change.id] = { ...(folders[change.id] as M), trashed: true }
       } else if (change.file && isFolder(change.file)) {
         folders[change.id] = change.file
@@ -170,8 +136,85 @@ export const planDocuments = async <M extends SourceFile>(
         folders[root] = { ...previous, trashed: true }
       }
     }
-    for (const folder of entering) if (!visited.has(folder.id) && within(folder, roots, folders)) await crawl(folder)
+    const stack = entering
+      .filter((folder) => within(folder, roots, folders))
+      .reverse()
+      .map((folder) => ({ id: folder.id, ancestry: [], folder }))
+    if (stack.length)
+      walk = {
+        scope: changesScope(scope, cursor),
+        cursor: page.cursor,
+        stack,
+        visited: [],
+        folders: {},
+        files: [],
+        discovered: 0,
+      }
+    else cursor = page.cursor
   }
+  let found: M[] = []
+  if (walk) {
+    const visited = new Set(walk.visited)
+    Object.assign(folders, walk.folders)
+    for (const file of walk.files) {
+      if (file.trashed) drop(file.id)
+      else keep(file)
+    }
+    cursor = walk.cursor
+    const now = options.now ?? Date.now
+    let savedAt = now()
+    const current = walk
+    const record = () => {
+      walks?.save({ ...current, visited: [...visited], folders, files: [...delta.values()] })
+      savedAt = now()
+    }
+    let spent = 0
+    let listed = 0
+    let stopped: WalkStop | null = null
+    try {
+      for (let step = walk.stack.at(-1); step; step = walk.stack.at(-1)) {
+        if (step.ancestry.includes(step.id)) throw new CliError("invalid_response", "folder traversal contains a cycle")
+        if (visited.has(step.id)) {
+          walk.stack.pop()
+          continue
+        }
+        // One folder at least per call, so a folder with more children than the bound still gets listed.
+        stopped = listed > 0 && spent >= maxEntries ? "entries" : (budget?.take() ?? null)
+        if (stopped) break
+        const folder = step.folder ?? (await source.metadata(step.id))
+        if (!step.folder && (!isFolder(folder) || folder.trashed))
+          throw new CliError("validation_error", "configured root is not an accessible folder")
+        if (!step.folder) container(folder)
+        const children = await source.children(folder.id)
+        spent += 1 + children.length
+        listed++
+        walk.discovered += children.length
+        walk.stack.pop()
+        visited.add(folder.id)
+        folders[folder.id] = folder
+        const nested = []
+        for (const file of children)
+          if (isFolder(file)) {
+            container(file)
+            if (walked(file.id)) folders[file.id] = file
+            else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
+          } else keep(file)
+        for (const entry of nested.reverse()) walk.stack.push(entry)
+        if (now() - savedAt > SAVE_EVERY_MS) record()
+      }
+      if (stopped) {
+        record()
+        return {
+          walk: { folders_left: walk.stack.length, entries: walk.discovered, listed, stopped },
+        }
+      }
+      // Listed once the walk is done: a call the walk does not finish would read it for nothing.
+      if (query?.mode === "include" && query.list) found = await query.list()
+    } catch (error) {
+      record()
+      throw error
+    }
+  } else if (query?.mode === "include" && query.list) found = await query.list()
   const matched = new Set<string>()
   for (const file of found) {
     if (
@@ -181,7 +224,6 @@ export const planDocuments = async <M extends SourceFile>(
       matched.has(file.id)
     )
       continue
-    if (!files.has(file.id) && ++discovered > MAX_ENTRIES) throw tooManyEntries()
     // Listed again on every sync, so only a new or changed file is work; a skipped one keeps its skip.
     const prior = state.documents[file.id]?.metadata ?? state.skipped.find((item) => item.id === file.id)?.file
     if (initial || !prior || changedSince(prior, file)) changed.add(file.id)
@@ -215,7 +257,7 @@ export const planDocuments = async <M extends SourceFile>(
         jobs.push({ id, kind: "save", file })
     }
   }
-  for (const id of new Set([...Object.keys(state.documents), ...abandoned])) {
+  for (const id of Object.keys(state.documents)) {
     const file = files.get(id)
     if (!file || !inScope(file, roots, folders, matched, query)) jobs.push({ id, kind: "remove" })
   }
@@ -224,11 +266,13 @@ export const planDocuments = async <M extends SourceFile>(
     Object.entries(folders).filter(([, file]) => within(file, roots, folders) || roots.includes(file.id)),
   )
   return {
-    scope,
-    cursor: finalCursor,
-    folders: scopedFolders,
-    jobs,
-    skipped,
-    ...(query?.mode === "include" ? { matched: [...matched] } : {}),
+    pending: {
+      scope,
+      cursor,
+      folders: scopedFolders,
+      jobs,
+      skipped,
+      ...(query?.mode === "include" ? { matched: [...matched] } : {}),
+    },
   }
 }

@@ -60,18 +60,6 @@ export interface CatalogTreeSource {
 }
 
 const PARENT_BATCH = 200
-/** `parent:a OR parent:b …` over ids as they are: the values go into a parsed template, so none needs escaping. */
-const anyParent = (ids: string[]): CatalogQuery["ast"] => {
-  const ast = parseLucene(Array.from({ length: Math.max(2, ids.length) }, () => "parent:x").join(" OR "), {
-    defaultField: "none",
-  })
-  const clauses = (ast.root as { clauses: { node: { value: string } }[] }).clauses
-  clauses.forEach((clause, i) => {
-    clause.node.value = ids[Math.min(i, ids.length - 1)] as string
-  })
-  return validateQuery(ast, CATALOG_QUERY)
-}
-
 /** The tree's reads through the CLI's catalog, which takes ids without the `.md` the store's entries carry. */
 export const catalogSource = (
   catalog: Pick<DocumentCatalog, "get" | "list">,
@@ -79,14 +67,14 @@ export const catalogSource = (
 ): CatalogTreeSource => ({
   get: (externalId) => catalog.get(principal, catalogId({ externalId })),
   children: (externalId, page) => catalog.list(principal, { parent: catalogId({ externalId }), ...page }),
-  // Each read scans the account's catalog, so the branches cut at the depth are asked about 200 at a time.
+  // Each read scans the account's catalog, so the branches cut at the depth are asked about 200 at a time, in one read.
   withChildren: async (externalIds) => {
     const found = new Set<string>()
     for (let start = 0; start < externalIds.length; start += PARENT_BATCH) {
       const batch = new Set(externalIds.slice(start, start + PARENT_BATCH))
-      const ast = anyParent([...batch].map((externalId) => catalogId({ externalId })))
+      const parent = [...batch].map((externalId) => catalogId({ externalId }))
       for (let offset = 0; ; offset += CATALOG_PAGE) {
-        const page = await catalog.list(principal, { ast, limit: CATALOG_PAGE, offset })
+        const page = await catalog.list(principal, { parent, limit: CATALOG_PAGE, offset })
         for (const item of page.items) for (const parent of item.parents) if (batch.delete(parent)) found.add(parent)
         if (!page.hasMore || batch.size === 0) break
       }

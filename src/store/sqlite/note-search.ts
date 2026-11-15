@@ -490,6 +490,11 @@ export interface NoteSearch extends DocumentPictureStore {
   /** The refs of the newest `limit` notes matching the query; `hasMore` when more match. */
   matchingRefs(query: Omit<NoteQuery, "offset" | "newest">): Promise<{ refs: string[]; hasMore: boolean }>
   indexState(): Promise<NoteIndexState | undefined>
+  /**
+   * Indexes the documents and notes written since the last search, so a reader that cannot write finds them by their
+   * words; stops between batches once `until` says so. 0 under a read-only store.
+   */
+  indexWritten(options?: { until?: () => boolean }): Promise<number>
   /** Live notes' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<NoteChunkToEmbed[]>
   /** Whether any live chunk in this scope has a vector of `model`: none means meaning search has nothing to rank. */
@@ -554,6 +559,7 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
       return matchingNoteRefs(context, query)
     },
     indexState: async () => noteIndexState(database),
+    indexWritten: async ({ until } = {}) => drainNoteIndex(database, stemmerFor, until ? { until } : {}),
     chunksToEmbed: async (model, { after, limit }) => {
       drain()
       const scope = live(undefined, undefined)
