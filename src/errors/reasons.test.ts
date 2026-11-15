@@ -45,6 +45,14 @@ describe("error reasons", () => {
     expect(failed(error).structuredContent).toEqual(object)
   })
 
+  it("takes an app's copy of a core reason with the same code, and refuses one with another code", () => {
+    const copy = { reason: "export.exists", code: "validation_error" as const, message: "exists", details: [] }
+    expect(
+      (failureContext({ reasons: [copy] }).reasons ?? []).filter((entry) => entry.reason === "export.exists"),
+    ).toHaveLength(1)
+    expect(() => failureContext({ reasons: [{ ...copy, code: "not_found" }] })).toThrow("listed twice")
+  })
+
   it("registers every dotted reason the source raises", () => {
     const known = new Set([...REASONS, ...BASE_REASONS].map((entry) => entry.reason))
     const raised = sources(join(import.meta.dirname, "..")).flatMap((path) =>

@@ -42,6 +42,14 @@
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"
     },
+    "./documents/cli": {
+      "types": "./dist/cli/documents/index.d.ts",
+      "default": "./dist/cli/documents/index.js"
+    },
+    "./documents/testing": {
+      "types": "./dist/cli/documents/testing/index.d.ts",
+      "default": "./dist/cli/documents/testing/index.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
