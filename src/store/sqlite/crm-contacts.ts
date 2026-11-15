@@ -32,9 +32,9 @@ const NONE: CrmContactsRemoved = { contacts: 0, persons: 0, personsKept: 0, name
 
 /**
  * Removes, in one transaction, every contact of the account that no kept deal or lead (not deleted, and inside
- * `users` when given) names in a client's role, and that is no contact of a kept company. A contact the owner decided
- * about, or one anything else points at, stays; so does one saved at or after `before`, whose deal may still be on
- * its way. A person the removed contacts leave empty is deleted unless anything still points at them. People named
+ * `users` when given) names in a client's role, that is no contact of a kept company, and that the CRM does not
+ * assign to one of `users`. A contact the owner decided about, or one anything else points at, stays; so does one
+ * saved at or after `before`, whose deal may still be on its way. A person the removed contacts leave empty is deleted unless anything still points at them. People named
  * after a contact keep that name without the import's `null #<id>`; the owner's person is never renamed.
  */
 export const removeCrmContacts = (
@@ -86,6 +86,9 @@ export const removeCrmContacts = (
         "INSERT INTO temp.crm_gone SELECT i.id, l.person_id FROM identities i " +
           `LEFT JOIN identity_links l ON l.identity_id = i.id WHERE ${contactOf} ` +
           "AND i.created_at < ? AND i.updated_at < ? " +
+          (users === undefined
+            ? ""
+            : "AND coalesce(json_extract(i.metadata, '$.assignee'), '') NOT IN (SELECT id FROM temp.crm_scope) ") +
           `AND NOT ${named("deals", "deal")} AND NOT ${named("leads", "lead")} ` +
           "AND NOT EXISTS (SELECT 1 FROM links k JOIN records r ON r.entity_type = 'organization' " +
           "AND r.entity_id = k.to_id WHERE k.from_type = 'person' AND k.from_id = l.person_id " +

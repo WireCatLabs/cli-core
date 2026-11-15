@@ -562,6 +562,18 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     return null
   }
 
+  /** Kept in the identity's metadata, as a deal keeps its own, so the contact cleanup under `mine` can read it. */
+  const assignContact = (key: AccountKey, externalId: string, assignee: string | null) => {
+    const user = assignee ? crmIdentityId(key, normalCrmUserId(assignee), "user") : null
+    database
+      .prepare(
+        "UPDATE identities SET metadata = CASE WHEN ? IS NULL THEN json_remove(metadata, '$.assignee') " +
+          "ELSE json_set(coalesce(metadata, '{}'), '$.assignee', ?) END " +
+          "WHERE provider = ? AND external_id = ? AND json_extract(metadata, '$.assignee') IS NOT ?",
+      )
+      .run(user, user, key.provider, crmIdentityId(key, externalId), user)
+  }
+
   const saveItems = (key: AccountKey, kind: DealKind, items: CrmItem[], users: boolean): CrmSaved =>
     write(database, () => {
       const accountId = account(key)
@@ -813,6 +825,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
         const tally = tallied()
         const pending = pendingBook(accountId)
         for (const contact of contacts) {
+          if (contact.assignee !== undefined) assignContact(key, contact.externalId, contact.assignee)
           const person = nameUnnamed(key, contact.externalId, "contact", textOf(contact.name, 200))
           const email = textOf(contact.email, 320)?.toLowerCase()
           const sharing = email ? peopleSharing(key, contact.externalId, email) : 0
