@@ -18,6 +18,10 @@ interface ShownPipeline {
   kind: string
   stages: ShownStage[]
   totals: { items: number; open: number; won: number; lost: number; win_rate: number | null }
+  closed?: { won: number; lost: number; win_rate: number | null; won_amounts: StageAmount[] }
+  cycle?: { median_days: number | null; items: number }
+  window?: { since: string | null; until: string | null }
+  owners?: { assignee: string | null; name: string | null; open: number; won: number; lost: number }[]
 }
 
 const sumOf = (amounts: Omit<StageAmount, "items">[]) =>
@@ -52,9 +56,25 @@ export const pipelineView = (body: Body, color: boolean): string => {
     "went on": percent(stage.conversion),
   }))
   const { won, lost, win_rate } = pipeline.totals
+  const { closed, cycle, window, owners = [] } = pipeline
+  // Without a window every closed row is in the totals already.
+  const windowed = Boolean(window?.since || window?.until)
+  const outcomes = [
+    `won: ${won} · lost: ${lost} · win rate ${percent(win_rate)}`,
+    ...(closed && windowed
+      ? [
+          `closed in the window: won ${closed.won} (${sumOf(closed.won_amounts)}) · lost ${closed.lost} · ` +
+            `win rate ${percent(closed.win_rate)}`,
+        ]
+      : []),
+    ...(cycle?.median_days == null ? [] : [`days to win: ${cycle.median_days} (median of ${cycle.items})`]),
+    ...owners.map(
+      (one) => `${one.name ?? one.assignee ?? "no owner"}: ${one.open} open · ${one.won} won · ${one.lost} lost`,
+    ),
+  ]
   return [
     `${pipeline.name} (${pipeline.ref})`,
     renderPretty(rows, { color }),
-    `${openStages(pipeline.stages)}\nwon: ${won} · lost: ${lost} · win rate ${percent(win_rate)}`,
+    `${openStages(pipeline.stages)}\n${outcomes.join("\n")}`,
   ].join("\n\n")
 }

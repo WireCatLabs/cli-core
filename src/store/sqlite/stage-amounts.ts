@@ -15,20 +15,21 @@ export interface StageAmounts {
 
 const TABLES = { deal: "deals", lead: "leads" } as const
 
-/** What stands in each stage of `stageIds`, in that order: `cutoff` (ms) keeps only rows made since then. */
+/** What stands in each stage of `stageIds`, in that order, of the rows made in the window (epoch ms, inclusive). */
 export const stageAmountsOf = (
   { database }: StoreContext,
   kind: DealKind,
   stageIds: number[],
-  cutoff: number | null,
+  { since, until }: { since: number | null; until: number | null },
 ): StageAmounts[] => {
   const rows = database
     .prepare(
       "SELECT stage_id, currency, count(*) AS items, coalesce(sum(amount), 0) AS units " +
         `FROM ${TABLES[kind]} WHERE stage_id IN (${stageIds.map(() => "?").join(", ") || "NULL"}) ` +
-        "AND deleted_at IS NULL AND (? IS NULL OR created_at >= ?) GROUP BY stage_id, currency ORDER BY currency",
+        "AND deleted_at IS NULL AND (? IS NULL OR created_at >= ?) AND (? IS NULL OR created_at <= ?) " +
+        "GROUP BY stage_id, currency ORDER BY currency",
     )
-    .all(...stageIds, cutoff, cutoff)
+    .all(...stageIds, since, since, until, until)
   return stageIds.map((stage) => {
     const within = rows.filter((row) => Number(row.stage_id) === stage)
     return {

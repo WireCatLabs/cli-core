@@ -372,6 +372,31 @@ describe("people and organizations writes", () => {
     expect(await store.crm.count(PORTAL, "organization")).toBe(before - 1)
   })
 
+  it("an update that hands an own contact to another owner removes it and its phones from the copy (R-2)", async () => {
+    const { cli, store } = await setup({ admin: false }, { permissions: { "crm.assign-others": "allow" } })
+    await cli("people", "update", "p3", "--phone", "+34600000003")
+    const identity = { provider: PORTAL.provider, id: crmIdentityId(PORTAL, "p3") }
+    expect(await store.people.personOf(identity)).toBeDefined()
+    const before = await store.crm.count(PORTAL, "person")
+    expect((await cli("people", "update", "p3", "--owner", "9")).item).toMatchObject({ stored: false })
+    expect(await store.crm.count(PORTAL, "person")).toBe(before - 1)
+    expect(await store.people.personOf(identity)).toBeUndefined()
+  })
+
+  it("--email and --phone, repeated, replace a contact's and a company's lists; a national phone is refused", async () => {
+    const { cli, source } = await setup()
+    const person = await cli("people", "update", "p3", "--email", "a@example.com", "--email", "b@example.com")
+    expect(person.item.person).toMatchObject({
+      emails: [{ value: "a@example.com" }, { value: "b@example.com" }],
+    })
+    const company = await cli("organizations", "create", "--name", "Example LLC", "--phone", "+34 600 111 222")
+    expect(company.item.organization).toMatchObject({ phones: [{ value: "+34600111222" }] })
+    await expect(cli("people", "update", "p3", "--phone", "600111222")).rejects.toMatchObject({
+      details: { reason: "crm.record-field", param: "--phone" },
+    })
+    expect(source.writes).toHaveLength(2)
+  })
+
   it("a lost answer is outcome_unknown, journaled, and the copy not stored", async () => {
     const { cli, source, store } = await setup()
     const before = await store.crm.count(PORTAL, "person")

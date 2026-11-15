@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
-import { CRM_KINDS, type CrmItem, type CrmPerson, type CrmPipeline } from "../../domain/crm.js"
+import { CRM_KINDS, type CrmItem, type CrmOrganization, type CrmPerson, type CrmPipeline } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import type { ContractCase } from "../../meetings/index.js"
 import { CRM_VERBS, type CrmWriter } from "../writer.js"
@@ -154,9 +154,11 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
                   { firstName: "Anna", lastName: "Example", emails: ["anna@example.com"] },
                   operation(),
                 )
-              : await writer.create(kind, { name: "Example contract company" }, operation())
+              : await writer.create(kind, { name: "Example contract company", phones: ["+34600000003"] }, operation())
           assert.ok(made.externalId, `${kind}: an id`)
           assert.ok(made.name, `${kind}: a name`)
+          if (kind === "organization")
+            assert.ok(((made as CrmOrganization).phones ?? []).includes("+34600000003"), "organization: its phone")
           if (!writer.capabilities.verbs.includes("update")) continue
           const changed =
             kind === "person"

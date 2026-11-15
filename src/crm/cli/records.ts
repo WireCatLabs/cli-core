@@ -472,7 +472,14 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
         .option("--first-name <name>", "the first name; empty clears it")
         .option("--last-name <name>", "the last name; empty clears it")
         .option("--position <title>", "the job title; empty clears it")
+    const repeated = (value: string, previous: string[] = []) => [...previous, value]
     command
+      .option("--email <address>", "an e-mail address to give it; repeat it for more; replaces its list", repeated)
+      .option(
+        "--phone <phone>",
+        "a phone number to give it, in international form starting with +; repeat it for more; replaces its list",
+        repeated,
+      )
       .option(
         "--owner <user>",
         "the CRM user it is assigned to; anyone but the sign-in's own user checks crm.assign-others",
@@ -497,10 +504,14 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
   }
   type Typed = Omit<CrmRecordInput, "custom" | "emails" | "phones"> & {
     field?: string[]
+    email?: string[]
+    phone?: string[]
     operationId?: string
   }
-  const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmRecordInput => ({
+  const inputOf = ({ field, email, phone, operationId: _id, ...rest }: Typed): CrmRecordInput => ({
     ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+    ...(email ? { emails: email } : {}),
+    ...(phone ? { phones: phone } : {}),
     ...(field?.length ? { custom: fieldPairsOf(field) } : {}),
   })
   const contextOf = (run: CrmRun, command: Command): CrmWriteContext => {

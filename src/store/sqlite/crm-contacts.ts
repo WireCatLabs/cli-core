@@ -1,6 +1,6 @@
 import type { AccountKey } from "../types.js"
 import { findAccountPk, OWN, referencesTo } from "./accounts.js"
-import { crmAccountPrefix, crmIdentityId } from "./crm-rows.js"
+import { crmAccountPrefix, crmIdentityId, PERSON_RECORD } from "./crm-rows.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
@@ -36,12 +36,18 @@ const NONE: CrmContactsRemoved = { contacts: 0, persons: 0, personsKept: 0, name
  * assign to one of `users`. A contact the owner decided about, or one anything else points at, stays; so does one
  * saved at or after `before`, whose deal may still be on its way. A person the removed contacts leave empty is
  * deleted unless anything still points at them. People named after a contact keep that name without the import's
- * `null #<id>`; the owner's person is never renamed.
+ * `null #<id>`; the owner's person is never renamed. `only` removes just these contacts, by the CRM's id, whatever
+ * names them and whenever they were saved.
  */
 export const removeCrmContacts = (
   context: StoreContext,
   key: AccountKey,
-  { users, before, dryRun = false }: { users?: readonly string[]; before: number; dryRun?: boolean },
+  {
+    users,
+    before,
+    dryRun = false,
+    only,
+  }: { users?: readonly string[]; before: number; dryRun?: boolean; only?: readonly string[] },
 ): CrmContactsRemoved => {
   const { database } = context
   const accountId = findAccountPk(context, key)
@@ -86,21 +92,26 @@ export const removeCrmContacts = (
       .prepare(
         "INSERT INTO temp.crm_gone SELECT i.id, l.person_id FROM identities i " +
           `LEFT JOIN identity_links l ON l.identity_id = i.id WHERE ${contactOf} ` +
-          "AND i.created_at < ? AND i.updated_at < ? " +
-          (users === undefined
-            ? ""
-            : "AND coalesce(json_extract(i.metadata, '$.assignee'), '') NOT IN (SELECT id FROM temp.crm_scope) ") +
-          `AND NOT ${named("deals", "deal")} AND NOT ${named("leads", "lead")} ` +
-          "AND NOT EXISTS (SELECT 1 FROM links k JOIN records r ON r.entity_type = 'organization' " +
-          "AND r.entity_id = k.to_id WHERE k.from_type = 'person' AND k.from_id = l.person_id " +
-          "AND +k.to_type = 'organization' AND k.kind = 'member-of' AND k.role = 'contact' AND k.source = 'crm' " +
-          `AND k.deleted_at IS NULL AND r.account_id = ${accountId} AND r.type = 'organization' ` +
-          "AND r.deleted_at IS NULL) " +
+          (only === undefined
+            ? "AND i.created_at < ? AND i.updated_at < ? " +
+              (users === undefined
+                ? ""
+                : "AND coalesce(json_extract(i.metadata, '$.assignee'), '') NOT IN (SELECT id FROM temp.crm_scope) ") +
+              `AND NOT ${named("deals", "deal")} AND NOT ${named("leads", "lead")} ` +
+              "AND NOT EXISTS (SELECT 1 FROM links k JOIN records r ON r.entity_type = 'organization' " +
+              "AND r.entity_id = k.to_id WHERE k.from_type = 'person' AND k.from_id = l.person_id " +
+              "AND +k.to_type = 'organization' AND k.kind = 'member-of' AND k.role = 'contact' AND k.source = 'crm' " +
+              `AND k.deleted_at IS NULL AND r.account_id = ${accountId} AND r.type = 'organization' ` +
+              "AND r.deleted_at IS NULL) "
+            : "AND i.external_id IN (SELECT value FROM json_each(?)) ") +
           "AND NOT EXISTS (SELECT 1 FROM identity_link_events e WHERE e.identity_id = i.id AND e.author = 'owner') " +
           "AND NOT EXISTS (SELECT 1 FROM temp.crm_proposed c WHERE c.decided AND c.ref = i.provider || ':' || " +
           "i.external_id)",
       )
-      .run(...contact, before, before)
+      .run(
+        ...contact,
+        ...(only === undefined ? [before, before] : [JSON.stringify(only.map((id) => crmIdentityId(key, id)))]),
+      )
     database.exec(`DELETE FROM temp.crm_gone WHERE id IN (${identityRefs})`)
     // A same-email join left the contact's first person empty; it goes too, unless something points at it.
     database.exec("INSERT OR IGNORE INTO temp.crm_persons SELECT person FROM temp.crm_gone WHERE person IS NOT NULL")
@@ -145,6 +156,13 @@ export const removeCrmContacts = (
         `json_extract(payload, '$.identity') IN (SELECT provider || ':' || external_id FROM identities WHERE id IN ${gone}) ` +
         `OR json_extract(payload, '$.with') IN (SELECT provider || ':' || external_id FROM identities WHERE id IN ${gone}))`,
     )
+    // The contact's own fields go with it, marked deleted as the CRM's other rows are (WC-DATA-7).
+    database
+      .prepare(
+        `UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL AND external_id IN ` +
+          `(SELECT substr(external_id, ?) FROM identities WHERE id IN ${gone})`,
+      )
+      .run(context.now(), accountId, PERSON_RECORD, prefix.length + 1)
     for (const table of ["identity_revisions", "identity_link_events", "identity_links", "account_identities"])
       database.exec(`DELETE FROM ${table} WHERE identity_id IN ${gone}`)
     const contacts = database.prepare(`DELETE FROM identities WHERE id IN ${gone}`).run().changes

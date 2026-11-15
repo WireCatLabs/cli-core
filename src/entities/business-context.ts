@@ -169,7 +169,7 @@ const { untrusted: _, ...dealRow } = deal.entries
 /** One deal or lead: the row, its stages, client, people, project, money and what its people said in its time. */
 export const dealContext: v.GenericSchema = v.strictObject({
   deal: v.strictObject(dealRow),
-  stages: section(v.strictObject({ from: nullableText, to: text, pipeline: reference, at: time })),
+  stages: section(v.strictObject({ from: nullableText, to: text, pipeline: reference, at: time, exact: v.boolean() })),
   organization: v.nullable(v.strictObject({ ref: reference, name: nullableText, categories })),
   participants: section(related),
   owner: v.nullable(related),

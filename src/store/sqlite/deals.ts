@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
 import type { CrmValue } from "../../domain/crm.js"
 import {
@@ -22,13 +23,22 @@ import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { suggestBaseStages } from "./base-suggest.js"
 import { activityTexts } from "./crm-activities.js"
 import { crmAccountPrefix } from "./crm-rows.js"
+import { stageEntriesOf } from "./crm-stage-entries.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  bounded,
+  boundOf,
+  dayIn,
+  type FunnelCounts,
+  type PipelinePeriod,
+  pipelinePeriod,
+  SHOWN_STAGE,
+} from "./pipeline-period.js"
 import { type AuthorInfo, isoDate, limitOf, oneOf, type Party, refuse, reviewedRowsOver, text } from "./reviewed.js"
 import { pageOfRows } from "./rows-page.js"
-import { type StageAmounts, stageAmountsOf } from "./stage-amounts.js"
 import { write } from "./transaction.js"
 
 export interface PipelineStage {
@@ -52,28 +62,28 @@ export interface Pipeline {
   createdAt: string
 }
 
-export interface FunnelStage extends PipelineStage, StageAmounts {
-  /** Rows that got this far: entered this stage or a later one that is not lost, or were won. */
-  reached: number
-  /** `reached` of the next stage that is not lost over this stage's, 0–1; `null` for the last or an empty one. */
-  conversion: number | null
-}
+export interface FunnelStage extends PipelineStage, FunnelCounts {}
 
-/** A pipeline with its funnel, counted from `pipeline_stage_changes`. */
-export interface PipelineReport extends Omit<Pipeline, "stages"> {
+/** A pipeline with its funnel and outcomes over a window (`pipelinePeriod`). */
+export interface PipelineReport extends Omit<Pipeline, "stages">, Omit<PipelinePeriod, "stages"> {
   stages: FunnelStage[]
-  totals: { items: number; open: number; won: number; lost: number; winRate: number | null }
-  /** `YYYY-MM-DD`: only rows made since that day are counted; `null` for all. */
+  /** The window's bounds as ISO times; `null` is open. */
+  window: { since: string | null; until: string | null }
+  /** `YYYY-MM-DD`: the UTC day `window.since` falls on; `null` for all. */
   since: string | null
 }
 
-/** One stage a deal or a lead entered, as the store saw it: a CRM copy's change is dated by the sync that saw it. */
+/**
+ * One stage a deal or a lead entered: from the CRM's own history (`exact`), else as the store saw it, a CRM copy's
+ * change dated by the sync that saw it.
+ */
 export interface StageChange {
-  /** `null` for the stage it started in. */
+  /** `null` for the stage it started in, or the first the CRM's history names. */
   from: string | null
   to: string
   pipeline: string
   at: string
+  exact: boolean
 }
 
 export interface DealPerson extends Party {
@@ -156,8 +166,21 @@ export interface DealInput {
   evidence?: string[]
 }
 
+export interface PipelineOptions {
+  kind?: DealKind
+  since?: string
+  until?: string
+  zone?: string
+  account?: DealScope
+}
+
 /** Whose pipelines: the owner's own, one CRM account's copies, or, left out, every one. */
 export type DealScope = "own" | AccountKey
+
+export interface TimeBounds {
+  since?: number
+  until?: number
+}
 
 export interface DealFilter {
   /** `deal` when left out. */
@@ -174,6 +197,14 @@ export interface DealFilter {
   project?: string
   organization?: string
   proposedBy?: ProposedByFilter
+  /** A CRM copy's assignee as the identity `<account>/user/<id>`; `null` is none. */
+  owner?: string | null
+  /** Epoch ms bounds, inclusive, on when the CRM changed or made it. */
+  updated?: TimeBounds
+  created?: TimeBounds
+  /** On the day it was won or lost, the bounds' days in `zone` (the system's when left out). */
+  closed?: TimeBounds
+  zone?: string
   /** 1–500, 100 by default; newest written first. */
   limit?: number
   /** Rows to skip before the first one answered, for the next page. */
@@ -226,11 +257,11 @@ export interface PipelineInput {
 export interface DealsStore {
   addPipeline(input: PipelineInput): Promise<Pipeline>
   pipelines(filter?: { kind?: DealKind; account?: DealScope }): Promise<Pipeline[]>
-  /** One pipeline by `pipeline:<id>` or a name only one pipeline has, with its funnel. */
-  pipeline(
-    reference: string,
-    options?: { kind?: DealKind; since?: string; account?: DealScope },
-  ): Promise<PipelineReport>
+  /**
+   * One pipeline by `pipeline:<id>` or a name only one pipeline has, with its funnel and outcomes over the window:
+   * `since` and `until` are a `YYYY-MM-DD` day or an ISO time, `zone` the owner's for closed days.
+   */
+  pipeline(reference: string, options?: PipelineOptions): Promise<PipelineReport>
   add(input: DealInput): Promise<Deal>
   /** `deal:<id>` or `lead:<id>`; a bare id is a deal. */
   get(reference: string): Promise<Deal>
@@ -474,7 +505,7 @@ export const dealOperationsOver = (context: StoreContext) => {
         "SELECT s.*, (SELECT count(*) FROM deals d WHERE d.stage_id = s.id AND d.status = 'open' AND d.deleted_at IS NULL) + " +
           "(SELECT count(*) FROM leads l WHERE l.stage_id = s.id AND l.status = 'open' AND l.deleted_at IS NULL) AS open " +
           `FROM pipeline_stages s WHERE s.pipeline_id IN (${pipelineIds.map(() => "?").join(", ") || "NULL"}) ` +
-          "ORDER BY s.pipeline_id, s.position, s.id",
+          `AND ${SHOWN_STAGE} ORDER BY s.pipeline_id, s.position, s.id`,
       )
       .all(...pipelineIds)
 
@@ -538,65 +569,19 @@ export const dealOperationsOver = (context: StoreContext) => {
     return row ?? refuse("the pipeline has no stages", "deal.stage")
   }
 
-  const funnelOf = (pipeline: Pipeline, since: string | null): PipelineReport => {
-    const kind = pipeline.kind
-    const cutoff = since === null ? null : Date.parse(`${since}T00:00:00Z`)
-    const items = database
-      .prepare(
-        `SELECT d.id, d.status, d.stage_id FROM ${TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id ` +
-          "WHERE s.pipeline_id = ? AND d.deleted_at IS NULL AND (? IS NULL OR d.created_at >= ?)",
-      )
-      .all(Number(pipeline.id), cutoff, cutoff)
-    const stages = database
-      .prepare("SELECT id, position, outcome FROM pipeline_stages WHERE pipeline_id = ? ORDER BY position, id")
-      .all(Number(pipeline.id))
-    const order = new Map(stages.map((stage, at) => [Number(stage.id), at]))
-    const standing = stageAmountsOf(
-      context,
-      kind,
-      stages.map((stage) => Number(stage.id)),
-      cutoff,
-    )
-    const lostStage = new Set(stages.filter((stage) => stage.outcome === "lost").map((stage) => Number(stage.id)))
-    const entered = new Map<number, number[]>()
-    for (const change of database
-      .prepare("SELECT item_id, to_stage_id FROM pipeline_stage_changes WHERE item_type = ? AND pipeline_id = ?")
-      .all(kind, Number(pipeline.id))) {
-      const list = entered.get(Number(change.item_id)) ?? []
-      list.push(Number(change.to_stage_id))
-      entered.set(Number(change.item_id), list)
+  const funnelOf = (pipeline: Pipeline, { since, until, zone = timezoneOf() }: PipelineOptions): PipelineReport => {
+    const window = {
+      since: boundOf(since, "the first day counted"),
+      until: boundOf(until, "the last day counted", true),
     }
-    const furthest = items.map((item) => {
-      if (item.status === "won") return Number.POSITIVE_INFINITY
-      const reached = [...(entered.get(Number(item.id)) ?? []), Number(item.stage_id)]
-        .filter((stage) => !lostStage.has(stage))
-        .map((stage) => order.get(stage) ?? -1)
-      return Math.max(-1, ...reached)
-    })
-    const lost = items.filter((item) => item.status === "lost").length
-    const reachedAt = (at: number) =>
-      lostStage.has(Number(stages[at]?.id)) ? lost : furthest.filter((far) => far >= at).length
-    const funnel = pipeline.stages.map((stage, at) => {
-      const reached = reachedAt(at)
-      const next = stages.findIndex((one, after) => after > at && !lostStage.has(Number(one.id)))
-      const conversion =
-        lostStage.has(Number(stages[at]?.id)) || next === -1 || reached === 0
-          ? null
-          : Math.round((reachedAt(next) / reached) * 1000) / 1000
-      return { ...stage, reached, conversion, ...(standing[at] as StageAmounts) }
-    })
-    const won = items.filter((item) => item.status === "won").length
+    const { stages, ...period } = pipelinePeriod(context, pipeline, window, zone)
+    const at = (bound: number | null) => (bound === null ? null : new Date(bound).toISOString())
     return {
       ...pipeline,
-      stages: funnel,
-      totals: {
-        items: items.length,
-        open: items.length - won - lost,
-        won,
-        lost,
-        winRate: won + lost === 0 ? null : Math.round((won / (won + lost)) * 1000) / 1000,
-      },
-      since,
+      ...period,
+      stages: pipeline.stages.map((stage, index) => ({ ...stage, ...(stages[index] as FunnelCounts) })),
+      window: { since: at(window.since), until: at(window.until) },
+      since: at(window.since)?.slice(0, 10) ?? null,
     }
   }
 
@@ -664,13 +649,9 @@ export const dealOperationsOver = (context: StoreContext) => {
     },
     pipelines: (filter: { kind?: DealKind; account?: DealScope } = {}): Pipeline[] =>
       pipelinesOf(pipelineRows(filter.kind === undefined ? undefined : kindOf(filter.kind), filter.account)),
-    pipeline: (
-      reference: string,
-      options: { kind?: DealKind; since?: string; account?: DealScope } = {},
-    ): PipelineReport => {
+    pipeline: (reference: string, options: PipelineOptions = {}): PipelineReport => {
       const kind = options.kind === undefined ? undefined : kindOf(options.kind)
-      const since = isoDate(options.since, "the first day counted")
-      return funnelOf(pipelinesOf([pipelineRow(reference, kind, options.account)])[0] as Pipeline, since)
+      return funnelOf(pipelinesOf([pipelineRow(reference, kind, options.account)])[0] as Pipeline, options)
     },
     add: (input: DealInput): Deal => {
       const kind = kindOf(input.kind)
@@ -748,19 +729,26 @@ export const dealOperationsOver = (context: StoreContext) => {
     get: (reference: string): Deal => read(reference),
     stages: (reference: string): StageChange[] => {
       const { kind, row } = rowOf(reference)
-      return database
-        .prepare(
-          "SELECT c.pipeline_id, c.changed_at, f.name AS from_name, t.name AS to_name FROM pipeline_stage_changes c " +
-            "LEFT JOIN pipeline_stages f ON f.id = c.from_stage_id JOIN pipeline_stages t ON t.id = c.to_stage_id " +
-            "WHERE c.item_type = ? AND c.item_id = ? ORDER BY c.id",
-        )
-        .all(kind, Number(row.id))
-        .map((change) => ({
-          from: change.from_name == null ? null : String(change.from_name),
-          to: String(change.to_name),
-          pipeline: `pipeline:${change.pipeline_id}`,
-          at: iso(change.changed_at),
-        }))
+      const own = stageEntriesOf(database, kind, { item: Number(row.id) })
+      const stages = new Map(
+        database
+          .prepare(
+            `SELECT id, name, pipeline_id FROM pipeline_stages WHERE id IN (${own.map(() => "?").join(", ") || "NULL"})`,
+          )
+          .all(...own.map(({ toStageId }) => toStageId))
+          .map((stage) => [Number(stage.id), stage]),
+      )
+      return own.map((entry, at) => {
+        const stage = stages.get(entry.toStageId) as Row
+        const before = at === 0 ? undefined : stages.get((own[at - 1] as typeof entry).toStageId)
+        return {
+          from: before === undefined ? null : String(before.name),
+          to: String(stage.name),
+          pipeline: `pipeline:${stage.pipeline_id}`,
+          at: iso(entry.at),
+          exact: entry.exact,
+        }
+      })
     },
     list: (filter: DealFilter = {}): ListResult<Deal> => {
       const kind = kindOf(filter.kind)
@@ -782,15 +770,34 @@ export const dealOperationsOver = (context: StoreContext) => {
           ? ""
           : `AND (d.account_id IS NULL OR a.provider || ':' || a.external_id IN (${keys.map(() => "?").join(", ") || "NULL"})) `
       const offset = Math.max(0, Math.trunc(filter.offset ?? 0))
+      const zone = filter.zone ?? timezoneOf()
+      const days = {
+        since: filter.closed?.since === undefined ? undefined : dayIn(filter.closed.since, zone),
+        until: filter.closed?.until === undefined ? undefined : dayIn(filter.closed.until, zone),
+      }
+      const within = [
+        ...bounded("d.updated_at", filter.updated),
+        ...bounded("d.closed_date", filter.closed && days),
+        ...bounded("d.created_at", filter.created),
+        ...(filter.owner === undefined
+          ? []
+          : [
+              filter.owner === null
+                ? { sql: "json_extract(d.metadata, '$.assignee') IS NULL", params: [] }
+                : { sql: "json_extract(d.metadata, '$.assignee') = ?", params: [filter.owner] },
+            ]),
+      ]
       const rows = database
         .prepare(
-          `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +
+          `${itemsSql(kind)} WHERE d.deleted_at IS NULL ${within.map(({ sql }) => `AND ${sql} `).join("")}` +
+            "AND (? IS NULL OR d.status = ?) " +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.id = ?) " +
             "AND (? IS NULL OR d.organization_id = ?) AND (? = 0 OR d.account_id IS NULL) " +
             `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) ${inAccounts}AND ${by.sql} ` +
             "ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?",
         )
         .all(
+          ...within.flatMap(({ params }) => params),
           status,
           status,
           project,

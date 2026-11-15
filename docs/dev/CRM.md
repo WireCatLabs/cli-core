@@ -13,6 +13,8 @@ What a CRM CLI (b24, amo) gets from `@wirecat/cli-core/crm` and `/crm/cli`, and 
 `CrmSource` is one CRM account as its adapter reads it: `pipelines`, `changes` (the sync's change feed), `fields`,
 `ids`, `users`, `departments`, `activities`, `stageHistory`. `syncCrm` copies the owner's own deals, leads, contacts
 and companies into the store. The copy is never the whole CRM (NEED-2661), so another client is found by a live read.
+An activity's `on` may name contacts and companies as well as deals and leads; `stageHistory` is read on every sync,
+and the funnel, `deals show` and the stage tasks count it.
 
 ## Live reads
 
@@ -44,10 +46,12 @@ guard, keys, journal and `operation_id` as `deals create`, the keys `people.crea
 and `crm.assign-others` for an owner other than the sign-in's user. The CRM's answer is stored by `savePeople` or
 `saveOrganizations`, as a sync would, but only when it is the sign-in's own client: a write of anyone else's answers
 it without phones and e-mails, spends none of the day's views, and says `stored: false`. An update that gives a
-company to someone else removes it from the copy; a contact stays until a sync's scope removes it.
+contact or company to someone else removes it from the copy (`store.crm.removeContact`, `remove`), the contact with its
+identity's phones and e-mails.
 
-A contact's e-mails and phones are in `CrmPersonFields` for an adapter's own use; the commands do not offer them,
-since the shared flag vocabulary has no `--email` or `--phone` yet.
+`--email <address>` and `--phone <phone>`, each repeated for more, replace the contact's or company's whole list
+(`CrmPersonFields`, `CrmOrganizationFields`); a phone is taken in international form only and sent as E.164. An
+adapter maps both lists for both kinds; `crmWriteContract` checks a company's phone.
 
 ## Foreign contacts
 

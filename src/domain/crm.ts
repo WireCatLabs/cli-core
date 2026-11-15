@@ -102,8 +102,8 @@ export interface CrmPerson {
   /** The CRM user the contact is assigned to: under `mine`, one assigned to a user in scope stays with no deal. */
   assignee?: string | null
   /**
-   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store keeps only
-   * `assignee` of them. Times are epoch ms; `url` is the CRM's own page for it.
+   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store keeps them
+   * too, a field left out keeping its stored value. Times are epoch ms; `url` is the CRM's own page for it.
    */
   createdAt?: number | null
   updatedAt?: number | null
@@ -132,8 +132,8 @@ export interface CrmOrganization {
   /** A live read's contacts of the company, by their id. */
   people?: string[]
   /**
-   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store does not keep
-   * them. `assignee` is the CRM user it is assigned to; times are epoch ms; `url` the CRM's own page for it.
+   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store keeps them,
+   * one left out keeping its stored value. `assignee` is the CRM user it is assigned to; times are epoch ms.
    */
   assignee?: string | null
   createdAt?: number | null
@@ -194,7 +194,7 @@ export const CRM_ACTIVITY_KINDS = ["call", "email", "meeting", "todo", "task", "
 export type CrmActivityKind = (typeof CRM_ACTIVITY_KINDS)[number]
 
 /**
- * An activity on the CRM's deals and leads, as the CRM has it. `externalId` is unique among the account's activities
+ * An activity on the CRM's deals, leads, contacts and companies, as the CRM has it. `externalId` is unique among the account's activities
  * of every kind (a source with separate lists prefixes them). Contact data the CRM keeps on it, such as a call's
  * phone number, is never part of it: it would bypass the limits on reading clients' contacts.
  */
@@ -211,8 +211,8 @@ export interface CrmActivity {
   assignee?: string | null
   createdAt: number
   updatedAt: number
-  /** The deals and leads it is on, by the CRM's ids; one on neither is not stored. */
-  on: { kind: DealKind; externalId: string }[]
+  /** The deals, leads, contacts and companies it is on, by the CRM's ids; one on none the copy holds is not stored. */
+  on: { kind: CrmKind; externalId: string }[]
 }
 
 /** The account's scope settings: `also` are the users whose deals `mine` copies, in place of the sign-in's own. */

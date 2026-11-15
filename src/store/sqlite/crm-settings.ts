@@ -211,7 +211,7 @@ export interface CrmStageMove {
   pipelineName: string
 }
 
-/** When stage tasks were last opened, or the rules first set: where the CRM's stage history is first read from. */
+/** When the stage-task rules were first set: a stage entered before then opens no task. */
 export const crmStageTasksSince = (database: CacheDatabase, key: AccountKey): number | null => {
   const row = database
     .prepare("SELECT at FROM store_settings WHERE key = ?")
@@ -219,9 +219,12 @@ export const crmStageTasksSince = (database: CacheDatabase, key: AccountKey): nu
   return row ? Number(row.at) : null
 }
 
+/** `at` stays when the rules were first set: the stage history counts from then, whenever the history arrives. */
 export const saveStageMovesMark = (database: CacheDatabase, key: AccountKey, through: number, now: number): void => {
   database
-    .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+    .prepare(
+      "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+    )
     .run(stageTasksMark(crmSettingKey(key, "stage-tasks")), JSON.stringify(through), now)
 }
 

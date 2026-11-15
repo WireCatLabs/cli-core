@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, metaOf, sharedCommand } from "@wirecat/cli-base/commands"
-import type { QueryRegistry } from "@wirecat/cli-base/query"
+import { type QueryRegistry, timezoneOf } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
@@ -9,17 +9,29 @@ import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/c
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
-import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
+import {
+  listQuery,
+  nativeField,
+  nativeTerms,
+  queryTerms,
+  termField,
+  timeBounds,
+  typedQuery,
+  unfilteredQuery,
+  withQuery,
+} from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { addStoreMaintenanceCommands } from "../../cli/messenger/store-maintenance-command.js"
 import { lineOf } from "../../cli/steps.js"
-import { CRM_KINDS, type CrmKind } from "../../domain/crm.js"
+import { CRM_KINDS, type CrmKind, isCrmUserId, normalCrmUserId } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { dateWindow } from "../../services/moment.js"
 import { readableAccounts } from "../../services/person-context.js"
 import { personMeetings } from "../../services/person-meetings.js"
+import { crmIdentityId } from "../../store/sqlite/crm-rows.js"
 import { CRM_SCOPES, crmSettingKey } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
@@ -112,11 +124,21 @@ const MOST = 500
 /** A stage by the store's reference, as memo's `stages list` and a deal's `base_stage` name it. */
 const STAGE_REF = /^stage:\d+$/
 
+const timeField = (name: string, example: string, relation: string) =>
+  nativeField({ name, type: "time", operators: ["term", "range"], example, relation })
+const TIME_FIELDS = ["updated", "created", "closed"]
+
 const DEAL_FIELDS = [
   termField("status", "enum", "status:open", { values: DEAL_STATUSES }),
   termField("stage", "kw", 'stage:"Quote sent"', { relation: "a stage's name, in any letter case" }),
   termField("pipeline", "kw", "pipeline:Sales", { relation: "pipeline:<id>, or a name only one pipeline has" }),
   termField("organization", "ref", 'organization:"organization:3"'),
+  timeField("updated", "updated:>=1d", "changed in the CRM in this time"),
+  timeField("created", "created:>=30d", "made in the CRM in this time"),
+  timeField("closed", "closed:>=7d", "won or lost on a day in this time, in your time zone"),
+  termField("owner", "kw", "owner:me", {
+    relation: "the CRM user it is assigned to: me (the sign-in's own), none, or the CRM's user id",
+  }),
 ]
 
 /** What `deals list` and `leads list` narrow by, the same in memo and every CRM CLI (WC-OUT-11). */
@@ -272,6 +294,24 @@ const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: coun
 const collect = (value: string, previous: string[] = []) => {
   if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
+}
+
+/** `owner:` as the identity a deal's assignee is stored as; `none` is no assignee. */
+const ownerOf = async (run: Pick<CrmRun, "store" | "account">, owner: string): Promise<string | null> => {
+  if (owner === "none") return null
+  if (owner === "me") {
+    const self = await run.store.crm.ownUser(run.account)
+    if (!self)
+      throw new CliError("validation_error", "this CRM names no user for the sign-in: use owner:<user id>", {
+        reason: "crm.owner-unknown",
+      })
+    return crmIdentityId(run.account, self, "user")
+  }
+  if (!isCrmUserId(owner))
+    throw new CliError("validation_error", `owner takes me, none or the CRM's user id, not ${owner}`, {
+      reason: "crm.owner-unknown",
+    })
+  return crmIdentityId(run.account, normalCrmUserId(owner), "user")
 }
 
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */
@@ -472,8 +512,12 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       `${plural} list stage:"Quote sent"`,
       `${plural} list status:open --format csv > ${plural}.csv`,
     ).action(async (words: string[], opts: { limit: number; page: number; format?: "csv" }, command: Command) => {
-      const terms = queryTerms(words, query, `${plural} list`)
-      const read = (run: CrmRun) =>
+      const name = `${plural} list`
+      const terms = queryTerms(words, query, name, TIME_FIELDS)
+      const times = nativeTerms(listQuery(typedQuery(words), query, name), name)
+      const bounds = Object.fromEntries(TIME_FIELDS.map((field) => [field, timeBounds(times.get(field))]))
+      const window = Object.values(bounds).find((one) => one.meta)?.meta
+      const read = async (run: CrmRun) =>
         run.store.deals.list({
           kind,
           account: run.account,
@@ -481,6 +525,10 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
           ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
           ...(terms.has("organization") ? { organization: terms.get("organization") as string } : {}),
+          ...(terms.has("owner") ? { owner: await ownerOf(run, terms.get("owner") as string) } : {}),
+          ...(times.has("updated") ? { updated: bounds.updated } : {}),
+          ...(times.has("created") ? { created: bounds.created } : {}),
+          ...(times.has("closed") ? { closed: bounds.closed, zone: window?.timezone } : {}),
           limit: Math.min(opts.limit, MOST),
           offset: (opts.page - 1) * opts.limit,
         })
@@ -502,6 +550,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           page: opts.page,
           has_more: found.hasMore,
           ...(words.length ? { args: { query: words } } : {}),
+          ...(window ? { meta: window } : {}),
         })
       })
     })
@@ -548,13 +597,17 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           event: one.event,
           people: one.people,
         }))
+        const stageHistory = (await run.store.deals.stages(found.ref)).map(({ pipeline: _, ...entry }) => entry)
         return itemOf({
           ...(dealKeys(found) as object),
           meetings,
           ...(activities ? { activities } : {}),
+          stage_history: stageHistory,
           untrusted: [
             ...DEAL_UNTRUSTED,
             "meetings.title",
+            "stage_history.from",
+            "stage_history.to",
             ...(activities ? ["activities.subject", "activities.body"] : []),
           ],
         })
@@ -778,17 +831,28 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         "pipeline:<id>, or a name only one of the CRM's pipelines has; needed unless the CRM has one pipeline in all",
       ),
     "pipelines show pipeline:3",
-    "pipelines show Sales --json",
-  ).action(async (reference: string | undefined, _opts: unknown, command: Command) => {
-    await within(
-      command,
-      async (run) => {
-        const report = await pipelineOf(run, undefined, reference, "pipeline")
-        return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
+    "pipelines show Sales --since-time 30d --json",
+  )
+    .option("--since-time <time>", "count the rows made at or after this date or time (ISO 8601, or 30d ago)")
+    .option("--until-time <time>", "count the rows made at or before this date or time; a date alone is that whole day")
+    .action(
+      async (reference: string | undefined, opts: { sinceTime?: string; untilTime?: string }, command: Command) => {
+        const zone = timezoneOf()
+        const { since, until } = dateWindow({ ...opts, zone, now: now() })
+        await within(
+          command,
+          async (run) => {
+            const report = await pipelineOf(run, undefined, reference, "pipeline", {
+              ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
+              ...(until === undefined ? {} : { until: new Date(until).toISOString() }),
+              zone,
+            })
+            return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
+          },
+          (body) => pipelineView(body, outputFor(command).color),
+        )
       },
-      (body) => pipelineView(body, outputFor(command).color),
     )
-  })
 
   const stages = annotate(program.command("stages"), { effects: NO_EFFECTS }).description(
     "the stages of the CRM's pipelines, as last synced",
@@ -815,17 +879,22 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
             }),
           ]
         : all
+      const rules = await run.store.crm.stageTasks(run.account)
       const found = chosen.flatMap((pipeline) =>
-        pipeline.stages.map(({ name, position, outcome, externalId, open }) => ({
-          name,
-          position,
-          outcome,
-          externalId,
-          open,
-          pipeline: pipeline.ref,
-          pipelineName: pipeline.name,
-          kind: pipeline.kind,
-        })),
+        pipeline.stages.map(({ name, position, outcome, externalId, open }) => {
+          const rule = externalId === null ? undefined : rules[pipeline.kind][externalId]
+          return {
+            name,
+            position,
+            outcome,
+            externalId,
+            open,
+            pipeline: pipeline.ref,
+            pipelineName: pipeline.name,
+            kind: pipeline.kind,
+            stageTask: rule ? { title: rule.title, dueDays: rule.dueDays } : null,
+          }
+        }),
       )
       return listOf(pathOf(command).join(" "), {
         items: marked(found, STAGE_UNTRUSTED),

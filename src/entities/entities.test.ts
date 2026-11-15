@@ -372,7 +372,11 @@ const samples: Record<EntityName, unknown> = {
   },
   deal_context: {
     deal: dealSample,
-    stages: { ...emptySection, items: [{ from: null, to: "Quote", pipeline: "pipeline:2", at }], total: 1 },
+    stages: {
+      ...emptySection,
+      items: [{ from: null, to: "Quote", pipeline: "pipeline:2", at, exact: false }],
+      total: 1,
+    },
     organization: { ref: "organization:3", name: "Sample LLC", categories: [] },
     participants: { ...emptySection, items: [relatedSample], total: 1 },
     owner: null,

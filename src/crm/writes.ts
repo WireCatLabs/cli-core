@@ -2,6 +2,7 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 import { currencyOf, minorUnits } from "../domain/money.js"
+import { e164Of } from "../domain/phones.js"
 import type { AppIdentity } from "../ports/app.js"
 import { foldName } from "../resolve.js"
 import type { Warn } from "../runs/events.js"
@@ -10,7 +11,7 @@ import { guardedWrite } from "../sends/guarded.js"
 import { keyedGuard } from "../sends/keyed-guard.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { Deal, Pipeline, PipelineReport } from "../store/sqlite/deals.js"
+import type { Deal, Pipeline, PipelineOptions, PipelineReport } from "../store/sqlite/deals.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { foreignContacts } from "./foreign-contacts.js"
@@ -154,8 +155,9 @@ export const pipelineOf = async (
   kind: DealKind | undefined,
   reference: string | undefined,
   param = "--pipeline",
+  window: Pick<PipelineOptions, "since" | "until" | "zone"> = {},
 ): Promise<PipelineReport> => {
-  const scope = { ...(kind ? { kind } : {}), account: context.account }
+  const scope = { ...window, ...(kind ? { kind } : {}), account: context.account }
   if (reference !== undefined) {
     const found = await context.store.deals.pipeline(reference, scope)
     if (found.externalId === null) throw new CliError("not_found", `${reference} is not a pipeline of this CRM account`)
@@ -595,7 +597,7 @@ export interface CrmRecordWritten<K extends CrmRecordKind> {
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/u
 /** A CRM id as a list prints it; shared with the commands, not exported from the package. */
 export const RECORD_ID = /^[\w.:-]{1,100}$/u
-const PERSON_ONLY = ["firstName", "lastName", "position", "emails", "phones"] as const
+const PERSON_ONLY = ["firstName", "lastName", "position"] as const
 
 const recordInvalid = (message: string, param?: string) =>
   new CliError("validation_error", message, { reason: "crm.record-field", ...(param ? { param } : {}) })
@@ -611,7 +613,7 @@ const listed = (values: readonly string[] | undefined, param: string, valid?: Re
   return all
 }
 
-/** Typed fields into the port's; a company takes only a name, an owner and its own fields. */
+/** Typed fields into the port's; a company takes no name parts and no position. */
 const recordFieldsOf = (kind: CrmRecordKind, input: CrmRecordInput): CrmPersonFields => {
   if (kind === "organization") {
     const given = PERSON_ONLY.find((one) => input[one] !== undefined)
@@ -628,7 +630,12 @@ const recordFieldsOf = (kind: CrmRecordKind, input: CrmRecordInput): CrmPersonFi
   if (parts.lastName !== undefined) fields.lastName = parts.lastName
   if (position !== undefined) fields.position = position
   const emails = listed(input.emails, "--email", EMAIL)
-  const phones = listed(input.phones, "--phone")
+  const phones = listed(input.phones, "--phone")?.map((phone) => {
+    const international = e164Of(phone, undefined)
+    if (typeof international !== "string")
+      throw recordInvalid(`--phone takes a number in international form, starting with +: not ${phone}`, "--phone")
+    return international
+  })
   if (emails) fields.emails = emails
   if (phones) fields.phones = phones
   if (input.owner !== undefined) {
@@ -658,12 +665,12 @@ const keptRecord = async (context: CrmWriteContext, kind: CrmRecordKind, record:
 }
 
 /**
- * A company the update gave to someone else leaves the copy (NEED-2661), as `removeCrmItem` removes a deal. A contact
- * stays until a sync's scope removes it: the store has no removal of one contact by id, and its identity keeps the
- * phones and e-mails it was saved with.
+ * A contact or company the update gave to someone else leaves the copy (NEED-2661), as `removeCrmItem` removes a deal:
+ * a contact with its identity, which held the phones and e-mails it was saved with.
  */
 const forgotten = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) => {
   if (kind === "organization") await context.store.crm.remove(context.account, kind, [record.externalId])
+  else await context.store.crm.removeContact(context.account, record.externalId)
 }
 
 const writeRecord = async <K extends CrmRecordKind>(
