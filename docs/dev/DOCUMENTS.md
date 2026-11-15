@@ -193,7 +193,7 @@ CLI's run; the builders honour a global `--dry-run`.
   place. Over 10 000 entries the answer is `catalog.tree-limit`: name a smaller folder or lower `--depth`. The
   store's `parent` filter takes one id or several (`parent: [a, b]`, an entry under any of them) and scans the
   account's catalog once per read; asking about the 1 000 branches of a folder in a 12 000-entry account takes about
-  0.1 s (5.6 s when each parent was its own `OR` clause). `catalog.get` and `catalog.list` of `documentIngestion` take
+  0.05 s, 3.1 s when each parent was its own `OR` clause ([measured](https://github.com/WireCatLabs/cli-testing/blob/main/performance/documents/sync-scale/README.md)). Each read still scans the account. `catalog.get` and `catalog.list` of `documentIngestion` take
   an id with or without the `.md` the entries carry.
 - **`mirrors watch`** polls the connection's `changes`. When the feed cannot go on from its cursor (expired, or
   over its bound), `changes` throws a `listing.too-large` CliError: watch then starts a new feed and checks every
