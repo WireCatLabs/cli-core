@@ -2,7 +2,9 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Command } from "commander"
+import * as v from "valibot"
 import { afterEach, expect, it, vi } from "vitest"
+import { ENTITIES } from "../entities/index.js"
 import { addMeetingPassageCommand } from "../meetings/cli/index.js"
 import { callMeetingPassageTool, meetingPassageTool } from "../meetings/mcp/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
@@ -73,6 +75,8 @@ it("search hit refs open exact sparse-position context through both shared CLI a
   expect(mcp.structuredContent).toEqual(result?.packet)
   expect(mcp.content).toEqual([{ type: "text", text: result?.content }])
   expect(meetingPassageTool.inputSchema.properties).not.toHaveProperty("account_id")
+  for (const cue of result?.packet.items ?? []) expect(cue.untrusted).toEqual(["speaker_name", "text"])
+  expect(v.safeParse(ENTITIES.meeting_passage, result?.packet).success).toBe(true)
 })
 it("handles transcript boundaries, zero context and inclusive continuation anchors", async () => {
   const f = await fixture()

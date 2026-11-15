@@ -94,7 +94,7 @@ describe("meetings list pages as the shared listings do", () => {
   it("--json id,title keeps those fields, through the program's own --json", async () => {
     await seeded
     const picked = await cli(homeWith(), "work", "meetings", "list", "--offline", "--json", "id,title")
-    expect(Object.keys(picked.items[0]).sort()).toEqual(["id", "title"])
+    expect(Object.keys(picked.items[0]).sort()).toEqual(["id", "title", "untrusted"])
     const leaves = meetings()
       .flatMap((group) => group.commands)
       .filter((leaf) => leaf.options.some((option) => option.long === "--json" || option.long === "--jsonl"))

@@ -4,7 +4,13 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
 import type { CalendarWrites } from "../writes.js"
-import { CALENDAR_UNTRUSTED_FIELDS, calendarTools, calendarWriteTools, callCalendarTool } from "./index.js"
+import {
+  CALENDAR_UNTRUSTED_FIELDS,
+  calendarTools,
+  calendarWriteTools,
+  calendarWriteToolsFor,
+  callCalendarTool,
+} from "./index.js"
 
 const HOUR = 3_600_000
 const NOW = Date.UTC(2026, 9, 27, 9)
@@ -203,9 +209,9 @@ describe("calendar MCP tools", () => {
   })
 
   describe("writes", () => {
-    const writable = async () => {
+    const writable = async (conferences?: readonly string[]) => {
       const { store } = await setup()
-      const writer = fakeCalendarWriter()
+      const writer = fakeCalendarWriter(conferences ? { conferences } : {})
       const home = mkdtempSync(join(tmpdir(), "calendar-mcp-"))
       const writes = (): CalendarWrites => ({
         writer,
@@ -282,6 +288,24 @@ describe("calendar MCP tools", () => {
       expect(result.isError).toBe(true)
       expect(body(result).error).toMatchObject({ code: "permission_error" })
       expect(writer.calls).toEqual([])
+    })
+
+    it("offers conference only with the services the writer declares, and a writer without any refuses it", async () => {
+      const propertiesOf = (tools: typeof calendarWriteTools, name: string) =>
+        tools.find((tool) => tool.name === name)?.inputSchema.properties as Record<string, { enum?: string[] }>
+      for (const name of ["event_create", "event_update"]) {
+        expect(propertiesOf(calendarWriteTools, name)).not.toHaveProperty("conference")
+        expect(propertiesOf(calendarWriteToolsFor(["google-meet"]), name).conference?.enum).toEqual(["google-meet"])
+      }
+      const plain = await writable()
+      const refused = body(
+        await plain.call("event_create", { calendar: "cal-1", ...planning, conference: "google-meet" }),
+      )
+      expect(refused.error).toMatchObject({ code: "validation_error" })
+      expect(plain.writer.calls).toEqual([])
+      const meet = await writable(["google-meet"])
+      await meet.call("event_create", { calendar: "cal-1", ...planning, conference: "google-meet" })
+      expect(meet.writer.conferenceRequests).toHaveLength(1)
     })
 
     it("a move stays inside the account: a calendar of another account is not found, and nothing moves", async () => {

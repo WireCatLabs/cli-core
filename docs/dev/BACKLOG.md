@@ -23,6 +23,9 @@ None open.
 
 ## Next (P2)
 
+- **CORE-68** · P2 · `meetings passage --format text|markdown` prints the reader's `content` with no untrusted
+  marks in a scheduled agent's run (`src/meetings/cli/passage.ts`, `markedPassage` marks only the cues). Format the
+  content from the marked cues, or have the host mark it; the meetings module cannot read the run's mark.
 - **CORE-67** · P2 · `src/cli/messenger/serve-relay.test.ts` failed once in a full run and passed alone (DEBT-360).
   A lock path too long for a socket puts the relay socket under the temporary folder or `/tmp`, named by a hash of
   the path (`src/background/relay.ts:69`), so parallel sessions may clash there; not verified.

@@ -448,6 +448,19 @@ describe("what a live read keeps, and what it says it could not read", () => {
     })
   })
 
+  it("names a rate limit as one: a list answers from the store, a show of an unstored meeting is no not_found", async () => {
+    const limited = new CliError("rate_limited", "Google rate limit reached; retry the command")
+    const { source } = serviceOf([ROADMAP], { fail: limited })
+    const { run } = await fixture(source)
+    const answer = await run("list")
+    expect(answer.missing).toEqual([{ field: "server", why: expect.stringContaining("asked to wait") }])
+    expect(answer.meta).toEqual({
+      complete: false,
+      issues: [{ code: "rate_limited", reason: "meetings.server-rate-limited", source: "Example Meet" }],
+    })
+    await expect(run("show", "svc-9")).rejects.toBe(limited)
+  })
+
   it("says a plain list leaves out upcoming meetings of a service that lists none before they start", async () => {
     const { source, asked } = serviceOf([ROADMAP], { finds: { fields: {}, upcoming: false } })
     const answer = await (await fixture(source)).run("list")
@@ -798,6 +811,54 @@ describe("meetings invitation", () => {
     expect(answers.at(-1)).toEqual({
       item: { id: "900", invitation: "Join the example meeting", untrusted: ["invitation"] },
     })
+  })
+})
+
+describe("the run's stop signal", () => {
+  it("reaches the service on create, update, cancel and invitation", async () => {
+    const stop = new AbortController()
+    const seen: [string, AbortSignal | undefined][] = []
+    const management = createMeetingManagement(
+      { provider: "example", account: "invented" },
+      {
+        async create(_change, { signal }) {
+          seen.push(["create", signal])
+          return { ...meetingRow, startTime: "2026-11-20T10:00:00.000Z" }
+        },
+        async update(_id, _change, { signal }) {
+          seen.push(["update", signal])
+        },
+        async cancel(_id, { signal }) {
+          seen.push(["cancel", signal])
+        },
+        async invitation(id, { signal }) {
+          seen.push(["invitation", signal])
+          return { id, invitation: "Join the example meeting" }
+        },
+      },
+    )
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "meetings-signal-")), "store.db") })
+    handles.push(store)
+    const run = (...words: string[]) => {
+      const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
+      addMeetingCommands(program, {
+        store: store.meetings,
+        pagingOf: flagPaging,
+        accountId: 1,
+        management,
+        askFirst: async () => {},
+        signal: () => stop.signal,
+        write: () => {},
+        inRun: (_command, body) => body(),
+      })
+      return program.parseAsync(words, { from: "user" })
+    }
+    await run("meetings", "create", "--start-time", "2026-11-20T10:00:00Z")
+    await run("meetings", "update", "900", "--title", "Example planning")
+    await run("meetings", "cancel", "900")
+    await run("meetings", "invitation", "900")
+    expect(seen.map(([name]) => name)).toEqual(["create", "update", "cancel", "invitation"])
+    for (const [, signal] of seen) expect(signal).toBe(stop.signal)
   })
 })
 

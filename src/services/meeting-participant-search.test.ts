@@ -230,3 +230,22 @@ it("rejects invalid bounds, malformed cursors and cancellation before selecting 
     f.store.meetings.participantCandidates("Alice", { accountId: f.accountId, signal: abort.signal }),
   ).rejects.toThrow("example cancellation")
 })
+
+it("answers the plain and the bounded people search with one row shape, so the untrusted names are its keys", async () => {
+  const f = await fixture()
+  const plain = memoryMeetingStore()
+  await plain.saveMeeting(sampleMeeting())
+  await f.add("Alice Example", "alice-a")
+  const plainRows = (await meetingPeople(plain, "Alice")).items
+  const boundedRows = (await meetingPeople(f.store.meetings, "Alice", f.accountId)).items
+  expect(plainRows.length).toBeGreaterThan(0)
+  expect(boundedRows.length).toBeGreaterThan(0)
+  const rows = [...plainRows, ...boundedRows] as Record<string, unknown>[]
+  const shape = ["display_name", "email", "identity_id", "meeting_id", "participant_id", "untrusted"]
+  for (const row of plainRows as Record<string, unknown>[]) expect(Object.keys(row).sort()).toEqual(shape)
+  for (const row of boundedRows as Record<string, unknown>[])
+    expect(Object.keys(row).sort()).toEqual([...shape, "person"].sort())
+  for (const row of rows)
+    for (const field of (row.untrusted as string[]).filter((one) => !one.startsWith("person.")))
+      expect(row).toHaveProperty(field)
+})

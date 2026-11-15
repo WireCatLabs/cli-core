@@ -28,6 +28,7 @@ import {
   type MeetingHitContextPacket,
   type MeetingHitItem,
   type MeetingPassageOutputFormat,
+  markedPassage,
   meetingHitsList,
   parseMeetingReference,
 } from "../meetings/index.js"
@@ -112,7 +113,7 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta, limit: number): 
         return {
           run: async (ctx) => {
             ctx.reserveReadBytes(request.max_read_bytes ?? 4194304)
-            const result = await reader.passage(reference, { ...request, signal: ctx.signal })
+            const result = markedPassage(await reader.passage(reference, { ...request, signal: ctx.signal }))
             const complete = result.packet.coverage.truncated_by === null
             return {
               answer: {

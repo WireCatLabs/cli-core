@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { randomUUID } from "node:crypto"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -347,8 +348,51 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
       },
     },
     ...moveCases(fixture),
+    ...conferenceCases(fixture, draft),
   ]
   return cases
+}
+
+/** A writer that declares `conferences` returns the new meeting link on the event; its cases are skipped without. */
+const conferenceCases = (
+  fixture: () => CalendarWriterFixture | Promise<CalendarWriterFixture>,
+  draft: (at: number) => EventDraft,
+): ContractCase[] => {
+  const ready = async () => {
+    const f = await fixture()
+    const provider = f.writer.conferences?.[0]
+    return provider ? { ...f, provider } : undefined
+  }
+  return [
+    {
+      name: "conference: a create with a meeting service returns the event with its new link",
+      run: async () => {
+        const f = await ready()
+        if (!f) return
+        const made = await f.writer.create(
+          f.calendar,
+          { ...draft(f.at), conference: { provider: f.provider, requestId: randomUUID() } },
+          { id: ID, notify: false },
+        )
+        assert.match(made.joinUrl ?? "", /^https:\/\//)
+      },
+    },
+    {
+      name: "conference: a change that adds one returns the event with its new link and a new etag",
+      run: async () => {
+        const f = await ready()
+        if (!f) return
+        const changed = await f.writer.update(
+          f.calendar,
+          f.existing.externalId,
+          { conference: { provider: f.provider, requestId: randomUUID() } },
+          { scope: "this", etag: f.existing.etag as string, notify: false },
+        )
+        assert.match(changed.joinUrl ?? "", /^https:\/\//)
+        assert.notEqual(changed.etag, f.existing.etag)
+      },
+    },
+  ]
 }
 
 const moveCases = (fixture: () => CalendarWriterFixture | Promise<CalendarWriterFixture>): ContractCase[] => {
