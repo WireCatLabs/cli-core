@@ -20,6 +20,9 @@ shape of this file.
   it a `--timeout` or Ctrl-C did not reach the service call. Pass the same signal the host gives its other reads.
 - **The calendar writer contract checks meeting links.** A writer that declares `conferences` must return the new
   link (`joinUrl`) on a create and on a change.
+- **`meetings show` names a recording's file on this computer.** Each of `attachments` carries `local_path`: the
+  file the store holds for it, or `null` when it stays on the meeting service or the phone system (pbx reading its
+  recordings over SFTP). WireCat Desktop plays a call's recording from it and reads nothing else.
 
 ### Changed — may break callers
 
