@@ -5,3 +5,5 @@
   left out of `deals list`, the funnel and the totals. Now the deal is stored with `amount` and `currency` empty,
   `provider_metadata.amount_note` ("Amount not kept") says what the CRM had and why it was not kept, and the sync
   answer names it as `crm.amount-unkept`.
+- **A deal in a new stage, skipped because the run's budget ran out before the pipelines were read again, is read
+  again.** The next run reads that page again instead of moving past it.

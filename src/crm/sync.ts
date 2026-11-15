@@ -580,6 +580,11 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       result.outOfScope += await store.crm.remove(account, kind, left)
     }
     run.moved()
+    // The page's skipped rows wait for the pipelines the budget refused: the next run reads the same page again.
+    if (stop) {
+      await save()
+      return stop
+    }
     if (!page.hasMore) {
       listed = true
       await save({ token: page.cursor ?? null })
@@ -592,7 +597,6 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     pages.add(page.nextCursor)
     round = { ...round, page: page.nextCursor }
     await save()
-    if (stop) return stop
   }
   const passes = source.ids && !source.traits.removedInChanges && kind !== "person"
   const due = cursor.pass !== null || now - cursor.passAt >= (options.passEvery ?? DAY)

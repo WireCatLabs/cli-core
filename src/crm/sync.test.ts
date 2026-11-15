@@ -2,12 +2,12 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { runBudget } from "../background/budget.js"
+import { type RunBudget, runBudget } from "../background/budget.js"
 import { openCache } from "../store/open.js"
 import { parseCrmSettingValue } from "../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { type CrmSyncOptions, type CrmSyncReport, crmStatus, parseCrmCursor, syncCrm } from "./index.js"
-import { exampleDeal, examplePerson, fakeCrmSource } from "./testing/index.js"
+import { exampleDeal, examplePerson, fakeCrmSource, SALES_PIPELINE } from "./testing/index.js"
 
 const stores: MessageStore[] = []
 afterEach(async () => {
@@ -422,4 +422,44 @@ it("keeps a deal whose money the store cannot hold, with no amount, and says why
   source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "BRL" }))
   await syncCrm(source, store, PORTAL)
   expect((await money()).eur).toEqual([null, null, expect.stringMatching(/100\.50 BRL is not kept/)])
+})
+
+it("reads again a page whose deal in a new stage was skipped because the budget ran out before the pipelines", async () => {
+  for (const pageSize of [10, 2]) {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-stage-cut-")), "store.db") })
+    stores.push(store)
+    const source = fakeCrmSource({ pageSize })
+    source.put("deal", exampleDeal("d1"))
+    source.put("deal", exampleDeal("d2", { stage: "extra" }))
+    source.put("deal", exampleDeal("d3"))
+    let refusing = false
+    const changes = source.changes.bind(source)
+    source.changes = (async (kind, cursor, page, context) => {
+      const answer = await changes(kind, cursor, page, context)
+      if (kind === "deal" && page === undefined) refusing = true
+      return answer
+    }) as typeof source.changes
+    let used = 0
+    const budget: RunBudget = {
+      take: () => {
+        if (refusing) return "requests"
+        used += 1
+        return null
+      },
+      get used() {
+        return used
+      },
+      limit: null,
+      stopped: null,
+    }
+    const cut = await syncCrm(source, store, PORTAL, { budget })
+    expect(cut.issues.find(({ externalId }) => externalId === "d2")?.reason).toBe("crm.stage-unknown")
+
+    source.changes = changes
+    const extra = { externalId: "extra", name: "Extra", position: 5, outcome: "open" as const }
+    source.setPipelines("deal", [{ ...SALES_PIPELINE, stages: [...SALES_PIPELINE.stages, extra] }])
+    await syncCrm(source, store, PORTAL)
+    const listed = (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map(({ externalId }) => externalId)
+    expect([pageSize, listed.sort()]).toEqual([pageSize, ["d1", "d2", "d3"]])
+  }
 })
