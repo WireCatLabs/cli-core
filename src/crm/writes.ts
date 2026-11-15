@@ -657,6 +657,15 @@ const keptRecord = async (context: CrmWriteContext, kind: CrmRecordKind, record:
   }
 }
 
+/**
+ * A company the update gave to someone else leaves the copy (NEED-2661), as `removeCrmItem` removes a deal. A contact
+ * stays until a sync's scope removes it: the store has no removal of one contact by id, and its identity keeps the
+ * phones and e-mails it was saved with.
+ */
+const forgotten = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) => {
+  if (kind === "organization") await context.store.crm.remove(context.account, kind, [record.externalId])
+}
+
 const writeRecord = async <K extends CrmRecordKind>(
   context: CrmWriteContext,
   kind: K,
@@ -672,6 +681,7 @@ const writeRecord = async <K extends CrmRecordKind>(
   const stored = await rule.own(kind, record)
   try {
     if (stored) await keptRecord(context, kind, record)
+    else if (verb === "update") await forgotten(context, kind, record)
   } catch (error) {
     if (isCliError(error))
       throw new CliError(error.code, error.message, { ...error.details, operation_id: operationId })

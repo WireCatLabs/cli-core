@@ -59,7 +59,7 @@ describe("foreign contacts (NEED-2487)", () => {
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ day: "2026-11-16", seen: ["organization:c1"] })
   })
 
-  it("two spends at once never both take the day's last slot (BUG-2)", async () => {
+  it("gives the day's last slot to one of two spends, and the count stays at the limit", async () => {
     const file = fileIn()
     spent(file, DAILY_FOREIGN_CONTACTS - 1)
     const quota = () => foreignContacts(fakeCrmSource({ admin: false }), () => file, { now: () => DAY })
@@ -78,21 +78,31 @@ describe("foreign contacts (NEED-2487)", () => {
     await expect(quota.spend("person", examplePerson("p1"))).rejects.toMatchObject({ code: "timeout" })
   })
 
-  it("strips a foreign record's provider_metadata of phones and e-mails too (SEC-2)", async () => {
-    const quota = foreignContacts(fakeCrmSource({ admin: false }), fileIn)
+  it("strips a foreign record's custom values only where the field holds a phone or e-mail (SEC-2, R-1)", async () => {
+    const source = fakeCrmSource({ admin: false })
+    source.setFields("person", [
+      { code: "AMOUNT", label: "Amount", type: "numeric", multiple: false, filterable: true },
+      { code: "TAX_ID", label: "Tax id", type: "text", multiple: false, filterable: true },
+      { code: "CELL", label: "Cell", type: "multitext", multiple: true, filterable: false, holds: "phone" },
+      { code: "COPY", label: "Copy", type: "text", multiple: false, filterable: false },
+    ])
     const person = examplePerson("p1", {
-      email: "p1@example.com",
       phones: ["+34 600 111 222"],
       metadata: {
-        WORK: { label: "Work mail", value: "other@example.org" },
-        CELL: { label: "Cell", value: ["+34 (600) 333-444"] },
-        SAME: { label: "Copy", value: "+34 600 111 222" },
-        SIZE: { label: "Size", value: "12" },
-        CODE: { label: "Code", value: "2026-11-15" },
+        AMOUNT: { label: "Amount", value: "1500000" },
+        TAX_ID: { label: "Tax id", value: "7701234567" },
+        CELL: { label: "Cell", value: ["+34 600 333 444"] },
+        COPY: { label: "Copy", value: "+34 600 111 222" },
       },
     })
-    const [shown] = await quota.strip("person", [person])
-    expect(Object.keys(shown?.metadata ?? {})).toEqual(["SIZE", "CODE"])
+    const [shown] = await foreignContacts(source, fileIn).strip("person", [person])
+    expect(Object.keys(shown?.metadata ?? {})).toEqual(["AMOUNT", "TAX_ID"])
+  })
+
+  it("drops every custom value of a foreign record when the CRM gives no field definitions (fail closed)", async () => {
+    const person = examplePerson("p1", { metadata: { AMOUNT: { label: "Amount", value: "1500000" } } })
+    const [shown] = await foreignContacts(fakeCrmSource({ admin: false }), fileIn).strip("person", [person])
+    expect(shown?.metadata).toEqual({})
   })
 
   it("tells own records from foreign ones without spending a slot", async () => {

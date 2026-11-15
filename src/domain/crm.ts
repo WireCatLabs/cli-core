@@ -175,6 +175,11 @@ export interface CrmField {
   filterable: boolean
   /** A list field's options in the CRM's order; absent on any other field. */
   options?: { id: string; label: string }[]
+  /**
+   * The field holds phones or e-mails: a foreign record's value is stripped (NEED-2487). amoCRM sets it for a
+   * `multitext` field whose `field_code` is `PHONE` or `EMAIL`, Bitrix24 for its phone and e-mail field types.
+   */
+  holds?: "phone" | "email"
 }
 
 export interface CrmRecords {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { CrmOrganization, CrmPerson } from "../domain/crm.js"
+import type { CrmField, CrmOrganization, CrmPerson, CrmValue } from "../domain/crm.js"
 import type { AppIdentity } from "../ports/app.js"
 import { withFileLockAsync } from "../sends/file-lock.js"
 import type { AccountKey } from "../store/types.js"
@@ -40,36 +40,22 @@ const shownIn = (file: string, day: string): Shown => {
   }
 }
 
-const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/u
-const PHONE = /^\+?[\d\s().-]{7,}$/u
-const DATE = /^\d{4}-\d{2}-\d{2}/u
-const digits = (text: string) => text.replace(/\D+/gu, "")
-
-/** A metadata value that holds a phone or an e-mail, or one of the record's own, in any of its texts. */
-const contactIn = (value: unknown, known: ReadonlySet<string>): boolean => {
-  if (Array.isArray(value)) return value.some((one) => contactIn(one, known))
-  if (value && typeof value === "object") return Object.values(value).some((one) => contactIn(one, known))
-  if (typeof value !== "string" && typeof value !== "number") return false
-  const text = String(value).trim()
-  return (
-    EMAIL.test(text) ||
-    (PHONE.test(text) && !DATE.test(text) && digits(text).length >= 7) ||
-    known.has(digits(text) || text)
-  )
-}
-
-const stripped = <T extends Live>(record: T): T => {
+/**
+ * A foreign record without its phones and e-mails. A custom value goes too when its field holds a phone or an e-mail
+ * (`CrmField.holds`) or repeats one of the record's own; with no definitions every custom value goes, since nothing
+ * then says which fields hold contact data.
+ */
+const stripped = <T extends Live>(record: T, fields: readonly CrmField[]): T => {
   const { phones, emails, email, phone, contactTypes: _types, ...rest } = record as CrmPerson
-  const known = new Set(
-    [...(phones ?? []), ...(emails ?? []), email, phone]
-      .filter((one): one is string => !!one)
-      .map((one) => digits(one) || one),
-  )
-  const metadata = (rest as { metadata?: Record<string, unknown> }).metadata
+  const own = new Set([...(phones ?? []), ...(emails ?? []), email, phone].filter((one): one is string => !!one))
+  const holding = new Set(fields.filter((field) => field.holds).map((field) => field.code))
+  const repeats = (value: unknown) =>
+    (Array.isArray(value) ? value : [value]).some((one) => typeof one === "string" && own.has(one.trim()))
+  const metadata = (rest as { metadata?: Record<string, CrmValue> }).metadata
   if (metadata)
-    (rest as { metadata?: Record<string, unknown> }).metadata = Object.fromEntries(
-      Object.entries(metadata).filter(([, one]) => !contactIn(one, known)),
-    )
+    (rest as { metadata?: Record<string, CrmValue> }).metadata = fields.length
+      ? Object.fromEntries(Object.entries(metadata).filter(([code, one]) => !holding.has(code) && !repeats(one.value)))
+      : {}
   return rest as T
 }
 
@@ -93,6 +79,8 @@ export const foreignContacts = (
   options: { now?: () => number; lockWaitMs?: number } = {},
 ): ForeignContacts => {
   let admin: Promise<boolean> | undefined
+  // Read from the CRM, not the copy: the store does not keep `holds` (no column for it yet).
+  const definitions: Partial<Record<CrmLiveKind, Promise<CrmField[]>>> = {}
   const limited = async () => {
     if (!source.isAdmin) return false
     admin ??= source.isAdmin()
@@ -109,7 +97,10 @@ export const foreignContacts = (
     async strip(kind, records) {
       if (!(await limited()) || records.length === 0) return records
       const mine = await own(kind, records)
-      return records.map((one) => (mine.has(one.externalId) ? one : stripped(one)))
+      if (records.every((one) => mine.has(one.externalId))) return records
+      definitions[kind] ??= Promise.resolve(source.fields?.(kind)).then((found) => found ?? [])
+      const fields = await definitions[kind]
+      return records.map((one) => (mine.has(one.externalId) ? one : stripped(one, fields)))
     },
     async own(kind, record) {
       return !(await limited()) || (await own(kind, [record])).has(record.externalId)

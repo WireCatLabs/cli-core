@@ -43,9 +43,11 @@ answers are `crm_person`, `crm_organization` and `crm_user`, one mapper each (`c
 guard, keys, journal and `operation_id` as `deals create`, the keys `people.create`, `organizations.update` and so on,
 and `crm.assign-others` for an owner other than the sign-in's user. The CRM's answer is stored by `savePeople` or
 `saveOrganizations`, as a sync would, but only when it is the sign-in's own client: a write of anyone else's answers
-it without phones and e-mails, spends none of the day's views, and says `stored: false`. A contact's e-mails and
-phones are in `CrmPersonFields` for an adapter's own use; the commands do not offer them, since the shared flag
-vocabulary has no `--email` or `--phone` yet.
+it without phones and e-mails, spends none of the day's views, and says `stored: false`. An update that gives a
+company to someone else removes it from the copy; a contact stays until a sync's scope removes it.
+
+A contact's e-mails and phones are in `CrmPersonFields` for an adapter's own use; the commands do not offer them,
+since the shared flag vocabulary has no `--email` or `--phone` yet.
 
 ## Foreign contacts
 
@@ -54,7 +56,11 @@ own clients, and at most `DAILY_FOREIGN_CONTACTS` (100) other contacts or compan
 applies when the source has `isAdmin()`. A record is the sign-in's own when its `assignee` is `self()` or
 `ownClients(kind, ids)` names it. `foreignContacts(source, file)` strips the lists and spends on `show`; the day's
 count is a file per CRM user in the CLI's state folder (`foreignContactsPathFor`), read and written under
-`withFileLockAsync`. A stripped record loses its `metadata` values that hold a phone or an e-mail too.
+`withFileLockAsync`. A stripped record also loses each custom value whose field definition has `holds` (`phone` or
+`email`) and each that repeats one of its own phones or e-mails. The definitions are read from the CRM once a run,
+since the store does not keep `holds`; with none, every custom value of a foreign record goes. An adapter sets
+`holds`: amoCRM for a `multitext` field whose `field_code` is `PHONE` or `EMAIL`, Bitrix24 for its phone and e-mail
+field types.
 
 `api call` of a method that reads contacts or companies is the administrator's only: the CLI decides which methods
 read clients and calls `refuseForeignClientReads(source, readsClients, method)` before sending

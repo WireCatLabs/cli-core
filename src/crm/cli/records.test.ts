@@ -12,6 +12,7 @@ import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
+import { crmIdentityId } from "../../store/sqlite/crm-rows.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { DAILY_FOREIGN_CONTACTS, foreignContactsPathFor } from "../foreign-contacts.js"
 import { exampleOrganization, examplePerson, type FakeCrmSourceOptions, fakeCrmSource } from "../testing/index.js"
@@ -354,6 +355,21 @@ describe("people and organizations writes", () => {
     const mine = await cli("people", "update", "p3", "--position", "Buyer")
     expect(mine.item).toMatchObject({ stored: true, person: { emails: [{ value: "p3@example.com", type: "WORK" }] } })
     expect(await store.crm.count(PORTAL, "person")).toBe(before + 1)
+  })
+
+  it("a write of a contact the copy never held does not add it", async () => {
+    const { cli, store } = await setup({ admin: false })
+    expect((await cli("people", "update", "p2", "--position", "Buyer")).item).toMatchObject({ stored: false })
+    expect(await store.people.personOf({ provider: PORTAL.provider, id: crmIdentityId(PORTAL, "p2") })).toBeUndefined()
+  })
+
+  it("an update that hands an own company to another owner removes it from the copy (R-2)", async () => {
+    const { cli, store, source } = await setup({ admin: false }, { permissions: { "crm.assign-others": "allow" } })
+    source.put("organization", exampleOrganization("c2", { assignee: "7" }))
+    await cli("organizations", "update", "c2", "--name", "Example Co")
+    const before = await store.crm.count(PORTAL, "organization")
+    expect((await cli("organizations", "update", "c2", "--owner", "9")).item).toMatchObject({ stored: false })
+    expect(await store.crm.count(PORTAL, "organization")).toBe(before - 1)
   })
 
   it("a lost answer is outcome_unknown, journaled, and the copy not stored", async () => {
