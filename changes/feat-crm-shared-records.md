@@ -39,9 +39,9 @@
 - **`CrmWriter.create` and `update` take every CRM kind** (`CrmDrafts[K]`, `CrmWriteFields[K]`) and answer
   `CrmRecords[K]`; `CrmWriteCapabilities.kinds` and the `alsoChecks` hooks take `CrmKind`. A writer that writes only
   deals and leads casts its answer and leaves `person` and `organization` out of `kinds`.
-- **`CrmPerson` and `CrmOrganization` carry what a live read answers:** `assignee`, `createdAt`, `updatedAt`, a
-  person's `firstName`, `lastName`, `url` and `metadata`, a company's `phones` and `emails`. The store does not keep
-  them yet.
+- **`CrmPerson` and `CrmOrganization` carry what a live read answers:** `createdAt`, `updatedAt`, a person's
+  `firstName`, `lastName`, `url`, `metadata` and `contactTypes`, a company's `assignee`, `phones`, `emails` and
+  `people`. Of these the store keeps a contact's `assignee` only.
 - **`fakeCrmSource` writes every kind by default:** `FakeCrmWrite.kind` is any `CrmKind`, and `calls` counts `list`
   and `get`.
 - **`crmSourceContract` asks more of a source:** a source with `list` must list at least one contact and one company,

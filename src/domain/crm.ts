@@ -133,7 +133,7 @@ export interface CrmOrganization {
   people?: string[]
   /**
    * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store does not keep
-   * them yet. `assignee` is the CRM user it is assigned to; times are epoch ms; `url` the CRM's own page for it.
+   * them. `assignee` is the CRM user it is assigned to; times are epoch ms; `url` the CRM's own page for it.
    */
   assignee?: string | null
   createdAt?: number | null
