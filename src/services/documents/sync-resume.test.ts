@@ -345,6 +345,26 @@ describe("a sync of a tree larger than one call's bound", () => {
     expect(settled).toEqual([false])
   })
 
+  it("stops a walk at the next folder once the run is cancelled, with no budget, and goes on in the next call", async () => {
+    const tree = treeSync(pageTree(2, 2, 2))
+    const stop = new AbortController()
+    const children = tree.options.source?.children as (id: string) => Promise<SourceFile[]>
+    const source = {
+      ...(tree.options.source as DocumentSource),
+      children: async (id: string) => {
+        if (tree.listed.length === 2) stop.abort()
+        return children(id)
+      },
+    }
+    expect(await syncDocuments({ ...tree.options, source, signal: stop.signal })).toMatchObject({
+      complete: false,
+      stopped: "cancelled",
+      walk: { listed: 3 },
+    })
+    expect(await syncDocuments(tree.options)).toMatchObject({ complete: true, saved: 15 })
+    expect(new Set(tree.listed).size).toBe(15)
+  })
+
   it("stops when its request budget says so and goes on in the next call", async () => {
     const tree = treeSync(pageTree(2, 2, 2))
     let left = 3

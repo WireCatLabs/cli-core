@@ -54,7 +54,9 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
   const wording = wordsOf(helpers.words)
   const { prefix, text } = wording
   const sync = examples(
-    annotate(program.command("sync"), { effects: FETCH, partial: true })
+    // Cooperative: it stops on its own at its budget, its deadline or a cancel and keeps its work, so it gets a sync's
+    // deadline (15 min in a terminal, 45 s over MCP) instead of a one-shot's 30 s.
+    annotate(program.command("sync"), { effects: FETCH, cooperative: true, partial: true })
       .summary("import what changed in the chosen folders, and finish an unfinished sync")
       .description(
         "import what changed in the chosen folders, and finish an unfinished sync; " +
