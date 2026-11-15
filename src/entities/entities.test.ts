@@ -954,7 +954,9 @@ const samples: Record<EntityName, unknown> = {
     transcripts: [{ ref: "meeting:1/2/3", source: "zoom", language: "en", lines_count: 12 }],
     chat: [{ sent_at: at, sender: "Ana", recipient: null, text: "hello" }],
     summaries: [],
-    attachments: [{ position: 0, kind: "file", name: "plan.pdf", mime: "application/pdf", size: 10, url: null }],
+    attachments: [
+      { position: 0, kind: "file", name: "plan.pdf", mime: "application/pdf", size: 10, url: null, local_path: null },
+    ],
     documents: [
       { file_id: "doc-transcript", role: "transcript", title: "Weekly – Transcript", document: "document:4" },
       { file_id: "doc-notes", role: "notes", title: null, document: null },
