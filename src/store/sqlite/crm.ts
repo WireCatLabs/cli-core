@@ -57,6 +57,7 @@ export interface CrmRelationIssue {
     | "crm.reference-unknown"
     | "crm.own-unknown"
     | "crm.email-ambiguous"
+    | "crm.amount-unkept"
     | "relationship.reference-unknown"
     | "relationship.invalid"
   message: string
@@ -531,6 +532,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
   ) => {
     const saved = saveItemRow(key, accountId, kind, item, at)
     if ("reason" in saved) return saved
+    if (saved.amountNote)
+      report.tally.issues.push({ externalId: item.externalId, reason: "crm.amount-unkept", message: saved.amountNote })
     const { id } = saved
     if (item.people === undefined && item.assignee === undefined) return null
     const self: CrmRef = { type: kind, id: item.externalId }

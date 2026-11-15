@@ -385,3 +385,41 @@ it("takes a scope of mine or all and the CRM's user ids as unassigned", () => {
       `numeric user ids, comma-separated: not "${bad}"`,
     )
 })
+
+it("keeps a deal whose money the store cannot hold, with no amount, and says why on the deal and in the answer", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-money-")), "store.db") })
+  stores.push(store)
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "EUR" }))
+  source.put("deal", exampleDeal("brl", { amount: "100", currency: "BRL" }))
+  source.put("deal", exampleDeal("jpy", { amount: "1500.5", currency: "JPY" }))
+  source.put("deal", exampleDeal("usd", { amount: "12.345", currency: "USD" }))
+  source.put("deal", exampleDeal("big", { amount: "1234567890123456", currency: "USD" }))
+  const report = await syncCrm(source, store, PORTAL)
+  const money = async () =>
+    Object.fromEntries(
+      (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map((one) => [
+        one.externalId,
+        [one.amount, one.currency, one.providerMetadata.amount_note?.value ?? null],
+      ]),
+    )
+  expect(await money()).toEqual({
+    eur: ["100.50", "EUR", null],
+    brl: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 100 BRL is not kept: the store keeps no amounts in BRL$/),
+    ],
+    jpy: [null, null, expect.stringMatching(/^the CRM's amount 1500\.5 JPY is not kept: .*at most 0 decimals/)],
+    usd: [null, null, expect.stringMatching(/^the CRM's amount 12\.345 USD is not kept/)],
+    big: [null, null, expect.stringMatching(/^the CRM's amount 1234567890123456 USD is not kept/)],
+  })
+  expect(report.issues.filter(({ reason }) => reason === "crm.item-invalid")).toEqual([])
+  expect(
+    report.issues.filter(({ reason }) => reason === "crm.amount-unkept").map(({ externalId }) => externalId),
+  ).toEqual(["brl", "jpy", "usd", "big"])
+
+  source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "BRL" }))
+  await syncCrm(source, store, PORTAL)
+  expect((await money()).eur).toEqual([null, null, expect.stringMatching(/100\.50 BRL is not kept/)])
+})
