@@ -408,6 +408,7 @@ describe("what a live read keeps, and what it says it could not read", () => {
     expect((await store.meetings.meetingByExternalId?.(accountId, "svc-1"))?.meeting.updatedAt).toBe(earlier)
   })
 
+  // Keeping 1200 meetings took 16s on a loaded CI runner, past the 15s default (release PR #2979).
   it("answers --backend server when the service returns more meetings than one SQL expression holds", async () => {
     const many = Array.from({ length: 1200 }, (_, i) =>
       found(`m-${i}`, `Example ${i}`, new Date(NOW - (i + 1) * 3_600_000).toISOString()),
@@ -416,7 +417,7 @@ describe("what a live read keeps, and what it says it could not read", () => {
     const { run } = await fixture(source)
     const answer = await run("list", "--backend", "server", "--limit", "5")
     expect(answer.items).toHaveLength(5)
-  })
+  }, 60_000)
 
   it("counts a meeting it could not keep and says why, apart from the call cap", async () => {
     const broken = found("bad-1", "Example broken", "2026-11-10T10:00:00Z")
