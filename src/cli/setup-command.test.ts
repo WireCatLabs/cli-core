@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
@@ -54,20 +54,27 @@ const {
   ...flow
 } = JSON.parse(readFileSync(new URL("../../test/fixtures/setup-v1/pbx.json", import.meta.url), "utf8"))
 
-const harness = () => {
+const harness = ({ ownerOnly, agent = false }: { ownerOnly?: { settings: string[] }; agent?: boolean } = {}) => {
   const checks: SetupCheckInput[] = []
   const setup = defineSetup({
     ...flow,
     app,
     configuration,
+    ...(ownerOnly ? { ownerOnly } : {}),
     check: async (input) => {
       checks.push(input)
-      if (input.secrets.db !== PASSWORD) throw new CliError("authentication_error", "the database refused the password")
+      // A real check falls back to the kept password when the answers bring none.
+      if ((input.secrets.db ?? PASSWORD) !== PASSWORD)
+        throw new CliError("authentication_error", "the database refused the password")
       return { calls_last_hour: 3 }
     },
   })
   const root = mkdtempSync(join(tmpdir(), "setup-"))
-  const env = { PBX_CONFIG_DIR: join(root, "config"), PBX_STATE_DIR: join(root, "state") }
+  const env = {
+    PBX_CONFIG_DIR: join(root, "config"),
+    PBX_STATE_DIR: join(root, "state"),
+    ...(agent ? { AI_AGENT: "claude-code" } : {}),
+  }
   const keyring = memoryKeyring()
   const call = async (argv: string[], { stdin, answer }: { stdin?: string; answer?: string[] } = {}) => {
     const streams = captureStreams()
@@ -88,7 +95,8 @@ const harness = () => {
     const error = () => JSON.parse(streams.stderr.at(-1) ?? "{}").error
     return { code, out, item: out ? JSON.parse(out).item : undefined, stderr: streams.stderr.join("\n"), error }
   }
-  const config = () => readFileSync(join(env.PBX_CONFIG_DIR, "config.json"), "utf8")
+  const configPath = join(env.PBX_CONFIG_DIR, "config.json")
+  const config = () => (existsSync(configPath) ? readFileSync(configPath, "utf8") : "")
   const kept = () => new ProfileTokenStore({ app, env, keyring }).readSecret("office", "db")?.secret
   return { call, checks, kept, config }
 }
@@ -105,11 +113,12 @@ const MYSQL = {
 
 describe("setup", () => {
   it("**show needs no profile**: the flow, every language, and each setting's own JSON Schema; no values", async () => {
-    const { call } = harness()
+    const { call, config } = harness()
     const { code, item } = await call(["setup", "show", "--json"])
     expect(code).toBe(0)
     expect(item).toMatchObject({ format: "wirecat.setup", version: 1, tool: "pbx", toolVersion: "0.7.0" })
     expect(item.values).toBeUndefined()
+    expect(config()).toBe("")
     expect(Object.keys(item.texts)).toEqual(["en", "ru"])
     const row = item.steps.database.blocks.find((block: { role?: string }) => block.role === "row")
     expect(row.blocks[1]).toMatchObject({ id: "db_port", schema: { type: "integer", minimum: 1, maximum: 65535 } })
@@ -125,7 +134,7 @@ describe("setup", () => {
     expect(item).toMatchObject({ valid: false, at: "database", path: ["source", "database"] })
     expect(item.errors).toEqual([{ input: "db_port", setting: "db_port", message: expect.stringMatching(/65535/) }])
     expect(item.dropped).toEqual(expect.arrayContaining(["sftp_host", "cdr_csv_path"]))
-    expect(config()).not.toContain("pbx.office.local")
+    expect(config()).toBe("")
 
     const good = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin: JSON.stringify(MYSQL) })
     expect(good.item).toMatchObject({ valid: true, complete: true, at: "check", errors: [] })
@@ -183,6 +192,38 @@ describe("setup", () => {
     const { code, error } = await call(["office", "setup", "run", "oauth", "--json"], { stdin: "{}" })
     expect(code).not.toBe(0)
     expect(error().message).toContain("not a run action of v1")
+  })
+
+  it("**editing a profile in the terminal keeps its saved password** unless the owner asks to change it", async () => {
+    const { call, checks, kept } = harness()
+    await call(["office", "setup", "run", "apply", "--json", "--answer-stdin"], { stdin: `${JSON.stringify(MYSQL)}\n` })
+    const { code, item } = await call(["office", "setup"], {
+      answer: ["", "", "db2.office.local", "", "", "", "n", "", "", "", ""],
+    })
+    expect(code).toBe(0)
+    expect(item.results).toEqual({ check: { outcome: "ok" } })
+    expect(checks.at(-1)?.secrets).toEqual({})
+    expect(checks.at(-1)?.settings.configured).toMatchObject({ db_host: "db2.office.local", cdr_source: "mysql" })
+    expect(kept()).toBe(PASSWORD)
+  })
+
+  it("**an agent's run cannot save a setting the owner keeps for themselves**, as with config set", async () => {
+    const { call, checks, config } = harness({ ownerOnly: { settings: ["db_host"] }, agent: true })
+    const { code, error } = await call(["office", "setup", "apply", "--json"], { stdin: JSON.stringify(MYSQL) })
+    expect(code).not.toBe(0)
+    expect(error()).toMatchObject({ code: "permission_error" })
+    expect(checks).toEqual([])
+    expect(config()).not.toContain("pbx.office.local")
+  })
+
+  it.each([
+    ["not JSON", "{db_host:"],
+    ["not an object", "[1]"],
+  ])("**answers that are %s are refused**", async (_, stdin) => {
+    const { call } = harness()
+    const { code, error } = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin })
+    expect(code).not.toBe(0)
+    expect(error()).toMatchObject({ code: "validation_error" })
   })
 
   // Every CLI that registers a flow lints its tree; a violation here lands in all of them.

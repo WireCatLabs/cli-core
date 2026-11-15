@@ -3,6 +3,7 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type * as v from "valibot"
+import { agentOf } from "../runs/run-context.js"
 import {
   type Current,
   checkField,
@@ -16,6 +17,7 @@ import {
 import type { Setup } from "../setup/define.js"
 import { type Block, SETUP_LIMITS, type SetupDocument, type Step, type Value } from "../setup/document.js"
 import { answerStdinOption, lineReader, type SignInSteps, signInSteps } from "../terminal/sign-in-steps.js"
+import { refuseGuardedKey } from "./config-command.js"
 import { baseContext, environmentOf, secretInputOf } from "./context.js"
 import { FETCH, LOCAL_READ, logsInOrOut, refuseUnderReadOnly } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -49,12 +51,19 @@ const settingJsonSchema = (schema: v.GenericSchema): Record<string, unknown> => 
 
 /** The setup group a CLI gets by describing its flow: `show`, `apply`, `run` and the terminal walk-through. */
 export const setupCommand = (setup: Setup): Command => {
-  const { app, configuration, check } = setup.definition
+  const { app, configuration, check, ownerOnly = {} } = setup.definition
   const cli = app.command
   const { document } = setup
 
-  const contextFor = (command: Command, needsProfile: boolean) =>
-    baseContext(command, (flags, options) => configuration.resolveSettings(flags, { ...options, needsProfile }))
+  // A read never creates the settings file, and a file with a bad key still shows the flow.
+  const contextFor = (command: Command, needsProfile: boolean, readOnly = false) =>
+    baseContext(command, (flags, options) =>
+      configuration.resolveSettings(flags, {
+        ...options,
+        needsProfile,
+        ...(readOnly ? { readOnly, withIssues: true } : {}),
+      }),
+    )
 
   const storeFor = (command: Command, warn: (message: string) => void) => {
     const environment = environmentOf(command)
@@ -131,7 +140,7 @@ export const setupCommand = (setup: Setup): Command => {
     answers: Answers,
     { dryRun, steps }: { dryRun: boolean; steps: SignInSteps },
   ) => {
-    const context = contextFor(command, true)
+    const context = contextFor(command, true, dryRun)
     const { settings, env } = context
     const profile = settings.profile
     const path = walk(setup, answers, { current: currentOf(command, context) })
@@ -156,6 +165,9 @@ export const setupCommand = (setup: Setup): Command => {
         ...told,
       })
     refuseUnderReadOnly(command, "setup")
+    // An agent's own shell counts too, as for `config set` (SEC-116).
+    if (environmentOf(command).agent || agentOf(env))
+      for (const [setting, value] of Object.entries(path.settings)) refuseGuardedKey(setting, String(value), ownerOnly)
     steps.progress("check", `checking ${profile}'s settings`)
     const checked =
       (await check?.({
@@ -185,7 +197,7 @@ export const setupCommand = (setup: Setup): Command => {
 
   const stepsFor = (command: Command, json: boolean, lines?: () => Promise<string>) =>
     signInSteps({
-      diagnostic: contextFor(command, false).streams.diagnostic,
+      diagnostic: contextFor(command, false, true).streams.diagnostic,
       json,
       answers: lines !== undefined,
       ...(lines ? { lines } : {}),
@@ -201,7 +213,7 @@ export const setupCommand = (setup: Setup): Command => {
         "own JSON Schema; with a profile it adds the profile's current values, a secret only as { set: true }",
     )
     .action(function (this: Command) {
-      const context = contextFor(this, false)
+      const context = contextFor(this, false, true)
       const named = context.settings.sources.profile !== NONE_NAMED
       const body = { ...described(), ...(named ? { values: currentOf(this, context) } : {}) }
       renderAnswer(this, context, itemOf(body))
@@ -222,7 +234,7 @@ export const setupCommand = (setup: Setup): Command => {
     .action(async function (this: Command, { dryRun }: { dryRun?: boolean }) {
       const answers = await readAnswers(this)
       const result = await apply(this, answers, { dryRun: dryRun === true, steps: stepsFor(this, false) })
-      renderAnswer(this, contextFor(this, false), itemOf(result))
+      renderAnswer(this, contextFor(this, false, true), itemOf(result))
     })
 
   const runCommand = logsInOrOut(
@@ -251,7 +263,7 @@ export const setupCommand = (setup: Setup): Command => {
       const lines = answerStdin ? lineReader(input) : undefined
       const steps = stepsFor(this, machine, lines)
       const answers = await readAnswers(this, lines)
-      renderAnswer(this, contextFor(this, false), itemOf(await apply(this, answers, { dryRun: false, steps })))
+      renderAnswer(this, contextFor(this, false, true), itemOf(await apply(this, answers, { dryRun: false, steps })))
     })
 
   const group = logsInOrOut(
@@ -343,14 +355,17 @@ export const setupCommand = (setup: Setup): Command => {
         say(`  ${index + 1}) ${text(option.label)}${option.hint ? ` — ${text(option.hint)}` : ""}`)
       if (field.hint) say(text(field.hint))
       const kept =
-        now === undefined
+        now === undefined || secretOf(field) !== undefined
           ? field.default === undefined
             ? ""
             : ` [${field.default}]`
-          : typeof now === "object" && !Array.isArray(now)
-            ? " [kept; Enter keeps it]"
-            : ` [${now}]`
+          : ` [${now}]`
       const label = field.label ? text(field.label) : options.length ? "Your choice" : field.id
+      // A hidden prompt takes no empty answer, so keeping a saved secret is its own question.
+      if (secretOf(field) !== undefined && now !== undefined) {
+        const change = await ask(`${label}: change the saved one? [y/N] `, false)
+        if (!/^\s*y(es)?\s*$/i.test(change)) return
+      }
       const toggle = field.type === "input" && field.input === "toggle" ? " (y/n)" : ""
       for (let tries = 1; ; tries++) {
         const typed = await ask(`${label}${toggle}${kept}: `, field.type === "input" && field.input === "password")

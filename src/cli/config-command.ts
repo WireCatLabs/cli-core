@@ -368,7 +368,7 @@ export const refuseUnknownKey = (
  * profile, in the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off
  * (NEED-1662, NEED-1679).
  */
-const refuseGuardedKey = (setting: string, value: string | undefined, ownerOnly: OwnerOnlySettings): void => {
+export const refuseGuardedKey = (setting: string, value: string | undefined, ownerOnly: OwnerOnlySettings): void => {
   if (ownerOnly.settings?.includes(setting))
     throw new CliError("permission_error", `an agent cannot change ${setting} — the owner sets it in a terminal`, {
       setting,

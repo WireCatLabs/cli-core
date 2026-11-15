@@ -1,5 +1,6 @@
 import type { Command } from "commander"
 import * as v from "valibot"
+import type { OwnerOnlySettings } from "../cli/config-command.js"
 import type { Configuration, Settings } from "../cli/settings.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { SignInSteps } from "../terminal/sign-in-steps.js"
@@ -47,6 +48,8 @@ export interface SetupDefinition {
   assets?: Record<string, Asset>
   texts: { en: Texts } & Record<string, Texts>
   check?: SetupCheck
+  /** The same list `configCommand` takes: settings an agent's run may not change, so a flow cannot either. */
+  ownerOnly?: OwnerOnlySettings
 }
 
 export interface Setup {
