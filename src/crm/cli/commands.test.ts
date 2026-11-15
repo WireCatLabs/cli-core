@@ -438,6 +438,17 @@ describe("CRM write commands", () => {
     expect(deals?.commands.map((one) => one.name())).toEqual(["list", "show"])
   })
 
+  it("refuses money the store cannot keep before anything is sent (BUG-3)", async () => {
+    const { cli, source } = await synced()
+    await expect(cli("deals", "create", "--title", "X", "--amount", "10", "--currency", "XYZ")).rejects.toMatchObject({
+      details: { reason: "money.currency", param: "--currency" },
+    })
+    await expect(
+      cli("deals", "create", "--title", "X", "--amount", "10.555", "--currency", "EUR"),
+    ).rejects.toMatchObject({ details: { reason: "money.amount", param: "--amount" } })
+    expect(source.writes).toEqual([])
+  })
+
   it("create writes to the CRM once, journals it and stores the CRM's copy", async () => {
     const { cli, source, journal } = await synced()
     const made = await cli("deals", "create", "--title", "Example kitchen", "--amount", "15000", "--currency", "eur")

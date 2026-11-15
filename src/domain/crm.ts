@@ -110,6 +110,8 @@ export interface CrmPerson {
   url?: string | null
   /** The CRM's own fields' values by code; never a phone or e-mail of a foreign client. */
   metadata?: Record<string, CrmValue>
+  /** A live read's kind of each phone and address, by the value: `WORK`, `MOB`, as the CRM names them. */
+  contactTypes?: Record<string, string>
 }
 
 /** A CRM company: it becomes an organization of its own, never one matched by name. */
@@ -121,9 +123,14 @@ export interface CrmOrganization {
   own?: boolean
   /** The CRM's company type code; `crm.<provider>:<account>.company-types` says what one means, nothing by default. */
   type?: string | null
-  metadata?: Record<string, unknown>
+  /** The CRM's own fields' values by code; never a phone or e-mail of a foreign client. */
+  metadata?: Record<string, CrmValue>
   phones?: string[]
   emails?: string[]
+  /** A live read's kind of each phone and address, by the value, as on a contact. */
+  contactTypes?: Record<string, string>
+  /** A live read's contacts of the company, by their id. */
+  people?: string[]
   /**
    * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store does not keep
    * them yet. `assignee` is the CRM user it is assigned to; times are epoch ms; `url` the CRM's own page for it.

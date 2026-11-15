@@ -161,6 +161,14 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
           if (latest !== current.tokens) return latest
           if (fresh(current.tokens) || current.tokens.refreshToken !== seen.tokens.refreshToken) return current.tokens
         }
+        if (storage.moved && storage.rotating)
+          throw new CliError(
+            "authentication_error",
+            `the sign-in to ${provider.name} needs a refresh, which a run with moved folders never makes: the ` +
+              "provider rotates its refresh token, and the owner's own sign-in would keep a dead one; run this in " +
+              "the normal run, or sign in again there",
+            { reason: "oauth.moved-rotating" },
+          )
         const client = clientOf(current)
         const refreshed = await exchange(
           { grant_type: "refresh_token", refresh_token: current.tokens.refreshToken },

@@ -1,6 +1,6 @@
-import { mkdtempSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
@@ -13,6 +13,7 @@ import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
+import { DAILY_FOREIGN_CONTACTS, foreignContactsPathFor } from "../foreign-contacts.js"
 import { exampleOrganization, examplePerson, type FakeCrmSourceOptions, fakeCrmSource } from "../testing/index.js"
 import { crmAlsoChecks } from "../writer.js"
 import { addCrmCommands, type CrmCommandOptions, type CrmRun } from "./index.js"
@@ -74,6 +75,7 @@ const setup = async (
         name: id === "p2" ? "Anna Example" : `Example person ${id}`,
         email: `${id}@example.com`,
         assignee: id === "p3" ? "7" : "9",
+        ...(id === "p3" ? { contactTypes: { "p3@example.com": "WORK" } } : {}),
         createdAt: Date.UTC(2026, 10, Number(id.slice(1))),
         metadata: {
           UF_TIER: { label: "Tier", value: id === "p1" ? "Gold" : "Silver", option_id: id === "p1" ? "1" : "2" },
@@ -141,7 +143,8 @@ const setup = async (
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
   const journal = () => new SendJournal(sendsPathFor(APP, "work", env)).entries()
-  return { source, store, cli, printed, journal, root: () => root }
+  const quotaFile = () => foreignContactsPathFor(APP, PORTAL, env, "7")
+  return { source, store, cli, printed, journal, quotaFile, root: () => root }
 }
 
 describe("people, organizations and users, read live", () => {
@@ -159,7 +162,7 @@ describe("people, organizations and users, read live", () => {
     expect(first.page).toMatchObject({ has_more: true, limit: 2 })
     expect(first.items[0]).toMatchObject({
       name: "Example person p3",
-      emails: ["p3@example.com"],
+      emails: [{ value: "p3@example.com", type: "WORK" }],
       assigned_to: "7",
       created_at: "2026-11-03T00:00:00.000Z",
       untrusted: expect.arrayContaining(["name", "provider_metadata"]),
@@ -204,6 +207,8 @@ describe("people, organizations and users, read live", () => {
     const [header, row] = table.trim().split(/\r?\n/u)
     expect(header).toContain("Tier")
     expect(row).toContain("Silver")
+    expect(row).toContain("p3@example.com")
+    expect(row).not.toContain("WORK")
   })
 
   it("show reads one by its id, and an unknown one is not_found", async () => {
@@ -217,11 +222,64 @@ describe("people, organizations and users, read live", () => {
     const { cli } = await setup({ admin: false, ownClients: { person: ["p1"] } })
     const listed = await cli("people", "list")
     expect(Object.fromEntries(listed.items.map(({ id, emails }) => [id, emails ?? null]))).toEqual({
-      p1: ["p1@example.com"],
+      p1: [{ value: "p1@example.com", type: null }],
       p2: null,
-      p3: ["p3@example.com"],
+      p3: [{ value: "p3@example.com", type: "WORK" }],
     })
-    expect((await cli("people", "show", "p2")).item).toMatchObject({ emails: ["p2@example.com"] })
+    expect((await cli("people", "show", "p2")).item).toMatchObject({
+      emails: [{ value: "p2@example.com", type: null }],
+    })
+  })
+
+  it("an administrator sees every contact whole and spends nothing", async () => {
+    const { cli, quotaFile } = await setup({ admin: true })
+    expect((await cli("people", "list")).items.every(({ emails }) => Array.isArray(emails))).toBe(true)
+    await cli("people", "show", "p2")
+    expect(existsSync(quotaFile())).toBe(false)
+  })
+
+  it("the 101st foreign contact a day is refused by show, while an own client still shows", async () => {
+    const { cli, quotaFile } = await setup({ admin: false })
+    mkdirSync(dirname(quotaFile()), { recursive: true })
+    const seen = Array.from({ length: DAILY_FOREIGN_CONTACTS }, (_, at) => `person:old-${at}`)
+    writeFileSync(quotaFile(), JSON.stringify({ day: "2026-11-15", seen }))
+    await expect(cli("people", "show", "p2")).rejects.toMatchObject({
+      details: { reason: "crm.foreign-contacts-spent" },
+    })
+    expect((await cli("people", "show", "p3")).item).toMatchObject({
+      emails: [{ value: "p3@example.com", type: "WORK" }],
+    })
+  })
+
+  it("show finds one by its exact name too, and refuses a name two share, naming both (PAR-1)", async () => {
+    const { cli, source } = await setup()
+    expect((await cli("people", "show", "anna example")).item).toMatchObject({ id: "p2" })
+    source.put("person", examplePerson("p4", { name: "Anna Example" }))
+    await expect(cli("people", "show", "Anna Example")).rejects.toMatchObject({
+      details: {
+        reason: "crm.record-ambiguous",
+        candidates: expect.arrayContaining([
+          expect.objectContaining({ id: "p2" }),
+          expect.objectContaining({ id: "p4" }),
+        ]),
+      },
+    })
+    await expect(cli("people", "show", "Nobody Example")).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("users show refuses a malformed id, and a run reads the CRM's users once (NIT-1, PERF-1)", async () => {
+    const { cli, source } = await setup()
+    let reads = 0
+    Object.assign(source, {
+      users: async () => {
+        reads += 1
+        return [{ externalId: "7", name: "Emma Example", active: true }]
+      },
+    })
+    await expect(cli("users", "show", "../7")).rejects.toMatchObject({ details: { reason: "ref.malformed" } })
+    expect((await cli("users", "show", "7")).item).toMatchObject({ id: "7" })
+    expect((await cli("users", "list")).items).toHaveLength(1)
+    expect(reads).toBe(1)
   })
 
   it("users list filters the CRM's users by name and active, and show finds one", async () => {
@@ -283,6 +341,19 @@ describe("people and organizations writes", () => {
     expect(crmAlsoChecks()(["people", "create"])).toEqual([
       { key: "crm.assign-others", when: "--owner other than the sign-in's user" },
     ])
+  })
+
+  it("a non-admin's write of a foreign contact answers it stripped, stores nothing, spends nothing (SEC-1)", async () => {
+    const { cli, store, quotaFile } = await setup({ admin: false })
+    const before = await store.crm.count(PORTAL, "person")
+    const foreign = await cli("people", "update", "p2", "--position", "Buyer")
+    expect(foreign.item).toMatchObject({ stored: false, person: { id: "p2", position: "Buyer" } })
+    expect(foreign.item.person).not.toHaveProperty("emails")
+    expect(await store.crm.count(PORTAL, "person")).toBe(before)
+    expect(existsSync(quotaFile())).toBe(false)
+    const mine = await cli("people", "update", "p3", "--position", "Buyer")
+    expect(mine.item).toMatchObject({ stored: true, person: { emails: [{ value: "p3@example.com", type: "WORK" }] } })
+    expect(await store.crm.count(PORTAL, "person")).toBe(before + 1)
   })
 
   it("a lost answer is outcome_unknown, journaled, and the copy not stored", async () => {

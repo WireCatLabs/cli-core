@@ -1,6 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
+import { currencyOf, minorUnits } from "../domain/money.js"
 import type { AppIdentity } from "../ports/app.js"
 import { foldName } from "../resolve.js"
 import type { Warn } from "../runs/events.js"
@@ -12,6 +13,7 @@ import { newOperationId } from "../sends/send-id.js"
 import type { Deal, Pipeline, PipelineReport } from "../store/sqlite/deals.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
+import { foreignContacts } from "./foreign-contacts.js"
 import type { CrmSource } from "./source.js"
 import {
   CRM_ASSIGN_OTHERS_KEY,
@@ -55,6 +57,15 @@ export interface CrmWriteContext {
   source?: () => CrmSource
   /** How the caller spells the operation id in a hint: `--operation-id`, or `operation_id` over MCP. */
   names?: { id: string }
+}
+
+const moneyChecked = (check: () => unknown, param: string) => {
+  try {
+    check()
+  } catch (error) {
+    if (isCliError(error)) throw new CliError(error.code, error.message, { ...error.details, param })
+    throw error
+  }
 }
 
 /** The fields as typed: a pipeline and a stage by reference or name, money as a decimal. */
@@ -198,6 +209,9 @@ const fieldsOf = (input: CrmFieldsInput, pipeline: Pipeline | undefined, currenc
     if (input.amount === undefined) throw invalid("--currency goes with --amount", "--amount")
     if (!DECIMAL.test(input.amount)) throw invalid("--amount is a decimal such as 1500.50", "--amount")
     if (!CURRENCY.test(code)) throw invalid("--amount needs --currency, an ISO 4217 code such as EUR", "--currency")
+    // The CRM's answer is stored in minor units: money the store refuses would be written and then not kept.
+    moneyChecked(() => currencyOf(code), "--currency")
+    moneyChecked(() => minorUnits(input.amount, code, "--amount"), "--amount")
     fields.amount = input.amount
     fields.currency = code
   }
@@ -263,9 +277,20 @@ export const fieldNamed = <F extends NamedField>(fields: readonly F[], name: str
 export const optionOf = (field: NamedField, value: string, param = "--field"): string => {
   if (!field.options) return value
   const want = foldFieldName(value)
-  const found =
-    field.options.find((option) => option.id === value.trim()) ??
-    field.options.find((option) => foldFieldName(option.label) === want)
+  const byId = field.options.find((option) => option.id === value.trim())
+  const named = byId ? [] : field.options.filter((option) => foldFieldName(option.label) === want)
+  if (named.length > 1)
+    throw new CliError(
+      "validation_error",
+      `${field.label ?? field.code} has ${named.length} options named ${value}; name one by its id`,
+      {
+        reason: "field.ambiguous-option",
+        param,
+        field: field.code,
+        candidates: named,
+      },
+    )
+  const found = byId ?? named[0]
   if (!found)
     throw new CliError("validation_error", `${field.label ?? field.code} has no option ${value}`, {
       reason: "field.unknown-option",
@@ -561,11 +586,15 @@ export interface CrmRecordInput {
 
 export interface CrmRecordWritten<K extends CrmRecordKind> {
   operationId: string
+  /** The CRM's answer; one that is not the sign-in's client comes without its phones and e-mails (NEED-2487). */
   record: K extends "person" ? CrmPerson : CrmOrganization
+  /** Whether the copy keeps it: only the sign-in's own clients are stored (NEED-2661). */
+  stored: boolean
 }
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/u
-const RECORD_ID = /^[\w.:-]{1,100}$/u
+/** A CRM id as a list prints it; shared with the commands, not exported from the package. */
+export const RECORD_ID = /^[\w.:-]{1,100}$/u
 const PERSON_ONLY = ["firstName", "lastName", "position", "emails", "phones"] as const
 
 const recordInvalid = (message: string, param?: string) =>
@@ -636,15 +665,20 @@ const writeRecord = async <K extends CrmRecordKind>(
   operationId: string,
   act: () => Promise<CrmPerson | CrmOrganization>,
 ): Promise<CrmRecordWritten<K>> => {
+  if (!context.source)
+    throw new CliError("configuration_error", "a contact or company write needs the CRM source to tell your clients")
+  const rule = foreignContacts(context.source(), undefined)
   const record = await written(context, keysOf(context, kind, verb, { owner: fields.owner }), operationId, act)
+  const stored = await rule.own(kind, record)
   try {
-    await keptRecord(context, kind, record)
+    if (stored) await keptRecord(context, kind, record)
   } catch (error) {
     if (isCliError(error))
       throw new CliError(error.code, error.message, { ...error.details, operation_id: operationId })
     throw error
   }
-  return { operationId, record: record as CrmRecordWritten<K>["record"] }
+  const [shown] = stored ? [record] : await rule.strip(kind, [record])
+  return { operationId, record: shown as CrmRecordWritten<K>["record"], stored }
 }
 
 /** A new contact or company in the CRM, through the guarded path; the CRM's answer is stored as a sync stores it. */

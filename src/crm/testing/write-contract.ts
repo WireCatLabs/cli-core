@@ -185,11 +185,7 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
         if (!kind) return
         const before = fixture.requests()
         fixture.loseNextAnswer()
-        await refusedWith("outcome_unknown", () =>
-          kind === "person"
-            ? fixture.writer.create(kind, { name: "Example lost" }, operation())
-            : fixture.writer.create(kind, { name: "Example lost" }, operation()),
-        )
+        await refusedWith("outcome_unknown", () => fixture.writer.create(kind, { name: "Example lost" }, operation()))
         assert.equal(fixture.requests(), before + 1, "one request")
       },
     },

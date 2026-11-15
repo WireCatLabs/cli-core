@@ -36,6 +36,16 @@ describe("providerCall", () => {
     expect(write.calls()).toBe(1)
   })
 
+  it("a write cut off by a cancel or answered with an unreadable body is outcome_unknown (BUG-1, BUG-13)", async () => {
+    for (const code of ["cancelled", "invalid_response"] as const) {
+      const write = failing(new CliError(code, "cut"))
+      await expect(providerCall({ write: true, send: write.send, sleep })).rejects.toMatchObject({
+        code: "outcome_unknown",
+      })
+      expect(write.calls()).toBe(1)
+    }
+  })
+
   it("a write the CRM refused before sending stays what it was", async () => {
     const write = failing(new CliError("timeout", "no turn", { sent: false }))
     await expect(providerCall({ write: true, send: write.send, sleep })).rejects.toMatchObject({ code: "timeout" })

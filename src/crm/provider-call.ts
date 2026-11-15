@@ -2,8 +2,11 @@ import { backoffMs, CliError, isCliError, type RetryConfig, realSleep } from "@w
 import { type Pacer, type TurnOptions, waitForTurn } from "../sends/pace.js"
 
 const RETRY: RetryConfig = { retries: 3, baseDelayMs: 1_000, maxDelayMs: 10_000, maxRetryAfterMs: 30_000 }
-/** A write cut off by these may have reached the CRM: only a refusal says it did not. */
-const UNANSWERED = new Set(["timeout", "network_error", "provider_unavailable"])
+/**
+ * A write cut off by these, or answered with a body nobody can read, may have reached the CRM: only a refusal says it
+ * did not. A cancel while waiting for the turn is thrown before the try and stays `cancelled`.
+ */
+const UNANSWERED = new Set(["timeout", "network_error", "provider_unavailable", "cancelled", "invalid_response"])
 
 export interface ProviderCallOptions<T> {
   /** A write is tried again only on `rate_limited`, which a CRM answers before doing anything. */

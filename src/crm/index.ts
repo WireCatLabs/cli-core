@@ -3,6 +3,7 @@ export {
   type ForeignContacts,
   foreignContacts,
   foreignContactsPathFor,
+  refuseForeignClientReads,
 } from "./foreign-contacts.js"
 export { type ProviderCallOptions, providerCall } from "./provider-call.js"
 export {
@@ -40,21 +41,8 @@ export {
   parseCrmCursor,
   syncCrm,
 } from "./sync.js"
-export {
-  amountOf,
-  type CrmRaw,
-  crmValuesOf,
-  epoch,
-  fieldOf,
-  fullName,
-  id,
-  ids,
-  isRaw,
-  number,
-  rawsOf,
-  text,
-  time,
-} from "./values.js"
+/** An adapter's readers of a CRM's raw JSON: `crmValues.text(raw.name)`, `crmValues.time(raw.created_at)`. */
+export * as crmValues from "./values.js"
 export { type CrmRows, type CrmWindow, crmWindowOf, walk } from "./walk.js"
 export {
   CRM_ASSIGN_OTHERS_KEY,

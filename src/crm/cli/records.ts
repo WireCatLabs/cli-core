@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery, type Predicate, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { isoTime } from "@wirecat/cli-base/standards"
-import type { Command } from "commander"
+import { type Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../../cli/effects.js"
@@ -25,7 +25,15 @@ import {
 } from "../query.js"
 import type { CrmLiveKind, CrmSource } from "../source.js"
 import type { CrmWriteCapabilities } from "../writer.js"
-import { type CrmRecordInput, type CrmWriteContext, createCrmRecord, fieldPairsOf, updateCrmRecord } from "../writes.js"
+import {
+  type CrmRecordInput,
+  type CrmRecordWritten,
+  type CrmWriteContext,
+  createCrmRecord,
+  fieldPairsOf,
+  RECORD_ID,
+  updateCrmRecord,
+} from "../writes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 
@@ -44,6 +52,8 @@ const metadata = v.optional(
   ),
 )
 const untrusted = v.array(v.string())
+/** A phone or an address and its kind as the CRM names it (`WORK`, `MOB`), null when it names none. */
+const contacts = v.optional(v.array(v.strictObject({ value: v.string(), type: v.nullable(v.string()) })))
 
 /** A CRM contact as the CRM holds it now. `emails` and `phones` are left out where the sign-in may not see them. */
 export const crmPersonSchema = v.strictObject({
@@ -53,8 +63,8 @@ export const crmPersonSchema = v.strictObject({
   last_name: v.nullable(v.string()),
   position: v.nullable(v.string()),
   organization_ids: v.array(v.string()),
-  emails: v.optional(v.array(v.string())),
-  phones: v.optional(v.array(v.string())),
+  emails: contacts,
+  phones: contacts,
   assigned_to: v.nullable(v.string()),
   created_at: time,
   updated_at: time,
@@ -69,8 +79,9 @@ export const crmOrganizationSchema = v.strictObject({
   name: v.nullable(v.string()),
   type: v.nullable(v.string()),
   own: v.boolean(),
-  emails: v.optional(v.array(v.string())),
-  phones: v.optional(v.array(v.string())),
+  person_ids: v.array(v.string()),
+  emails: contacts,
+  phones: contacts,
   assigned_to: v.nullable(v.string()),
   created_at: time,
   updated_at: time,
@@ -92,7 +103,7 @@ export const crmUserSchema = v.strictObject({
 
 const PERSON_UNTRUSTED = ["name", "first_name", "last_name", "position", "emails", "phones", "provider_metadata"]
 const ORGANIZATION_UNTRUSTED = ["name", "type", "emails", "phones", "provider_metadata"]
-const USER_UNTRUSTED = ["name", "position"]
+const USER_UNTRUSTED = ["name", "email", "position"]
 
 const iso = (ms: number | null | undefined) => (ms == null ? null : new Date(ms).toISOString())
 
@@ -101,8 +112,10 @@ const both = (first: string | null | undefined, all: string[] | undefined) =>
   first == null && all === undefined ? undefined : [...new Set([...(first ? [first] : []), ...(all ?? [])])]
 
 const shared = (record: CrmPerson | CrmOrganization) => {
-  const emails = both((record as CrmPerson).email, record.emails)
-  const phones = both((record as CrmPerson).phone, record.phones)
+  const typed = (values: string[] | undefined) =>
+    values?.map((value) => ({ value, type: record.contactTypes?.[value] ?? null }))
+  const emails = typed(both((record as CrmPerson).email, record.emails))
+  const phones = typed(both((record as CrmPerson).phone, record.phones))
   return {
     ...(emails ? { emails } : {}),
     ...(phones ? { phones } : {}),
@@ -130,6 +143,7 @@ export const crmOrganizationOf = (organization: CrmOrganization): v.InferOutput<
   name: organization.name,
   type: organization.type ?? null,
   own: organization.own === true,
+  person_ids: organization.people ?? [],
   ...shared(organization),
   untrusted: ORGANIZATION_UNTRUSTED,
 })
@@ -217,11 +231,11 @@ const NOUNS: Record<CrmLiveKind, Noun> = {
   },
 }
 
-const MOST = 500
-const RECORD_ID = /^[\w.:-]{1,100}$/u
-
-const integer = (most: number) => (value: string) => {
-  if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new CliError("validation_error", `expected 1 to ${most}`)
+/** The most rows a live page asks for: amoCRM's own largest page. */
+const MOST = 250
+/** A whole number from 1 to `most`, as `--limit` and `--page` take it. */
+export const integer = (most: number) => (value: string) => {
+  if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
   return Number(value)
 }
 
@@ -245,11 +259,19 @@ export interface CrmRecordCommandOptions {
 export const addCrmRecordCommands = (program: Command, options: CrmRecordCommandOptions): void => {
   const { within, example } = options
   const quotaOf = (run: CrmRun) =>
-    foreignContacts(run.source(), () => foreignContactsPathFor(options.app, run.account, run.env), {
-      now: options.now,
-    })
-  const liveFields = async (run: CrmRun, kind: CrmLiveKind): Promise<CrmField[]> =>
-    (await run.source().fields?.(kind)) ?? []
+    foreignContacts(
+      run.source(),
+      async () => {
+        const self = run.source().self
+        return foreignContactsPathFor(options.app, run.account, run.env, self ? String(await self()) : undefined)
+      },
+      { now: options.now },
+    )
+  // The definitions a sync stored, which a list reads without a request; read live only before the first sync.
+  const liveFields = async (run: CrmRun, kind: CrmLiveKind): Promise<CrmField[]> => {
+    const stored = await run.store.crm.fields(run.account, kind)
+    return stored.length ? stored : ((await run.source().fields?.(kind)) ?? [])
+  }
 
   const records = (noun: Noun) => {
     const group = annotate(program.command(noun.noun), { effects: REMOTE_READ }).description(
@@ -295,7 +317,7 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
           conditions: [...conditionsOf(terms, RECORD_FIELDS[noun.kind]), ...custom],
           ...(name ? { text: name } : {}),
           limit: opts.limit,
-          page: String(opts.page),
+          page: opts.page,
         })
         const shown = await quotaOf(run).strip(noun.kind, page.items as (CrmPerson | CrmOrganization)[])
         return { items: shown.map(noun.of), fields, hasMore: page.hasMore }
@@ -324,17 +346,12 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
           `one of the CRM's ${noun.what}, read live, with its phones and e-mails; one that is not your client ` +
             "counts toward the day's limit when the CRM sets one",
         )
-        .argument(`<${noun.kind}>`, `the CRM's id of the ${noun.kind}, as list prints it`),
+        .argument(`<${noun.kind}>`, `the CRM's id of the ${noun.kind}, as list prints it, or its exact name`),
       `${noun.noun} show 42`,
-      `${noun.noun} show 42 --json`,
-    ).action(async (id: string, _opts: unknown, command: Command) => {
-      if (!RECORD_ID.test(id))
-        throw new CliError("validation_error", `name the ${noun.kind} by the CRM's id, as list prints it`, {
-          reason: "ref.malformed",
-        })
+      `${noun.noun} show "Anna Example" --json`,
+    ).action(async (given: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
-        const found = await sourceWith(run, "get", noun.what).get(noun.kind, id)
-        if (!found) throw new CliError("not_found", `the CRM has no ${noun.kind} ${id}, or this sign-in cannot see it`)
+        const found = await recordNamed(run, noun, given)
         await quotaOf(run).spend(noun.kind, found)
         return itemOf(noun.of(found))
       })
@@ -346,6 +363,24 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
   if (options.live.includes("user")) users(program, options)
 }
 
+/** By the CRM's id first; else the one record whose whole name is the given one, folded. */
+const recordNamed = async (run: CrmRun, noun: Noun, given: string): Promise<CrmPerson | CrmOrganization> => {
+  const id = given.trim()
+  const byId = RECORD_ID.test(id) ? await sourceWith(run, "get", noun.what).get(noun.kind, id) : null
+  if (byId) return byId as CrmPerson | CrmOrganization
+  const want = foldName(id)
+  const page = await sourceWith(run, "list", noun.what).list(noun.kind, { conditions: [], text: id, limit: MOST })
+  const named = (page.items as (CrmPerson | CrmOrganization)[]).filter((one) => foldName(one.name ?? "") === want)
+  const [only] = named
+  if (named.length > 1)
+    throw new CliError("validation_error", `${named.length} ${noun.what} are named ${id}; name one by its id`, {
+      reason: "crm.record-ambiguous",
+      candidates: named.map((one) => ({ id: one.externalId, name: one.name })),
+    })
+  if (!only) throw new CliError("not_found", `the CRM has no ${noun.kind} ${id}, or this sign-in cannot see it`)
+  return only
+}
+
 const matches = (user: CrmUser, terms: Map<string, Predicate>) => {
   const name = terms.get("name")
   if (name) {
@@ -354,6 +389,17 @@ const matches = (user: CrmUser, terms: Map<string, Predicate>) => {
   }
   const active = terms.get("active")
   return !active || String(user.active !== false) === active.value.toLowerCase()
+}
+
+const runUsers = new WeakMap<CrmRun, Promise<CrmUser[]>>()
+/** The CRM's users, read once a run. */
+const usersOf = (run: CrmRun): Promise<CrmUser[]> => {
+  let found = runUsers.get(run)
+  if (!found) {
+    found = sourceWith(run, "users", "users").users()
+    runUsers.set(run, found)
+  }
+  return found
 }
 
 const users = (program: Command, { within, example }: CrmRecordCommandOptions) => {
@@ -378,7 +424,7 @@ const users = (program: Command, { within, example }: CrmRecordCommandOptions) =
     const path = commandPath(command)
     const terms = nativeTerms(listQuery(typedQuery(words), CRM_USERS_QUERY, path, { defaultField: "name" }), path)
     await within(command, async (run) => {
-      const all = (await sourceWith(run, "users", "users").users()).filter((user) => matches(user, terms))
+      const all = (await usersOf(run)).filter((user) => matches(user, terms))
       const offset = (opts.page - 1) * opts.limit
       return listOf(path, {
         items: all.slice(offset, offset + opts.limit).map(crmUserOf),
@@ -395,8 +441,12 @@ const users = (program: Command, { within, example }: CrmRecordCommandOptions) =
       .argument("<user>", "the CRM's id of the user, as list prints it"),
     "users show 7",
   ).action(async (id: string, _opts: unknown, command: Command) => {
+    if (!RECORD_ID.test(id))
+      throw new CliError("validation_error", "name the user by the CRM's id, as users list prints it", {
+        reason: "ref.malformed",
+      })
     await within(command, async (run) => {
-      const found = (await sourceWith(run, "users", "users").users()).find((user) => user.externalId === id)
+      const found = (await usersOf(run)).find((user) => user.externalId === id)
       if (!found) throw new CliError("not_found", `the CRM has no user ${id}`)
       return itemOf(crmUserOf(found))
     })
@@ -405,6 +455,7 @@ const users = (program: Command, { within, example }: CrmRecordCommandOptions) =
 
 const crmRecordWrite = v.strictObject({
   operation_id: v.string(),
+  stored: v.boolean(),
   person: v.optional(crmPersonSchema),
   organization: v.optional(crmOrganizationSchema),
   untrusted,
@@ -463,9 +514,10 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
       names: { id: "--operation-id" },
     }
   }
-  const answered = (operationId: string, record: CrmPerson | CrmOrganization): Body =>
+  const answered = ({ operationId, record, stored }: CrmRecordWritten<CrmLiveKind>): Body =>
     itemOf({
       operation_id: operationId,
+      stored,
       [noun.kind]: noun.of(record),
       untrusted: (person ? PERSON_UNTRUSTED : ORGANIZATION_UNTRUSTED).map((one) => `${noun.kind}.${one}`),
     })
@@ -484,7 +536,7 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
     ).action(async (opts: Typed, leaf: Command) => {
       await within(leaf, async (run) => {
         const done = await createCrmRecord(contextOf(run, leaf), noun.kind, inputOf(opts), idOf(opts))
-        return answered(done.operationId, done.record)
+        return answered(done)
       })
     })
   if (writes.verbs.includes("update"))
@@ -499,7 +551,7 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
     ).action(async (id: string, opts: Typed, leaf: Command) => {
       await within(leaf, async (run) => {
         const done = await updateCrmRecord(contextOf(run, leaf), noun.kind, id, inputOf(opts), idOf(opts))
-        return answered(done.operationId, done.record)
+        return answered(done)
       })
     })
 }

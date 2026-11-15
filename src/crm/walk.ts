@@ -14,12 +14,12 @@ export interface CrmWindow {
 
 /** The rows a live query's page asks for: its page number, from 1, and its size. */
 export const crmWindowOf = (query: Pick<CrmLiveQuery, "limit" | "page">): CrmWindow => {
-  const page = query.page === undefined ? 1 : Number(query.page)
+  const page = query.page ?? 1
   return { offset: (Number.isSafeInteger(page) && page > 1 ? page - 1 : 0) * query.limit, limit: query.limit }
 }
 
 /**
- * The rows of one answer page, read from the CRM in its own page sizes, up to `largest` a request: one more than asked,
+ * For a CRM that pages by offset only. The rows of one answer page, read from the CRM in its own page sizes, up to `largest` a request: one more than asked,
  * so `hasMore` is known without a total, which many CRMs do not give.
  */
 export const walk = async <T>(

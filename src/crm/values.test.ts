@@ -24,7 +24,7 @@ describe("CRM JSON helpers", () => {
   it("walk reads a page over the CRM's smaller pages and knows has_more without a total", async () => {
     const rows = ["a", "b", "c", "d", "e"]
     const asked: [number, number][] = []
-    const page = await walk(crmWindowOf({ limit: 2, page: "2" }), 2, async (offset, size) => {
+    const page = await walk(crmWindowOf({ limit: 2, page: 2 }), 2, async (offset, size) => {
       asked.push([offset, size])
       return { rows: rows.slice(offset, offset + size), more: offset + size < rows.length }
     })

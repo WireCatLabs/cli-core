@@ -72,8 +72,11 @@ export interface CrmLiveQuery {
   text?: string
   /** Rows on the page. */
   limit: number
-  /** The page number from 1, as decimal text; absent is the first. `crmWindowOf` turns it into an offset. */
-  page?: string
+  /**
+   * The page number from 1; absent is the first. A CRM that pages by offset turns it into one with `crmWindowOf`;
+   * one that pages by number passes it on.
+   */
+  page?: number
 }
 
 /** What the engine hands every source call; a source that ignores it works as before. */

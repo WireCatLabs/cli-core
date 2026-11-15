@@ -104,4 +104,17 @@ describe("accountTokenCodec", () => {
       ),
     ).toMatchObject({ host: "https://example.amocrm.ru", userId: "7", clientSecret: "synthetic-owner-secret" })
   })
+
+  it("a new sign-in takes its host and user from the sign-in alone, never from the entry it replaces (BUG-3)", () => {
+    const codec = accountTokenCodec("amocrm")
+    expect(codec.rotating).toBe(true)
+    const signIn = {
+      tokens: { refreshToken: "synthetic-refresh", scopes: [] },
+      client: { clientId: "owner-integration", clientSecret: "synthetic-owner-secret" },
+      previous: JSON.stringify(entry),
+      signIn: true,
+    }
+    expect(() => codec.encode(signIn)).toThrow(/host and user/)
+    expect(JSON.parse(codec.encode({ ...signIn, signIn: false }))).toMatchObject({ host: "https://example.amocrm.ru" })
+  })
 })

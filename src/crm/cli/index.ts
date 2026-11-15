@@ -42,7 +42,7 @@ import {
 } from "../writes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
-import { addCrmRecordCommands, type CrmLiveRecord } from "./records.js"
+import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
 import { addCrmSearchAll } from "./search-all.js"
 
 export {
@@ -272,11 +272,6 @@ const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: coun
 const collect = (value: string, previous: string[] = []) => {
   if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
-}
-
-const integer = (most: number) => (value: string) => {
-  if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
-  return Number(value)
 }
 
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */

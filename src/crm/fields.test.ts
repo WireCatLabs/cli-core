@@ -35,6 +35,23 @@ describe("the CRM field lookup a CRM CLI shares", () => {
     expect(source && optionOf(source, "сайт елки")).toBe("7")
   })
 
+  it("refuses a label two options share, naming both (BUG-14)", () => {
+    const twice = {
+      code: "UF_KIND",
+      label: "Kind",
+      options: [
+        { id: "1", label: "Retail" },
+        { id: "2", label: "retail" },
+      ],
+    }
+    expect(() => optionOf(twice, "Retail")).toThrow(
+      expect.objectContaining({
+        details: expect.objectContaining({ reason: "field.ambiguous-option", candidates: twice.options }),
+      }),
+    )
+    expect(optionOf(twice, "2")).toBe("2")
+  })
+
   it("names the option the name came from in a refusal", () => {
     const [source] = fields
     const refusedWith = (param: string) => expect.objectContaining({ details: expect.objectContaining({ param }) })

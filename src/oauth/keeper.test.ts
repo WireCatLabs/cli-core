@@ -245,6 +245,19 @@ describe("a run with moved folders", () => {
     expect(calls).toHaveLength(1)
   })
 
+  it("refuses to refresh a sign-in whose refresh token rotates, so the owner's entry keeps a live one (RISK-1)", async () => {
+    const { keeper, calls, keyring, storage } = setup({ saved })
+    const before = keyring.get("example-cli", "oauth:example:personal")
+    const moved = { ...storage, moved: true, rotating: true }
+    await expect(keeper({ storage: moved }).accessToken()).rejects.toMatchObject({
+      code: "authentication_error",
+      details: { reason: "oauth.moved-rotating" },
+    })
+    expect(calls).toHaveLength(0)
+    expect(keyring.get("example-cli", "oauth:example:personal")).toBe(before)
+    expect(await keeper({ storage: { ...storage, rotating: true } }).accessToken()).toBe("synthetic-access-new")
+  })
+
   it("refreshes a refused token in a run with moved folders, in memory only", async () => {
     const { keeper, calls, keyring } = setup({
       saved: { accessToken: "synthetic-access-refused", refreshToken: "synthetic-refresh", expiresAt: NOW + 600_000 },
