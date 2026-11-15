@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
-import type { RunBudget } from "../../background/budget.js"
-import { runBudgetOf } from "../context.js"
+import type { Deadline, RunBudget } from "../../background/budget.js"
+import { environmentOf, runBudgetOf } from "../context.js"
 import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
@@ -15,6 +15,8 @@ export interface DocumentSyncArgs {
   embed?: boolean
   /** Sized to the run's deadline; pass it to `syncDocuments` so a sync stops in time and says how to go on. */
   budget?: RunBudget
+  /** The run's hard limit; pass it to `syncDocuments` so its last step, the word index, ends before it. */
+  deadline?: Deadline
 }
 
 export interface DocumentSyncAnswer {
@@ -65,7 +67,8 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
     .option("--rescan", "read every chosen folder again instead of only what changed")
     .option("--embed", "also index pending text for meaning search, with a model already downloaded")
     .action(async (args: DocumentSyncArgs, command: Command) => {
-      const result = await helpers.sync({ ...args, budget: runBudgetOf(command) })
+      const deadline = environmentOf(command).deadline?.()
+      const result = await helpers.sync({ ...args, budget: runBudgetOf(command), ...(deadline ? { deadline } : {}) })
       const unfinished = result.complete === false || result.pending > 0
       const moved =
         (result.walk?.listed ?? 0) > 0 ||

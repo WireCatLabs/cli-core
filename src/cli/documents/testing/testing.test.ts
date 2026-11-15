@@ -257,7 +257,17 @@ const reference = async (source: FakeDocumentSource = fakeDocumentSource(PRINCIP
 describe("documents source contract over the fake provider", () => {
   for (const c of documentSourceContract(() => {
     const source = fakeDocumentSource()
-    return { source, root: "root", isFolder, missing: "gone", change: async () => source.put(fakeFile("c"), "new") }
+    return {
+      source,
+      root: "root",
+      isFolder,
+      missing: "gone",
+      change: async () => source.put(fakeFile("c"), "new"),
+      addNested: async () => {
+        source.put(fakeFile("deep", ["nested"]), "deep text")
+        return { file: "deep", folder: "nested" }
+      },
+    }
   }))
     it(c.name, c.run)
 })

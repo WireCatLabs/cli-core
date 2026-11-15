@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
 import { openStore } from "../../store/index.js"
@@ -63,10 +64,13 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
   let state: SourceState = { version: 1, principal: "alpha", scope: "", folders: {}, documents: {}, skipped: [] }
   let walk: SourceWalk | undefined
   const listed: string[] = []
+  const removed: string[] = []
   const source: DocumentSource = {
     identity: async () => "alpha",
     metadata: async (id) => nodes.get(id) as SourceFile,
     children: async (id) => {
+      // As Notion answers a page deleted or unshared since it was found.
+      if (!nodes.has(id)) throw new CliError("not_found", "object_not_found")
       listed.push(id)
       return index.get(id) ?? []
     },
@@ -88,7 +92,9 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
     source,
     index: {
       save: async (_principal, content) => content.metadata.id,
-      remove: async () => {},
+      remove: async (_principal, id) => {
+        removed.push(id)
+      },
       openPictures: async () => {
         throw new Error("no pictures")
       },
@@ -103,7 +109,7 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
     isDocument: () => true,
     skipReason: () => undefined,
     retryable: () => false,
-    errorOf: (error) => error as never,
+    errorOf: (error) => (isCliError(error) ? error : new CliError("provider_error", "synthetic failure")),
     assertHeld: () => {},
     state: {
       read: () => structuredClone(state),
@@ -125,6 +131,7 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
   return {
     options,
     listed,
+    removed,
     state: () => state,
     walk: () => walk,
     /** Changes a node and names it in the next change feed, as the source would. */
@@ -132,6 +139,11 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
       for (const file of files) nodes.set(file.id, file)
       index = byParent()
       changes = files.map((file) => ({ id: file.id, removed: false, file }))
+    },
+    /** Deletes nodes the feed does not name yet. */
+    remove: (...ids: string[]) => {
+      for (const id of ids) nodes.delete(id)
+      index = byParent()
     },
     /** Adds nodes the feed does not name, such as the sub-pages of a page moved in from outside the scope. */
     add: (...files: SourceFile[]) => {
@@ -198,7 +210,7 @@ describe("a sync of a tree larger than one call's bound", () => {
     expect(tree.state().cursor).toBe("start+")
   })
 
-  it("keeps a rescan going over the next syncs, and a second --rescan does not start it again", async () => {
+  it("keeps a rescan going over the next syncs, and a second --rescan starts it over", async () => {
     const tree = treeSync(pageTree(4, 3, 3))
     await untilComplete(() => syncDocuments(tree.options))
     tree.listed.length = 0
@@ -206,11 +218,92 @@ describe("a sync of a tree larger than one call's bound", () => {
     expect(await syncDocuments({ ...options, rescan: true })).toMatchObject({ complete: false })
     expect(tree.state().cursor).toBeUndefined()
     expect(await syncDocuments(options)).toMatchObject({ complete: false })
+    const walked = tree.listed.length
+    tree.listed.length = 0
     expect(await syncDocuments({ ...options, rescan: true })).toMatchObject({ complete: false })
     await untilComplete(() => syncDocuments(options))
+    expect(walked).toBeGreaterThan(0)
     expect(tree.listed).toHaveLength(53)
     expect(new Set(tree.listed).size).toBe(53)
     expect(tree.state().cursor).toBe("start")
+  })
+
+  it("drops a page deleted while it waits on the saved walk, and goes on with the rest", async () => {
+    const nodes = pageTree(2, 2, 2)
+    const tree = treeSync(nodes)
+    expect(await syncDocuments({ ...tree.options, maxEntries: 3 })).toMatchObject({ complete: false })
+    const gone = tree.walk()?.stack.at(-1)?.id as string
+    tree.remove(...[...nodes.keys()].filter((id) => id.startsWith(gone)))
+    const runs = await untilComplete(() => syncDocuments({ ...tree.options, maxEntries: 3 }))
+    expect(runs.at(-1)).toMatchObject({ complete: true, errors: [] })
+    expect(Object.keys(tree.state().documents)).toEqual(expect.arrayContaining([...nodes.keys()]))
+    expect(Object.keys(tree.state().documents)).not.toContain(gone)
+  })
+
+  it("drops a page deleted under a known one in a round of changes, with what was below it", async () => {
+    const nodes = pageTree(1, 2, 3)
+    const tree = treeSync(nodes)
+    await untilComplete(() => syncDocuments(tree.options))
+    const moved = [page("away", "root", "2"), page("away0", "away"), page("away1", "away")]
+    tree.add(...moved.slice(1))
+    tree.change(moved[0] as SourceFile)
+    expect(await syncDocuments({ ...tree.options, maxEntries: 2 })).toMatchObject({ complete: false })
+    tree.remove("away1")
+    await untilComplete(() => syncDocuments({ ...tree.options, maxEntries: 2 }))
+    expect(tree.state().documents.away0).toBeDefined()
+    expect(tree.state().documents.away1).toBeUndefined()
+  })
+
+  it("saves a dropped batch at once, so a walk cut short does not remove its files again", async () => {
+    const tree = treeSync(pageTree(2, 3, 3))
+    await syncDocuments({ ...tree.options, max: 2 })
+    expect(tree.state().pending?.jobs.length).toBeGreaterThan(10)
+    tree.removed.length = 0
+    const options = { ...tree.options, roots: ["h0"], maxEntries: 3 }
+    expect(await syncDocuments(options)).toMatchObject({ complete: false })
+    const once = tree.removed.length
+    expect(once).toBeGreaterThan(10)
+    await syncDocuments(options)
+    await syncDocuments(options)
+    expect(tree.removed).toHaveLength(once)
+  })
+
+  it("finds a file in a held sub-folder only when the feed names that folder too", async () => {
+    const tree = treeSync(pageTree(1, 2, 3))
+    await untilComplete(() => syncDocuments(tree.options))
+    tree.add(page("hidden", "h0s0"))
+    tree.change(page("h0", "root", "2"))
+    await syncDocuments(tree.options)
+    expect(tree.state().documents.hidden).toBeUndefined()
+    tree.change(page("h0s0", "h0", "2"))
+    await syncDocuments(tree.options)
+    expect(tree.state().documents.hidden).toBeDefined()
+  })
+
+  it("does not index words after a stop or past the run's deadline", async () => {
+    const tree = treeSync(pageTree(1, 1, 1))
+    const settled: boolean[] = []
+    const index = {
+      ...tree.options.index,
+      settle: async ({ until }: { until: () => boolean }) => {
+        settled.push(until())
+      },
+    }
+    let left = 4
+    const budget = {
+      take: () => (left-- > 0 ? null : ("deadline" as const)),
+      get stopped() {
+        return left < 0 ? ("deadline" as const) : null
+      },
+    }
+    expect(await syncDocuments({ ...tree.options, budget, index })).toMatchObject({ stopped: "deadline" })
+    expect(settled).toEqual([])
+    const near = { endsAt: Date.now() + 3_000, ms: 45_000 }
+    expect(await syncDocuments({ ...tree.options, index, deadline: near })).toMatchObject({ complete: true })
+    expect(settled).toEqual([])
+    const far = { endsAt: Date.now() + 120_000, ms: 120_000 }
+    await syncDocuments({ ...tree.options, index, deadline: far, rescan: true })
+    expect(settled).toEqual([false])
   })
 
   it("stops when its request budget says so and goes on in the next call", async () => {
@@ -241,6 +334,7 @@ describe("a sync of a tree larger than one call's bound", () => {
     await store.close()
     const reader = await openStore({ path, readOnly: true })
     try {
+      expect(await reader.notes.indexWritten()).toBe(0)
       const found = await searchNotesQuery(reader, { text: "words", limit: 10, timezone: "UTC", folderIds: [folder] })
       expect(found.items).toHaveLength(4)
     } finally {

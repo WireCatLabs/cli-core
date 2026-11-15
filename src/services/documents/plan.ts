@@ -185,7 +185,20 @@ export const planDocuments = async <M extends SourceFile>(
         if (!step.folder && (!isFolder(folder) || folder.trashed))
           throw new CliError("validation_error", "configured root is not an accessible folder")
         if (!step.folder) container(folder)
-        const children = await source.children(folder.id)
+        let children: M[]
+        try {
+          children = await source.children(folder.id)
+        } catch (error) {
+          // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
+          if (errorOf(error).code !== "not_found") throw error
+          walk.stack.pop()
+          visited.add(folder.id)
+          folders[folder.id] = { ...folder, trashed: true }
+          drop(folder.id)
+          spent++
+          listed++
+          continue
+        }
         spent += 1 + children.length
         listed++
         walk.discovered += children.length

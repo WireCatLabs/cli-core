@@ -12,14 +12,22 @@ import type { ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolv
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, outOfTime, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import type { Stemmer } from "../../search/stem.js"
-import type { SqlValue } from "../driver.js"
+import { isQueryOnly, type SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { contextDocumentTime } from "./context-document-source.js"
 import { type DocumentPictureStore, documentPicturesOver } from "./document-pictures.js"
 import { ENRICHMENT_POSITION, enrichmentText } from "./enrichments.js"
 import { linkKind } from "./link-kinds.js"
 import { prefixOf } from "./lucene.js"
-import { drainNoteIndex, type NoteIndexState, noteIndexState, noteIndexText } from "./note-index.js"
+import {
+  drainCorpus,
+  drainNoteIndex,
+  fillTrigrams,
+  CORPORA as INDEXED,
+  type NoteIndexState,
+  noteIndexState,
+  noteIndexText,
+} from "./note-index.js"
 import { documentOf, type Note, noteOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
@@ -492,7 +500,9 @@ export interface NoteSearch extends DocumentPictureStore {
   indexState(): Promise<NoteIndexState | undefined>
   /**
    * Indexes the documents and notes written since the last search, so a reader that cannot write finds them by their
-   * words; stops between batches once `until` says so. 0 under a read-only store.
+   * words. The queue is the store's own, shared by every tool that writes to it, not only the caller's rows. Works a
+   * batch of 50 at a time and yields between batches, so `until` (a deadline, a signal) is asked often; 0 under a
+   * read-only store.
    */
   indexWritten(options?: { until?: () => boolean }): Promise<number>
   /** Live notes' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
@@ -516,6 +526,7 @@ export interface NoteSearch extends DocumentPictureStore {
 }
 
 const SCAN_PAGE = 5_000
+const SETTLE_BATCH = 50
 
 /** A note's best chunk so far, and its lowest chunk, by which the scan breaks ties. */
 interface Best {
@@ -559,7 +570,35 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
       return matchingNoteRefs(context, query)
     },
     indexState: async () => noteIndexState(database),
-    indexWritten: async ({ until } = {}) => drainNoteIndex(database, stemmerFor, until ? { until } : {}),
+    indexWritten: async ({ until = () => false } = {}) => {
+      if (isQueryOnly(database)) return 0
+      // One batch per step: a step's own `until` lets it run once, so every corpus moves on each round.
+      const once = () => {
+        let ran = false
+        return () => {
+          const stop = ran
+          ran = true
+          return stop
+        }
+      }
+      const steps = [
+        () => drainCorpus(database, INDEXED.document, stemmerFor, { batch: SETTLE_BATCH, until: once() }),
+        () => drainCorpus(database, INDEXED.note, stemmerFor, { batch: SETTLE_BATCH, until: once() }),
+        () => fillTrigrams(database, { batch: SETTLE_BATCH, until: once() }),
+      ]
+      let total = 0
+      for (;;) {
+        let done = 0
+        for (const step of steps) {
+          if (until()) return total
+          done += step()
+        }
+        total += done
+        if (done === 0) return total
+        // A synchronous drain would hide an abort or a timer until it ends.
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    },
     chunksToEmbed: async (model, { after, limit }) => {
       drain()
       const scope = live(undefined, undefined)

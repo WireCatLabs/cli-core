@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { deadlineMargin } from "../../background/budget.js"
 import { catalogFiles } from "../../documents/catalog.js"
 import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSkip } from "../../documents/model.js"
 import { inScope } from "../../documents/scope.js"
@@ -86,9 +87,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     if (state.principal !== principal)
       throw new CliError("configuration_error", "sync state belongs to another source account")
     const currentScope = scopeHash(profile.roots, query, options.isDocument !== undefined)
-    // With no cursor a full pass is already under way, a rescan's included: it goes on rather than starting again.
-    const restart = rescan && Boolean(state.cursor)
-    if (state.pending && (state.pending.scope !== currentScope || restart)) {
+    if (state.pending && (state.pending.scope !== currentScope || rescan)) {
       // Work the new plan cannot see: a file saved to the index before its state was.
       for (const job of state.pending.jobs)
         if (!state.documents[job.id]) {
@@ -96,8 +95,12 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           statePort.removeSnapshot(job.id)
         }
       delete state.pending
+      // Saved at once: a call the walk cuts short would otherwise find the old batch again and repeat these removals.
+      statePort.save(state)
     }
-    if (restart) {
+    // A rescan starts the walk over, a saved one included; the cursor is dropped on disk, so the syncs after it
+    // continue the walk until it ends.
+    if (rescan) {
       delete state.cursor
       statePort.removeWalk()
       statePort.save(state)
@@ -260,11 +263,18 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       statePort.save(state)
     }
     // A reader that cannot write finds the text by its words only once it is indexed; a search that can write does it
-    // itself, so what this bound leaves, or a failure here, is indexed by the next one. Real time: `now` may be fixed.
+    // itself, so what this bound leaves, or a failure here, is indexed by the next one. Skipped after a stop, and kept
+    // inside the run's deadline less its margin, so the partial answer and its next step still reach the caller.
+    // Real time: `now` may be fixed.
     const settleFrom = Date.now()
-    await index
-      .settle?.({ until: () => signal?.aborted === true || Date.now() - settleFrom > SETTLE_MS })
-      .catch(() => undefined)
+    const settleUntil = Math.min(
+      settleFrom + SETTLE_MS,
+      options.deadline ? options.deadline.endsAt - deadlineMargin(options.deadline) : Number.POSITIVE_INFINITY,
+    )
+    if (!result.stopped && !options.budget?.stopped && settleUntil > settleFrom)
+      await index
+        .settle?.({ until: () => signal?.aborted === true || Date.now() >= settleUntil })
+        .catch(() => undefined)
     return result
   } finally {
     flush?.()
