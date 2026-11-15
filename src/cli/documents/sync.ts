@@ -71,6 +71,7 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
         (result.walk?.listed ?? 0) > 0 ||
         [result.saved, result.names_only, result.removed, result.unchanged].some((count) => (count ?? 0) > 0)
       const again = `${wording.app} ${helpers.profile()} sync`
+      const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
       // The same sync again, never --rescan, which would start the pass over; a run that moved nothing gets no step.
       const next =
         unfinished && !result.errors.length && moved
@@ -79,7 +80,11 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
                 kind: "command" as const,
                 step: "sync.run",
                 command: "sync",
-                args: { limit: args.limit },
+                args: {
+                  limit: args.limit,
+                  ...(timeout === undefined ? {} : { timeout }),
+                  ...(args.embed ? { embed: true } : {}),
+                },
                 why: "the sync stopped before the end of its pass; running it again goes on from there",
                 safe_to_auto_execute: true,
               },

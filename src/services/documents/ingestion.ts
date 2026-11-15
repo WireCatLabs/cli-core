@@ -81,7 +81,8 @@ export const documentIngestion = <M extends SourceFile>(
       },
     },
     collection: folder,
-    settle: ({ until }: { until: () => boolean }) => store.notes.indexWritten({ until }),
+    // A store fake that predates `indexWritten` leaves the text for the next search to index.
+    settle: async ({ until }: { until: () => boolean }) => store.notes.indexWritten?.({ until }),
     save: async (principal: string, content: SourceContent<M>, hash: string) => {
       const selected = await folder(principal, true)
       if (!selected) throw new Error("folder registration failed")

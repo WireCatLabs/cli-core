@@ -376,13 +376,15 @@ describe("shared documents commands", () => {
 
   it("a sync that leaves work for the next one answers partial and names the same sync as its next step", async () => {
     const cli = await reference()
-    const answer = await cli.run(["sync", "--limit", "1"])
+    const answer = await cli.run(["sync", "--limit", "1", "--embed"])
     expect(answer.exit).toBe(0)
     expect(answer.printed[0]).toMatchObject({
       item: { complete: false, pending: 1 },
       meta: { complete: false },
-      next: [{ step: "sync.run", command: "sync", args: { limit: 1 }, safe_to_auto_execute: true }],
+      next: [{ step: "sync.run", command: "sync", safe_to_auto_execute: true }],
     })
+    // The same sync again, its --rescan left out: that would start the pass over.
+    expect((answer.printed[0] as { next: { args: object }[] }).next[0]?.args).toEqual({ limit: 1, embed: true })
     const done = await cli.run(["sync", "--limit", "1"])
     expect(done.printed[0]).toMatchObject({ item: { complete: true, pending: 0 } })
     expect((done.printed[0] as { next?: { step: string }[] }).next ?? []).not.toContainEqual(

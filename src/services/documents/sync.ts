@@ -249,10 +249,6 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     flush()
     result.pending = pending.jobs.length
     result.complete = !pending.jobs.length
-    const settleFrom = now()
-    // A reader that cannot write finds the text by its words only once it is indexed; a search that can write does it
-    // itself, so what this bound leaves is indexed by the next one.
-    await index.settle?.({ until: () => signal?.aborted === true || now() - settleFrom > SETTLE_MS })
     if (!pending.jobs.length) {
       state.cursor = pending.cursor
       state.scope = pending.scope
@@ -263,6 +259,12 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       state.lastSync = new Date(now()).toISOString()
       statePort.save(state)
     }
+    // A reader that cannot write finds the text by its words only once it is indexed; a search that can write does it
+    // itself, so what this bound leaves, or a failure here, is indexed by the next one. Real time: `now` may be fixed.
+    const settleFrom = Date.now()
+    await index
+      .settle?.({ until: () => signal?.aborted === true || Date.now() - settleFrom > SETTLE_MS })
+      .catch(() => undefined)
     return result
   } finally {
     flush?.()
