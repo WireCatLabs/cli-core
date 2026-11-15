@@ -6,6 +6,7 @@ import {
   type MeetingPassageReader,
   type MeetingPassageRequest,
   type MeetingPassageResult,
+  markedPassage,
   validateMeetingPassage,
 } from "../passage.js"
 
@@ -87,7 +88,7 @@ const addMeetingPassageCommandDefinition = (
       const globals = command.optsWithGlobals()
       const format = globals.json || globals.jsonl ? "json" : (options.format ?? "text")
       const input = meetingPassageRequest(reference, { ...options, format }, deps.signal())
-      const result = await deps.read(reference, input)
+      const result = markedPassage(await deps.read(reference, input))
       input.signal?.throwIfAborted()
       deps.output(result, format)
     },

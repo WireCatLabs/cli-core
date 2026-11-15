@@ -1,5 +1,5 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
-import { type MeetingPassageReader, validateMeetingPassage } from "../passage.js"
+import { type MeetingPassageReader, markedPassage, validateMeetingPassage } from "../passage.js"
 import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 const count = { type: "integer", minimum: 0, maximum: 999 }
@@ -46,7 +46,7 @@ export const callMeetingPassageTool = async (
     const reference = args.reference as string
     validateMeetingPassage(reference, options)
     signal?.throwIfAborted()
-    const result = await read(reference, options)
+    const result = markedPassage(await read(reference, options))
     signal?.throwIfAborted()
     return agentResult({ content: [{ type: "text" as const, text: result.content }], structuredContent: result.packet })
   } catch (error) {

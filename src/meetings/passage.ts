@@ -20,6 +20,7 @@ export interface MeetingContextCue {
   speaker_name: string | null
   text: string
   revision: "current" | "superseded"
+  untrusted?: string[]
 }
 export const meetingHitContextLimits = (options: MeetingHitContextOptions = {}) => {
   const { before = 3, after = 3, bytes = 65536, max_read_bytes = 4194304, expected_fingerprint } = options
@@ -75,6 +76,17 @@ export interface MeetingPassageResult {
   packet: MeetingHitContextPacket
   content: string
 }
+/** The cues' speaker names and lines are what people said: each cue names them, as every meeting read does. */
+export const MEETING_CUE_UNTRUSTED = ["speaker_name", "text"]
+
+/** The passage as a command or tool answers it, its cues marked; the reader's own packet stays as its bytes counted. */
+export const markedPassage = (result: MeetingPassageResult): MeetingPassageResult => ({
+  ...result,
+  packet: {
+    ...result.packet,
+    items: result.packet.items.map((cue) => ({ ...cue, untrusted: [...MEETING_CUE_UNTRUSTED] })),
+  },
+})
 export type MeetingPassageReader = (reference: string, options: MeetingPassageRequest) => Promise<MeetingPassageResult>
 export const validateMeetingPassage = (reference: string, options: MeetingPassageRequest) => {
   meetingHitContextLimits(options)

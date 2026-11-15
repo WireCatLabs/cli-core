@@ -88,7 +88,7 @@ describe("fake calendar source", () => {
 
 describe("fake calendar writer", () => {
   for (const c of calendarWriterContract(() => {
-    const writer = fakeCalendarWriter()
+    const writer = fakeCalendarWriter({ conferences: ["google-meet"] })
     const calendar = {
       id: 1,
       accountId: 1,

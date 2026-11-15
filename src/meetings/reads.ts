@@ -15,6 +15,7 @@ import {
 } from "./answers.js"
 import { MEETING_QUERY, type MeetingItem, type MeetingOwner, meetingItem } from "./item.js"
 import {
+  type MeetingParticipantCandidate,
   type MeetingParticipantSearchOptions,
   type MeetingParticipantSearchStore,
   validateMeetingParticipantQuery,
@@ -106,8 +107,19 @@ export const meetingPeople = async (
       "configuration_error",
       "bounded participant lookup needs a selected account and capable store",
     )
+  // The bounded path's row, so `untrusted` names keys that are there. This store cannot tell a person link, so no
+  // `person`: its null would say the identity is linked to no one.
   return listed(
-    (await store.participants(query, accountId)).map((one) => ({ ...one, untrusted: [...PARTICIPANT_UNTRUSTED] })),
+    (await store.participants(query, accountId)).map(
+      (one): Omit<MeetingParticipantCandidate, "person"> & { untrusted: string[] } => ({
+        participant_id: one.id,
+        meeting_id: one.meetingId,
+        identity_id: one.identityId,
+        display_name: one.displayName,
+        email: one.email,
+        untrusted: [...PARTICIPANT_UNTRUSTED],
+      }),
+    ),
   )
 }
 

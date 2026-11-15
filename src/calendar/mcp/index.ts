@@ -121,11 +121,17 @@ const fields = {
   description: { ...anyText, description: "empty clears it" },
   attendees: { type: "array", items: text, description: "email addresses; on a change, the whole new list" },
   repeat: { ...text, description: `how it repeats: ${REPEAT_HELP}; on a change, only with series` },
-  conference: {
-    ...text,
-    description: "a meeting service to make a new meeting link with, one the calendar offers; never replaces a link",
-  },
 }
+const conferenceOf = (services: readonly string[]) =>
+  services.length
+    ? {
+        conference: {
+          ...text,
+          enum: [...services],
+          description: "a meeting service to make a new meeting link with; never replaces a link",
+        },
+      }
+    : {}
 const target = {
   account_id: integer,
   event: text,
@@ -134,82 +140,91 @@ const target = {
 
 /**
  * The calendar writes, offered only by a host that has a writer. Over MCP `ask` goes ahead (WC-MCP-7); `deny`,
- * `readonly`, `events.notify` and the extra keys still refuse.
+ * `readonly`, `events.notify` and the extra keys still refuse. `conference` is offered only with the services the
+ * writer declares (`CalendarWriter.conferences`).
  */
-export const calendarWriteTools = [
-  {
-    name: "event_create",
-    description: "add an event to a calendar, one that repeats with repeat",
-    properties: {
-      account_id: integer,
-      calendar: text,
-      ...fields,
-      notify,
-      operation_id: operationId(
-        "the operation_id a create that ended in outcome_unknown named: a retry finds that event",
-      ),
+export const calendarWriteToolsFor = (conferences: readonly string[] = []) =>
+  [
+    {
+      name: "event_create",
+      description: "add an event to a calendar, one that repeats with repeat",
+      properties: {
+        account_id: integer,
+        calendar: text,
+        ...fields,
+        ...conferenceOf(conferences),
+        notify,
+        operation_id: operationId(
+          "the operation_id a create that ended in outcome_unknown named: a retry finds that event",
+        ),
+      },
+      required: ["calendar", "title"],
+      destructive: false,
     },
-    required: ["calendar", "title"],
-    destructive: false,
-  },
-  {
-    name: "event_update",
-    description:
-      "change an event, with series every occurrence of its repeating event and its repeat rule, or with following " +
-      "this occurrence and every later one",
-    properties: {
-      ...target,
-      ...fields,
-      series: flag,
-      following,
-      notify,
-      operation_id: operationId(
-        "with following, the operation_id an outcome_unknown named: a retry finds that new series",
-      ),
+    {
+      name: "event_update",
+      description:
+        "change an event, with series every occurrence of its repeating event and its repeat rule, or with following " +
+        "this occurrence and every later one",
+      properties: {
+        ...target,
+        ...fields,
+        ...conferenceOf(conferences),
+        series: flag,
+        following,
+        notify,
+        operation_id: operationId(
+          "with following, the operation_id an outcome_unknown named: a retry finds that new series",
+        ),
+      },
+      required: ["event"],
+      destructive: true,
     },
-    required: ["event"],
-    destructive: true,
-  },
-  {
-    name: "event_delete",
-    description:
-      "delete an event; deleting a whole repeating event (series) or every later occurrence (following) is denied " +
-      "unless the owner allowed it",
-    properties: { ...target, series: flag, following, notify },
-    required: ["event"],
-    destructive: true,
-  },
-  {
-    name: "event_move",
-    description: "move an event, with its id, to another calendar of the same account; a repeating one moves whole",
-    properties: {
-      ...target,
-      to_calendar: { ...text, description: "the calendar to move it to" },
-      series: flag,
-      notify,
+    {
+      name: "event_delete",
+      description:
+        "delete an event; deleting a whole repeating event (series) or every later occurrence (following) is denied " +
+        "unless the owner allowed it",
+      properties: { ...target, series: flag, following, notify },
+      required: ["event"],
+      destructive: true,
     },
-    required: ["event", "to_calendar"],
-    destructive: false,
-  },
-  {
-    name: "event_respond",
-    description: "answer an invitation; the organiser is told only with notify true",
-    properties: { ...target, response: { type: "string", enum: EVENT_RESPONSES }, notify },
-    required: ["event", "response"],
-    destructive: false,
-  },
-].map(({ properties, required, description, destructive, ...tool }) => ({
-  ...tool,
-  description: `${description}. ${UNTRUSTED_EVENTS}`,
-  inputSchema: { type: "object", properties, required, additionalProperties: false },
-  annotations: { readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: true },
-}))
+    {
+      name: "event_move",
+      description: "move an event, with its id, to another calendar of the same account; a repeating one moves whole",
+      properties: {
+        ...target,
+        to_calendar: { ...text, description: "the calendar to move it to" },
+        series: flag,
+        notify,
+      },
+      required: ["event", "to_calendar"],
+      destructive: false,
+    },
+    {
+      name: "event_respond",
+      description: "answer an invitation; the organiser is told only with notify true",
+      properties: { ...target, response: { type: "string", enum: EVENT_RESPONSES }, notify },
+      required: ["event", "response"],
+      destructive: false,
+    },
+  ].map(({ properties, required, description, destructive, ...tool }) => ({
+    ...tool,
+    description: `${description}. ${UNTRUSTED_EVENTS}`,
+    inputSchema: { type: "object", properties, required, additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: true },
+  }))
+
+/** The write tools of a writer that makes no meeting links. */
+export const calendarWriteTools = calendarWriteToolsFor()
+// Any host's call may name a conference; the account's writer refuses a service it does not offer.
+const ACCEPTED_WRITES = calendarWriteToolsFor(["any"])
 
 const WRITES = new Set(calendarWriteTools.map(({ name }) => name))
 
 const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   const tool: { inputSchema: { properties: Record<string, unknown>; required: string[] } } | undefined =
-    calendarTools.find((one) => one.name === name) ?? calendarWriteTools.find((one) => one.name === name)
+    calendarTools.find((one) => one.name === name) ?? ACCEPTED_WRITES.find((one) => one.name === name)
   if (!tool) throw new CliError("validation_error", "unknown calendar tool")
   if (typeof input !== "object" || input === null || Array.isArray(input))
     throw new CliError("validation_error", "expected argument object")
@@ -241,6 +256,7 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
         "operation_id",
         "repeat",
         "to_calendar",
+        "conference",
       ].includes(key) &&
       (typeof value !== "string" || !value.trim())
     )

@@ -85,7 +85,8 @@ meetings comes from this read, so it cannot be skipped.
 - **`--backend server`** answers only the meetings this read found, as a bound id list (`MeetingFilter.ids`, one
   `json_each` parameter), however many there are.
 
-A service that cannot be asked — no `find`/`get`, `--offline`, not signed in, refused, unreachable or failing — leaves
+A service that cannot be asked — no `find`/`get`, `--offline`, not signed in, refused, rate-limited, unreachable or
+failing — leaves
 the store's answer and a `missing` line that says why. A meeting the service returned that cannot be kept is counted,
 and the answer says how many and why. Past the call or page cap the list may be short. Each of these sets
 `meta.complete: false` with one issue, as below; a typed `--backend server` refuses instead of falling back.
@@ -98,6 +99,7 @@ number that is a stored meeting's is that meeting.
 | `meetings.server-unreachable` | `network_error` | the service could not be reached |
 | `meetings.server-signed-out` | `authentication_error` | the service needs a sign-in |
 | `meetings.server-refused` | `permission_error` | the service refused the request |
+| `meetings.server-rate-limited` | `rate_limited` | the service asked to wait (HTTP 429); a `show` of a meeting the store does not hold fails with that error, not `not_found` |
 | `meetings.server-failed` | `provider_error`, or the error's own code | the service could not be read, or a meeting it returned could not be kept |
 | `meetings.server-capped` | `outcome_unknown` | the call cap, the page cap or a query of more than 64 OR branches left matches unasked |
 
@@ -108,8 +110,11 @@ fetches under the lock (`isStoreChange` in `src/cli/effects.ts`). A custom `Meet
 the read asks the list query by `provider_id`. Every `meeting` item lists `untrusted: ["title", "description",
 "location"]`, the service's text. `meetings show` adds the participants' names and emails, the chat, the series title
 and the attachment and document names; a transcript lists `lines.text` and `lines.speaker`; a summary its text;
-`meetings export` its `content`; `meetings people` each match's `display_name` and `email`; `meetings invitation`
-lists `untrusted: ["invitation"]`.
+`meetings export` its `content`; `meetings people` each match's `display_name` and `email`; `meetings passage` each
+cue's `speaker_name` and `text`; `events list` each event's title, description and location; `meetings invitation`
+lists `untrusted: ["invitation"]`. `meetings projects evidence` hits are search hits and list theirs.
+`meetings passage` marks its structured cues only: the text and Markdown `content` the reader formats carries no
+marks. `meetings people` on a store without the bounded capability answers the bounded row without `person`.
 
 **Writes.** Pass `management: createMeetingManagement(scope, ports)` to `addMeetingCommands` and the group mounts
 `meetings create|update|cancel|invitation` for the ports given: a service that cannot delete a meeting (Meet) gives
@@ -120,6 +125,8 @@ runs (`refuseByCommandPermissions`). The `ask` step is the host's `askFirst`, `a
 `@wirecat/cli-core/cli`: it asks at a terminal, `--yes` answers, an agent goes ahead, and with nobody to answer it
 refuses with `confirmation_required`. It comes after the change is validated, so a change the service cannot take is
 refused without the question. A host that passes `management` without `askFirst` gets a refusal for every write.
+The host's `signal` (the run's stop signal) reaches each port's `signal`, so `--timeout` and Ctrl-C end a write or an
+`invitation` read.
 `--dry-run` answers `applied: false` without asking or reaching the service. What `create` and `update` take is the
 ports' declaration ([Remote management](#remote-management)).
 

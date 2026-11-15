@@ -28,6 +28,7 @@ export type MeetingServerSkip =
   | "unreachable"
   | "not_signed_in"
   | "refused"
+  | "rate_limited"
   | "failed"
   | "no_upcoming"
 
@@ -72,6 +73,7 @@ const ISSUES: Partial<Record<MeetingServerSkip, [Issue["code"], string]>> = {
   unreachable: ["network_error", "meetings.server-unreachable"],
   not_signed_in: ["authentication_error", "meetings.server-signed-out"],
   refused: ["permission_error", "meetings.server-refused"],
+  rate_limited: ["rate_limited", "meetings.server-rate-limited"],
   failed: ["provider_error", "meetings.server-failed"],
 }
 const metaOf = (reason: MeetingServerSkip, provider: string): Partial<Meta> | undefined => {
@@ -85,6 +87,7 @@ const WHY: Record<MeetingServerSkip, (provider: string) => string> = {
   unreachable: (provider) => `${provider} could not be reached — the answer is the store's`,
   not_signed_in: (provider) => `not signed in to ${provider} — the answer is the store's`,
   refused: (provider) => `${provider} refused the request — the answer is the store's`,
+  rate_limited: (provider) => `${provider} asked to wait before more requests — the answer is the store's`,
   failed: (provider) => `${provider} could not be read — the answer is the store's`,
   no_upcoming: (provider) => `${provider} lists no meeting before it starts — upcoming ones are not in the answer`,
 }
@@ -94,6 +97,7 @@ const reasonOf = (error: unknown): MeetingServerSkip => {
   if (code === "authentication_error") return "not_signed_in"
   if (code === "permission_error") return "refused"
   if (code === "network_error") return "unreachable"
+  if (code === "rate_limited") return "rate_limited"
   return "failed"
 }
 

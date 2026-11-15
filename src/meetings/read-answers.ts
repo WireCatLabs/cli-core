@@ -246,6 +246,8 @@ export const meetingPassage = v.strictObject({
       speaker_name: v.nullable(text),
       text,
       revision,
+      /** What people said: `speaker_name` and `text`. */
+      untrusted: v.optional(v.array(text)),
     }),
   ),
 })

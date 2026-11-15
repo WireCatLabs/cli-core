@@ -297,6 +297,7 @@ const OTHERS: Entry[] = [
   ["meetings.server-unreachable", "network_error", "the meetings service could not be reached"],
   ["meetings.server-signed-out", "authentication_error", "the meetings service needs a sign-in"],
   ["meetings.server-refused", "permission_error", "the meetings service refused the request"],
+  ["meetings.server-rate-limited", "rate_limited", "the meetings service asked to wait before more requests"],
   ["meetings.server-failed", "provider_error", "the meetings service could not be read, or what it returned kept"],
   [
     "meetings.server-capped",

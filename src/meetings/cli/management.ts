@@ -136,6 +136,8 @@ export interface MeetingManagementCommandDeps {
   inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
   /** The profile's question before a write reaches the service (`MeetingCommandDeps.askFirst`). */
   askFirst?: (command: Command) => Promise<void>
+  /** The run's stop signal (`MeetingCommandDeps.signal`), passed to the service so `--timeout` and Ctrl-C end a call. */
+  signal?: () => AbortSignal | undefined
 }
 
 /**
@@ -145,12 +147,17 @@ export interface MeetingManagementCommandDeps {
  */
 export const addMeetingManagementCommands = (group: Command, deps: MeetingManagementCommandDeps): void => {
   const { management, print, output, inRun, askFirst } = deps
+  const signalled = () => {
+    const signal = deps.signal?.()
+    return signal ? { signal } : {}
+  }
   const has = (name: string) => management.capabilities.includes(name)
   // The question comes after validation, so a change the service cannot take is refused without asking. A write the
   // owner could not be asked about never goes: a host that forgets the question gets a refusal.
   const mutation = (command: Command) => ({
     apply: true,
     dryRun: command.optsWithGlobals().dryRun === true,
+    ...signalled(),
     confirm: async () => {
       if (!askFirst)
         throw new CliError("configuration_error", "this tool cannot ask before it changes a meeting on the service")
@@ -212,7 +219,7 @@ export const addMeetingManagementCommands = (group: Command, deps: MeetingManage
       ),
     ).action(async (id: string, _flags: unknown, command: Command) =>
       inRun(command, async () =>
-        print({ item: { ...(await management.invitation(id)), untrusted: ["invitation"] } }, command),
+        print({ item: { ...(await management.invitation(id, signalled())), untrusted: ["invitation"] } }, command),
       ),
     )
 }

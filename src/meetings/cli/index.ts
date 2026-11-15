@@ -74,7 +74,11 @@ export interface MeetingCommandDeps {
    * asks when the command's key is at `ask` and refuses when nobody can answer. Without it the writes refuse.
    */
   askFirst?: (command: Command) => Promise<void>
+  /** The run's stop signal; the meeting writes and `meetings invitation` pass it to the service. */
+  signal?: () => AbortSignal | undefined
 }
+// Whoever sent the invitation wrote these, as on a calendar CLI's `events list`.
+const EVENT_UNTRUSTED = ["title", "description", "location"]
 const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
     throw new InvalidArgumentError("expected a positive integer")
@@ -330,6 +334,7 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
       output,
       inRun: deps.inRun,
       ...(deps.askFirst ? { askFirst: deps.askFirst } : {}),
+      ...(deps.signal ? { signal: deps.signal } : {}),
     })
   const eventList = queryWordsAfterOptions(
     annotate(program.command("events").description("the owner's stored events"), {
@@ -347,7 +352,7 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     if (query) validateQuery(query, EVENT_QUERY, { command: "events list" })
     if (query && !deps.store.queryEvents) throw new MeetingError("validation_error", "this store cannot filter events")
     const events = query ? await deps.store.queryEvents?.(query) : await deps.store.events()
-    print(listed((events ?? []).map(eventItem)), command)
+    print(listed((events ?? []).map((one) => ({ ...eventItem(one), untrusted: [...EVENT_UNTRUSTED] }))), command)
   })
 }
 

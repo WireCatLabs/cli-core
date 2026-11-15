@@ -8,7 +8,7 @@ import { addMeetingCommands, addMeetingProjectEvidenceCommand, type MeetingComma
 import { meeting } from "./item.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
 import { meetingDetailsAnswer, meetingsList, meetingsQuery } from "./reads.js"
-import { fakeMeetingSource, flagPaging, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
+import { fakeMeetingSource, flagPaging, memoryMeetingStore, sampleEvent, sampleMeeting } from "./testing/index.js"
 
 const meta = { run_id: "run", duration_ms: 0, complete: true }
 
@@ -36,6 +36,23 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   }
   return { store, d, outputs, run }
 }
+const peopleRows = (
+  participants: {
+    id: number
+    meetingId: number
+    identityId: number
+    displayName: string | null
+    email: string | null
+  }[],
+) =>
+  participants.map((one) => ({
+    participant_id: one.id,
+    meeting_id: one.meetingId,
+    identity_id: one.identityId,
+    display_name: one.displayName,
+    email: one.email,
+  }))
+
 describe("meeting commands", () => {
   it("declares effects on every command and no effects for groups that only hold commands", () => {
     const program = new Command("meet")
@@ -69,7 +86,7 @@ describe("meeting commands", () => {
     })
   })
   it("lists, shows, reads transcripts, finds participants and lists events", async () => {
-    const { run, outputs, d } = await setup()
+    const { run, outputs, d, store } = await setup()
     await run(["meetings", "list", "--json", "--limit", "1", "--page", "1", "started_at:[1970-01-01 TO 1970-01-02]"])
     expect(outputs[0]).toMatchObject({ format: "json", value: { page: { limit: 1, has_more: false } } })
     expect(v.parse(listEnvelopeSchema(meeting), { ...(outputs[0]?.value as object), meta })).toMatchObject({
@@ -88,9 +105,12 @@ describe("meeting commands", () => {
     const transcripts = v.parse(listEnvelopeSchema(meetingTranscript), { ...(outputs[2]?.value as object), meta })
     expect(transcripts.items[0]?.lines[0]).toMatchObject({ offset_ms: d.transcripts[0]?.rows[0]?.startMs })
     await run(["meetings", "people", "Alice"])
-    expect(outputs[3]).toMatchObject({ value: { items: d.participants } })
+    expect(outputs[3]).toMatchObject({ value: { items: peopleRows(d.participants) } })
     await run(["events", "list"])
     expect(outputs[4]).toMatchObject({ value: { items: [] } })
+    await store.createEvent(sampleEvent(), 4000)
+    await run(["events", "list"])
+    expect(outputs[5]).toMatchObject({ value: { items: [{ untrusted: ["title", "description", "location"] }] } })
   })
   it("pulls and imports through injected sources and file readers", async () => {
     const { run, outputs } = await setup()
@@ -181,7 +201,7 @@ describe("MCP meeting reads", () => {
     expect(
       (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 }, { limit: 100 }))
         .structuredContent,
-    ).toMatchObject({ items: d.participants })
+    ).toMatchObject({ items: peopleRows(d.participants) })
     expect((await callMeetingTool(store, "meetings_list", {}, { limit: 100 })).structuredContent).toEqual(
       await meetingsList(store),
     )

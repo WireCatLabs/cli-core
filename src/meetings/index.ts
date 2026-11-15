@@ -216,6 +216,7 @@ export {
   validateMeetingParticipantSearch,
 } from "./participant-search.js"
 export {
+  MEETING_CUE_UNTRUSTED,
   type MeetingContextCue,
   type MeetingHitContextOptions,
   type MeetingHitContextPacket,
@@ -223,6 +224,7 @@ export {
   type MeetingPassageReader,
   type MeetingPassageRequest,
   type MeetingPassageResult,
+  markedPassage,
   meetingHitContextLimits,
   validateMeetingPassage,
 } from "./passage.js"
