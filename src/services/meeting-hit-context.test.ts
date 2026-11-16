@@ -4,6 +4,8 @@ import { join } from "node:path"
 import { Command } from "commander"
 import * as v from "valibot"
 import { afterEach, expect, it, vi } from "vitest"
+import { provide } from "../cli/context.js"
+import { passageForRun } from "../cli/meeting-passage-text.js"
 import { ENTITIES } from "../entities/index.js"
 import { addMeetingPassageCommand } from "../meetings/cli/index.js"
 import { callMeetingPassageTool, meetingPassageTool } from "../meetings/mcp/index.js"
@@ -255,6 +257,37 @@ it("renders plain and Markdown passages without executable HTML, terminal escape
       "text",
     ),
   ).toContain("No cues included; check coverage")
+})
+it("marks transcript text in a scheduled agent's text and markdown passage as a host prints it, and only there", async () => {
+  const f = await fixture()
+  const read = (reference: string, options: Parameters<typeof readMeetingPassage>[3]) =>
+    readMeetingPassage(f.store.meetings, f.accountId, reference, options)
+  const MARK = "0123456789abcdef"
+  const app = { command: "example", appName: "example-cli", envPrefix: "EXAMPLE", description: "", version: "1.0.0" }
+  const passage = async (format: string, env: NodeJS.ProcessEnv) => {
+    const program = new Command("example").option("--json")
+    program.command("meetings")
+    provide(program, { app, env })
+    let printed = ""
+    addMeetingPassageCommand(program, {
+      read,
+      signal: () => undefined,
+      output: (result, chosen) => {
+        printed = passageForRun(program, result, chosen).content
+      },
+    })
+    await program.parseAsync(["meetings", "passage", f.ref, "--format", format], { from: "user" })
+    return printed
+  }
+  const agent = { EXAMPLE_READ_ONLY: "1", EXAMPLE_UNTRUSTED_MARK: MARK }
+  const block = new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*⟦/untrusted:${MARK}⟧`, "gu")
+  for (const format of ["text", "markdown"]) {
+    const content = await passage(format, agent)
+    expect(content, format).toMatch(new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*context 20`, "u"))
+    expect(content.replace(block, ""), format).not.toContain("context")
+    expect(content.replace(block, ""), format).toContain(f.ref)
+    expect(await passage(format, {}), format).not.toContain("⟦untrusted")
+  }
 })
 it("keeps CLI JSON structured and refuses MCP overrides, malformed limits and cancellation", async () => {
   const f = await fixture()

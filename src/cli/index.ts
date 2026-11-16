@@ -530,6 +530,7 @@ export {
   type MeetingEmbeddingCommandDeps,
   type MeetingSearchRun,
 } from "./meeting-meaning-command.js"
+export { passageForRun } from "./meeting-passage-text.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export {
   type MeetingPreparationReader,
