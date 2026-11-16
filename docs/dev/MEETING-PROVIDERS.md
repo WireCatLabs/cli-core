@@ -50,7 +50,9 @@ at once, so a meeting a sync has not kept yet still shows. A source declares wha
 operators it reads on each (`{ provider_id: ["term"] }`); `finds.negatable` the ones whose NOT it can send. Every
 `find` takes `started_at` as `window` (`{ from?, to? }`, epoch ms, both ends inclusive; an open end is the source's own
 default). `terms` are the other parts it declared, each `{ predicate, negated }`. It answers one page, `{ meetings:
-[{ meeting, participants? }], next }`, `next` `null` on the last.
+[{ meeting, participants? }], next }`, `next` `null` on the last. `find` and `get` take the run's stop signal as their last
+argument (`signal?`); pass it to the requests. A read the signal stopped ends the command, not a fallback to the
+store.
 
 **One meeting, one id.** Each `meeting.occurrence.id` that `find` and `get` return must be the external id
 `meetings()` writes for that occurrence. The store keys a meeting by it, and a matching join link (`join_key`) does

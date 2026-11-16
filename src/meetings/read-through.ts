@@ -54,6 +54,8 @@ export interface MeetingServerAccess {
   offline?: boolean
   now?: number
   timezone?: string
+  /** The run's stop signal: handed to the service, and a stopped read never answers from the store instead. */
+  signal?: AbortSignal
 }
 
 type FoundIn = NonNullable<MeetingItem["found_in"]>
@@ -282,14 +284,17 @@ export const askServerForList = async (
   for (const call of asked) {
     let cursor: string | null = null
     for (let page = 0; page < MEETING_SERVER_BOUNDS.pages; page++) {
+      access.signal?.throwIfAborted()
       step.report.calls += 1
       let answer: Awaited<ReturnType<NonNullable<MeetingSource["find"]>>>
       try {
-        answer = await source.find(call.window, call.terms, cursor)
+        answer = await source.find(call.window, call.terms, cursor, access.signal)
       } catch (error) {
+        access.signal?.throwIfAborted()
         return skip(reasonOf(error), error)
       }
       for (const found of answer.meetings) {
+        access.signal?.throwIfAborted()
         if (seen.has(found.meeting.occurrence.id)) continue
         seen.add(found.meeting.occurrence.id)
         try {
@@ -444,11 +449,13 @@ export const meetingShowThrough = async (
   if (providerId === undefined) throw notFound()
   if (!source?.get) return fromStore("unsupported")
   if (access.offline) return fromStore("offline")
+  access.signal?.throwIfAborted()
   step.report.calls = 1
   let full: Awaited<ReturnType<NonNullable<MeetingSource["get"]>>>
   try {
-    full = await source.get(providerId)
+    full = await source.get(providerId, access.signal)
   } catch (error) {
+    access.signal?.throwIfAborted()
     return fromStore(reasonOf(error), error)
   }
   if (!full) {

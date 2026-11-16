@@ -92,7 +92,12 @@ export interface MeetingSource {
    * The meetings that may match, for `meetings list`: one page from `cursor` (`null` first). Each meeting's
    * `occurrence.id` is the one `meetings()` gives, so the row it is kept as is the row `sync` writes.
    */
-  find?(window: MeetingWindow, terms: readonly MeetingTerm[], cursor: string | null): Promise<FoundMeetings>
+  find?(
+    window: MeetingWindow,
+    terms: readonly MeetingTerm[],
+    cursor: string | null,
+    signal?: AbortSignal,
+  ): Promise<FoundMeetings>
   /** One meeting by the service's id, for `meetings show`; `null` when the service has none. */
-  get?(id: string): Promise<FullMeeting | null>
+  get?(id: string, signal?: AbortSignal): Promise<FullMeeting | null>
 }
