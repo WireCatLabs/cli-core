@@ -1,10 +1,10 @@
 import type { CrmActivityKind, CrmKind } from "../../domain/crm.js"
-import { dayIn } from "../../domain/moment.js"
 import { formatDecimal, scaleOf } from "../../domain/money.js"
 import type { AccountKey } from "../types.js"
 import { findAccountPk } from "./accounts.js"
+import type { CopyViewer } from "./copy-viewer.js"
 import { ACTIVITY_RECORD, type ActivityFilter, crmActivitiesOver, type ListedActivity } from "./crm-activities.js"
-import { OWNER_CHANGE_RECORD, PERSON_RECORD } from "./crm-rows.js"
+import { crmAccountPrefix, OWNER_CHANGE_RECORD, PERSON_RECORD } from "./crm-rows.js"
 import { STAGE_ENTRY_RECORD } from "./crm-stage-entries.js"
 import type { StoreContext } from "./open.js"
 
@@ -49,37 +49,34 @@ export interface CrmChange {
 export interface ChangeFilter {
   since: number
   until: number
-  /** The zone whose days a won or lost day is compared in. */
-  zone: string
   changes?: readonly CrmChangeKind[]
   /** The identity `<account>/user/<id>`; `null` is none. */
   owner?: string | null
   /** A pipeline's store id: only the changes of its deals or leads. */
   pipeline?: number
+  /**
+   * A profile that may read only part of the copy (SEC-197): the deals and leads assigned to it, the activities on
+   * them, and the contacts linked to them or assigned to it.
+   */
+  viewer?: CopyViewer
   limit: number
   offset: number
 }
 
 const HALF_DAY = 43_200_000
+const DAY = 86_400_000
+const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10)
 
-/**
- * Every change of an account's copy in a window, newest first, paged in SQL: deals and leads made, moved, won, lost
- * and given another owner, activities added and done, contacts added. A move comes from the CRM's own stage history
- * where a row has any, else from the copy's changes, never both; a move into a won or lost stage is listed as won or
- * lost. A day the CRM gives without a time, as a closed day, is taken at its noon in UTC, the same day everywhere.
- */
-export const crmChanges = (
-  context: StoreContext,
-  key: AccountKey,
-  filter: ChangeFilter,
-): { items: CrmChange[]; hasMore: boolean } => {
-  const { database } = context
+/** The SQL of every change in `filter`'s window, unordered, and its numbered parameters (`?13`, `?14` page it). */
+const changesQuery = (context: StoreContext, key: AccountKey, filter: ChangeFilter) => {
   const accountId = findAccountPk(context, key)
-  if (accountId === undefined) return { items: [], hasMore: false }
+  if (accountId === undefined) return undefined
+  // ?15 is set when a viewer limits the read, ?16 its assignee; `= NULL` then hides every row.
   const items = (table: string, kind: string) =>
     `SELECT '${kind}' AS kind, d.id, d.external_id, d.status, d.created_at, d.closed_date, ` +
     `json_extract(d.metadata, '$.assignee') AS owner, s.pipeline_id FROM ${table} d ` +
-    "JOIN pipeline_stages s ON s.id = d.stage_id WHERE d.account_id = ?1 AND d.deleted_at IS NULL"
+    "JOIN pipeline_stages s ON s.id = d.stage_id WHERE d.account_id = ?1 AND d.deleted_at IS NULL " +
+    "AND (?15 IS NULL OR json_extract(d.metadata, '$.assignee') = ?16)"
   const entries =
     "SELECT r.id AS record, i.kind, i.id AS item, i.owner, i.pipeline_id, " +
     "CAST(json_extract(r.fields, '$.at') AS INTEGER) AS at, CAST(json_extract(r.fields, '$.stage_id') AS INTEGER) AS stage, " +
@@ -87,26 +84,35 @@ export const crmChanges = (
     "ORDER BY json_extract(r.fields, '$.at'), r.id) AS before FROM records r " +
     "JOIN record_relations rr ON rr.record_id = r.id AND rr.role = 'on' " +
     "JOIN items i ON i.kind = rr.target_type AND i.external_id = rr.target_external_id " +
-    "WHERE r.account_id = ?1 AND r.type = ?2"
+    "WHERE r.account_id = ?1 AND r.type = ?2 AND r.deleted_at IS NULL"
   const closing = "(SELECT outcome FROM pipeline_stages WHERE id = m.stage) IN ('won', 'lost')"
   const itemOf = (record: string) =>
     "(SELECT i.kind || ':' || i.id FROM record_relations rr JOIN items i ON i.kind = rr.target_type " +
     `AND i.external_id = rr.target_external_id WHERE rr.record_id = ${record} AND rr.role = 'on' LIMIT 1)`
+  const closedAt =
+    "(SELECT max(m.at) FROM entries m WHERE m.kind = i.kind AND m.item = i.id " +
+    "AND (SELECT outcome FROM pipeline_stages WHERE id = m.stage) = i.status)"
+  const onDealOrLead =
+    "EXISTS (SELECT 1 FROM record_relations x WHERE x.record_id = a.id AND x.role = 'on' " +
+    "AND x.target_type IN ('deal', 'lead'))"
+  const linkedToSeen =
+    "EXISTS (SELECT 1 FROM identities n JOIN identity_links l ON l.identity_id = n.id " +
+    "JOIN links k ON k.to_type = 'person' AND k.to_id = l.person_id AND k.deleted_at IS NULL " +
+    "JOIN items v ON v.kind = k.from_type AND v.id = k.from_id WHERE n.provider = ?17 AND n.external_id = ?18 || r.external_id)"
   const parts = [
     "SELECT 'created' AS change, created_at AS at, kind, id AS item, NULL AS record, NULL AS from_id, NULL AS to_id, " +
-      "0 AS exact, owner, pipeline_id FROM items WHERE created_at BETWEEN ?6 AND ?7",
+      "0 AS exact, owner, pipeline_id FROM items",
     `SELECT 'moved', m.at, m.kind, m.item, m.record, m.before, m.stage, 1, m.owner, m.pipeline_id FROM entries m ` +
-      `WHERE m.before IS NOT NULL AND m.at BETWEEN ?6 AND ?7 AND NOT ${closing}`,
+      `WHERE m.before IS NOT NULL AND NOT ${closing}`,
     "SELECT 'moved', c.changed_at, i.kind, i.id, NULL, c.from_stage_id, c.to_stage_id, 0, i.owner, i.pipeline_id " +
       "FROM pipeline_stage_changes c JOIN items i ON i.kind = c.item_type AND i.id = c.item_id " +
       "WHERE c.from_stage_id IS NOT NULL AND c.changed_at BETWEEN ?6 AND ?7 " +
       "AND (SELECT outcome FROM pipeline_stages WHERE id = c.to_stage_id) NOT IN ('won', 'lost') " +
       "AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.kind = i.kind AND e.item = i.id)",
-    "SELECT i.status, coalesce((SELECT max(m.at) FROM entries m WHERE m.kind = i.kind AND m.item = i.id " +
-      `AND (SELECT outcome FROM pipeline_stages WHERE id = m.stage) = i.status), ` +
-      `CAST(strftime('%s', i.closed_date) AS INTEGER) * 1000 + ${HALF_DAY}), i.kind, i.id, NULL, NULL, NULL, ` +
-      "0, i.owner, i.pipeline_id FROM items i WHERE i.status IN ('won', 'lost') " +
-      "AND i.closed_date BETWEEN ?8 AND ?9",
+    // The closed day only narrows the rows; the window is checked on `at`, so a deal is listed in one window only.
+    `SELECT i.status, coalesce(${closedAt}, CAST(strftime('%s', i.closed_date) AS INTEGER) * 1000 + ${HALF_DAY}), ` +
+      `i.kind, i.id, NULL, NULL, NULL, ${closedAt} IS NOT NULL, i.owner, i.pipeline_id FROM items i ` +
+      "WHERE i.status IN ('won', 'lost') AND i.closed_date BETWEEN ?8 AND ?9",
     "SELECT 'owner_changed', CAST(json_extract(r.fields, '$.at') AS INTEGER), i.kind, i.id, r.id, NULL, NULL, 0, " +
       "json_extract(r.fields, '$.to'), i.pipeline_id FROM records r " +
       "JOIN record_relations rr ON rr.record_id = r.id AND rr.role = 'on' " +
@@ -123,24 +129,26 @@ export const crmChanges = (
         `FROM (SELECT r.id, r.fields, ${itemOf("r.id")} AS item, (SELECT target_type FROM record_relations ` +
         "WHERE record_id = r.id AND role = 'on' LIMIT 1) AS target FROM records r WHERE r.account_id = ?1 " +
         `AND r.type = ?4 AND r.deleted_at IS NULL AND json_extract(r.fields, '$.${field}') ` +
-        "BETWEEN ?6 AND ?7) a",
+        "BETWEEN ?6 AND ?7) a " +
+        // A viewer reads an activity on its own deal or lead, or one on contacts alone that is assigned to it.
+        `WHERE ?15 IS NULL OR a.item IS NOT NULL OR (NOT ${onDealOrLead} AND json_extract(a.fields, '$.assignee') = ?16)`,
     ),
     "SELECT 'person_added', CAST(json_extract(r.fields, '$.created_at') AS INTEGER), 'person', NULL, r.id, NULL, " +
       "NULL, 0, json_extract(r.fields, '$.assignee'), NULL FROM records r WHERE r.account_id = ?1 " +
-      "AND r.type = ?5 AND r.deleted_at IS NULL AND json_extract(r.fields, '$.created_at') BETWEEN ?6 AND ?7",
+      "AND r.type = ?5 AND r.deleted_at IS NULL AND json_extract(r.fields, '$.created_at') BETWEEN ?6 AND ?7 " +
+      `AND (?15 IS NULL OR json_extract(r.fields, '$.assignee') = ?16 OR ${linkedToSeen})`,
   ]
   const where = [
+    "at BETWEEN ?6 AND ?7",
     ...(filter.changes?.length ? ["change IN (SELECT value FROM json_each(?10))"] : []),
     ...(filter.owner === undefined ? [] : [filter.owner === null ? "owner IS NULL" : "owner = ?11"]),
     ...(filter.pipeline === undefined ? [] : ["pipeline_id = ?12"]),
   ]
-  const rows = database
-    .prepare(
+  return {
+    sql:
       `WITH items AS (${items("deals", "deal")} UNION ALL ${items("leads", "lead")}), entries AS (${entries}) ` +
-        `SELECT * FROM (${parts.join(" UNION ALL ")}) ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ` +
-        "ORDER BY at DESC, change, item DESC, record DESC LIMIT ?13 OFFSET ?14",
-    )
-    .all(
+      `SELECT * FROM (${parts.join(" UNION ALL ")}) WHERE ${where.join(" AND ")}`,
+    params: [
       accountId,
       STAGE_ENTRY_RECORD,
       OWNER_CHANGE_RECORD,
@@ -148,27 +156,70 @@ export const crmChanges = (
       PERSON_RECORD,
       filter.since,
       filter.until,
-      dayIn(filter.since, filter.zone),
-      dayIn(filter.until, filter.zone),
+      // A day without a time is taken at its noon in UTC, which is never more than a day from the window's days.
+      utcDay(filter.since - DAY),
+      utcDay(filter.until + DAY),
       filter.changes?.length ? JSON.stringify(filter.changes) : null,
       filter.owner ?? null,
       filter.pipeline ?? null,
       filter.limit + 1,
       filter.offset,
-    )
+      filter.viewer ? 1 : null,
+      filter.viewer?.assignee ?? null,
+      key.provider,
+      `${crmAccountPrefix(key)}contact/`,
+    ],
+  }
+}
+
+/** How many changes of each kind `filter`'s window holds, every page together. */
+export const crmChangeCounts = (
+  context: StoreContext,
+  key: AccountKey,
+  filter: Omit<ChangeFilter, "limit" | "offset">,
+): Record<CrmChangeKind, number> => {
+  const counts = Object.fromEntries(CRM_CHANGES.map((one) => [one, 0])) as Record<CrmChangeKind, number>
+  const query = changesQuery(context, key, { ...filter, limit: 0, offset: 0 })
+  if (!query) return counts
+  for (const row of context.database
+    .prepare(`SELECT change, count(*) AS n FROM (${query.sql}) GROUP BY change`)
+    .all(...query.params))
+    counts[row.change as CrmChangeKind] = Number(row.n)
+  return counts
+}
+
+/**
+ * Every change of an account's copy in a window, newest first, paged in SQL: deals and leads made, moved, won, lost
+ * and given another owner, activities added and done, contacts added. A move comes from the CRM's own stage history
+ * where a row has any, else from the copy's changes, never both; a move into a won or lost stage is listed as won or
+ * lost. A day the CRM gives without a time, as a closed day, is taken at its noon in UTC, the same day everywhere.
+ */
+export const crmChanges = (
+  context: StoreContext,
+  key: AccountKey,
+  filter: ChangeFilter,
+): { items: CrmChange[]; hasMore: boolean } => {
+  const { database } = context
+  const query = changesQuery(context, key, filter)
+  if (!query) return { items: [], hasMore: false }
+  const rows = database
+    .prepare(`${query.sql} ORDER BY at DESC, change, kind, item DESC, record DESC LIMIT ?13 OFFSET ?14`)
+    .all(...query.params)
   const stageName = database.prepare("SELECT name FROM pipeline_stages WHERE id = ?")
   const nameOf = (id: unknown) =>
     id == null ? null : ((stageName.get(Number(id))?.name as string | undefined) ?? null)
+  const itemStatements = Object.fromEntries(
+    (["deal", "lead"] as const).map((kind) => [
+      kind,
+      database.prepare(
+        "SELECT d.external_id, d.title, d.currency, d.amount, json_extract(d.metadata, '$.closed_reason') AS reason, " +
+          `p.id AS pipeline, p.name AS pipeline_name FROM ${kind === "deal" ? "deals" : "leads"} d ` +
+          "JOIN pipeline_stages s ON s.id = d.stage_id JOIN pipelines p ON p.id = s.pipeline_id WHERE d.id = ?",
+      ),
+    ]),
+  )
   const itemRow = (kind: string, id: unknown) =>
-    id == null || (kind !== "deal" && kind !== "lead")
-      ? undefined
-      : database
-          .prepare(
-            "SELECT d.external_id, d.title, d.currency, d.amount, json_extract(d.metadata, '$.closed_reason') AS reason, " +
-              `p.id AS pipeline, p.name AS pipeline_name FROM ${kind === "deal" ? "deals" : "leads"} d ` +
-              "JOIN pipeline_stages s ON s.id = d.stage_id JOIN pipelines p ON p.id = s.pipeline_id WHERE d.id = ?",
-          )
-          .get(Number(id))
+    id == null || (kind !== "deal" && kind !== "lead") ? undefined : itemStatements[kind]?.get(Number(id))
   const recordRow = database.prepare("SELECT external_id, fields FROM records WHERE id = ?")
   return {
     hasMore: rows.length > filter.limit,
@@ -215,14 +266,20 @@ export const crmChanges = (
 export interface CrmReads {
   /** One page of the account's activities: open ones first by due time, then the rest, newest first. */
   activities(key: AccountKey, filter: ActivityFilter): Promise<{ items: ListedActivity[]; hasMore: boolean }>
+  /** How many activities a filter matches, every page together. */
+  activityCount(key: AccountKey, filter: Omit<ActivityFilter, "limit" | "offset">): Promise<number>
   /** One page of what changed in the account's copy in a window, newest first (`crmChanges`). */
   changes(key: AccountKey, filter: ChangeFilter): Promise<{ items: CrmChange[]; hasMore: boolean }>
+  /** How many changes of each kind a window holds (`crmChangeCounts`). */
+  changeCounts(key: AccountKey, filter: Omit<ChangeFilter, "limit" | "offset">): Promise<Record<CrmChangeKind, number>>
 }
 
 export const crmReadsOver = (context: StoreContext): CrmReads => {
   const activities = crmActivitiesOver(context)
   return {
     activities: async (key, filter) => activities.list(key, filter),
+    activityCount: async (key, filter) => activities.count(key, filter),
     changes: async (key, filter) => crmChanges(context, key, filter),
+    changeCounts: async (key, filter) => crmChangeCounts(context, key, filter),
   }
 }

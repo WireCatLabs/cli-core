@@ -4,6 +4,7 @@ import { recordFingerprint } from "../../domain/records.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
+import { type CopyViewer, viewerSql } from "./copy-viewer.js"
 import { crmAccountPrefix, crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
@@ -74,6 +75,11 @@ export interface ActivityFilter {
   on?: string
   /** The identity `<account>/user/<id>` it is assigned to; `null` is none. */
   owner?: string | null
+  /**
+   * A profile that may read only part of the copy (SEC-197): the activities on its deals and leads, and those on
+   * contacts or companies alone that are assigned to it. A hidden deal or lead is never named in `on`.
+   */
+  viewer?: CopyViewer
   /** 1–500. */
   limit: number
   offset: number
@@ -220,7 +226,12 @@ export const crmActivitiesOver = (context: StoreContext) => {
   }
 
   /** The CRM ids of the activity targets a store reference names in this account, by kind. */
-  const targetOf = (key: AccountKey, accountId: number, ref: string): { kind: CrmKind; ids: string } => {
+  const targetOf = (
+    key: AccountKey,
+    accountId: number,
+    ref: string,
+    viewer: CopyViewer | undefined,
+  ): { kind: CrmKind; ids: string } => {
     const [type = "", id = ""] = ref.split(":")
     const one = (sql: string, ...params: (string | number)[]) =>
       JSON.stringify(
@@ -229,15 +240,18 @@ export const crmActivitiesOver = (context: StoreContext) => {
           .all(...params)
           .map((row) => String(row.id)),
       )
-    if (type === "deal" || type === "lead")
+    if (type === "deal" || type === "lead") {
+      const seen = viewerSql(TABLES[type], viewer)
       return {
         kind: type,
         ids: one(
-          `SELECT external_id AS id FROM ${TABLES[type]} WHERE account_id = ? AND id = ?`,
+          `SELECT external_id AS id FROM ${TABLES[type]} WHERE account_id = ? AND id = ? AND ${seen.sql}`,
           accountId,
           Number(id),
+          ...seen.params,
         ),
       }
+    }
     if (type === "organization")
       return {
         kind: type,
@@ -263,7 +277,12 @@ export const crmActivitiesOver = (context: StoreContext) => {
     }
   }
 
-  const targets = (key: AccountKey, accountId: number, recordId: number): ActivityTarget[] =>
+  const targets = (
+    key: AccountKey,
+    accountId: number,
+    recordId: number,
+    viewer: CopyViewer | undefined,
+  ): ActivityTarget[] =>
     database
       .prepare("SELECT target_type, target_external_id FROM record_relations WHERE record_id = ? AND role = 'on'")
       .all(recordId)
@@ -274,9 +293,10 @@ export const crmActivitiesOver = (context: StoreContext) => {
           kind === "deal" || kind === "lead"
             ? database
                 .prepare(
-                  `SELECT '${kind}:' || id AS ref, title FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ?`,
+                  `SELECT '${kind}:' || id AS ref, title FROM ${TABLES[kind]} d WHERE account_id = ? ` +
+                    `AND external_id = ? AND ${viewerSql("d", viewer).sql}`,
                 )
-                .get(accountId, externalId)
+                .get(accountId, externalId, ...viewerSql("d", viewer).params)
             : kind === "organization"
               ? database
                   .prepare(
@@ -300,11 +320,8 @@ export const crmActivitiesOver = (context: StoreContext) => {
         }
       })
 
-  /** One page of the account's activities: open ones first by due time, then the rest, newest first. */
-  const list = (key: AccountKey, filter: ActivityFilter): { items: ListedActivity[]; hasMore: boolean } => {
-    const accountId = findAccountPk(context, key)
-    if (accountId === undefined) return { items: [], hasMore: false }
-    const field = (name: string) => `json_extract(r.fields, '$.${name}')`
+  const field = (name: string) => `json_extract(r.fields, '$.${name}')`
+  const whereOf = (key: AccountKey, accountId: number, filter: Omit<ActivityFilter, "limit" | "offset">) => {
     const where: { sql: string; params: (string | number)[] }[] = []
     if (filter.status) where.push({ sql: `${field("done")} = ?`, params: [filter.status === "done" ? 1 : 0] })
     if (filter.due?.since !== undefined) where.push({ sql: `${field("due_at")} >= ?`, params: [filter.due.since] })
@@ -323,7 +340,7 @@ export const crmActivitiesOver = (context: StoreContext) => {
           : { sql: `${field("assignee")} = ?`, params: [filter.owner] },
       )
     if (filter.on !== undefined) {
-      const target = targetOf(key, accountId, filter.on)
+      const target = targetOf(key, accountId, filter.on, filter.viewer)
       where.push({
         sql:
           "EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = r.id AND rr.role = 'on' " +
@@ -331,11 +348,21 @@ export const crmActivitiesOver = (context: StoreContext) => {
         params: [target.kind, target.ids],
       })
     }
+    if (filter.viewer) where.push(seenSql(filter.viewer))
+    return where
+  }
+
+  /** One page of the account's activities: open ones first, overdue before undated, then the rest, newest first. */
+  const list = (key: AccountKey, filter: ActivityFilter): { items: ListedActivity[]; hasMore: boolean } => {
+    const accountId = findAccountPk(context, key)
+    if (accountId === undefined) return { items: [], hasMore: false }
+    const where = whereOf(key, accountId, filter)
+    const open = `CASE WHEN ${field("done")} THEN NULL ELSE ${field("due_at")} END`
     const rows = database
       .prepare(
         "SELECT r.id, r.external_id, r.fields FROM records r WHERE r.account_id = ? AND r.type = ? " +
           `AND r.deleted_at IS NULL ${where.map(({ sql }) => `AND ${sql}`).join(" ")} ` +
-          `ORDER BY ${field("done")} ASC, CASE WHEN ${field("done")} THEN NULL ELSE ${field("due_at")} END ASC, ` +
+          `ORDER BY ${field("done")} ASC, ${field("done")} = 0 AND ${field("due_at")} IS NULL, ${open} ASC, ` +
           `${field("updated_at")} DESC, r.id DESC LIMIT ? OFFSET ?`,
       )
       .all(accountId, ACTIVITY_RECORD, ...where.flatMap(({ params }) => params), filter.limit + 1, filter.offset)
@@ -346,11 +373,43 @@ export const crmActivitiesOver = (context: StoreContext) => {
         return {
           ...activityOf(String(row.external_id), fields),
           doneAt: (fields.done_at as number | null) ?? null,
-          on: targets(key, accountId, Number(row.id)),
+          on: targets(key, accountId, Number(row.id), filter.viewer),
         }
       }),
     }
   }
 
-  return { save, of, list }
+  /** How many activities `filter` matches, every page together. */
+  const count = (key: AccountKey, filter: Omit<ActivityFilter, "limit" | "offset">): number => {
+    const accountId = findAccountPk(context, key)
+    if (accountId === undefined) return 0
+    const where = whereOf(key, accountId, filter)
+    return Number(
+      database
+        .prepare(
+          "SELECT count(*) AS n FROM records r WHERE r.account_id = ? AND r.type = ? AND r.deleted_at IS NULL " +
+            where.map(({ sql }) => `AND ${sql}`).join(" "),
+        )
+        .get(accountId, ACTIVITY_RECORD, ...where.flatMap(({ params }) => params))?.n ?? 0,
+    )
+  }
+
+  return { save, of, list, count }
+}
+
+/** An activity a viewer may read: on one of its deals or leads, or on contacts alone and assigned to it. */
+const seenSql = (viewer: CopyViewer): { sql: string; params: string[] } => {
+  if (viewer.assignee === null) return { sql: "0", params: [] }
+  const on = (table: string, kind: string) =>
+    `EXISTS (SELECT 1 FROM record_relations rr JOIN ${table} d ON d.account_id = r.account_id ` +
+    "AND d.external_id = rr.target_external_id AND d.deleted_at IS NULL " +
+    `WHERE rr.record_id = r.id AND rr.role = 'on' AND rr.target_type = '${kind}' ` +
+    "AND json_extract(d.metadata, '$.assignee') = ?)"
+  return {
+    sql:
+      `(${on("deals", "deal")} OR ${on("leads", "lead")} OR (NOT EXISTS (SELECT 1 FROM record_relations rr ` +
+      "WHERE rr.record_id = r.id AND rr.role = 'on' AND rr.target_type IN ('deal', 'lead')) " +
+      "AND json_extract(r.fields, '$.assignee') = ?))",
+    params: [viewer.assignee, viewer.assignee, viewer.assignee],
+  }
 }

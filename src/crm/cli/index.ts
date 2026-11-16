@@ -38,7 +38,7 @@ import { type MessageStore, seenBy } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { openStageTasks } from "../stage-tasks.js"
-import { crmStatus, syncCrm } from "../sync.js"
+import { crmStatus, syncRecorded } from "../sync.js"
 import { shortened, viewerOf } from "../viewer.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
@@ -53,7 +53,6 @@ import {
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
-import { addCrmActivityCommands } from "./activities.js"
 import { addCrmChangeCommands } from "./changes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
@@ -386,7 +385,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       const { signal } = environmentOf(command)
       await within(command, async (run) => {
         const source = run.source()
-        const report = await syncCrm(source, run.store, run.account, {
+        const report = await syncRecorded(source, run.store, run.account, {
           now: now(),
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
@@ -961,8 +960,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     now,
   })
 
-  if (options.activities) addCrmActivityCommands(program, { within, example, now, ownerOf, pathOf })
-  addCrmChangeCommands(program, { within, example, open: options.open, now, ownerOf, pathOf })
+  addCrmChangeCommands(program, { ...options, within, example, now, ownerOf, pathOf })
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
   const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(

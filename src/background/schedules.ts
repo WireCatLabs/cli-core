@@ -621,6 +621,7 @@ export const runSchedule = async (
           now: now().getTime(),
           links: sharedLinks(runEnv),
           env: runEnv,
+          trusted: schedule.kind !== "agent",
           ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
         })
       : undefined

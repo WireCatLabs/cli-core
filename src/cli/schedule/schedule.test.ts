@@ -1508,7 +1508,7 @@ describe("delivery after a run", () => {
       format: "wirecat.report/1",
       kind: "morning-digest",
       date: "2026-11-06",
-      sections: [{ kind: "crm", items: [{ type: "fact", topic: "Example deal", detail: "won", refs: [] }] }],
+      sections: [{ kind: "crm", items: [{ type: "fact", topic: "follow_up deal", detail: "won", refs: [] }] }],
     }
     const { env, system, file, sends } = routed({
       kind: "command",
@@ -1519,7 +1519,8 @@ describe("delivery after a run", () => {
     const last = await runSchedule(app, { ...system, entry: [] }, env, file, { ownerLanguage: async () => "en" })
     expect(last.output).toMatch(/\.md$/)
     expect(sends()[0]?.input).toMatch(/^<div /)
-    expect(sends()[0]?.input).toContain("Example deal")
+    // A command's report is the store's data: a title such as follow_up is kept whole.
+    expect(sends()[0]?.input).toContain("follow_up deal")
     expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toContain("🤝 CRM")
 
     const plain = routed({ kind: "command", argv: [process.execPath, "-e", 'console.log("synced 3")'], to: [] })

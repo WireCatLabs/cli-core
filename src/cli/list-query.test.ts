@@ -76,4 +76,10 @@ describe("timeBounds", () => {
     expect(bounds(`time:["2026-10-01T00:00:00Z" TO "${at}"]`)).toMatchObject({ until: Date.parse(at) })
     expect(bounds(`time:["2026-10-01T00:00:00Z" TO "${at}"}`)).toMatchObject({ until: Date.parse(at) - 1 })
   })
+
+  it("reads a relative term against the clock it is given", () => {
+    const now = Date.parse("2026-01-02T12:00:00Z")
+    const term = nativeTerms(listQuery("time>=1d", TIMED, "events list"), "events list").get("time")
+    expect(timeBounds(term, "UTC", now)).toMatchObject({ since: now - 86_400_000 })
+  })
 })

@@ -1,5 +1,6 @@
+import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import type { QueryRegistry } from "@wirecat/cli-base/query"
+import { type QueryRegistry, timezoneOf } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
@@ -19,6 +20,7 @@ import { CRM_ACTIVITY_KINDS, CRM_KINDS, type CrmActivityKind } from "../../domai
 import { text, time } from "../../entities/fields.js"
 import type { ListedActivity } from "../../store/sqlite/crm-activities.js"
 import { crmSettingKey } from "../../store/sqlite/crm-settings.js"
+import { viewerOf } from "../viewer.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 import { integer } from "./records.js"
 
@@ -118,8 +120,18 @@ export const addCrmActivityCommands = (program: Command, options: CrmActivityCom
   ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
     const name = "activities list"
     const terms = queryTerms(words, ACTIVITIES_QUERY, name, ["due"])
-    const due = timeBounds(nativeTerms(listQuery(typedQuery(words), ACTIVITIES_QUERY, name), name).get("due"))
-    const ref = REFS.find((kind) => terms.has(kind))
+    const clock = now()
+    const due = timeBounds(
+      nativeTerms(listQuery(typedQuery(words), ACTIVITIES_QUERY, name), name).get("due"),
+      timezoneOf(),
+      clock,
+    )
+    const refs = REFS.filter((kind) => terms.has(kind))
+    if (refs.length > 1)
+      throw new CliError("validation_error", `name one of ${refs.join(", ")}: an activity list is on one row`, {
+        reason: "query.unsupported-placement",
+      })
+    const ref = refs[0]
     await within(command, async (run) => {
       const paged = { limit: opts.limit, page: opts.page, ...(words.length ? { args: { query: words } } : {}) }
       if (!(await run.store.crm.activitiesOn(run.account)))
@@ -135,7 +147,9 @@ export const addCrmActivityCommands = (program: Command, options: CrmActivityCom
           ],
         })
       const found = await run.store.crm.activities(run.account, {
-        status: (terms.get("status") as "open" | "done" | undefined) ?? (terms.has("overdue") ? undefined : "open"),
+        status:
+          (terms.get("status") as "open" | "done" | undefined) ??
+          (terms.get("overdue") === "true" ? undefined : "open"),
         ...(due.since === undefined && due.until === undefined
           ? {}
           : {
@@ -144,7 +158,8 @@ export const addCrmActivityCommands = (program: Command, options: CrmActivityCom
                 ...(due.until === undefined ? {} : { until: due.until }),
               },
             }),
-        ...(terms.get("overdue") === "true" ? { overdueAt: now() } : {}),
+        ...(terms.get("overdue") === "true" ? { overdueAt: clock } : {}),
+        viewer: await viewerOf(run),
         ...(terms.has("kind") ? { kinds: [terms.get("kind") as CrmActivityKind] } : {}),
         ...(ref ? { on: refOf(ref, terms.get(ref) as string) } : {}),
         ...(terms.has("owner") ? { owner: await ownerOf(run, terms.get("owner") as string) } : {}),

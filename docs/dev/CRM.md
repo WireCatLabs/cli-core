@@ -104,23 +104,32 @@ Known limits:
 
 ## Activities, changes and the digest
 
-These read the copy only.
+These read the copy only, under the offline rule above: a limited profile sees the activities on its own deals and
+leads (and those on contacts alone that are assigned to it), and the contacts linked to its deals or assigned to it.
+A hidden deal is never named in an activity's `on`.
 
 - `activities list` is mounted with `addCrmCommands(program, { activities: true })`, for a CLI whose adapter has
-  `activities`. It answers `crm_activity`: open ones first by due time, then the rest, newest first, `status:open`
-  unless a status or `overdue:` is given. With the account's `activities` setting off it answers no items and a
-  `missing` entry that names the setting.
+  `activities`. It answers `crm_activity`: open ones first (overdue, then by due time, then undated), then the rest,
+  newest first, `status:open` unless a status or `overdue:true` is given. With the account's `activities` setting off
+  it answers no items and a `missing` entry that names the setting.
 - `changes list` is always mounted. It answers `crm_change`, newest first, over a window (`at:`, the last day by
-  default): `created`, `moved`, `won`, `lost`, `owner_changed`, `activity_added`, `activity_done`, `person_added`
-  (`CRM_CHANGES`). One SQL over the stage entries, owner changes, activities and contacts reads it
-  (`store.crm.changes`, `crm-changes.ts`). A won or lost row with no exact stage entry takes noon UTC of its closed
-  day, `exact: false`.
-- `changes list --format report` prints `crmDigest`'s `wirecat.report/1` document: one `crm` section (overdue CRM
-  tasks, those due today, won, lost, moved, new, new owners, new contacts as a count, tasks the stage rules opened),
-  capped by `SECTION_CAPS.crm`, and `health` when the last sync is older than a day. A `command` schedule whose
-  output is such a document is rendered and delivered like an agent's report (`isReportAnswer`), so
-  `schedule command crm-digest --daily 08:00 --deliver-to … -- changes list "at>=1d" --format report` is the CRM
-  morning digest.
+  default, read against the CLI's clock): `created`, `moved`, `won`, `lost`, `owner_changed`, `activity_added`,
+  `activity_done`, `person_added` (`CRM_CHANGES`). One SQL over the stage entries, owner changes, activities and
+  contacts reads it (`store.crm.changes`, `crm-changes.ts`); `store.crm.changeCounts` counts it by kind. A won or lost
+  row takes the time of its stage entry when the CRM's history has one (`exact: true`), else noon UTC of its closed
+  day, which east of UTC+12 is the next local day. Every row, won and lost too, is selected by that time, so a deal
+  is in one window only. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
+- `changes list --format report` prints `crmDigest`'s `wirecat.report/1` document: one `crm` section. Won and lost
+  come first and are never pushed out; then overdue CRM tasks, those due today, moves, new deals, new owners, new
+  contacts as a count and the tasks the stage rules opened, each read with its own limit, and `more` from SQL counts.
+  Only an activity's subject is shown, never its text. `health` names a last `sync` that failed (`sync-failed`, kept
+  as the sync state `crm:sync-failed`) or a kind older than a day. Run by a schedule (`<PREFIX>_SCHEDULED`), it
+  starts where that schedule's last run ended (the sync state `crm:digest:<schedule>`), so a late or missed run
+  loses nothing. A `command` schedule whose output is such a document is rendered and delivered like an agent's
+  report (`isReportAnswer`), without the agent-text leak scrub, so
+  `schedule command crm-digest --daily 08:00 --deliver-to … -- changes list --format report` is the CRM morning
+  digest. It sends deal titles, amounts, loss reasons, contact names and task subjects to every reader of the route:
+  a group chat as a route shares them with the whole group.
 
 ## Adapter helpers
 
