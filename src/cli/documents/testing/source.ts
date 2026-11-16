@@ -24,8 +24,11 @@ export interface FakeDocumentSource extends DocumentSource {
   remove(id: string): void
 }
 
-/** A provider in memory: a root folder, a nested folder and two text files, with a change feed and a cursor. */
-export const fakeDocumentSource = (account = "alpha"): FakeDocumentSource => {
+/**
+ * A provider in memory: a root folder, a nested folder and two text files, with a change feed and a cursor. With
+ * `pageSize` it also lists a folder's children a page at a time through `childrenPage`.
+ */
+export const fakeDocumentSource = (account = "alpha", options: { pageSize?: number } = {}): FakeDocumentSource => {
   const files = new Map<string, SourceFile>()
   const texts = new Map<string, string>()
   let feed: SourceChange[] = []
@@ -35,6 +38,9 @@ export const fakeDocumentSource = (account = "alpha"): FakeDocumentSource => {
     if (!found) throw new CliError("not_found", "no such synthetic file", { reason: "document.not-found" })
     return structuredClone(found)
   }
+  const children = async (id: string) =>
+    [...files.values()].filter((item) => item.parents.includes(id)).map((item) => structuredClone(item))
+  const { pageSize } = options
   const source: FakeDocumentSource = {
     files,
     put(file, text) {
@@ -49,8 +55,19 @@ export const fakeDocumentSource = (account = "alpha"): FakeDocumentSource => {
     },
     identity: async () => account,
     metadata,
-    children: async (id) =>
-      [...files.values()].filter((item) => item.parents.includes(id)).map((item) => structuredClone(item)),
+    children,
+    ...(pageSize
+      ? {
+          childrenPage: async (id: string, cursor?: string) => {
+            if (cursor !== undefined && !/^page-\d+$/.test(cursor))
+              throw new CliError("validation_error", "unknown synthetic page cursor")
+            const from = cursor === undefined ? 0 : Number(cursor.slice("page-".length))
+            const all = await children(id)
+            const end = from + pageSize
+            return { files: all.slice(from, end), ...(end < all.length ? { cursor: `page-${end}` } : {}) }
+          },
+        }
+      : {}),
     startToken: async () => `cursor-${cursor}`,
     changes: async (token) => {
       if (!/^cursor-\d+$/.test(token)) throw new CliError("validation_error", "unknown synthetic cursor")

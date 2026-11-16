@@ -272,6 +272,22 @@ describe("documents source contract over the fake provider", () => {
     it(c.name, c.run)
 })
 
+describe("documents source contract over a provider that lists a folder a page at a time", () => {
+  for (const c of documentSourceContract(() => {
+    const source = fakeDocumentSource("alpha", { pageSize: 1 })
+    return { source, root: "root", isFolder, missing: "gone" }
+  }))
+    it(c.name, c.run)
+
+  it("lists every child of a folder over its pages", async () => {
+    const source = fakeDocumentSource("alpha", { pageSize: 1 })
+    const first = await source.childrenPage?.("root")
+    const second = await source.childrenPage?.("root", first?.cursor)
+    expect([...(first?.files ?? []), ...(second?.files ?? [])].map((file) => file.id).sort()).toEqual(["b", "nested"])
+    expect(second?.cursor).toBeUndefined()
+  })
+})
+
 const PAGE = "application/x-synthetic-page"
 const isPage = (file: SourceFile) => file.mime === PAGE
 

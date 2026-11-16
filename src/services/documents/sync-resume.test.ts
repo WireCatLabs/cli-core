@@ -45,7 +45,12 @@ const pageTree = (hubs: number, sections: number, leaves: number) => {
 const strictWalk = (walk: SourceWalk): SourceWalk => ({
   scope: walk.scope,
   cursor: walk.cursor,
-  stack: walk.stack.map(({ id, ancestry, folder }) => ({ id, ancestry, ...(folder ? { folder } : {}) })),
+  stack: walk.stack.map(({ id, ancestry, folder, listing }) => ({
+    id,
+    ancestry,
+    ...(folder ? { folder } : {}),
+    ...(listing ? { listing } : {}),
+  })),
   visited: walk.visited,
   folders: walk.folders,
   files: walk.files,
@@ -160,6 +165,34 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
       index = byParent()
     },
   }
+}
+
+/** The tree's source, listing a folder `size` children a page at a time; `pages` names each page asked for. */
+const paged = (tree: ReturnType<typeof treeSync>, size: number) => {
+  const pages: string[] = []
+  const stale = new Set<string>()
+  const base = tree.options.source as DocumentSource
+  const source: DocumentSource = {
+    ...base,
+    childrenPage: async (id, cursor) => {
+      pages.push(`${id}@${cursor ?? 0}`)
+      if (cursor !== undefined && stale.delete(id)) throw new CliError("not_found", "object_not_found")
+      const all = await base.children(id)
+      const from = Number(cursor ?? 0)
+      const end = from + size
+      return { files: all.slice(from, end), ...(end < all.length ? { cursor: String(end) } : {}) }
+    },
+  }
+  /** The next later page of each of these answers 404 once, as a cursor the provider dropped does. */
+  const expire = (...ids: string[]) => {
+    for (const id of ids) stale.add(id)
+  }
+  return { source, pages, expire }
+}
+
+const requests = (most: number) => {
+  let left = most
+  return { take: () => (left-- > 0 ? null : ("requests" as const)) }
 }
 
 const untilComplete = async (sync: () => Promise<SyncResult>, most = 100) => {
@@ -363,6 +396,41 @@ describe("a sync of a tree larger than one call's bound", () => {
     })
     expect(await syncDocuments(tree.options)).toMatchObject({ complete: true, saved: 15 })
     expect(new Set(tree.listed).size).toBe(15)
+  })
+
+  it("lists a folder a page per step and goes on mid-folder in the next call, each page once and no file lost", async () => {
+    const tree = treeSync(pageTree(1, 3, 30))
+    const { source, pages } = paged(tree, 7)
+    const first = await syncDocuments({ ...tree.options, source, budget: requests(4) })
+    expect(first).toMatchObject({ complete: false, stopped: "requests", walk: { listed: 4 } })
+    expect(tree.walk()?.stack.at(-1)).toMatchObject({ id: "h0s0", listing: "14" })
+    const runs = await untilComplete(() => syncDocuments({ ...tree.options, source, budget: requests(4) }))
+    expect([first, ...runs].reduce((sum, run) => sum + (run.saved ?? 0), 0)).toBe(95)
+    expect(Object.keys(tree.state().documents)).toHaveLength(95)
+    expect(new Set(pages).size).toBe(pages.length)
+    expect(pages.filter((name) => name.startsWith("h0s1@"))).toEqual([
+      "h0s1@0",
+      "h0s1@7",
+      "h0s1@14",
+      "h0s1@21",
+      "h0s1@28",
+    ])
+  })
+
+  it("lists a folder again from its first page when a later page answers 404, and drops nothing", async () => {
+    const tree = treeSync(pageTree(1, 1, 20))
+    const { source, pages, expire } = paged(tree, 7)
+    expire("h0s0")
+    const runs = await untilComplete(() => syncDocuments({ ...tree.options, source, budget: requests(3) }))
+    expect(runs.at(-1)?.removed ?? 0).toBe(0)
+    expect(Object.keys(tree.state().documents)).toHaveLength(23)
+    expect(pages.filter((name) => name.startsWith("h0s0@"))).toEqual([
+      "h0s0@0",
+      "h0s0@7",
+      "h0s0@0",
+      "h0s0@7",
+      "h0s0@14",
+    ])
   })
 
   it("stops when its request budget says so and goes on in the next call", async () => {

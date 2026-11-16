@@ -81,7 +81,7 @@ operations.
 A sync stops before its end and saves where it is; the next sync goes on from there. No size makes it fail.
 
 - **One call is bounded.** A walk lists folders until it has counted `maxEntries` (each listing counts one, plus
-  the entries it returns) or until `budget.take()` says no. The first folder of a call is always listed, so a folder
+  the entries it returns) or until `budget.take()` says no. The first listing of a call is always made, so a folder
   with more children than the bound still moves on. The budget is the run's `RunBudget`
   ([WC-LIFE-16](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)); the shared `sync` command passes
   `runBudgetOf(command)` as `budget` in its arguments, and the CLI hands it to `syncDocuments`. The budget is also
@@ -116,8 +116,20 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   trash, drops it and what was below it from the scope, and the walk goes on. On any doubt (the folder is there, or
   the read fails another way) the call fails with the listing's error; the walk is saved, so the next sync lists the
   folder again, and a `--rescan` starts the walk over. A passing 404 therefore never removes a subtree.
-- **Not resumable:** one call of a source's `children()` or `changes()`. A folder is listed whole, so a source caps
-  its own listing (drive at 10 000 entries in one folder or one change feed).
+- **A big folder is listed a page per step** when the source has `childrenPage(id, cursor?)`. Each page is one
+  listing for the bound and one `budget.take()`. While the page gives a `cursor`, the folder stays on the stack with
+  `listing` set to it, its child folders wait below it, and a stop saves it there, so the next sync asks for that
+  page and no page is read twice. Without a `cursor` the folder is done. Only a 404 on the first page is checked with
+  `metadata`, as above; a 404 on a later page can be a cursor the provider dropped, so the folder is listed again
+  from its first page and nothing is dropped. So a source answers a cursor it no longer accepts with `not_found`
+  through `errorOf` (Notion answers a bad `start_cursor` with 400 `validation_error`); any other error fails each
+  later sync on that page until a `--rescan`. A CLI that validates its walk file must keep `listing`: without it a
+  folder bigger than one call starts over each sync and never ends. A Notion database of 12 000 rows needs this to
+  get past its first page over MCP (45 s); `documentSourceContract` checks that the pages list what `children()`
+  does, each entry once.
+- **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one
+  `changes()`. A folder listed with `children()` is listed whole, so a source caps its own listing (drive at 10 000
+  entries in one folder or one change feed).
 
 ## Verification
 

@@ -141,6 +141,33 @@ export const documentSourceContract = <M extends SourceFile>(
     },
   })
   cases.push({
+    name: "childrenPage: the pages of a folder, cursor to cursor, list what children() lists, each entry once",
+    async run() {
+      const fixture = await make()
+      const { source } = fixture
+      if (!source.childrenPage) return
+      const stack = [fixture.root]
+      while (stack.length) {
+        const parent = stack.pop() as string
+        const paged: string[] = []
+        let cursor: string | undefined
+        for (let pages = 1; ; pages++) {
+          assert.ok(pages <= MAX_ENTRIES, `childrenPage(${parent}) ends`)
+          const page = await source.childrenPage(parent, cursor)
+          assert.ok(Array.isArray(page.files), "a page has files")
+          paged.push(...page.files.map((file) => file.id))
+          for (const file of page.files) if (fixture.isFolder(file)) stack.push(file.id)
+          if (page.cursor === undefined) break
+          assert.ok(typeof page.cursor === "string" && page.cursor !== cursor, "a page gives a new cursor or none")
+          cursor = page.cursor
+        }
+        assert.equal(new Set(paged).size, paged.length, `childrenPage(${parent}) lists each entry once`)
+        const listed = (await source.children(parent)).map((file) => file.id)
+        assert.deepEqual([...paged].sort(), [...listed].sort(), `childrenPage(${parent}) lists what children() does`)
+      }
+    },
+  })
+  cases.push({
     name: "metadata: an id the provider does not know is not_found",
     async run() {
       const { source, missing } = await make()
