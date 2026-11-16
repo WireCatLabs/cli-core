@@ -56,6 +56,7 @@ export {
 export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
+export { linkFetch } from "../http/link-fetch.js"
 export { mailFindingFieldsHelp } from "../mail/findings.js"
 export { botInstructions } from "../mcp/bot/instructions.js"
 export type { BotServerOptions, RunBotCommand } from "../mcp/bot/server.js"
@@ -361,6 +362,7 @@ export {
   runBudgetOf,
   secretInputOf,
   withAgentLevels,
+  withoutOwnPaging,
 } from "./context.js"
 export { addContractInfo, type ContractEvidenceOptions, contractEvidence } from "./contract-evidence.js"
 export { sharedCommandTemplate } from "./contract-templates.js"
@@ -659,12 +661,13 @@ export {
 } from "./schedule/schedule-command.js"
 export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"
 export {
-  type ServiceApiOperation,
+  type BodyPermission,
   type ServiceApiOptions,
   type ServiceApiPermissionsInput,
-  serviceApiDeletes,
+  serviceApiKeys,
   serviceApiPermissions,
 } from "./service-api.js"
+export { manifestBaseUrl, type ServiceApiManifest } from "./service-api-manifest.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,

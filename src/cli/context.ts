@@ -155,10 +155,25 @@ export const provide = (program: Command, environment: BaseEnvironment): void =>
 export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(command: Command): E =>
   (environments.get(rootOf(command)) ?? {}) as E
 
-/** The command's flags with an MCP server's `--permission` levels first: they reach a run on its agent, never in argv. */
+const PAGING = ["page", "limit", "all"]
+
+/** A generated API command's own `--page`, `--limit` or `--all` is the service's parameter, not the CLI's paging. */
+export const withoutOwnPaging = <F extends object>(command: Command, flags: F): F => {
+  if (metaOf(command).origin !== "generated") return flags
+  const own = PAGING.filter((name) => command.options.some((option) => option.attributeName() === name))
+  return own.length > 0
+    ? (Object.fromEntries(Object.entries(flags).filter(([name]) => !own.includes(name))) as F)
+    : flags
+}
+
+/**
+ * The command's flags as settings read them, an MCP server's `--permission` levels first: they reach a run on its
+ * agent, never in argv.
+ */
 export const withAgentLevels = <F extends { permission?: string[] }>(command: Command, flags: F): F => {
   const overrides = environmentOf(command).agent?.overrides ?? []
-  return overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags
+  const read = withoutOwnPaging(command, flags)
+  return overrides.length > 0 ? { ...read, permission: [...overrides, ...(read.permission ?? [])] } : read
 }
 
 /**

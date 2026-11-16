@@ -33,7 +33,7 @@ import { commandPathOf } from "./command-contract.js"
 import { enterCommandServer } from "./command-server.js"
 import { exitCodeSet } from "./command-server-request.js"
 import { entityRows, type RowTable } from "./compact.js"
-import { type BaseEnvironment, outputFieldsOf, outputFor, provide } from "./context.js"
+import { type BaseEnvironment, outputFieldsOf, outputFor, provide, withoutOwnPaging } from "./context.js"
 import { refuseByCommandPermissions, refuseOfflineCommand, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
   admittedUnderLock,
@@ -377,7 +377,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         (parent, word) => parent?.commands.find((one) => one.name() === word),
         program,
       )
-      const flags = (inspected ?? program).optsWithGlobals<GlobalFlags & { bot?: boolean }>()
+      const shown = inspected ?? program
+      const flags = withoutOwnPaging(shown, shown.optsWithGlobals<GlobalFlags & { bot?: boolean }>())
       const env = options.env ?? process.env
       if (!flags.profile && !env[envName(definition.app, "PROFILE")]) return undefined
       try {
@@ -434,6 +435,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         dryRun?: boolean
       }
     >()
+    const own = withoutOwnPaging(action, flags)
     const commandEnv = options.env ?? process.env
     const argvLog = commandEnv[envName(definition.app, "TEST_ARGV_LOG")]
     if (argvLog) logParsedArgv(argvLog, action)
@@ -557,7 +559,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
             action,
             flags as { offline?: boolean; http?: boolean },
             () =>
-              (definition.configuration ?? settingsFor(definition.app)).resolveSettings(flags, {
+              (definition.configuration ?? settingsFor(definition.app)).resolveSettings(own, {
                 env: commandEnv,
                 needsProfile: false,
                 readOnly: true,
@@ -613,7 +615,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       throw control.failure()
     }
     if (flags.dryRun && !localPreview) {
-      const resolved = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(flags, {
+      const resolved = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(own, {
         kind: path[0] === "bot" ? "bot" : "personal",
         env: options.env ?? process.env,
         readOnly: true,

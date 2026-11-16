@@ -13,6 +13,8 @@ export interface HttpApiRequest {
   url: URL
   headers: Headers
   body?: string
+  /** `manual` for a request whose sign-in header a redirect to another host would carry along. */
+  redirect?: "follow" | "manual" | "error"
 }
 
 export interface HttpApiExecutorOptions {
@@ -99,62 +101,74 @@ const answerOf = async (response: Response, maxBytes: number): Promise<unknown> 
   return readJsonResponse(response, { maxBytes })
 }
 
+/** What one exchange needs: the service's name, the fetch, its own refusals and the answer's size limit. */
+export type HttpApiSendOptions = Pick<HttpApiExecutorOptions, "service" | "fetch" | "failure" | "maxBytes">
+
+/**
+ * Sends one request, records it in the run by its path template, never an id, and gives the parsed answer. A write
+ * that got no answer is `outcome_unknown` (WC-LIFE-9); the service's own error text is never repeated (WC-SECR-6).
+ */
+export const httpApiSend =
+  (options: HttpApiSendOptions) =>
+  async (command: Command, operation: ManifestOperation, request: HttpApiRequest): Promise<unknown> => {
+    const writes = operation.effect !== "read"
+    const template = templateOf(operation.binding.kind === "http" ? operation.binding.path : "")
+    const end = providerRequest(`${request.method} ${template}`, undefined, {
+      method: request.method,
+      endpointTemplate: template,
+      transport: "http",
+    })
+    let response: Response
+    try {
+      response = await options.fetch(command)(request.url, {
+        method: request.method,
+        headers: request.headers,
+        ...(request.body === undefined ? {} : { body: request.body }),
+        ...(request.redirect === undefined ? {} : { redirect: request.redirect }),
+      })
+    } catch (error) {
+      const failed = unanswered(options.service, writes, error)
+      end({ error: failed })
+      throw failed
+    }
+    const { status } = response
+    let answer: unknown
+    try {
+      answer = await answerOf(response, options.maxBytes ?? LARGEST_ANSWER)
+    } catch {
+      if (response.ok) {
+        end({ status })
+        throw unreadable(options.service, writes, status)
+      }
+    }
+    if (!response.ok) {
+      const failed =
+        status >= 500 && writes
+          ? refusal(options.service, operation, response, writes)
+          : (options.failure?.(status, answer, operation) ?? refusal(options.service, operation, response, writes))
+      end({ status, error: failed })
+      throw failed
+    }
+    end({ status })
+    return answer
+  }
+
 /**
  * The `execute` of `generatedApiCommand` for any OpenAPI CLI: fills the path, adds the query, sends the JSON body
  * with the caller's headers through the caller's fetch, and prints the answer. Nothing here retries: a write is
- * never sent twice, since the first may have landed (WC-OUT-20). The service's own error text is never repeated,
- * since it can quote what was sent (WC-SECR-6).
+ * never sent twice, since the first may have landed (WC-OUT-20).
  */
 export const httpApiExecutor =
   (options: HttpApiExecutorOptions) =>
   async (command: Command, operation: ManifestOperation, input: ApiCommandInput): Promise<void> => {
     const request = httpApiRequest(operation, input, options.baseUrl)
-    const writes = operation.effect !== "read"
-    const template = templateOf(operation.binding.kind === "http" ? operation.binding.path : "")
     for (const [name, value] of Object.entries(await options.headers(command, operation)))
       request.headers.set(name, value)
-    const send = async (): Promise<unknown> => {
-      const end = providerRequest(`${request.method} ${template}`, undefined, {
-        method: request.method,
-        endpointTemplate: template,
-        transport: "http",
-      })
-      let response: Response
-      try {
-        response = await options.fetch(command)(request.url, {
-          method: request.method,
-          headers: request.headers,
-          ...(request.body === undefined ? {} : { body: request.body }),
-        })
-      } catch (error) {
-        const failed = unanswered(options.service, writes, error)
-        end({ error: failed })
-        throw failed
-      }
-      const { status } = response
-      let answer: unknown
-      try {
-        answer = await answerOf(response, options.maxBytes ?? LARGEST_ANSWER)
-      } catch {
-        if (response.ok) {
-          end({ status })
-          throw unreadable(options.service, writes, status)
-        }
-      }
-      if (!response.ok) {
-        const failed =
-          status >= 500 && writes
-            ? refusal(options.service, operation, response, writes)
-            : (options.failure?.(status, answer, operation) ?? refusal(options.service, operation, response, writes))
-        end({ status, error: failed })
-        throw failed
-      }
-      end({ status })
-      return answer
-    }
-    const answer = writes
-      ? await options.write(command, operation, send)
-      : await (options.read ?? ((_command, _operation, call) => call()))(command, operation, send)
+    const send = () => httpApiSend(options)(command, operation, request)
+    const answer =
+      operation.effect !== "read"
+        ? await options.write(command, operation, send)
+        : await (options.read ?? ((_command, _operation, call) => call()))(command, operation, send)
     renderAnswer(command, outputFor(command), itemOf(answer))
   }
 

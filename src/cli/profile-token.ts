@@ -3,6 +3,7 @@ import {
   type CredentialSource,
   Credentials,
   type CredentialsOptions,
+  isCliError,
   isMovedRun,
   type KeyringStore,
   resolvePaths,
@@ -112,8 +113,7 @@ export class ProfileTokenStore {
 
   /** The token; the profile's named secrets stay as they were. */
   write(profile: string, token: string, storage: TokenStorage = "keyring"): CredentialSource {
-    const held = this.#held(profile)
-    return this.#put(profile, { ...held, token }, storage)
+    return this.#put(profile, { ...this.#heldUnlessUnreachable(profile), token }, storage)
   }
 
   /** The token and every named secret: the whole entry, as `session end` wants. */
@@ -160,6 +160,16 @@ export class ProfileTokenStore {
 
   #held(profile: string): Held {
     return unpack(this.#stored.read(accountOf(profile))?.secret)
+  }
+
+  /** A sign-in must still land, in the file, when the keyring does not answer; what the keyring held stays there. */
+  #heldUnlessUnreachable(profile: string): Held {
+    try {
+      return this.#held(profile)
+    } catch (error) {
+      if (isCliError(error) && error.details.reason === "keyring.unreachable") return unpack(undefined)
+      throw error
+    }
   }
 
   /** `file` also forgets the keyring copy, so a later read cannot find the secret the owner asked to keep elsewhere. */

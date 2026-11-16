@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, OperationPermission, SchemaNode } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -12,8 +12,8 @@ import type { Level, PermissionKey } from "../sends/permissions.js"
 import { levelFor } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { refusedPlace } from "../sends/upload.js"
-import { generatedApiCommand } from "./bot/api.js"
-import { httpApiExecutor, httpApiRequest } from "./bot/api-http.js"
+import { type ApiCommandInput, generatedApiCommand } from "./bot/api.js"
+import { type HttpApiRequest, httpApiRequest, httpApiSend } from "./bot/api-http.js"
 import { checkApiBody, checkApiParameter, parseApiJson, readApiBody } from "./bot/api-input.js"
 import { baseContext, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
@@ -21,29 +21,29 @@ import { itemOf, listOf, renderAnswer } from "./envelope.js"
 import { queryTerms, termField, withQuery } from "./list-query.js"
 import { terminalAsker } from "./messenger/ask.js"
 import type { ConditionalKey } from "./permission-keys.js"
+import {
+  authHeader,
+  manifestBaseUrl,
+  nextPage,
+  parameterValue,
+  type ServiceApiManifest,
+} from "./service-api-manifest.js"
 import type { Configuration } from "./settings.js"
 
-/**
- * A generated operation, with what the generator may know about deleting. Both fields are optional until cli-base's
- * manifest writes them; a CLI may add them by hand meanwhile.
- */
-export interface ServiceApiOperation extends ManifestOperation {
-  /** The key a delete through this operation also checks, `pages.delete`; the CLI's `deleteKey` otherwise. */
-  deleteKey?: string
-  /** Body fields that delete when `true`, as `in_trash` or `archived`. */
-  deletingFields?: readonly string[]
+/** A key a call's body implies in a way no flag names, as notion's `agent-batch` with an action `delete`. */
+export interface BodyPermission {
+  key: PermissionKey
+  /** When it applies, in a few words, for `--dry-run` and discovery. */
+  when: string
+  /** The body parsed by lossless-json: a number is a `LosslessNumber`. */
+  applies: (body: unknown) => boolean
 }
 
 /** What both halves of the group, the permissions and the command, are built from. */
 export interface ServiceApiPermissionsInput {
-  operations: readonly ServiceApiOperation[]
-  /** The key every delete also checks, `documents.delete`, so denying it holds over `api` as over the CLI's own commands. */
-  deleteKey?: string
-  /**
-   * Operations, by command name, whose body can delete in a way no top-level field names: `agent-batch` with an action
-   * `delete`. The body comes parsed by lossless-json, so a number is a `LosslessNumber`.
-   */
-  deletingBodies?: Readonly<Record<string, (body: unknown) => boolean>>
+  manifest: ServiceApiManifest
+  /** By command name: keys beside the manifest's `permissions`, for a body the generator cannot read. */
+  bodyPermissions?: Readonly<Record<string, readonly BodyPermission[]>>
 }
 
 export interface ServiceApiOptions extends ServiceApiPermissionsInput {
@@ -51,12 +51,14 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   configuration: Configuration
   /** The service's name in messages: "Notion". */
   service: string
-  /** The server the spec names; a path template is appended to its path. */
-  baseUrl: string
+  /** In place of the manifest's first server. */
+  baseUrl?: string
   /** The host-checked fetch with the CLI's pace and its retry of reads (cli-base `retrying` over `hostFetch`). */
   fetch: (command: Command) => FetchLike
-  /** The sign-in headers; read before any guard asks, so a missing sign-in fails first. */
-  headers: (command: Command, operation: ManifestOperation) => Record<string, string> | Promise<Record<string, string>>
+  /** The profile's token, sent in the header the operation's security scheme names. Read before any guard asks. */
+  token: (command: Command) => string | Promise<string>
+  /** Headers beside the sign-in, such as the API version. */
+  headers?: (command: Command, operation: ManifestOperation) => Record<string, string>
   /** Loaded only once an operation is about to check its input: a large spec is megabytes of code. */
   schemas: () => Promise<Readonly<Record<string, v.GenericSchema>>>
   /** Loaded only by `api show`. */
@@ -68,59 +70,79 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   failure?: (status: number, answer: unknown, operation: ManifestOperation) => CliError | undefined
 }
 
+/** How far `--all` reads: a service that never stops paging must not run a command forever. */
+const MOST_PAGES = 500
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value)
 
 const keyOf = (operation: ManifestOperation): PermissionKey => `api.${operation.command}`
 
-const deleteKeyOf = (input: ServiceApiPermissionsInput, operation: ServiceApiOperation) =>
-  operation.deleteKey ?? input.deleteKey
+const permissionsOf = (operation: ManifestOperation): readonly OperationPermission[] => operation.permissions ?? []
 
 /** By its method too: an override may have marked a DELETE as a plain write. */
 const destructive = (operation: ManifestOperation) =>
   operation.effect === "destructive" || (operation.binding.kind === "http" && operation.binding.method === "DELETE")
 
-const bodyMayDelete = (input: ServiceApiPermissionsInput, operation: ServiceApiOperation) =>
-  (operation.deletingFields?.length ?? 0) > 0 || input.deletingBodies?.[operation.command] !== undefined
+const flagsOf = ({ body = [], query = [] }: OperationPermission) => [...body, ...query]
 
-/** Whether one call deletes: by its method, a deleting field set to `true`, or the CLI's own test of the body. */
-export const serviceApiDeletes = (
+/** A flag counts unless it is absent or plainly false: a service may read `1` or `True` as true. */
+const set = (value: unknown) => value !== undefined && value !== null && value !== false && value !== "false"
+
+/** Whether a manifest key applies to this call: always, or when one of its flags is set. */
+const applies = (permission: OperationPermission, body: unknown, input: ApiCommandInput): boolean =>
+  flagsOf(permission).length === 0 ||
+  (permission.body ?? []).some((field) => isObject(body) && set(body[field])) ||
+  (permission.query ?? []).some((name) => set(input.query[name]))
+
+/** The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body. */
+export const serviceApiKeys = (
   input: ServiceApiPermissionsInput,
-  operation: ServiceApiOperation,
-  body: unknown,
-): boolean =>
-  destructive(operation) ||
-  (isObject(body) && (operation.deletingFields ?? []).some((field) => body[field] === true)) ||
-  input.deletingBodies?.[operation.command]?.(body) === true
+  operation: ManifestOperation,
+  call: ApiCommandInput,
+): PermissionKey[] => {
+  const body = call.body?.trim() ? parseApiJson(call.body) : undefined
+  const keys = [
+    ...permissionsOf(operation)
+      .filter((permission) => applies(permission, body, call))
+      .map(({ key }) => key),
+    ...(input.bodyPermissions?.[operation.command] ?? []).filter((one) => one.applies(body)).map(({ key }) => key),
+  ]
+  return [...new Set(keys)]
+}
 
 /**
- * The group's half of `commandPermissions`: the delete key each operation also checks, for `--dry-run` and discovery,
- * and the levels a delete starts at. A CLI with keys of its own merges each field with its own, never spreads one
- * over the other. `ask` stops at a terminal; over MCP it goes ahead, so `deny` is what stops an agent.
+ * The group's half of `commandPermissions`: the keys each operation also checks, for `--dry-run` and discovery, and
+ * `ask` for each of them and for every operation that deletes. A CLI with keys of its own merges each field with its
+ * own, never spreads one over the other. `ask` stops at a terminal; over MCP it goes ahead, so `deny` is what stops an
+ * agent.
  */
 export const serviceApiPermissions = (
   input: ServiceApiPermissionsInput,
 ): {
   alsoChecks: (path: readonly string[]) => readonly (PermissionKey | ConditionalKey)[]
   defaults: Readonly<Record<PermissionKey, Level>>
-  /** The delete keys, so a profile may name one that no command path spells. */
+  /** The keys, so a profile may name one that no command path spells. */
   extra: readonly PermissionKey[]
 } => {
-  const deleting = input.operations.filter((operation) => destructive(operation) || bodyMayDelete(input, operation))
-  const keys = new Set(deleting.map((operation) => deleteKeyOf(input, operation)).filter((key) => key !== undefined))
+  const checks = new Map<string, (PermissionKey | ConditionalKey)[]>()
+  for (const operation of input.manifest.operations)
+    checks.set(operation.command, [
+      ...permissionsOf(operation).map((permission) =>
+        flagsOf(permission).length === 0
+          ? permission.key
+          : { key: permission.key, when: `with ${flagsOf(permission).join(" or ")} set` },
+      ),
+      ...(input.bodyPermissions?.[operation.command] ?? []).map(({ key, when }) => ({ key, when })),
+    ])
+  const keys = [...new Set([...checks.values()].flat().map((one) => (typeof one === "string" ? one : one.key)))]
   return {
-    extra: [...keys],
-    alsoChecks: (path) => {
-      if (path[0] !== "api" || path.length !== 2) return []
-      const operation = deleting.find((one) => one.command === path[1])
-      const key = operation && deleteKeyOf(input, operation)
-      if (!operation || !key) return []
-      return destructive(operation) ? [key] : [{ key, when: "the body deletes, trashes or archives" }]
-    },
+    extra: keys,
+    alsoChecks: (path) => (path[0] === "api" && path.length === 2 ? (checks.get(path[1] ?? "") ?? []) : []),
     defaults: {
-      ...Object.fromEntries([...keys].map((key) => [key, "ask" as const])),
+      ...Object.fromEntries(keys.map((key) => [key, "ask" as const])),
       ...Object.fromEntries(
-        input.operations.filter(destructive).map((operation) => [keyOf(operation), "ask" as const]),
+        input.manifest.operations.filter(destructive).map((operation) => [keyOf(operation), "ask" as const]),
       ),
     },
   }
@@ -145,37 +167,54 @@ const API_QUERY = {
 
 /**
  * The raw API of an OpenAPI service as one group: `api list` and `api show` without a request, and one command per
- * operation. Every write goes through the profile's guard on `api.<operation>` and, when it deletes, on the delete key
- * too; the journal records that it ran, never its body. There is no free-form `api call`: a request is always one
- * operation of the spec, with its own key (SEC-196).
+ * operation of the generated manifest, sent to its server with the sign-in its security scheme names. Every write goes
+ * through the profile's guard on `api.<operation>` and on each manifest key that applies to the call (`files.delete`
+ * when `permanently` is true); the journal records that it ran, never its body. A read that pages takes `--all`. There
+ * is no free-form `api call`: a request is always one operation of the spec, with its own key (SEC-196).
  */
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
-  const { app, configuration } = options
+  const { app, configuration, manifest } = options
   // A credential-returning operation needs a bot's `--store-token`; a service CLI signs in through `session` instead.
-  const operations = options.operations.filter((operation) => !operation.response?.sensitive)
+  const operations = manifest.operations.filter((operation) => !operation.response?.sensitive)
+  const baseUrl = manifestBaseUrl(manifest, options.baseUrl)
+  const base = new URL(baseUrl)
   const own = serviceApiPermissions(options)
   // The group's own levels hold even where the CLI's permissions left them out.
   const defaults = { ...own.defaults, ...configuration.permissions?.defaults }
-  const keyless = options.operations.filter(
-    (operation) => (destructive(operation) || bodyMayDelete(options, operation)) && !deleteKeyOf(options, operation),
+  const unguarded = operations.filter(
+    (operation) => destructive(operation) && !permissionsOf(operation).some(({ key }) => key.endsWith(".delete")),
   )
-  if (keyless.length > 0)
+  if (unguarded.length > 0)
     throw new CliError(
       "configuration_error",
-      `${keyless.map(({ command }) => command).join(", ")} can delete, but no delete key is set: give the api a deleteKey`,
+      `${unguarded.map(({ command }) => command).join(", ")} can delete, but the manifest gives no delete key: generate with \`permissions\``,
+    )
+  const named = new Set(manifest.operations.flatMap((operation) => permissionsOf(operation).map(({ key }) => key)))
+  const unnamed = Object.values(options.bodyPermissions ?? {})
+    .flat()
+    .filter(({ key }) => !named.has(key))
+  if (unnamed.length > 0)
+    throw new CliError(
+      "configuration_error",
+      `bodyPermissions name ${unnamed.map(({ key }) => key).join(", ")}, which the manifest does not: the keys come from \`permissions\``,
     )
   let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
   const loaded = () => {
     if (!schemas) throw new CliError("configuration_error", "the api schemas were not loaded before the command ran")
     return schemas
   }
+  const send = httpApiSend({
+    service: options.service,
+    fetch: options.fetch,
+    ...(options.failure ? { failure: options.failure } : {}),
+  })
 
-  const operationOf = (name: string): ServiceApiOperation => {
+  const operationOf = (name: string): ManifestOperation => {
     const found = operations.find((operation) => operation.command === name || operation.id === name)
     if (found) return found
     const left =
       options.excluded?.find((one) => one.id === name) ??
-      (options.operations.some((one) => one.command === name || one.id === name)
+      (manifest.operations.some((one) => one.command === name || one.id === name)
         ? { reason: "it returns a credential, which is never printed" }
         : undefined)
     throw new CliError(
@@ -186,45 +225,91 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     )
   }
 
-  const write =
-    (extra: readonly PermissionKey[]) =>
-    async (command: Command, operation: ManifestOperation, send: () => Promise<unknown>) => {
-      const { settings, env, renderer, run } = baseContext(command, configuration.resolveSettings)
-      const operationId = newOperationId()
-      const guard = keyedGuard(
-        (ask) =>
-          guardFor(
-            app,
-            { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: defaults },
-            renderer.warn,
-            env,
-            ask,
-          ),
-        terminalAsker(command),
-        (key) => levelFor(settings.permissions, key, defaults).level,
-        extra,
-      )
-      const request = { chatId: null, kind: "edit" as const, key: keyOf(operation), operationId }
-      guard.refuse(request)
-      try {
-        return { operation_id: operationId, result: await guardedWrite(guard, request, () => run(() => send())) }
-      } catch (error) {
-        if (isCliError(error) && error.code === "outcome_unknown")
-          throw new CliError("outcome_unknown", error.message, { ...error.details, operation_id: operationId })
-        throw error
-      }
-    }
+  const signed = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) => {
+    const auth = authHeader(manifest, operation)
+    if (auth) request.headers.set(auth.name, auth.value(await options.token(command)))
+    // A redirect to another host drops only the standard sign-in headers; an API key header would go along.
+    if (auth && auth.name !== "authorization") request.redirect = "manual"
+    for (const [name, value] of Object.entries(options.headers?.(command, operation) ?? {}))
+      request.headers.set(name, value)
+    return request
+  }
 
-  const executorFor = (extra: readonly PermissionKey[]) =>
-    httpApiExecutor({
-      service: options.service,
-      baseUrl: options.baseUrl,
-      fetch: options.fetch,
-      headers: options.headers,
-      write: write(extra),
-      read: (command, _operation, send) => baseContext(command, configuration.resolveSettings).run(() => send()),
-      ...(options.failure ? { failure: options.failure } : {}),
+  const write = async (
+    command: Command,
+    operation: ManifestOperation,
+    extra: readonly PermissionKey[],
+    request: HttpApiRequest,
+  ) => {
+    const { settings, env, renderer, run } = baseContext(command, configuration.resolveSettings)
+    const operationId = newOperationId()
+    const guard = keyedGuard(
+      (ask) =>
+        guardFor(
+          app,
+          { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: defaults },
+          renderer.warn,
+          env,
+          ask,
+        ),
+      terminalAsker(command),
+      (key) => levelFor(settings.permissions, key, defaults).level,
+      extra,
+    )
+    const guarded = { chatId: null, kind: "edit" as const, key: keyOf(operation), operationId }
+    guard.refuse(guarded)
+    try {
+      const result = await guardedWrite(guard, guarded, () => run(() => send(command, operation, request)))
+      return { operation_id: operationId, result }
+    } catch (error) {
+      if (isCliError(error) && error.code === "outcome_unknown")
+        throw new CliError("outcome_unknown", error.message, { ...error.details, operation_id: operationId })
+      throw error
+    }
+  }
+
+  /** Every page, in one run; a next page on another host is never sent the sign-in. */
+  const allPages = async (command: Command, operation: ManifestOperation, input: ApiCommandInput) => {
+    const pagination = operation.pagination as NonNullable<ManifestOperation["pagination"]>
+    // Services number pages from 0 or from 1, and the manifest does not say which.
+    if (pagination.style === "page" && parameterValue(input, pagination.page) === undefined)
+      throw new CliError(
+        "validation_error",
+        `--all on ${operation.command} needs the first page: give --${pagination.page.name} 0 or 1, as ${options.service} counts`,
+      )
+    const items: unknown[] = []
+    const asked = new Set<string>()
+    let call = input
+    let url: URL | undefined
+    await baseContext(command, configuration.resolveSettings).run(async () => {
+      for (let page = 0; ; page++) {
+        if (page >= MOST_PAGES)
+          throw new CliError(
+            "validation_error",
+            `${operation.command} has more than ${MOST_PAGES} pages; narrow it with its own flags, or page it yourself`,
+          )
+        const request = await signed(command, operation, httpApiRequest(operation, call, baseUrl))
+        if (url !== undefined) request.url = url
+        const key = `${request.url.href} ${request.body ?? ""}`
+        if (asked.has(key))
+          throw new CliError("invalid_response", `${options.service} gave the same next page twice; nothing more read`)
+        asked.add(key)
+        const step = nextPage(pagination, call, await send(command, operation, request))
+        for (const item of step.items) items.push(item)
+        if (!step.next) return
+        if ("url" in step.next) {
+          url = new URL(step.next.url, request.url)
+          if (url.origin !== base.origin)
+            throw new CliError("invalid_response", `${options.service} pointed the next page at another host`)
+        } else call = step.next.input
+      }
     })
+    renderAnswer(
+      command,
+      outputFor(command),
+      listOf(`api ${operation.command}`, { items, limit: items.length, has_more: false }),
+    )
+  }
 
   const generated = generatedApiCommand({
     operations,
@@ -241,12 +326,22 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       }
       return readApiBody(body)
     },
-    execute: (command, operation: ServiceApiOperation, input) => {
-      const text = httpApiRequest(operation, input, options.baseUrl).body
-      const key = deleteKeyOf(options, operation)
-      const body = text === undefined ? undefined : parseApiJson(text)
-      const deletes = key !== undefined && serviceApiDeletes(options, operation, body)
-      return executorFor(deletes ? [key] : [])(command, operation, input)
+    execute: async (command, operation, input) => {
+      const extra = serviceApiKeys(options, operation, input)
+      if (operation.pagination && command.opts<{ all?: unknown }>().all === true) {
+        if (operation.effect !== "read" || extra.length > 0)
+          throw new CliError(
+            "validation_error",
+            `--all reads only; this call of ${operation.command} is guarded by ${extra.join(", ") || "its write"}`,
+          )
+        return allPages(command, operation, input)
+      }
+      const request = await signed(command, operation, httpApiRequest(operation, input, baseUrl))
+      const answer =
+        operation.effect === "read" && extra.length === 0
+          ? await baseContext(command, configuration.resolveSettings).run(() => send(command, operation, request))
+          : await write(command, operation, extra, request)
+      renderAnswer(command, outputFor(command), itemOf(answer))
     },
   })
 
@@ -292,6 +387,11 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const load = async () => {
     schemas ??= await options.schemas()
   }
-  for (const child of generated.commands) group.addCommand(child.hook("preAction", load))
+  for (const child of generated.commands) {
+    const operation = operations.find((one) => one.command === child.name())
+    if (operation?.pagination && !operation.parameters.some(({ name }) => name === "all"))
+      child.option("--all", "read every page, as the API pages it")
+    group.addCommand(child.hook("preAction", load))
+  }
   return group
 }
