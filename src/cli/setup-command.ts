@@ -75,7 +75,11 @@ export const setupCommand = (setup: Setup): Command => {
     })
   }
 
-  const currentOf = (command: Command, context: ReturnType<typeof contextFor>): Current => {
+  const currentOf = (
+    command: Command,
+    context: ReturnType<typeof contextFor>,
+    { dryRun = false }: { dryRun?: boolean } = {},
+  ): Current => {
     const { settings, renderer } = context
     const current: Record<string, Value | { set: true }> = {}
     let store: ReturnType<typeof storeFor> | undefined
@@ -96,6 +100,12 @@ export const setupCommand = (setup: Setup): Command => {
       }
       const secret = secretOf(field)
       if (secret === undefined || secret in current) continue
+      // Only `apply` checks a secret, and it keeps the saved one when none is answered: a dry run takes it as kept, so
+      // an edit that leaves the password alone can continue, and the keyring stays shut (WC-PERM-23).
+      if (dryRun) {
+        current[secret] = { set: true }
+        continue
+      }
       let read: { value: { set: true } | undefined } | undefined
       Object.defineProperty(current, secret, {
         enumerable: true,
@@ -162,7 +172,7 @@ export const setupCommand = (setup: Setup): Command => {
     const context = contextFor(command, true, dryRun)
     const { settings, env } = context
     const profile = settings.profile
-    const path = walk(setup, answers, { current: currentOf(command, context) })
+    const path = walk(setup, answers, { current: currentOf(command, context, { dryRun }) })
     const reached = path.stopped === "run" || path.stopped === "done"
     const told = {
       profile,

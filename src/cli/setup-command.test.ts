@@ -141,7 +141,7 @@ describe("setup", () => {
   })
 
   it("**apply --dry-run checks each answer on the path with its setting's schema, drops the rest, saves nothing**", async () => {
-    const { call, config } = harness()
+    const { call, config, reads } = harness()
     const answers = { ...MYSQL, db_port: 70000, sftp_host: "never.example", cdr_csv_path: "/tmp/Master.csv" }
     const { code, item } = await call(["office", "setup", "apply", "--dry-run", "--json"], {
       stdin: JSON.stringify(answers),
@@ -155,6 +155,22 @@ describe("setup", () => {
     const good = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin: JSON.stringify(MYSQL) })
     expect(good.item).toMatchObject({ valid: true, complete: true, at: "check", errors: [] })
     expect(good.item.path).toEqual(["source", "database", "recordings", "check"])
+    expect(reads).toEqual([])
+  })
+
+  it("**a dry run of an edit without the password passes**, never opening the keyring; a malformed one is refused", async () => {
+    const { call, reads } = harness()
+    expect((await call(["office", "setup", "apply", "--json"], { stdin: JSON.stringify(MYSQL) })).code).toBe(0)
+    reads.length = 0
+    const { db: _, ...unchanged } = MYSQL
+    const edit = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin: JSON.stringify(unchanged) })
+    expect(edit.item).toMatchObject({ valid: true, complete: true, errors: [] })
+    expect(reads).toEqual([])
+    const typo = await call(["office", "setup", "apply", "--dry-run", "--json"], {
+      stdin: JSON.stringify({ ...MYSQL, db: 42 }),
+    })
+    expect(typo.item).toMatchObject({ valid: false, at: "database" })
+    expect(typo.item.errors).toEqual([expect.objectContaining({ input: "db" })])
   })
 
   it("**a dry run with nothing on stdin checks no answers**: it names the first step, as a program asks", async () => {
