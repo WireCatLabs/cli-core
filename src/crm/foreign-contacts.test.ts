@@ -33,6 +33,23 @@ describe("foreign contacts (NEED-2487)", () => {
     ])
   })
 
+  it("counts a colleague's deal or lead once a day, never the sign-in's own, and refuses the 101st (NEED-2703 B)", async () => {
+    const source = fakeCrmSource({ self: "7", admin: false, ownClients: { organization: ["d1"] } })
+    const file = fileIn()
+    const quota = foreignContacts(source, () => file, { now: () => DAY })
+    await quota.spend("deal", { externalId: "d1", assignee: "8" })
+    await quota.spend("deal", { externalId: "d1", assignee: "8" })
+    await quota.spend("lead", { externalId: "d1", assignee: "8" })
+    await quota.spend("deal", { externalId: "d2", assignee: "7" })
+    expect(JSON.parse(readFileSync(file, "utf8")).seen).toEqual(["deal:d1", "lead:d1"])
+    spent(file, DAILY_FOREIGN_CONTACTS)
+    await expect(quota.spend("deal", { externalId: "d3", assignee: null })).rejects.toMatchObject({
+      code: "permission_error",
+      message: expect.stringContaining("records that are not yours"),
+      details: { reason: "crm.foreign-contacts-spent" },
+    })
+  })
+
   it("leaves an administrator and a CRM without isAdmin alone", async () => {
     const people = [examplePerson("p1", { email: "p1@example.com" })]
     for (const source of [fakeCrmSource({ admin: true }), fakeCrmSource()]) {

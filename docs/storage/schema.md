@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-135 tables, 25 full-text indexes.
+136 tables, 26 full-text indexes.
 
 ## Conventions
 
@@ -2143,6 +2143,44 @@ A CRM account's own fields on its deals, leads, contacts or companies, as its sy
 | `deleted_at` | integer |  |  | the CRM no longer lists it; values under its code may still stand |
 
 *Keys and indexes:* `UNIQUE (account_id, kind, code)`
+
+### `crm_files`
+
+A file of a CRM deal, lead, contact or company that the owner downloaded, with its extracted text. Never a download link: the CRM is asked for a fresh one each time. Only CRM code reads it, under the copy's viewer rule.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the CRM account the file is in |
+| `external_id` | text | not null |  | `<owner kind>:<owner id>:<source kind>:<provider id>`, as `files list` prints it; opaque, never a link |
+| `owner_kind` | text | not null |  | deal, lead, person or organization |
+| `owner_id` | text | not null |  | the owner record's id in the CRM |
+| `owner_assignee` | text |  |  | the identity `<account>/user/<id>` the owner record was assigned to at download; a limited profile finds the text only when it is its own |
+| `source` | text | not null |  | record, field, document, activity or comment: where on the record it hangs |
+| `name` | text | not null |  | the file name the CRM gives |
+| `name_folded` | text | not null |  | the name in one letter case |
+| `mime` | text |  |  |  |
+| `size` | integer |  |  | bytes, as the CRM says or as downloaded; null when neither knows |
+| `external_created_at` | integer |  |  | when the CRM says the file was added |
+| `local_path` | text |  |  | where the file is saved; null once the disk cap dropped it (the text stays) or before it is saved |
+| `content_sha256` | text |  |  |  |
+| `text` | text |  |  | the file's text as extracted; null for a scan or a file too large to read |
+| `normalized_text` | text |  |  | the text normalized for the word index |
+| `extraction` | text |  |  | how reading the text went: extracted, needs-agent (a scan), unreadable, unsupported, engine-missing or too-large |
+| `extraction_error` | text |  |  |  |
+| `downloaded_by` | text |  |  | the CRM user id of the sign-in that downloaded it |
+| `downloaded_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, owner_kind, owner_id)`
+
+### `crm_file_words`
+
+Word index over the text of downloaded CRM files, rowid = `crm_files.id`. Apart from `attachment_words`, so no generic reader finds a colleague's file.
+
+```sql
+CREATE VIRTUAL TABLE crm_file_words USING fts5(normalized_text, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE crm_file_words_vocab USING fts5vocab(crm_file_words, 'col')
+```
 
 ## Business
 

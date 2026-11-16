@@ -1,16 +1,21 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { CrmField, CrmOrganization, CrmPerson, CrmValue } from "../domain/crm.js"
+import type { CrmField, CrmKind, CrmOrganization, CrmPerson, CrmValue } from "../domain/crm.js"
 import type { AppIdentity } from "../ports/app.js"
 import { withFileLockAsync } from "../sends/file-lock.js"
 import type { AccountKey } from "../store/types.js"
 import type { CrmLiveKind, CrmSource } from "./source.js"
 
-/** The owner's rule (NEED-2487): a user sees at most this many other contacts' or companies' details a UTC day. */
+/**
+ * The owner's rule (NEED-2487, NEED-2703 B): a user sees at most this many other people's records a UTC day: a
+ * contact's or company's details, or a deal's, lead's, contact's or company's files.
+ */
 export const DAILY_FOREIGN_CONTACTS = 100
 
 type Live = CrmPerson | CrmOrganization
+/** What a spend needs of a record: its id and whom it is assigned to. */
+type Owned = { externalId: string; assignee?: string | null }
 
 /** Where the day's count of one CRM user is kept: the CLI's state folder, a file per account and user. */
 export const foreignContactsPathFor = (
@@ -64,8 +69,12 @@ export interface ForeignContacts {
   strip<T extends Live>(kind: CrmLiveKind, records: T[]): Promise<T[]>
   /** Whether the sign-in may see this record whole: its own client, or an administrator's or unlimited CRM's. */
   own(kind: CrmLiveKind, record: Live): Promise<boolean>
-  /** One record shown whole: a foreign one spends one of the day's slots, the same one again that day is free. */
-  spend(kind: CrmLiveKind, record: Live): Promise<void>
+  /**
+   * One record shown whole, or its files read: a foreign one spends one of the day's slots, the same one again that
+   * day is free. A deal or lead is the sign-in's own when assigned to its user; a contact or company also when
+   * `ownClients` names it.
+   */
+  spend(kind: CrmKind, record: Owned): Promise<void>
 }
 
 /**
@@ -86,11 +95,12 @@ export const foreignContacts = (
     admin ??= source.isAdmin()
     return !(await admin)
   }
-  const own = async (kind: CrmLiveKind, records: readonly Live[]): Promise<Set<string>> => {
+  const own = async (kind: CrmKind, records: readonly Owned[]): Promise<Set<string>> => {
     const self = source.self ? String(await source.self()) : undefined
     const mine = new Set(records.filter((one) => self && one.assignee === self).map((one) => one.externalId))
     const rest = records.filter((one) => !mine.has(one.externalId)).map((one) => one.externalId)
-    if (rest.length && source.ownClients) for (const id of await source.ownClients(kind, rest)) mine.add(id)
+    if (rest.length && source.ownClients && (kind === "person" || kind === "organization"))
+      for (const id of await source.ownClients(kind, rest)) mine.add(id)
     return mine
   }
   return {
@@ -120,8 +130,9 @@ export const foreignContacts = (
           if (shown.seen.length >= DAILY_FOREIGN_CONTACTS)
             throw new CliError(
               "permission_error",
-              `${DAILY_FOREIGN_CONTACTS} contacts and companies that are not your clients were shown today, the ` +
-                "most a day; your own clients are not counted, and the CRM's administrator has no limit",
+              `${DAILY_FOREIGN_CONTACTS} records that are not yours (contacts, companies, or the files of deals, ` +
+                "leads, contacts and companies) were read today, the most a day; your own records are not counted, " +
+                "and the CRM's administrator has no limit",
               { reason: "crm.foreign-contacts-spent", limit: DAILY_FOREIGN_CONTACTS },
             )
           writeSecurely(path, JSON.stringify({ day, seen: [...shown.seen, key] }), 0o600)

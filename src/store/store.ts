@@ -36,6 +36,7 @@ import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
+import { type CrmFileStore, crmFilesOver } from "./sqlite/crm-files.js"
 import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
 import { type DecisionRequestStore, decisionRequestStoreOver } from "./sqlite/decision-requests.js"
 import { type DocumentListing, documentListingOver } from "./sqlite/document-listing.js"
@@ -160,6 +161,8 @@ export interface MessageStore {
   readonly business: BusinessSearchStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies
+  /** The CRM files the owner downloaded, with their text; only CRM code reads them, under the copy's viewer rule. */
+  readonly crmFiles: CrmFileStore
   /** Relationships a source account reports, written as a diff that never overrides the owner's. */
   readonly relations: RelationsStore
   /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
@@ -291,6 +294,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const wallets = once(() => walletsStoreOver(context))
   const transactions = once(() => transactionsStoreOver(context))
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
+  const crmFiles = once(() => crmFilesOver(context))
   const relations = once(() => relationsStoreOver(context))
   const decisionRequests = once(() => decisionRequestStoreOver(context))
   const templates = once(() => templateStoreOver(context))
@@ -436,6 +440,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get crm() {
       return crm()
+    },
+    get crmFiles() {
+      return crmFiles()
     },
     get relations() {
       return relations()

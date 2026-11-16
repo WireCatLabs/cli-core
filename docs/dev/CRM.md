@@ -7,6 +7,7 @@ What a CRM CLI (b24, amo) gets from `@wirecat/cli-core/crm` and `/crm/cli`, and 
 - [Writes](#writes)
 - [Foreign contacts](#foreign-contacts)
 - [Activities, changes and the digest](#activities-changes-and-the-digest)
+- [Client files](#client-files)
 - [Adapter helpers](#adapter-helpers)
 
 ## The port
@@ -59,10 +60,11 @@ and e-mail.
 
 ## Foreign contacts
 
-The owner's rule (NEED-2487, NEED-2660): anyone but the CRM's administrator sees the phones and e-mails only of their
-own clients, and at most `DAILY_FOREIGN_CONTACTS` (100) other contacts or companies a UTC day in `show`. The rule
-applies when the source has `isAdmin()`. A record is the sign-in's own when its `assignee` is `self()` or
-`ownClients(kind, ids)` names it. `foreignContacts(source, file)` strips the lists and spends on `show`; the day's
+The owner's rule (NEED-2487, NEED-2660, NEED-2703 B): anyone but the CRM's administrator sees the phones and e-mails
+only of their own clients, and reads at most `DAILY_FOREIGN_CONTACTS` (100) other people's records a UTC day: a
+contact or company in `show`, or the files of a deal, lead, contact or company. The rule applies when the source has
+`isAdmin()`. A record is the sign-in's own when its `assignee` is `self()`, and a contact or company also when
+`ownClients(kind, ids)` names it. One slot is keyed `<kind>:<id>`, so the same record again that day is free. `foreignContacts(source, file)` strips the lists and spends on `show`; the day's
 count is a file per CRM user in the CLI's state folder (`foreignContactsPathFor`), read and written under
 `withFileLockAsync`. A stripped record also loses each custom value whose field definition has `holds` (`phone` or
 `email`) and each that repeats one of its own phones or e-mails. The definitions are read from the CRM once a run,
@@ -141,6 +143,33 @@ A hidden deal is never named in an activity's `on`.
   digest. It sends deal titles, amounts, loss reasons, contact names and task subjects to every reader of the route:
   a group chat as a route shares them with the whole group.
 
+## Client files
+
+The files of a deal, lead, contact or company (NEED-2701 C): listed live, downloaded on demand, their text found by
+`search all`.
+
+- `CrmSource.files(owner)` reads one record's files live and answers its `assignee`, the CRM user id the day's limit
+  checks. Each `CrmFile` has an opaque `id`, `<owner kind>:<owner id>:<source>:<provider id>` (`crmFileId`,
+  `parseCrmFileId`), and `open()`, which asks the CRM for a fresh link each time and keeps it inside the adapter: a
+  tokened link reaches no record, store row, error or answer. A kind of file the sign-in may not read is a
+  `context.gap` naming the scope; the others still list. `null`: no such record, or the sign-in cannot see it.
+- `withoutFileLinks(body)`: what a CLI's `api call` answers, with every file link replaced by `[link removed]`: the
+  values of the download keys, folded (every `…Machine`, `DOWNLOAD_URL`, `downloadUrl`, `fileUrl`, `CALL_RECORD_URL`,
+  `archiveLink`, `publicUrl`), amoCRM's `_links.download`, and any string holding a webhook (`/rest/<user>/<code>/`),
+  `auth=`, `access_token=`, `api_token=` or `X-Amz-Signature=`, or a portal path (`/rest/`, `show_file.php`) with
+  `token=`. A site the owner typed with `?token=promo` stays. `crmValuesOf` applies it to every custom value.
+- Only a downloaded file has a row: `crm_files` (store version 68), with the owner record, its assignee at download
+  as the identity a deal's assignee is kept as, the local path and the extracted text, in its own word index
+  `crm_file_words`. It is not `attachments`, so no generic reader (`attachments list`, MCP `attachments_show`) shows a
+  colleague's contract. `store.crmFiles` reads and writes it; `find` takes the copy's viewers: a limited profile finds
+  only the files of records assigned to its user (NEED-2707 A), the administrator all. A deal's or lead's file follows
+  the copy's current assignee, so it goes with a reassigned deal and is hidden while the copy lacks the deal; a
+  contact's or company's keeps its assignee at download. The account's purge removes the rows.
+  `account remove --delete-data` lists and deletes, before and after its confirmation alike, the files
+  `store.crmFiles.savedPaths` names inside the CLI's state folder, one file at a time; a consumer must save its
+  downloads under that state folder, or account removal leaves them on disk. A copy saved elsewhere is the owner's. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
+  that have text are dropped, the row and the text stay.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on
@@ -159,6 +188,6 @@ A hidden deal is never named in an activity's `on`.
   keeps the app's secret, the account's `host` and `userId` and saves a rotated refresh token. A new sign-in takes
   `host` and `userId` from its own `extra` only. The codec is `rotating`: a run with moved folders never refreshes it
   (`oauth.moved-rotating`), since the rotated token would land in the temporary entry and leave the owner's dead.
-- `@wirecat/cli-core/crm/testing`: `fakeCrmSource` (strict: a condition it does not know fails; `stageHistory` and
-  `activities` options give it those reads), `crmSourceContract` and `crmWriteContract` cover the live reads and the
+- `@wirecat/cli-core/crm/testing`: `fakeCrmSource` (strict: a condition it does not know fails; `stageHistory`,
+  `activities` and `files` options give it those reads; each fake file's link holds `FAKE_FILE_TOKEN`), `crmSourceContract` and `crmWriteContract` cover the live reads and the
   contact and company writes, and `crmSyncContract` the sync (a fixture's `activitiesOn` adds the activity case).

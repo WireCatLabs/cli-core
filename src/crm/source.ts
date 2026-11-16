@@ -95,6 +95,42 @@ export interface CrmCallContext {
   scope?: CrmScope
 }
 
+/** The record a file hangs on. */
+export interface CrmFileOwner {
+  kind: CrmKind
+  /** The CRM's id of the record. */
+  id: string
+}
+
+/** Where on its record a file hangs: the record's own files, a file field, a generated document, an activity, a comment. */
+export const CRM_FILE_SOURCES = ["record", "field", "document", "activity", "comment"] as const
+export type CrmFileSourceKind = (typeof CRM_FILE_SOURCES)[number]
+
+/** One file of a CRM record as the CRM lists it. Never a link: its bytes come through `open`. */
+export interface CrmFile {
+  /** `<owner kind>:<owner id>:<source kind>:<provider id>` (`crmFileId`): opaque, never a link. */
+  id: string
+  name: string
+  /** Bytes, when the CRM says. */
+  size: number | null
+  mime: string | null
+  /** Epoch ms. */
+  created: number | null
+  owner: CrmFileOwner
+  source: CrmFileSourceKind
+}
+
+/** A listed file with its download: each `open` asks the CRM for a fresh link, kept inside the adapter. */
+export interface CrmOpenableFile extends CrmFile {
+  open(signal?: AbortSignal): Promise<ReadableStream<Uint8Array>>
+}
+
+export interface CrmFiles {
+  /** The owner record's assignee, the CRM user's id, as `self()` names users; what the day's limit is checked by. */
+  assignee: string | null
+  files: CrmOpenableFile[]
+}
+
 /** One CRM account, as an adapter reads it. The engine never sees a provider word. */
 export interface CrmSource {
   /** The registry name: `bitrix24`, `pipedrive`, `hubspot`, `amocrm`. */
@@ -168,4 +204,10 @@ export interface CrmSource {
     after?: string,
     context?: CrmCallContext,
   ): Promise<CrmPage<CrmStageEntry>>
+  /**
+   * One record's files, read live, with the record's assignee. A link to a file never leaves the adapter: not in a
+   * record, an error or an answer. A kind of file the sign-in may not read is a `context.gap` naming the scope; the
+   * others are still listed. Null when the CRM has no such record or the sign-in cannot see it.
+   */
+  files?(owner: CrmFileOwner, context?: CrmCallContext): Promise<CrmFiles | null>
 }

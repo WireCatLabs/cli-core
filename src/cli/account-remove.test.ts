@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
@@ -227,6 +227,67 @@ describe("account remove", () => {
     expect(result.item.kept).toEqual([])
     expect(existsSync(given.media)).toBe(false)
     expect(await storeState(given.env)).toEqual({ accounts: ["600"], profiles: ["work"] })
+  })
+
+  it("with --delete-data lists and deletes the account's downloaded CRM files, never anything else (RISK-2)", async () => {
+    const given = await setup()
+    const files = join(given.root, "state", "crm", "files", "telegram-500")
+    const cached = join(files, "deal-1", "contract.pdf")
+    const elsewhere = join(given.root, "Downloads", "contract.pdf")
+    // A row naming a folder, or a path that climbs out of the state folder, deletes nothing.
+    const folder = join(files, "deal-2")
+    const climbing = join(files, "..", "..", "..", "..", "outside", "kept.pdf")
+    for (const path of [cached, elsewhere, join(folder, "inner.pdf"), climbing]) {
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, "synthetic")
+    }
+    const store = await openStore({ env: given.env })
+    const row = (id: string, localPath: string) => ({
+      externalId: `deal:1:record:${id}`,
+      ownerKind: "deal",
+      ownerId: "1",
+      ownerAssignee: null,
+      source: "record",
+      name: "contract.pdf",
+      mime: null,
+      size: 9,
+      externalCreatedAt: null,
+      localPath,
+      contentSha256: null,
+      text: null,
+      extraction: null,
+      extractionError: null,
+      downloadedBy: null,
+      downloadedAt: 1,
+    })
+    const key = { provider: "telegram", account: "500" }
+    await store.crmFiles.save(key, row("1", cached))
+    await store.crmFiles.save(key, row("2", elsewhere))
+    await store.crmFiles.save(key, row("3", folder))
+    await store.crmFiles.save(key, row("4", climbing))
+    await store.close()
+
+    const dry = await call(
+      ["personal", "--json", "account", "remove", "--delete-data", "--dry-run"],
+      given,
+      removalOf(given),
+    )
+    expect(dry.item.removed).toContainEqual({ kind: "file", target: cached })
+    expect(existsSync(cached)).toBe(true)
+
+    const result = await call(
+      ["personal", "--json", "account", "remove", "--delete-data", "--yes"],
+      given,
+      removalOf(given),
+    )
+
+    expect(result.code).toBe(0)
+    const files_ = (result.item.removed as { kind: string; target: string }[]).filter((one) =>
+      one.target.includes("crm"),
+    )
+    expect(files_).toEqual([{ kind: "file", target: cached }])
+    expect(existsSync(cached)).toBe(false)
+    for (const kept of [elsewhere, join(folder, "inner.pdf"), climbing]) expect(existsSync(kept)).toBe(true)
   })
 
   it("**removes nothing in the owner's folders when only the config folder is moved** (WC-SECR-24)", async () => {

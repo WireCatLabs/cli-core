@@ -2176,6 +2176,39 @@ export const crmFields = sqliteTable(
   (table) => [unique().on(table.accountId, table.kind, table.code)],
 )
 
+/** A downloaded file of a CRM record with its text; never a download link. Only CRM code reads it, under the viewer. */
+export const crmFiles = sqliteTable(
+  "crm_files",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    ownerKind: text("owner_kind").notNull(),
+    ownerId: text("owner_id").notNull(),
+    ownerAssignee: text("owner_assignee"),
+    source: text("source").notNull(),
+    name: text("name").notNull(),
+    nameFolded: text("name_folded").notNull(),
+    mime: text("mime"),
+    size: integer("size"),
+    externalCreatedAt: integer("external_created_at"),
+    localPath: text("local_path"),
+    contentSha256: text("content_sha256"),
+    text: text("text"),
+    normalizedText: text("normalized_text"),
+    extraction: text("extraction"),
+    extractionError: text("extraction_error"),
+    downloadedBy: text("downloaded_by"),
+    downloadedAt: integer("downloaded_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("crm_files_by_account_id_owner_kind_owner_id").on(table.accountId, table.ownerKind, table.ownerId),
+  ],
+)
+
 /** What the owner or a supplier sells, a product or a service; a line copies its price and never reads it back. */
 export const catalogItems = sqliteTable(
   "catalog_items",

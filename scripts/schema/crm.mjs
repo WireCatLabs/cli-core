@@ -1,4 +1,4 @@
-import { actor, c, del, fk, id, meta, ts } from "./columns.mjs"
+import { actor, c, del, fk, fts, id, meta, ts } from "./columns.mjs"
 import { MINOR } from "./finance.mjs"
 
 export const crmTables = [
@@ -160,4 +160,48 @@ export const crmTables = [
     ],
     keys: ["UNIQUE (account_id, kind, code)"],
   },
+  {
+    name: "crm_files",
+    doc: "A file of a CRM deal, lead, contact or company that the owner downloaded, with its extracted text. Never a download link: the CRM is asked for a fresh one each time. Only CRM code reads it, under the copy's viewer rule.",
+    cols: [
+      id(),
+      fk("account_id", "accounts", { notnull: true, note: "the CRM account the file is in" }),
+      c("external_id", "text", {
+        notnull: true,
+        note: "`<owner kind>:<owner id>:<source kind>:<provider id>`, as `files list` prints it; opaque, never a link",
+      }),
+      c("owner_kind", "text", { notnull: true, note: "deal, lead, person or organization" }),
+      c("owner_id", "text", { notnull: true, note: "the owner record's id in the CRM" }),
+      c("owner_assignee", "text", {
+        note: "the identity `<account>/user/<id>` the owner record was assigned to at download; a limited profile finds the text only when it is its own",
+      }),
+      c("source", "text", {
+        notnull: true,
+        note: "record, field, document, activity or comment: where on the record it hangs",
+      }),
+      c("name", "text", { notnull: true, note: "the file name the CRM gives" }),
+      c("name_folded", "text", { notnull: true, note: "the name in one letter case" }),
+      c("mime", "text"),
+      c("size", "integer", { note: "bytes, as the CRM says or as downloaded; null when neither knows" }),
+      c("external_created_at", "integer", { note: "when the CRM says the file was added" }),
+      c("local_path", "text", {
+        note: "where the file is saved; null once the disk cap dropped it (the text stays) or before it is saved",
+      }),
+      c("content_sha256", "text"),
+      c("text", "text", { note: "the file's text as extracted; null for a scan or a file too large to read" }),
+      c("normalized_text", "text", { note: "the text normalized for the word index" }),
+      c("extraction", "text", {
+        note: "how reading the text went: extracted, needs-agent (a scan), unreadable, unsupported, engine-missing or too-large",
+      }),
+      c("extraction_error", "text"),
+      c("downloaded_by", "text", { note: "the CRM user id of the sign-in that downloaded it" }),
+      c("downloaded_at", "integer", { notnull: true }),
+    ],
+    keys: ["UNIQUE (account_id, external_id)", "INDEX (account_id, owner_kind, owner_id)"],
+  },
+  fts(
+    "crm_file_words",
+    "Word index over the text of downloaded CRM files, rowid = `crm_files.id`. Apart from `attachment_words`, so no generic reader finds a colleague's file.",
+    "normalized_text",
+  ),
 ]

@@ -23,7 +23,8 @@ export interface AccountAccounts {
   accountName(key: AccountKey): Promise<string | null>
   /**
    * Everything one account holds — its chats, messages, members, state, leases, transcripts and whom
-   * it has seen — for `cache clear`. Other accounts, and identities they share, stay.
+   * it has seen — for `cache clear`. Other accounts, and identities they share, stay. The store never touches a file
+   * on disk: `account remove` deletes the downloaded CRM files `crmFiles.savedPaths` names.
    */
   purge(key: AccountKey): Promise<void>
 }

@@ -14,6 +14,8 @@ export {
   exampleOrganization,
   examplePerson,
   FAKE_CRM_ALIASES,
+  FAKE_FILE_TOKEN,
+  type FakeCrmFile,
   type FakeCrmSource,
   type FakeCrmSourceOptions,
   type FakeCrmWrite,

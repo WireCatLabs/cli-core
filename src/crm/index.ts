@@ -1,3 +1,4 @@
+export { crmFileId, LINK_REMOVED, parseCrmFileId, withoutFileLinks } from "./files.js"
 export {
   DAILY_FOREIGN_CONTACTS,
   type ForeignContacts,
@@ -17,17 +18,23 @@ export {
   wantedCodes,
   withCustomFields,
 } from "./query.js"
-export type {
-  CrmCallContext,
-  CrmChanges,
-  CrmCondition,
-  CrmGap,
-  CrmIdPage,
-  CrmLiveKind,
-  CrmLiveQuery,
-  CrmPage,
-  CrmSource,
-  CrmSourceTraits,
+export {
+  CRM_FILE_SOURCES,
+  type CrmCallContext,
+  type CrmChanges,
+  type CrmCondition,
+  type CrmFile,
+  type CrmFileOwner,
+  type CrmFileSourceKind,
+  type CrmFiles,
+  type CrmGap,
+  type CrmIdPage,
+  type CrmLiveKind,
+  type CrmLiveQuery,
+  type CrmOpenableFile,
+  type CrmPage,
+  type CrmSource,
+  type CrmSourceTraits,
 } from "./source.js"
 export {
   type CrmCursor,
