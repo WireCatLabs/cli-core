@@ -22,6 +22,7 @@ import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { suggestBaseStages } from "./base-suggest.js"
+import { type CopyViewer, seenBy, viewerSql } from "./copy-viewer.js"
 import { activityTexts } from "./crm-activities.js"
 import { crmAccountPrefix } from "./crm-rows.js"
 import { stageEntriesOf } from "./crm-stage-entries.js"
@@ -33,9 +34,9 @@ import {
   bounded,
   boundOf,
   type FunnelCounts,
+  openPerStage,
   type PipelinePeriod,
   pipelinePeriod,
-  SHOWN_STAGE,
 } from "./pipeline-period.js"
 import { type AuthorInfo, isoDate, limitOf, oneOf, type Party, refuse, reviewedRowsOver, text } from "./reviewed.js"
 import { pageOfRows } from "./rows-page.js"
@@ -172,6 +173,7 @@ export interface PipelineOptions {
   until?: string
   zone?: string
   account?: DealScope
+  viewer?: CopyViewer
 }
 
 /** Whose pipelines: the owner's own, one CRM account's copies, or, left out, every one. */
@@ -205,6 +207,7 @@ export interface DealFilter {
   /** On the day it was won or lost, the bounds' days in `zone` (the system's when left out). */
   closed?: TimeBounds
   zone?: string
+  viewer?: CopyViewer
   /** 1–500, 100 by default; newest written first. */
   limit?: number
   /** Rows to skip before the first one answered, for the next page. */
@@ -225,6 +228,7 @@ export interface DealSearch {
   accounts?: AccountKey[]
   /** Only these kinds; absent, deals and leads. */
   kinds?: readonly DealKind[]
+  viewers?: CopyViewer[]
   /** 1–500, 100 by default. */
   limit?: number
   offset?: number
@@ -256,7 +260,7 @@ export interface PipelineInput {
  */
 export interface DealsStore {
   addPipeline(input: PipelineInput): Promise<Pipeline>
-  pipelines(filter?: { kind?: DealKind; account?: DealScope }): Promise<Pipeline[]>
+  pipelines(filter?: { kind?: DealKind; account?: DealScope; viewer?: CopyViewer }): Promise<Pipeline[]>
   /**
    * One pipeline by `pipeline:<id>` or a name only one pipeline has, with its funnel and outcomes over the window:
    * `since` and `until` are a `YYYY-MM-DD` day or an ISO time, `zone` the owner's for closed days.
@@ -499,18 +503,9 @@ export const dealOperationsOver = (context: StoreContext) => {
     return rows[0] as Row
   }
 
-  const stagesOf = (pipelineIds: number[]) =>
-    database
-      .prepare(
-        "SELECT s.*, (SELECT count(*) FROM deals d WHERE d.stage_id = s.id AND d.status = 'open' AND d.deleted_at IS NULL) + " +
-          "(SELECT count(*) FROM leads l WHERE l.stage_id = s.id AND l.status = 'open' AND l.deleted_at IS NULL) AS open " +
-          `FROM pipeline_stages s WHERE s.pipeline_id IN (${pipelineIds.map(() => "?").join(", ") || "NULL"}) ` +
-          `AND ${SHOWN_STAGE} ORDER BY s.pipeline_id, s.position, s.id`,
-      )
-      .all(...pipelineIds)
-
-  const pipelinesOf = (rows: Row[]): Pipeline[] => {
-    const stages = stagesOf(rows.map((row) => Number(row.id)))
+  const pipelinesOf = (rows: Row[], viewer?: CopyViewer): Pipeline[] => {
+    const ids = rows.map((row) => Number(row.id))
+    const stages = openPerStage(database, ids, viewer)
     return rows.map((row) => ({
       id: String(row.id),
       ref: `pipeline:${row.id}`,
@@ -569,12 +564,13 @@ export const dealOperationsOver = (context: StoreContext) => {
     return row ?? refuse("the pipeline has no stages", "deal.stage")
   }
 
-  const funnelOf = (pipeline: Pipeline, { since, until, zone = timezoneOf() }: PipelineOptions): PipelineReport => {
+  const funnelOf = (pipeline: Pipeline, options: PipelineOptions): PipelineReport => {
+    const { since, until, zone = timezoneOf(), viewer } = options
     const window = {
       since: boundOf(since, "the first day counted", zone),
       until: boundOf(until, "the last day counted", zone, true),
     }
-    const { stages, ...period } = pipelinePeriod(context, pipeline, window, zone)
+    const { stages, ...period } = pipelinePeriod(context, pipeline, window, zone, viewer)
     const at = (bound: number | null) => (bound === null ? null : new Date(bound).toISOString())
     return {
       ...pipeline,
@@ -647,11 +643,12 @@ export const dealOperationsOver = (context: StoreContext) => {
         pipelineRows(pipelineKind, undefined, { deleted: true }).filter((row) => Number(row.id) === id),
       )[0] as Pipeline
     },
-    pipelines: (filter: { kind?: DealKind; account?: DealScope } = {}): Pipeline[] =>
-      pipelinesOf(pipelineRows(filter.kind === undefined ? undefined : kindOf(filter.kind), filter.account)),
+    pipelines: ({ kind, account, viewer }: { kind?: DealKind; account?: DealScope; viewer?: CopyViewer } = {}) =>
+      pipelinesOf(pipelineRows(kind === undefined ? undefined : kindOf(kind), account), viewer),
     pipeline: (reference: string, options: PipelineOptions = {}): PipelineReport => {
       const kind = options.kind === undefined ? undefined : kindOf(options.kind)
-      return funnelOf(pipelinesOf([pipelineRow(reference, kind, options.account)])[0] as Pipeline, options)
+      const [found] = pipelinesOf([pipelineRow(reference, kind, options.account)], options.viewer)
+      return funnelOf(found as Pipeline, options)
     },
     add: (input: DealInput): Deal => {
       const kind = kindOf(input.kind)
@@ -776,6 +773,7 @@ export const dealOperationsOver = (context: StoreContext) => {
         until: filter.closed?.until === undefined ? undefined : dayIn(filter.closed.until, zone),
       }
       const within = [
+        ...(filter.viewer ? [viewerSql("d", filter.viewer)] : []),
         ...bounded("d.updated_at", filter.updated),
         ...bounded("d.closed_date", filter.closed && days),
         ...bounded("d.created_at", filter.created),
@@ -821,7 +819,7 @@ export const dealOperationsOver = (context: StoreContext) => {
       return pageOfRows(rows, limit, offset)
     },
     find: async (wanted: DealSearch): Promise<ListResult<FoundDeal>> => {
-      const { words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit, offset = 0 } = wanted
+      const { words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit, offset = 0, viewers = [] } = wanted
       const seen = new Set<string>()
       const clauses = words
         .map((word) => tokensOf(word).filter((token) => fold(token)))
@@ -884,12 +882,14 @@ export const dealOperationsOver = (context: StoreContext) => {
           .prepare(
             `SELECT d.id, d.account_id, d.external_id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company, ` +
               "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.company_name') END AS own_company, " +
-              "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.contact_name') END AS own_contact " +
+              "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.contact_name') END AS own_contact, " +
+              "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.assignee') END AS assignee " +
               `FROM ${TABLES[kind]} d LEFT JOIN accounts a ON a.id = d.account_id ` +
               "LEFT JOIN organizations o ON o.id = d.organization_id WHERE d.deleted_at IS NULL",
           )
           .all()
           .filter((row) => within === undefined || within.includes(`${row.provider}\u0000${row.account}`))
+          .filter((row) => viewers.every((viewer) => seenBy(viewer, row)))
           .map((row) => ({
             kind,
             row,

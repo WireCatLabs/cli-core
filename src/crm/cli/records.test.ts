@@ -88,6 +88,7 @@ const setup = async (
   const env = { HOME: home, XDG_DATA_HOME: home, XDG_STATE_HOME: home, CRM_STATE_DIR: home }
   const runOf: CrmRun = {
     profile: "work",
+    user: "7",
     account: PORTAL,
     store,
     source: () => source,

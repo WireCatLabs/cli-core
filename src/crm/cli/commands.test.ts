@@ -119,7 +119,7 @@ const setup = async (
   )
   source.put("deal", exampleDeal("d2", { stage: "won" }))
   source.put("lead", exampleLead("l1"))
-  const runOf: CrmRun = { profile: "work", account: PORTAL, store, source: () => source, writes, ...extra }
+  const runOf: CrmRun = { profile: "work", account: PORTAL, user: null, store, source: () => source, writes, ...extra }
   let data = ""
   let root = new Command("crm")
   const printed = async (args: string[], tty = false) => {
@@ -696,6 +696,7 @@ describe("CRM write commands", () => {
           open: async () => ({
             profile: "work",
             account: PORTAL,
+            user: null,
             store,
             source: () => fakeCrmSource(),
             writes: () => ({}) as never,

@@ -73,6 +73,34 @@ field types.
 read clients and calls `refuseForeignClientReads(source, readsClients, method)` before sending
 (`crm.client-reads-admin-only`), as Bitrix24's `readsClients` does.
 
+### Offline reads of the copy
+
+One account's copy is kept once, whichever profile synced it, so another profile on the same account must not read it
+past the rule above. `CrmRun.user` is the profile's own CRM user, read from its sign-in entry without the network; it
+is required, and `null` when the sign-in names none or the CRM limits nobody. Each `sync` records, as a sync state the
+`config` command cannot set, whether the CRM limits its users (the source has `self()` or `isAdmin()`) and whether its
+sign-in's user is the administrator; it records this before it refuses a sign-in that is not the copy's owner, so
+another administrator's first sync is enough. `crmViewerOf` turns that into a `CopyViewer`: none for the administrator
+or a CRM that limits nobody, otherwise only the deals and leads assigned to `user`, and none of them when `user` is
+`null`. With `user` `null`, or a copy no sync of this version recorded, the answer carries a note saying why and what
+to do, and `complete: false`.
+
+`deals`, `leads`, `pipelines` and `stages` reads and `search all` pass the viewer to the store, which filters the rows,
+the stage counts, the funnel and the deals whose contacts' e-mails and phones `search all` matches; `show` of a row
+the viewer may not read is `not_found`. A deal's contacts are then the profile's own clients, so no quota applies
+offline; another client is read live, under the rule above. `search all` of a limited profile reads only its own
+account's copy; anyone else's reads each other account's copy by that copy's rule for its owner (the `self` setting),
+and a copy with no owner as none. `store status` counts the whole copy and says so to a limited profile.
+
+Known limits:
+
+- The commands enforce the rule; the file does not. The store is one SQLite file of the OS user: `store backup`, or
+  `sqlite3` on the file, reads every row, and an edited user id in a sign-in kept in a file names another user. It
+  keeps an agent working through the commands to its part, not someone with the file.
+- A demoted administrator reads the whole copy until a sync of its own records that it no longer is one.
+- A user that is not the administrator reads offline only the deals assigned to it, even in a copy its own sync made:
+  the unassigned deals and the colleagues a `mine` scope chose stay hidden from it.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on

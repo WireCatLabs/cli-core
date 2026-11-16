@@ -1,5 +1,6 @@
 import type { DealKind } from "../../domain/deals.js"
 import { formatDecimal, type Money, scaleOf } from "../../domain/money.js"
+import { type CopyViewer, viewerSql } from "./copy-viewer.js"
 import type { StoreContext } from "./open.js"
 
 export interface StageAmount extends Money {
@@ -21,15 +22,17 @@ export const stageAmountsOf = (
   kind: DealKind,
   stageIds: number[],
   { since, until }: { since: number | null; until: number | null },
+  viewer?: CopyViewer,
 ): StageAmounts[] => {
+  const seen = viewerSql("d", viewer)
   const rows = database
     .prepare(
       "SELECT stage_id, currency, count(*) AS items, coalesce(sum(amount), 0) AS units " +
-        `FROM ${TABLES[kind]} WHERE stage_id IN (${stageIds.map(() => "?").join(", ") || "NULL"}) ` +
-        "AND deleted_at IS NULL AND (? IS NULL OR created_at >= ?) AND (? IS NULL OR created_at <= ?) " +
+        `FROM ${TABLES[kind]} d WHERE stage_id IN (${stageIds.map(() => "?").join(", ") || "NULL"}) ` +
+        `AND deleted_at IS NULL AND (? IS NULL OR created_at >= ?) AND (? IS NULL OR created_at <= ?) AND ${seen.sql} ` +
         "GROUP BY stage_id, currency ORDER BY currency",
     )
-    .all(...stageIds, since, since, until, until)
+    .all(...stageIds, since, since, until, until, ...seen.params)
   return stageIds.map((stage) => {
     const within = rows.filter((row) => Number(row.stage_id) === stage)
     return {

@@ -3,6 +3,7 @@ import type { DealKind, StageOutcome } from "../../domain/deals.js"
 import { dayIn } from "../../domain/moment.js"
 import { formatDecimal, scaleOf } from "../../domain/money.js"
 import type { CacheDatabase } from "../driver.js"
+import { type CopyViewer, viewerSql } from "./copy-viewer.js"
 import { stageEntriesOf } from "./crm-stage-entries.js"
 import type { StoreContext } from "./open.js"
 import { refuse } from "./reviewed.js"
@@ -36,6 +37,20 @@ export const boundOf = (value: string | undefined, what: string, zone: string, e
 export const SHOWN_STAGE =
   "(s.deleted_at IS NULL OR EXISTS (SELECT 1 FROM deals d WHERE d.stage_id = s.id AND d.deleted_at IS NULL) " +
   "OR EXISTS (SELECT 1 FROM leads l WHERE l.stage_id = s.id AND l.deleted_at IS NULL))"
+
+/** Each stage of these pipelines that is shown, with how many open deals and leads the viewer may read stand in it. */
+export const openPerStage = (database: CacheDatabase, pipelineIds: number[], viewer?: CopyViewer) => {
+  const deals = viewerSql("d", viewer)
+  const leads = viewerSql("l", viewer)
+  return database
+    .prepare(
+      `SELECT s.*, (SELECT count(*) FROM deals d WHERE d.stage_id = s.id AND d.status = 'open' AND d.deleted_at IS NULL AND ${deals.sql}) + ` +
+        `(SELECT count(*) FROM leads l WHERE l.stage_id = s.id AND l.status = 'open' AND l.deleted_at IS NULL AND ${leads.sql}) AS open ` +
+        `FROM pipeline_stages s WHERE s.pipeline_id IN (${pipelineIds.map(() => "?").join(", ") || "NULL"}) ` +
+        `AND ${SHOWN_STAGE} ORDER BY s.pipeline_id, s.position, s.id`,
+    )
+    .all(...deals.params, ...leads.params, ...pipelineIds)
+}
 
 /** Epoch ms bounds, both inclusive; `null` is open. */
 export interface PeriodWindow {
@@ -100,14 +115,15 @@ interface Item {
   amount: number | bigint | null
 }
 
-const itemsOf = (database: CacheDatabase, kind: DealKind, pipelineId: number): Item[] =>
-  database
+const itemsOf = (database: CacheDatabase, kind: DealKind, pipelineId: number, viewer?: CopyViewer): Item[] => {
+  const seen = viewerSql("d", viewer)
+  return database
     .prepare(
       "SELECT d.id, d.status, d.stage_id, d.created_at, d.closed_date, d.currency, d.amount, " +
         "json_extract(d.metadata, '$.assignee') AS assignee, json_extract(d.metadata, '$.closed_reason') AS reason " +
-        `FROM ${TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id WHERE s.pipeline_id = ? AND d.deleted_at IS NULL`,
+        `FROM ${TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id WHERE s.pipeline_id = ? AND d.deleted_at IS NULL AND ${seen.sql}`,
     )
-    .all(pipelineId)
+    .all(pipelineId, ...seen.params)
     .map((row) => ({
       id: Number(row.id),
       status: String(row.status),
@@ -119,6 +135,7 @@ const itemsOf = (database: CacheDatabase, kind: DealKind, pipelineId: number): I
       currency: row.currency == null ? null : String(row.currency),
       amount: (row.amount as number | bigint | null) ?? null,
     }))
+}
 
 /** The CRM user's name as its identity holds it; its ids are `<account>/user/<id>`. */
 const userName = (database: CacheDatabase, provider: string | null, assignee: string | null) => {
@@ -141,6 +158,7 @@ export const pipelinePeriod = (
   pipeline: { id: string; kind: DealKind; account: { provider: string } | null },
   window: PeriodWindow,
   zone: string,
+  viewer?: CopyViewer,
 ): PipelinePeriod => {
   const { database } = context
   const { kind } = pipeline
@@ -153,7 +171,7 @@ export const pipelinePeriod = (
   }
   const closedIn = (day: string | null) =>
     day !== null && (days.since === null || day >= days.since) && (days.until === null || day <= days.until)
-  const all = itemsOf(database, kind, pipelineId)
+  const all = itemsOf(database, kind, pipelineId, viewer)
   const cohort = all.filter((item) => made(item.createdAt))
   const stages = database
     .prepare(
@@ -199,6 +217,7 @@ export const pipelinePeriod = (
     kind,
     stages.map(({ id }) => id),
     window,
+    viewer,
   )
   const funnel = stages.map((stage, at) => {
     const reached = reachedAt(at)

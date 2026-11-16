@@ -40,6 +40,7 @@ const open = async (command: Command): Promise<CrmRun> => {
   const given = environmentOf<RunOptions & { crm?: typeof source }>(command).crm ?? source
   return {
     profile: "work",
+    user: null,
     account: { provider: "example-crm", account: "portal" },
     store,
     source: () => given,
