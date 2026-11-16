@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Help, Option } from "commander"
 import wrapAnsi from "wrap-ansi"
+import { WIRECAT_TOOLS } from "../../ports/wirecat-tools.js"
 import { NO_EFFECTS } from "../effects.js"
 import { commandAt } from "../steps.js"
 import { EXAMPLE_PROFILE, installCommandHelp } from "./command-help.js"
@@ -24,73 +25,7 @@ export interface FirstScreen {
   start?: string
 }
 
-interface Tool {
-  command: string
-  /** The npm package `setup` installs it from. */
-  package: string
-  shown?: string
-  does: string
-}
-
-/** Every WireCat tool, as "Works with" names it; a tool's own entry is left out of its screen. */
-export const WIRECAT_TOOLS: readonly Tool[] = [
-  {
-    command: "tg",
-    package: "@wirecat/tg-cli",
-    does: "Telegram in the same local store: search, review and tasks offline",
-  },
-  {
-    command: "max",
-    package: "@wirecat/max-cli",
-    does: "MAX in the same local store: search, review and tasks offline",
-  },
-  {
-    command: "wa",
-    package: "@wirecat/whatsapp-cli",
-    does: "WhatsApp in the same local store: search, review and tasks offline",
-  },
-  {
-    command: "zm",
-    package: "@wirecat/zoom-cli",
-    does: "Zoom meetings: transcripts and summaries, searchable with your other WireCat data",
-  },
-  {
-    command: "drive",
-    package: "@wirecat/drive-cli",
-    does: "Google Drive and Docs as local text, searchable with your other WireCat data",
-  },
-  {
-    command: "gcal",
-    package: "@wirecat/gcal-cli",
-    does: "Google Calendar events, searchable with your other WireCat data",
-  },
-  {
-    command: "memo",
-    package: "@wirecat/cli-memo",
-    shown: "memo context <person>",
-    does: "one person across messengers, mail, notes and meetings",
-  },
-  {
-    command: "mail",
-    package: "@wirecat/mail-cli",
-    does: "IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data",
-  },
-  {
-    command: "b24",
-    package: "@wirecat/bitrix24-cli",
-    does: "Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data",
-  },
-  {
-    command: "pbx",
-    package: "@wirecat/asterisk-cli",
-    does: "Asterisk PBX calls and recordings, searchable with your other WireCat data",
-  },
-  {
-    command: "notion",
-    package: "@wirecat/notion-cli",
-    does: "Notion pages and databases as local text, searchable with your other WireCat data",
-  },
-]
+export { WIRECAT_TOOLS }
 
 const WIDTH = 100
 
