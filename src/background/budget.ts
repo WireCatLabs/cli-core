@@ -27,6 +27,10 @@ export const DEADLINE_MARGIN_SHARE = 0.15
 /** How long one request to a provider is expected to take when the CLI does not say (`AppIdentity.requestMs`). */
 export const DEFAULT_REQUEST_MS = 2_000
 
+/** Whether one more request still ends before the deadline itself, inside its margin. */
+export const oneMoreFits = (deadline: Deadline | undefined, at: number, requestMs = DEFAULT_REQUEST_MS): boolean =>
+  deadline !== undefined && at + requestMs < deadline.endsAt
+
 export const deadlineMargin = (deadline: Deadline): number =>
   Math.max(DEADLINE_MARGIN_MS, deadline.ms * DEADLINE_MARGIN_SHARE)
 
