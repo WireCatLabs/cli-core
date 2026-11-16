@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Parity's blocking downstream steps, run here before a push: packs this checkout and builds each CLI from
+# scripts/parity/downstream.json against it, then its typecheck and a `--help` start with a throwaway home and no
+# D-Bus. One CLI at a time, so it fits beside other work in memory.
+#
+#   bin/downstream-check                  # every CLI in downstream.json
+#   bin/downstream-check tg max           # only these (the `cli` names in downstream.json)
+#   APP_REF=<branch> bin/downstream-check # the CLIs' adoption branch instead of main, as bin/release --app-ref
+#   KEEP=1 bin/downstream-check           # keep the temp folder with the clones to look into a failure
+#
+# The CLI's ref follows CI: an open pull request from the branch named like this one, else main (app-ref.sh).
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+list=$root/scripts/parity/downstream.json
+cd "$root"
+
+if [ $# -gt 0 ]; then
+  wanted=$(printf '%s\n' "$@" | jq -R . | jq -s -c .)
+  rows=$(jq -c --argjson w "$wanted" '.[] | select(.cli | IN($w[]))' "$list")
+  unknown=$(jq -r --argjson w "$wanted" '[.[].cli] as $k | $w - $k | join(" ")' "$list")
+  [ -z "$unknown" ] || { echo "not in $list: $unknown (choices: $(jq -r '[.[].cli] | join(" ")' "$list"))" >&2; exit 2; }
+else
+  rows=$(jq -c '.[]' "$list")
+fi
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/downstream-check.XXXXXX")
+if [ "${KEEP:-}" = 1 ]; then echo "keeping $work"; else trap 'rm -rf "$work"' EXIT; fi
+
+echo "== packing this checkout"
+pnpm install --frozen-lockfile >/dev/null
+pnpm build >/dev/null
+pnpm pack --out "$work/cli-core.tgz" >/dev/null
+
+branch=$(git branch --show-current)
+summary=()
+failed=0
+
+start() {
+  local home
+  home=$(mktemp -d "$work/home.XXXXXX")
+  HOME=$home XDG_CONFIG_HOME=$home/.config XDG_STATE_HOME=$home/.local/state XDG_CACHE_HOME=$home/.cache \
+    XDG_DATA_HOME=$home/.local/share DBUS_SESSION_BUS_ADDRESS=disabled: \
+    timeout 60 node "dist/bin/$1.js" --help </dev/null >/dev/null
+}
+
+while read -r row; do
+  cli=$(jq -r .cli <<<"$row")
+  repo=$(jq -r .repo <<<"$row")
+  dir=$work/$repo
+  echo "== $repo"
+  ref=$(PR_BRANCH=$branch "$root/scripts/parity/app-ref.sh" "$cli" "$repo" | sed 's/^ref=//')
+  step=clone
+  if git clone -q --depth 1 --branch "$ref" "https://github.com/WireCatLabs/$repo.git" "$dir" &&
+    step=build && "$root/scripts/parity/build-app.sh" "$cli" "$dir" "$work/cli-core.tgz" "$ref" &&
+    step=typecheck && (cd "$dir" && pnpm typecheck) &&
+    step=start && (cd "$dir" && start "$cli"); then
+    summary+=("ok      $repo@$ref")
+  else
+    known=$("$root/scripts/parity/known-broken.sh" "$repo" | sed 's/^until=//')
+    if [ -n "$known" ]; then
+      summary+=("known   $repo@$ref fails at $step (known-broken.json until $known)")
+    else
+      summary+=("FAILED  $repo@$ref fails at $step")
+      failed=1
+    fi
+  fi
+done <<<"$rows"
+
+echo
+printf '%s\n' "${summary[@]}"
+exit $failed
