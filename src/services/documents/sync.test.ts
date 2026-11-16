@@ -346,8 +346,9 @@ describe("provider-neutral document sync", () => {
       expect(await syncDocuments({ ...f.options, query })).toMatchObject({ removed: 1 })
       expect(f.state().documents).toEqual({})
     })
-    it("exclude that drops a page drops its sub-pages too, from the documents and the catalog", async () => {
+    it("exclude that drops a page drops its sub-pages too, from the documents and the catalog, but not a file another parent keeps", async () => {
       const f = await setup()
+      f.files.set("c", file("c", ["nested", "root"]))
       const pages = new Set(["root", "nested"])
       const options: SyncOptions<SourceFile> = {
         ...f.options,
@@ -355,15 +356,15 @@ describe("provider-neutral document sync", () => {
         skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
       }
       await syncDocuments(options)
-      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested", "root"])
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "c", "nested", "root"])
       const query = { key: "nested", mode: "exclude" as const, matches: (item: SourceFile) => item.id === "nested" }
       expect(await syncDocuments({ ...options, query })).toMatchObject({ removed: 2 })
-      expect(Object.keys(f.state().documents).sort()).toEqual(["b", "root"])
+      expect(Object.keys(f.state().documents).sort()).toEqual(["b", "c", "root"])
       expect(
         catalogFiles(f.state(), ["root"], query)
           .map((item) => item.id)
           .sort(),
-      ).toEqual(["b", "root"])
+      ).toEqual(["b", "c", "root"])
     })
   })
 })
