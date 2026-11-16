@@ -149,23 +149,18 @@ describe("a phone two people share (NEED-2445, safe option)", () => {
     expect(scan.proposed).toMatchObject([{ signal: "phone", opened: true }])
   })
 
-  it("left after the owner confirmed one pair of three stays a proposal", async () => {
+  it("held once by each of three sources is one person's, and joins them (BUG-774)", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana", phone: "79001234567" }])
     await store.people.savePeople(WORK, [{ id: "contact/20", name: "Ana Example", phone: "+79001234567" }])
     await store.people.savePeople(MAX, [{ id: "7", name: "Bea", phone: "79001234567" }])
-    await store.people.scanMatches()
-    const ana = [await uidOf(store, "telegram", "5"), await uidOf(store, "bitrix24", "contact/20")]
-    const pair = (await openLinks(store)).items.find(({ payload }) =>
-      ana.every((uid) => (payload as { persons: string[] }).persons.includes(uid)),
-    )
-    await store.people.decideLink(pair?.id as string, { confirm: true, by: "owner" })
 
-    const second = await store.people.scanMatches()
+    const scan = await store.people.scanMatches()
 
-    expect(second.merged).toEqual([])
-    expect(await uidOf(store, "max", "7")).not.toBe(await uidOf(store, "telegram", "5"))
-    expect((await openLinks(store)).items).toHaveLength(1)
+    expect(scan.merged).toHaveLength(2)
+    expect(await uidOf(store, "max", "7")).toBe(await uidOf(store, "telegram", "5"))
+    expect(await uidOf(store, "bitrix24", "contact/20")).toBe(await uidOf(store, "telegram", "5"))
+    expect((await openLinks(store)).items).toEqual([])
   })
 })
 
@@ -380,7 +375,7 @@ describe("a proposal whose people changed", () => {
     expect((await openLinks(store)).items).toEqual([])
   })
 
-  it("keeps a phone pair it names a proposal, never an automatic join", async () => {
+  it("joins a phone pair over a proposal still open for it, and the join settles it (BUG-775)", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana" }])
     await store.people.savePeople(MAX, [{ id: "7", name: "Ana B" }])
@@ -395,8 +390,8 @@ describe("a proposal whose people changed", () => {
 
     const scan = await store.people.scanMatches()
 
-    expect(scan.merged).toEqual([])
-    expect(scan.proposed).toMatchObject([{ id: proposal.id, opened: false }])
+    expect(scan.merged).toMatchObject([{ signal: "same-phone" }])
+    expect((await openLinks(store)).items.map(({ id }) => id)).not.toContain(proposal.id)
   })
 
   it("follows a merge that added an identity to one side, so the owner can still confirm it", async () => {

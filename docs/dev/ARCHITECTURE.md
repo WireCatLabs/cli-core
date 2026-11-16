@@ -612,7 +612,10 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   later pass to what changed; a cursor of other rules makes the next pass full once. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445; NEED-2600: also a mobile number
   one holder is keyed by, `phone:<number>`, as a phone line keeps a call's other side),
   `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444), which proposes a
-  rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
+  rejected pair on evidence new to the owner. A number each source holds once, such as a CRM contact's, a WhatsApp
+  account's and a call's, is one person's however many people they still are, so they join as a pair would
+  (`oneHolderPerSource`, BUG-774; `linkEvidence` does not call it shared either); a proposal still open for a pair
+  never stops a join, which settles it (BUG-775). `RULES` 6 makes the pass after that change full once. SEC-177: a pair with the owner's person on either side is never joined
   or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
   an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address and a
   company's phone line (held by an organization, or by two people of one source list such as two CRM contacts) join and

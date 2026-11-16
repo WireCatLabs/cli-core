@@ -20,6 +20,7 @@ import {
   emailHolders,
   type Holder,
   type Holders,
+  oneHolderPerSource,
   phoneHolders,
   phonePairJoins,
   sharedLine,
@@ -52,7 +53,7 @@ const weaknessOf = (
   if (kind === "email" && isNoReplyAddress(value)) return "no-reply"
   if (kind === "email" && isRoleAddress(value)) return "role-address"
   if (sharedLine(context, holders)) return "company"
-  if (others > 0) return "shared"
+  if (others > 0 && !oneHolderPerSource(holders)) return "shared"
   if (kind === "phone" && !isMobilePhone(value)) return "landline"
   const [one, other] = sides
   if (!one.some((a) => other.some((b) => a.provider !== b.provider))) return "one-source"

@@ -27,7 +27,7 @@ const MOST_SHARING = 6
 const CURSOR = "people.scan"
 
 /** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
-const RULES = 5
+const RULES = 6
 
 /**
  * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
@@ -61,6 +61,13 @@ export const PROPOSAL_SCORE = {
 export const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
   holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider)) ||
   (holders.some(({ externalId }) => externalId === `phone:${phone}`) && isMobilePhone(phone))
+
+/**
+ * BUG-774: holders that each come from a different source are one human seen by each of them (their CRM card, their
+ * WhatsApp, their call), not people on one line, however many person rows they still are.
+ */
+export const oneHolderPerSource = (holders: Holder[]): boolean =>
+  new Set(holders.map(({ list }) => list)).size === holders.length
 
 /** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
 const addressGroupJoins = (people: number): boolean => people <= 2
@@ -343,17 +350,20 @@ const skipShared = (pass: Pass, people: Map<number, number>, signal: string) =>
   pass.result.skipped.push({ persons: [...people.keys()].map(String), signal, reason: `identity.shared-${signal}` })
 
 /**
- * A number two people have joins them (NEED-2445); one that more share, or that once proposed, proposes. A company's
- * line does neither.
+ * A number two people have joins them (NEED-2445), and so does one each source has once (BUG-774); one that more
+ * share proposes. A company's line does neither. A proposal still open for the pair never keeps it from joining
+ * (BUG-775): the join settles it.
  */
 const samePhone = (pass: Pass, phone: string, holders: Holder[]) => {
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-phone", "phone")) return
   if (sharedLine(pass.context, holders)) return skipShared(pass, people, "phone")
-  const [into, from] = [...people.keys()].sort((a, b) => a - b) as [number, number]
-  if (people.size === 2 && phonePairJoins(phone, holders) && !pass.index.known(from, into))
-    join(pass, { from, into, identity: people.get(from) as number, with: people.get(into) as number }, "phone")
-  else proposeEachPair(pass, people, "phone")
+  if (!(people.size === 2 || oneHolderPerSource(holders)) || !phonePairJoins(phone, holders))
+    return proposeEachPair(pass, people, "phone")
+  const [first, ...rest] = [...people.keys()].sort((a, b) => a - b) as [number, ...number[]]
+  let into = first
+  for (const from of rest)
+    into = join(pass, { from, into, identity: people.get(from) as number, with: people.get(into) as number }, "phone")
 }
 
 const nameOf = ({ database }: StoreContext, person: number): string | null => {
