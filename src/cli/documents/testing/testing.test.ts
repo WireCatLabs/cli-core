@@ -13,6 +13,7 @@ import {
   type SourceContent,
   type SourceFile,
   type SourceState,
+  type SourceWalk,
   syncDocuments,
 } from "../../../documents.js"
 import { type CatalogEntry, type MessageStore, openStore } from "../../../store/index.js"
@@ -26,6 +27,7 @@ import {
   type DocumentWords,
 } from "../index.js"
 import {
+  type DocumentSourceFaults,
   documentCommandsContract,
   documentSourceContract,
   FAKE_FOLDER,
@@ -254,9 +256,66 @@ const reference = async (source: FakeDocumentSource = fakeDocumentSource(PRINCIP
   return { program, run, store, source, printed, state: () => state, collection }
 }
 
+/** `syncDocuments` over the fake, its state and index in memory between calls, as a CLI's own sync wiring is. */
+const memorySync = (source: FakeDocumentSource): NonNullable<DocumentSourceFaults["sync"]> => {
+  let state: SourceState = { version: 1, principal: PRINCIPAL, scope: "", folders: {}, documents: {}, skipped: [] }
+  let walk: SourceWalk | undefined
+  const saved = new Set<string>()
+  return async ({ wrap, budget, deadline, signal, now }) => {
+    const result = await syncDocuments({
+      source: wrap(source),
+      index: {
+        save: async (_principal, content) => {
+          saved.add(content.metadata.id)
+          return `document:${content.metadata.id}`
+        },
+        remove: async (_principal, id) => {
+          saved.delete(id)
+        },
+        openPictures: async () => {
+          throw new CliError("not_found", "no picture model")
+        },
+      },
+      state: {
+        read: () => structuredClone(state),
+        save: (next) => {
+          state = structuredClone(next)
+        },
+        readWalk: (scope) => (walk?.scope === scope ? structuredClone(walk) : undefined),
+        saveWalk: (next) => {
+          walk = structuredClone(next)
+        },
+        removeWalk: () => {
+          walk = undefined
+        },
+        saveSnapshot: () => {},
+        removeSnapshot: () => {},
+      },
+      principal: PRINCIPAL,
+      roots: ["root"],
+      textLimit: 10_000,
+      max: 1_000,
+      maxEntries: 1_000,
+      isFolder,
+      skipReason: () => undefined,
+      retryable: () => false,
+      errorOf: (error) => (isCliError(error) ? error : new CliError("provider_error", String(error))),
+      assertHeld: () => undefined,
+      storeVersion: "contract",
+      ...(budget ? { budget } : {}),
+      ...(deadline ? { deadline } : {}),
+      ...(signal ? { signal } : {}),
+      ...(now ? { now } : {}),
+    })
+    return { result, saved: [...saved] }
+  }
+}
+
 describe("documents source contract over the fake provider", () => {
   for (const c of documentSourceContract(() => {
     const source = fakeDocumentSource()
+    for (const id of ["c1", "c2", "c3"]) source.put(fakeFile(id, ["nested"]), `text of ${id}`)
+    void source.changes("cursor-0")
     return {
       source,
       root: "root",
@@ -266,6 +325,15 @@ describe("documents source contract over the fake provider", () => {
       addNested: async () => {
         source.put(fakeFile("deep", ["nested"]), "deep text")
         return { file: "deep", folder: "nested" }
+      },
+      faults: {
+        deny: (status) => {
+          source.deny("b", status)
+          return "b"
+        },
+        skewed: () => source,
+        sameToken: () => source,
+        sync: memorySync(source),
       },
     }
   }))

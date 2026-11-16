@@ -5,4 +5,9 @@ export {
   SHARED_MIRROR_PATHS,
 } from "./commands-contract.js"
 export { FAKE_FOLDER, type FakeDocumentSource, fakeDocumentSource, fakeFile } from "./source.js"
-export { type DocumentSourceFixture, documentSourceContract } from "./source-contract.js"
+export {
+  type DocumentFaultRun,
+  type DocumentSourceFaults,
+  type DocumentSourceFixture,
+  documentSourceContract,
+} from "./source-contract.js"

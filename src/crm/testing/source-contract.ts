@@ -1,8 +1,21 @@
 import assert from "node:assert/strict"
+import { CliError } from "@wirecat/cli-base"
 import { type CrmItem, type CrmKind, type CrmPerson, isItemKind } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
 import type { ContractCase } from "../../meetings/index.js"
-import type { CrmPage, CrmSource } from "../source.js"
+import type { CrmCallContext, CrmLiveKind, CrmPage, CrmSource } from "../source.js"
+
+/** Faults a case injects; each is opt-in, and a case whose hook is absent passes without running. */
+export interface CrmSourceFaults {
+  /** Makes one contact or company answer HTTP `status` from now on, as the CRM would, and names it. */
+  deny?(status: 403 | 404): { kind: CrmLiveKind; id: string } | Promise<{ kind: CrmLiveKind; id: string }>
+  /** A source over the same CRM whose own clock runs `ms` ahead of the CRM's, behind when negative. */
+  skewed?(ms: number): CrmSource | Promise<CrmSource>
+  /** Changes one row on the CRM's side, for the next `changes()` to list. */
+  change?(): { kind: CrmKind; id: string } | Promise<{ kind: CrmKind; id: string }>
+  /** A source for a second profile signed in with the same token. */
+  sameToken?(): CrmSource | Promise<CrmSource>
+}
 
 /**
  * One adapter over recorded or faked responses, fresh for each case. Every kind its traits name must list at least
@@ -17,7 +30,14 @@ export interface CrmSourceFixture {
   live?: Partial<Record<"person" | "organization", readonly string[]>>
   /** A cursor the CRM refuses; absent skips that case. */
   deadCursor?: { kind: CrmKind; cursor: string }
+  /** Faults for the opt-in fault cases; given, the cases that need no hook run too. */
+  faults?: CrmSourceFaults
 }
+
+/** Within any change feed's overlap: a computer's clock that is off by more is broken, not skewed. */
+const SKEW_MS = 10 * 60_000
+
+const idsOf = (items: readonly unknown[]) => items.map((item) => (item as { externalId: string }).externalId)
 
 const MAX_PAGES = 1_000
 const DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -240,6 +260,7 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
   })
   return [
     ...cases,
+    ...faultCases(make),
     {
       name: "changes: a dead cursor answers reset",
       async run() {
@@ -250,3 +271,104 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
     },
   ]
 }
+
+const faultCases = (make: () => CrmSourceFixture | Promise<CrmSourceFixture>): ContractCase[] => [
+  ...([403, 404] as const).map((status) => ({
+    name: `faults: a contact or company that answers ${status} is null from get, not a failure`,
+    async run() {
+      const { source, faults } = await make()
+      if (!faults?.deny || !source.get) return
+      const { kind, id } = await faults.deny(status)
+      assert.equal(await source.get(kind, id), null, `get(${kind}, ${id}) after a ${status}`)
+    },
+  })),
+  {
+    name: "faults: a clock off by ten minutes either way loses no change",
+    async run() {
+      const first = await make()
+      if (!first.faults?.skewed || !first.faults.change) return
+      for (const ms of [SKEW_MS, -SKEW_MS]) {
+        const { faults } = ms === SKEW_MS ? first : await make()
+        const source = (await faults?.skewed?.(ms)) as CrmSource
+        const read = await Promise.all(
+          source.traits.kinds.map(async (kind) => [kind, await listAll(source, kind, null)] as const),
+        )
+        const { kind, id } = await (faults as Required<CrmSourceFaults>).change()
+        const cursor = read.find(([one]) => one === kind)?.[1].cursor ?? null
+        assert.ok(cursor !== null, `${kind}: a full list gives a cursor for the change to be read after`)
+        const { items } = await listAll(source, kind, cursor)
+        assert.ok(
+          idsOf(items).includes(id),
+          `${kind} ${id} is in the changes with this computer's clock ${ms / 60_000} min off`,
+        )
+      }
+    },
+  },
+  {
+    name: "faults: a second profile on the same token is the same user and lists the same rows",
+    async run() {
+      const { source, faults } = await make()
+      const other = await faults?.sameToken?.()
+      if (!other) return
+      if (source.self) assert.equal(await other.self?.(), await source.self(), "both profiles name one user")
+      for (const kind of source.traits.kinds)
+        assert.deepEqual(
+          idsOf((await listAll(other, kind, null)).items).sort(),
+          idsOf((await listAll(source, kind, null)).items).sort(),
+          `${kind}: both profiles list the same rows`,
+        )
+    },
+  },
+  {
+    name: "faults: a full list cut after its first page goes on from that page in a new run, nothing lost or repeated",
+    async run() {
+      const { source, faults } = await make()
+      if (!faults) return
+      let cut = false
+      for (const kind of source.traits.kinds) {
+        const whole = idsOf((await listAll(source, kind, null)).items)
+        const first = (await source.changes(kind, null)) as CrmPage<unknown>
+        if (!first.hasMore) continue
+        cut = true
+        const { source: resumed } = await make()
+        const rest: unknown[] = []
+        let page = first.nextCursor
+        for (let read = 0; page !== undefined && read < MAX_PAGES; read += 1) {
+          const answer = (await resumed.changes(kind, null, page)) as CrmPage<unknown>
+          rest.push(...answer.items)
+          page = answer.nextCursor
+        }
+        const joined = [...idsOf(first.items), ...idsOf(rest)]
+        assert.equal(new Set(joined).size, joined.length, `${kind}: no row twice across the cut`)
+        assert.deepEqual(joined.sort(), whole.sort(), `${kind}: the cut list adds up to the whole one`)
+      }
+      assert.ok(cut, "the fixture holds more than one page of some kind, so a list can be cut")
+    },
+  },
+  {
+    // A source that never pages inside one call never asks, and passes: the deadline itself is the engine's to keep.
+    name: "faults: a call that pages inside stops when the run's budget is spent, and says so",
+    async run() {
+      const { source, faults } = await make()
+      if (!faults) return
+      const spent = new CliError("provider_error", "the run's budget is spent", { reason: "sync.partial" })
+      let asked = false
+      const context: CrmCallContext = {
+        spend: () => {
+          asked = true
+          throw spent
+        },
+        gap: () => {},
+      }
+      for (const kind of source.traits.kinds) {
+        asked = false
+        const ended = await source.changes(kind, null, undefined, context).then(
+          () => undefined,
+          (error: unknown) => error,
+        )
+        if (asked) assert.equal(ended, spent, `${kind}: a spent budget ends the call with its own error, not swallowed`)
+        else assert.equal(ended, undefined, `${kind}: a call that asks for no more requests is not stopped`)
+      }
+    },
+  },
+]

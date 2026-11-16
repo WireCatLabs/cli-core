@@ -22,6 +22,8 @@ export interface FakeDocumentSource extends DocumentSource {
   put(file: SourceFile, text?: string): void
   /** Takes one out, and lists it as removed in the next change feed. */
   remove(id: string): void
+  /** Makes one file answer as a provider's 403 or 404 does, from now on. */
+  deny(id: string, status: 403 | 404): void
 }
 
 /**
@@ -33,8 +35,11 @@ export const fakeDocumentSource = (account = "alpha", options: { pageSize?: numb
   const texts = new Map<string, string>()
   let feed: SourceChange[] = []
   let cursor = 0
+  const denied = new Map<string, 403 | 404>()
   const metadata = async (id: string) => {
-    const found = files.get(id)
+    const status = denied.get(id)
+    if (status === 403) throw new CliError("permission_error", "the synthetic file is not shared with this account")
+    const found = status === 404 ? undefined : files.get(id)
     if (!found) throw new CliError("not_found", "no such synthetic file", { reason: "document.not-found" })
     return structuredClone(found)
   }
@@ -47,6 +52,9 @@ export const fakeDocumentSource = (account = "alpha", options: { pageSize?: numb
       files.set(file.id, file)
       if (text !== undefined) texts.set(file.id, text)
       feed.push({ id: file.id, removed: false, file: structuredClone(file) })
+    },
+    deny(id, status) {
+      denied.set(id, status)
     },
     remove(id) {
       files.delete(id)

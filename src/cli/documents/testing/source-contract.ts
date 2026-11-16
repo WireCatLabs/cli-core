@@ -1,7 +1,38 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
-import type { DocumentSource, SourceFile } from "../../../documents.js"
+import { type Deadline, type RunBudget, runBudget } from "../../../background/budget.js"
+import type { DocumentSource, SourceFile, SyncResult } from "../../../documents.js"
 import type { ContractCase } from "../../../meetings/index.js"
+import { DEFAULT_AGENT_COOPERATIVE_MS } from "../../execution.js"
+
+/** What one sync of a fault case may be given: the CLI passes each on to `syncDocuments`. */
+export interface DocumentFaultRun<M extends SourceFile = SourceFile> {
+  /** Wraps the source the CLI builds for this run: the case counts its calls, slows them or cuts them off. */
+  wrap(source: DocumentSource<M>): DocumentSource<M>
+  budget?: RunBudget
+  deadline?: Deadline
+  signal?: AbortSignal
+  now?(): number
+}
+
+/** Faults a case injects; each is opt-in, and a case whose hook is absent passes without running. */
+export interface DocumentSourceFaults<M extends SourceFile = SourceFile> {
+  /**
+   * Makes one document below the root answer HTTP `status` from now on, as the provider would, and names it. It stays
+   * listed in its folder, and the fixture holds at least one other document that still answers.
+   */
+  deny?(status: 403 | 404): string | Promise<string>
+  /** A source over the same provider whose own clock runs `ms` ahead of the provider's, behind when negative. */
+  skewed?(ms: number): DocumentSource<M> | Promise<DocumentSource<M>>
+  /** A source for a second profile signed in with the same token. */
+  sameToken?(): DocumentSource<M> | Promise<DocumentSource<M>>
+  /**
+   * The CLI's own sync of the root over this fixture's provider, its state and index kept between calls, and the ids
+   * it holds after the call, all calls together. Given, the cases also check a sync: a fault skipped, an interrupted run resumed, the
+   * MCP deadline kept.
+   */
+  sync?(run: DocumentFaultRun<M>): Promise<{ result: SyncResult; saved: readonly string[] }>
+}
 
 /** One adapter over recorded or faked responses, fresh for each case. */
 export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
@@ -22,6 +53,8 @@ export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
   addNested?(): Promise<{ file: string; folder: string }>
   /** An id the provider does not know; absent skips that case. */
   missing?: string
+  /** Faults for the opt-in fault cases. */
+  faults?: DocumentSourceFaults<M>
 }
 
 const MAX_ENTRIES = 500
@@ -47,6 +80,47 @@ const isImported = <M extends SourceFile>(fixture: DocumentSourceFixture<M>, ent
   !fixture.isFolder(entry) || fixture.isDocument?.(entry) === true
 
 const isTime = (value: string | undefined) => value === undefined || !Number.isNaN(Date.parse(value))
+
+/** Within any change feed's overlap: a computer's clock that is off by more is broken, not skewed. */
+const SKEW_MS = 10 * 60_000
+/** Slow enough that a run under the MCP deadline cannot read the fixture's tree in one go. */
+const SLOW_CALL_MS = 15_000
+const MOST_SYNCS = 50
+
+const READS = new Set(["metadata", "children", "childrenPage", "content", "bytes", "startToken", "changes"])
+
+/** The source with `before` run ahead of each provider read: the case counts, slows or cuts off the calls. */
+const watched = <M extends SourceFile>(source: DocumentSource<M>, before: () => void): DocumentSource<M> =>
+  new Proxy(source, {
+    get(target, name) {
+      const value = Reflect.get(target, name)
+      if (typeof value !== "function") return value
+      // Bound to the adapter itself: a class with #private fields refuses a proxy as `this`.
+      if (!READS.has(String(name))) return value.bind(target)
+      return (...args: unknown[]) => {
+        before()
+        return value.apply(target, args)
+      }
+    },
+  })
+
+/**
+ * Syncs until the walk is done and nothing is left but reported errors, and gives the last call's answer and ids and
+ * how many reads the calls made. A file the provider refuses stays pending with its error, sync after sync.
+ */
+const finish = async <M extends SourceFile>(sync: NonNullable<DocumentSourceFaults<M>["sync"]>) => {
+  let reads = 0
+  for (let call = 1; call <= MOST_SYNCS; call++) {
+    const { result, saved } = await sync({
+      wrap: (source) =>
+        watched(source, () => {
+          reads++
+        }),
+    })
+    if (!result.walk && result.pending === result.errors.length) return { result, saved: [...saved].sort(), reads }
+  }
+  throw new assert.AssertionError({ message: `the sync is still unfinished after ${MOST_SYNCS} calls` })
+}
 
 /** What every documents adapter answers, whatever the provider: run each case in the adapter's tests. */
 export const documentSourceContract = <M extends SourceFile>(
@@ -175,5 +249,125 @@ export const documentSourceContract = <M extends SourceFile>(
       await assert.rejects(source.metadata(missing), (error) => isCliError(error) && error.code === "not_found")
     },
   })
-  return cases
+  return [...cases, ...faultCases(make)]
 }
+
+const faultCases = <M extends SourceFile>(
+  make: () => DocumentSourceFixture<M> | Promise<DocumentSourceFixture<M>>,
+): ContractCase[] => [
+  ...([403, 404] as const).map((status) => ({
+    name: `faults: a child that answers ${status} is ${status === 403 ? "permission_error" : "not_found"}, and a sync skips it and imports the rest`,
+    async run() {
+      const fixture = await make()
+      const deny = fixture.faults?.deny
+      if (!deny) return
+      const id = await deny(status)
+      const code = status === 403 ? "permission_error" : "not_found"
+      await assert.rejects(
+        fixture.source.content(id),
+        (error) => isCliError(error) && error.code === code,
+        `content(${id}) after a ${status} is ${code}`,
+      )
+      const sync = fixture.faults?.sync
+      if (!sync) return
+      const { result, saved } = await finish(sync)
+      assert.ok(!saved.includes(id), `the sync does not hold ${id}, which answers ${status}`)
+      assert.ok(saved.length > 0, `the sync imports the documents that still answer beside ${id}`)
+      if (status === 403)
+        assert.ok(
+          [...result.errors, ...result.skipped].some((one) => one.id === id),
+          `the sync names ${id} among its errors or skipped files, not silently left out`,
+        )
+    },
+  })),
+  {
+    name: "faults: a clock off by ten minutes either way loses no change",
+    async run() {
+      const first = await make()
+      if (!first.faults?.skewed || !first.change) return
+      for (const ms of [SKEW_MS, -SKEW_MS]) {
+        const fixture = ms === SKEW_MS ? first : await make()
+        const source = (await fixture.faults?.skewed?.(ms)) as DocumentSource<M>
+        const token = await source.startToken()
+        await fixture.change?.()
+        const page = await source.changes(token)
+        assert.ok(page.items.length > 0, `a change is in the feed with this computer's clock ${ms / 60_000} min off`)
+      }
+    },
+  },
+  {
+    name: "faults: a second profile on the same token is the same account and sees the same tree",
+    async run() {
+      const fixture = await make()
+      const other = await fixture.faults?.sameToken?.()
+      if (!other) return
+      assert.equal(await other.identity(), await fixture.source.identity(), "both profiles name one account")
+      const ids = async (source: DocumentSource<M>) =>
+        (await walk({ ...fixture, source })).map((entry) => entry.id).sort()
+      assert.deepEqual(await ids(other), await ids(fixture.source), "both profiles list the same tree")
+    },
+  },
+  {
+    name: "faults: an interrupted sync goes on where it stopped and ends with what one whole sync holds",
+    async run() {
+      const whole = await make()
+      if (!whole.faults?.sync) return
+      const expected = await finish(whole.faults.sync)
+      const fixture = await make()
+      const sync = fixture.faults?.sync as NonNullable<DocumentSourceFaults<M>["sync"]>
+      const stop = new AbortController()
+      let reads = 0
+      const cut = await sync({
+        signal: stop.signal,
+        wrap: (source) =>
+          watched(source, () => {
+            if (++reads > 2) stop.abort()
+          }),
+      }).then(
+        ({ result }) => result.complete === false,
+        (error: unknown) => {
+          if (!stop.signal.aborted) throw error
+          return true
+        },
+      )
+      assert.ok(stop.signal.aborted, "the fixture's tree takes more than two reads, so the run is cut short")
+      assert.ok(cut, "the cut run stops: it is cancelled or answers complete: false, it does not read on")
+      const resumed = await finish(sync)
+      assert.deepEqual(resumed.saved, expected.saved, "the resumed sync holds what one whole sync does")
+      assert.ok(resumed.reads < expected.reads, "the resumed sync reads less than a whole one: it went on, not over")
+    },
+  },
+  {
+    name: "faults: under the MCP's 45 s deadline a slow provider's sync stops in time, and the next goes on",
+    async run() {
+      const whole = await make()
+      if (!whole.faults?.sync) return
+      const expected = await finish(whole.faults.sync)
+      const fixture = await make()
+      const sync = fixture.faults?.sync as NonNullable<DocumentSourceFaults<M>["sync"]>
+      let clock = 0
+      const now = () => clock
+      let stopped = false
+      for (let call = 1; call <= MOST_SYNCS; call++) {
+        const deadline: Deadline = { endsAt: clock + DEFAULT_AGENT_COOPERATIVE_MS, ms: DEFAULT_AGENT_COOPERATIVE_MS }
+        const { result, saved } = await sync({
+          budget: runBudget({ deadline, now, requestMs: SLOW_CALL_MS }),
+          deadline,
+          now,
+          wrap: (source) =>
+            watched(source, () => {
+              clock += SLOW_CALL_MS
+            }),
+        })
+        assert.ok(clock <= deadline.endsAt, `sync ${call} ended by its deadline, ${clock - deadline.endsAt} ms late`)
+        if (!result.walk && result.pending === result.errors.length) {
+          assert.ok(stopped, "a slow provider's tree takes more than one run under the deadline")
+          assert.deepEqual([...saved].sort(), expected.saved, "the runs together hold what one whole sync does")
+          return
+        }
+        stopped = true
+      }
+      throw new assert.AssertionError({ message: `the sync is still unfinished after ${MOST_SYNCS} runs` })
+    },
+  },
+]

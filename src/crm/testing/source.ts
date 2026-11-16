@@ -76,6 +76,8 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   expireCursors(kind: CrmKind): void
   /** Lists no id at all, as a CRM does for a sign-in that lost its rights. */
   hideAll(hidden: boolean): void
+  /** One record the sign-in may no longer read: `get` answers it as the CRM's 403 or 404, with nothing. */
+  deny(kind: CrmKind, externalId: string): void
   /** The next write is carried out and its answer lost: it throws `outcome_unknown`. */
   loseNextAnswer(): void
   /** The next write is carried out and its item cannot be read back: it throws with `sent: true`. */
@@ -144,6 +146,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   const fields: Record<CrmKind, CrmField[]> = { deal: [SOURCE_FIELD], lead: [], person: [], organization: [] }
   let version = 0
   const expired = new Map<CrmKind, number>()
+  const denied = new Set<string>()
   let hidden = false
   const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0, list: 0, get: 0 }
   const capabilities: CrmWriteCapabilities = {
@@ -375,6 +378,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     },
     async get(kind, externalId) {
       calls.get += 1
+      if (denied.has(`${kind}:${externalId}`)) return null
       const found = of(kind).get(externalId)
       return (found && !found.deleted ? found.record : null) as never
     },
@@ -435,6 +439,9 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     },
     hideAll(value) {
       hidden = value
+    },
+    deny(kind, externalId) {
+      denied.add(`${kind}:${externalId}`)
     },
     async pipelines(kind) {
       calls.pipelines += 1
