@@ -1,4 +1,4 @@
-import { CliError, isCliError } from "@wirecat/cli-base"
+import { CliError, isCliError, realSleep } from "@wirecat/cli-base"
 import { withTimeLimit } from "../http/time-limit.js"
 import type { ExchangeContext, OAuthProvider, RequestContext, TokenSet } from "./provider.js"
 
@@ -20,19 +20,55 @@ const cancelledBy = (signal?: AbortSignal) => {
   throw isCliError(signal.reason) ? signal.reason : new CliError("cancelled", "sign-in was cancelled")
 }
 
+const TRANSIENT = new Set([
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+])
+const ATTEMPTS = 3
+
+/** A dropped network or a DNS lookup that failed: Node's fetch puts the system's code on the cause. */
+const transientNetworkError = (error: unknown): boolean => {
+  if (isCliError(error)) return error.code === "network_error"
+  for (let at: unknown = error, depth = 0; at instanceof Error && depth < 4; at = at.cause, depth++) {
+    const code = (at as { code?: unknown }).code
+    if (typeof code === "string" && TRANSIENT.has(code)) return true
+  }
+  return false
+}
+
+/**
+ * A token request lost to a network blip (a DNS lookup that failed, a dropped connection) is sent again while the time
+ * limit lasts, or one blip stops a whole sync. Sending it again is safe: a refresh the provider already took is
+ * refused as the next run's would be, a used code is refused and the owner signs in again, as after a lost answer, and
+ * a revoke of a revoked token succeeds (RFC 7009).
+ */
 const post = async (url: string, body: URLSearchParams, context: RequestContext, deadline: AbortSignal) => {
-  cancelledBy(context.signal)
-  try {
-    return await context.fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-      body,
-      signal: requestSignal(deadline, context.signal),
-      redirect: "error",
-    })
-  } catch {
+  const signal = requestSignal(deadline, context.signal)
+  for (let attempt = 1; ; attempt++) {
     cancelledBy(context.signal)
-    return undefined
+    try {
+      return await context.fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+        body,
+        signal,
+        redirect: "error",
+      })
+    } catch (error) {
+      cancelledBy(context.signal)
+      if (attempt >= ATTEMPTS || signal.aborted || !transientNetworkError(error)) return undefined
+      const waited = await realSleep(500 * attempt, signal).then(
+        () => true,
+        () => false,
+      )
+      cancelledBy(context.signal)
+      if (!waited) return undefined
+    }
   }
 }
 

@@ -55,6 +55,71 @@ describe("the request time limit", () => {
   })
 })
 
+describe("a token request lost to the network", () => {
+  const dropped = (code: string) => new TypeError("fetch failed", { cause: Object.assign(new Error(code), { code }) })
+
+  it("is sent again after a failed DNS lookup or a dropped connection, and the answer is used", async () => {
+    vi.useFakeTimers()
+    const failures = [dropped("EAI_AGAIN"), dropped("ECONNRESET")]
+    let calls = 0
+    const flaky: typeof fetch = async () => {
+      calls++
+      const failure = failures.shift()
+      if (failure) throw failure
+      return Response.json({ access_token: "a", refresh_token: "r", expires_in: 60 })
+    }
+    const tokens = requestTokens(provider, { grant_type: "refresh_token" }, contextFor(flaky))
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(tokens).resolves.toMatchObject({ accessToken: "a" })
+    expect(calls).toBe(3)
+  })
+
+  it("gives up after three tries, and never retries a failure that is not the network's", async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    const down: typeof fetch = async () => {
+      calls++
+      throw dropped("EAI_AGAIN")
+    }
+    const outcome = expect(
+      requestTokens(provider, { grant_type: "refresh_token" }, contextFor(down)),
+    ).rejects.toMatchObject({ code: "outcome_unknown" })
+    await vi.advanceTimersByTimeAsync(2_000)
+    await outcome
+    expect(calls).toBe(3)
+
+    calls = 0
+    const controller = new AbortController()
+    const cancelled = expect(
+      requestTokens(
+        provider,
+        { grant_type: "refresh_token" },
+        {
+          ...contextFor(async () => {
+            calls++
+            throw dropped("EAI_AGAIN")
+          }),
+          signal: controller.signal,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "cancelled" })
+    await vi.advanceTimersByTimeAsync(100)
+    controller.abort()
+    await cancelled
+    expect(calls).toBe(1)
+
+    calls = 0
+    const broken: typeof fetch = async () => {
+      calls++
+      throw new Error("socket")
+    }
+    await expect(requestTokens(provider, { grant_type: "refresh_token" }, contextFor(broken))).rejects.toMatchObject({
+      code: "outcome_unknown",
+    })
+    expect(calls).toBe(1)
+  })
+})
+
 describe("revokeToken", () => {
   const revokeAnswering = (status: number, body: string) =>
     revokeToken(
