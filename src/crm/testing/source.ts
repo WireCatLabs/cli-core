@@ -13,12 +13,16 @@ import type {
 } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import { foldName } from "../../resolve.js"
+import { crmFileId } from "../files.js"
 import type {
   CrmChanges,
   CrmCondition,
+  CrmFileOwner,
+  CrmFileSourceKind,
   CrmIdPage,
   CrmLiveKind,
   CrmLiveQuery,
+  CrmOpenableFile,
   CrmSource,
   CrmSourceTraits,
 } from "../source.js"
@@ -49,6 +53,36 @@ export interface FakeCrmSourceOptions {
   stageHistory?: CrmStageEntry[]
   /** Gives the fake `activities()` over these, the array read on each call, by `updatedAt` after `since`. */
   activities?: CrmActivity[]
+  /**
+   * Gives the fake `files()` over these, the array read on each call. Each listed file also carries a `url` with
+   * `FAKE_FILE_TOKEN`, as a careless adapter's might, so a test sees whether the token gets out.
+   */
+  files?: FakeCrmFile[]
+}
+
+/** The token in every fake file link: it must reach no output, store, file or error. */
+export const FAKE_FILE_TOKEN = "fake-file-token-5f2a9c"
+
+/** A file of one of the fake's records. */
+export interface FakeCrmFile {
+  owner: CrmFileOwner
+  /** `record` when absent. */
+  source?: CrmFileSourceKind
+  /** The CRM's own id of the file. */
+  id: string
+  name: string
+  bytes: string | Uint8Array
+  mime?: string | null
+  /** Epoch ms. */
+  created?: number | null
+  /** What the CRM says the size is; the bytes' length when absent, unknown when null. */
+  size?: number | null
+  /** `open` fails with an error that names the tokened link, as a raw fetch error would. */
+  broken?: boolean
+  /** `open` answers an HTML page, as a CRM does for a link that is not a server link. */
+  html?: boolean
+  /** The link answers from this host instead of the account's own. */
+  host?: string
 }
 
 /** One write the fake CRM was sent, in order. */
@@ -81,7 +115,16 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   /** The next write is carried out and its item cannot be read back: it throws with `sent: true`. */
   failNextReadBack(): void
   /** Requests made, by method. */
-  readonly calls: { pipelines: number; fields: number; changes: number; ids: number; list: number; get: number }
+  readonly calls: {
+    pipelines: number
+    fields: number
+    changes: number
+    ids: number
+    list: number
+    get: number
+    files: number
+    open: number
+  }
   /** Writes sent, refused ones included. */
   readonly writes: FakeCrmWrite[]
 }
@@ -145,7 +188,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   let version = 0
   const expired = new Map<CrmKind, number>()
   let hidden = false
-  const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0, list: 0, get: 0 }
+  const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0, list: 0, get: 0, files: 0, open: 0 }
   const capabilities: CrmWriteCapabilities = {
     kinds: ["deal", "lead", "person", "organization"],
     verbs: CRM_VERBS,
@@ -352,6 +395,22 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
             return { items, hasMore: false, cursor: String(newest) }
           },
         }),
+    ...(options.files === undefined
+      ? {}
+      : {
+          files: async (owner: CrmFileOwner) => {
+            calls.files += 1
+            const record = of(owner.kind).get(owner.id)
+            if (!record || record.deleted) return null
+            const listed = (options.files as FakeCrmFile[]).filter(
+              (one) => one.owner.kind === owner.kind && one.owner.id === owner.id,
+            )
+            return {
+              assignee: (record.record as { assignee?: string | null }).assignee ?? null,
+              files: listed.map((one) => fakeFile(one, () => (calls.open += 1))),
+            }
+          },
+        }),
     ...(options.ownClients === undefined
       ? {}
       : {
@@ -503,3 +562,35 @@ export const exampleOrganization = (externalId: string, extra: Partial<CrmOrgani
   name: `Example company ${externalId}`,
   ...extra,
 })
+
+const fakeFile = (file: FakeCrmFile, opened: () => void): CrmOpenableFile => {
+  const bytes = typeof file.bytes === "string" ? new TextEncoder().encode(file.bytes) : file.bytes
+  const link = `https://${file.host ?? "portal.example"}/download/${file.id}?token=${FAKE_FILE_TOKEN}`
+  const listed = {
+    id: crmFileId(file.owner, file.source ?? "record", file.id),
+    name: file.name,
+    size: file.size === undefined ? bytes.byteLength : file.size,
+    mime: file.mime ?? null,
+    created: file.created ?? null,
+    owner: { ...file.owner },
+    source: file.source ?? "record",
+    url: link,
+    async open() {
+      opened()
+      if (file.broken) throw new Error(`GET ${link} failed: socket hang up`)
+      if (file.host && file.host !== "portal.example")
+        throw new CliError("provider_error", `the file link points to another host than the account's: ${link}`)
+      if (file.html) throw new CliError("provider_error", `the CRM answered a web page, not the file: ${link}`)
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          // Two chunks, so a cap is checked between them.
+          const half = Math.ceil(bytes.byteLength / 2)
+          controller.enqueue(bytes.slice(0, half))
+          if (half < bytes.byteLength) controller.enqueue(bytes.slice(half))
+          controller.close()
+        },
+      })
+    },
+  }
+  return listed as CrmOpenableFile
+}

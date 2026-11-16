@@ -21,6 +21,7 @@ import { readHealthMark, recordDeepCheck } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { forgetCoverageSince, REFILL_MARGIN_MS, type Refetch } from "./refill.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
+import { resetCrmFileWords } from "./sqlite/crm-files.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
 import { drainMeetingIndex } from "./sqlite/meetings.js"
 import { rebuildMentions } from "./sqlite/mentions.js"
@@ -428,6 +429,7 @@ const FILLERS: Record<string, (database: CacheDatabase, now: () => number) => vo
     fillStems(database, { now })
   },
   attachment_words: (database) => void resetAttachmentWords(database),
+  crm_file_words: (database) => void resetCrmFileWords(database),
   attachment_name_words: (database) =>
     // As migration 20 filled it: й and ё fold as the triggers fold them.
     database.exec(

@@ -1344,5 +1344,22 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `meetings` ADD `client_phone` text;",
       "CREATE INDEX `fact_removals_by_removed_at` ON `fact_removals` (`removed_at`);"
     ]
+  },
+  {
+    "name": "20261116204138_version-68-crm-files",
+    "statements": [
+      "CREATE TABLE `crm_files` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`owner_kind` text NOT NULL,\n\t`owner_id` text NOT NULL,\n\t`owner_assignee` text,\n\t`source` text NOT NULL,\n\t`name` text NOT NULL,\n\t`name_folded` text NOT NULL,\n\t`mime` text,\n\t`size` integer,\n\t`external_created_at` integer,\n\t`local_path` text,\n\t`content_sha256` text,\n\t`text` text,\n\t`normalized_text` text,\n\t`extraction` text,\n\t`extraction_error` text,\n\t`downloaded_by` text,\n\t`downloaded_at` integer NOT NULL,\n\tCONSTRAINT `fk_crm_files_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `crm_files_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE INDEX `crm_files_by_account_id_owner_kind_owner_id` ON `crm_files` (`account_id`,`owner_kind`,`owner_id`);"
+    ]
+  },
+  {
+    "name": "20261116204204_version-68-crm-file-words",
+    "statements": [
+      "-- Words of a downloaded CRM file's text, rowid = crm_files.id. Apart from attachment_words, so no generic\n-- reader of attachments finds a colleague's file: only CRM code reads it, under the copy's viewer rule.\nCREATE VIRTUAL TABLE crm_file_words USING fts5(\n  normalized_text,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE crm_file_words_vocab USING fts5vocab(crm_file_words, 'col');",
+      "CREATE TRIGGER crm_file_words_ai AFTER INSERT ON crm_files WHEN new.normalized_text <> '' BEGIN\n  INSERT INTO crm_file_words (rowid, normalized_text) VALUES (new.id, new.normalized_text);\nEND;",
+      "CREATE TRIGGER crm_file_words_au AFTER UPDATE OF normalized_text ON crm_files\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM crm_file_words WHERE rowid = old.id;\n  INSERT INTO crm_file_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
+      "CREATE TRIGGER crm_file_words_ad AFTER DELETE ON crm_files BEGIN\n  DELETE FROM crm_file_words WHERE rowid = old.id;\nEND;"
+    ]
   }
 ]

@@ -1,4 +1,5 @@
 import type { CrmField, CrmValue } from "../domain/crm.js"
+import { withoutFileLinks } from "./files.js"
 
 /** A JSON object as a CRM sends one; anything else is not read as a record. */
 export type CrmRaw = Record<string, unknown>
@@ -75,7 +76,8 @@ const optionLabel = (field: CrmField, option: unknown) =>
 
 /**
  * A record's custom values, by code, as the port keeps them: each with its field's label, and a list field's option
- * ids turned into their labels with `option_id` beside (both lists on a multiple field).
+ * ids turned into their labels with `option_id` beside (both lists on a multiple field). A file field's tokened link
+ * is removed, so it reaches neither the store nor an answer.
  */
 export const crmValuesOf = (
   values: Readonly<Record<string, unknown>>,
@@ -86,7 +88,7 @@ export const crmValuesOf = (
     Object.entries(values).map(([code, value]): [string, CrmValue] => {
       const field = byCode.get(code)
       const label = field?.label ?? null
-      if (!field?.options) return [code, { label, value }]
+      if (!field?.options) return [code, { label, value: withoutFileLinks(value) }]
       if (Array.isArray(value))
         return [code, { label, value: value.map((one) => optionLabel(field, one)), option_id: value.map(String) }]
       return [code, { label, value: optionLabel(field, value), option_id: String(value) }]

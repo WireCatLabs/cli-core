@@ -47,6 +47,13 @@ export {
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export { type CopyViewer, seenBy } from "./sqlite/copy-viewer.js"
 export type { CounterTarget } from "./sqlite/counters.js"
+export {
+  type CrmFileHit,
+  type CrmFileRow,
+  type CrmFileSearch,
+  type CrmFileStore,
+  resetCrmFileWords,
+} from "./sqlite/crm-files.js"
 export { crmSettingsOf, parseCrmSetting, parseCrmSettingValue, saveCrmSetting } from "./sqlite/crm-settings.js"
 export {
   type EmailMarks,
