@@ -20,8 +20,11 @@ export const hintsFor = (flags: readonly string[], hint: string): Record<string,
   Object.fromEntries(flags.map((flag) => [flag, hint]))
 
 /** Date flags agents guess; commander would suggest an unrelated near name (`--since` → `--source`). */
-export const START_FLAGS = ["--since", "--after", "--from", "--since-date", "--after-date", "--start"]
-export const END_FLAGS = ["--until", "--before", "--to", "--until-date", "--before-date", "--end"]
+export const START_FLAGS = ["--since", "--after", "--since-date", "--after-date", "--start"]
+export const END_FLAGS = ["--until", "--before", "--until-date", "--before-date", "--end"]
+
+/** In a message search `--from` means the sender, as `from:` does in the query, never a date. */
+export const SENDER_FLAGS = ["--from", "--sender", "--author"]
 
 export const AROUND_HINT =
   "read the messages either side of one: messages context <hit ref> --before-n 5 --after-n 5 " +

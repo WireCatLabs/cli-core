@@ -219,6 +219,15 @@ describe("searches", () => {
         "search all 'words' --only messages",
       )
 
+    for (const path of ["messages", "all"]) {
+      expect(await message("search", path, "invoice", "--from", "me")).toContain(`search ${path} 'from:<sender> words'`)
+      expect((await call("search", path, "from:me invoice", "--json")).code).toBe(0)
+    }
+    expect(await message("search", "conversations", "invoice", "--from", "me")).toContain("--filter 'from:<sender>'")
+    expect((await call("search", "conversations", "invoice", "--filter", "from:me", "--offline", "--json")).code).toBe(
+      0,
+    )
+
     const hit = json(await call("search", "messages", "invoice", "--json")).items[0].ref as string
     for (const argv of [
       ["search", "messages", "invoice"],
