@@ -5,6 +5,38 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.680.0 — 16.11.2026
+
+### Added
+
+- **`embedNotes`, `embedEvents` and `embedMail` take `deadline` and `signal`.** They stop between batches at the
+  deadline less its margin, or on a cancel, and answer `stopped` and, for notes and events, `remaining`: the chunks
+  still without a vector. Enrichment before the embed gets the same limit. Calendar `sync --embed` passes its run's
+  deadline and signal, so a sync that ends late no longer runs into `command.timed-out` while it embeds. See
+  [Walks over several syncs](docs/dev/DOCUMENTS.md#walks-over-several-syncs).
+- **`RunBudget.first()`**: whether a call's first request goes past a `deadline` stop.
+
+### Fixed
+
+- **A documents sync no longer overruns its deadline after a slow first listing.** The first-request exception held
+  for the walk's first listing and again for the first file read, so a 4 s run could list for 1.9 s, read for 3 s
+  and end at 4.9 s. Now only one request per call goes past the margin, only before any other, sized by the CLI's
+  `requestMs` plus 0.5 s to answer, and timed by the budget's clock rather than a sync's fixed `now`.
+- **`setup apply --dry-run` never opens the keyring.** 0.679.0 still read it when the answers reached a secret input
+  and left it empty, so the shared deny contract (`cli-contract`, WC-PERM-23) could still fail. A dry run now takes
+  each secret as kept: it never reports an unanswered secret as missing, so an edit that leaves the password alone can
+  continue, and it still refuses a secret answer of the wrong shape. `apply` checks the secret and keeps the saved
+  one when none is answered.
+
+### Security
+
+- **A file to send is refused under `/proc`, `/sys` and `/dev`**, through any link and even with `--allow-any-file`:
+  `--file /proc/self/environ` sent the process's environment, which can hold a tool's token. `refusedPlace` refuses
+  those paths too, and `readUpload` still takes only a regular file.
+- **`refusedPlace` covers every WireCat tool's folders.** It takes them from `WIRECAT_TOOLS`, which now names each
+  tool's `appName` and `envPrefix`, plus amo-cli and beeline-cli. zoom-cli's folders were missed: they
+  were listed under the name `zm`, not `zoom-cli`.
+
 ## 0.679.0 — 16.11.2026
 
 ### Added
