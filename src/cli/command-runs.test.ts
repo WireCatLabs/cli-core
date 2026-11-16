@@ -15,7 +15,14 @@ import {
   readEvents,
   runsDirFor,
 } from "../runs/run.js"
-import { type CommandRunOptions, commandRuns, providerRequest, recordRuns, runSettings } from "./command-runs.js"
+import {
+  type CommandRunOptions,
+  commandRunId,
+  commandRuns,
+  providerRequest,
+  recordRuns,
+  runSettings,
+} from "./command-runs.js"
 import { run } from "./program.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
@@ -106,6 +113,16 @@ describe("recordRuns", () => {
     const success = listRuns(dir).find((one) => one.status === "success")
     expect(readdirSync(dir, { recursive: true }).filter((one) => String(one).endsWith("run.json"))).toHaveLength(1)
     expect(findRun(dir, success?.runId ?? "")?.metadata).toMatchObject({ command: "notes show", status: "success" })
+  })
+
+  it("names the command's run to the command itself, as runs show takes it", async () => {
+    const env = sandbox()
+    let named: string | undefined
+    await cli(env, ["notes", "show", "note:1"], {}, async () => {
+      named = commandRunId()
+    })
+    expect(named).toBe(listRuns(runsDirFor(app, env))[0]?.runId)
+    expect(commandRunId()).toBeUndefined()
   })
 
   it("keeps only failures under a saved record: false, and nothing under --no-record", async () => {

@@ -18,6 +18,8 @@ shape of this file.
 - **`people.linkEvidence(pairs)`** answers what each pair of people shares and whether it is strong, reading the store
   once; **`people.agentMerges()`** lists the agents' merges still in place; **`people.merges()`** names the agent, run,
   reason and evidence of an agent's merge (`agent`).
+- **`commandRunId()`** (`@wirecat/cli-core/cli`) gives the id `runs show` takes for the command under way, so a write
+  can name the run that made it.
 
 ## 0.676.0 — 16.11.2026
 
