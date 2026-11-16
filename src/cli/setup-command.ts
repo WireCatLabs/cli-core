@@ -112,13 +112,19 @@ export const setupCommand = (setup: Setup): Command => {
     return { ...document, steps }
   }
 
-  const readAnswers = async (command: Command, lines?: () => Promise<string>): Promise<Answers> => {
+  const readAnswers = async (
+    command: Command,
+    lines?: () => Promise<string>,
+    { noneAllowed = false } = {},
+  ): Promise<Answers> => {
     const input = environmentOf(command).stdin ?? process.stdin
     if (!lines && input.isTTY)
       throw new CliError("validation_error", `pipe the answers as one JSON object on stdin: echo '{…}' | ${cli} …`, {
         reason: "input.required",
       })
     const text = lines ? await lines() : (await bufferedInput(input, { maxBytes: SETUP_LIMITS.bytes })).toString("utf8")
+    // A dry run of no answers names the first step to ask, and lets a contract learn the command's permission key.
+    if (noneAllowed && text.trim() === "") return {}
     let parsed: unknown
     try {
       parsed = JSON.parse(text)
@@ -237,7 +243,7 @@ export const setupCommand = (setup: Setup): Command => {
     )
     .option("--dry-run", "check the answers, and save nothing")
     .action(async function (this: Command, { dryRun }: { dryRun?: boolean }) {
-      const answers = await readAnswers(this)
+      const answers = await readAnswers(this, undefined, { noneAllowed: dryRun === true })
       const result = await apply(this, answers, { dryRun: dryRun === true, steps: stepsFor(this, false) })
       renderAnswer(this, contextFor(this, false, true), itemOf(result))
     })

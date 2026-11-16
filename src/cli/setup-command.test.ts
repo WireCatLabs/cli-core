@@ -149,6 +149,16 @@ describe("setup", () => {
     expect(good.item.path).toEqual(["source", "database", "recordings", "check"])
   })
 
+  it("**a dry run with nothing on stdin checks no answers**: it names the first step, as a program asks", async () => {
+    const { call, config } = harness()
+    const { code, item } = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin: "" })
+    expect(code).toBe(0)
+    expect(item).toMatchObject({ valid: false, complete: false, at: "source", path: ["source"] })
+    expect(config()).toBe("")
+    const saving = await call(["office", "setup", "apply", "--json"], { stdin: "" })
+    expect(saving.error()).toMatchObject({ code: "validation_error", reason: "input.invalid" })
+  })
+
   it("**run apply saves only after the CLI's check succeeds**: a refused password keeps nothing", async () => {
     const { call, checks, kept, config } = harness()
     const wrong = await call(["office", "setup", "run", "apply", "--json", "--answer-stdin"], {

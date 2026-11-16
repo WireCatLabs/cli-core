@@ -85,7 +85,7 @@ and nothing is written.
 Only answers on steps the path visits, on inputs shown there, are checked and saved. An answer on a branch the owner
 left is dropped and listed in `dropped`.
 
-A dry run walks as far as the answers go and stops at the first step with a problem; `at` names that step. When Desktop
+A dry run with nothing on stdin checks no answers: it stops at the first step and names it in `at`. A dry run walks as far as the answers go and stops at the first step with a problem; `at` names that step. When Desktop
 sends the answers up to the step on screen, a stop past that step means the step passed, and only errors for inputs on
 the step on screen are the owner's to fix now. Leaving a saved secret alone sends no secret: the check then uses the one
 already kept.
