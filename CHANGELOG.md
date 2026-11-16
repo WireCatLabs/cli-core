@@ -5,6 +5,43 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.679.0 — 16.11.2026
+
+### Added
+
+- **The first screen and first run list `notion`**, the Notion tool (`@wirecat/notion-cli`), under "Works with" and
+  among the tools first run offers to install.
+- **`personHistory(store, "person:<id>")`** gives what happened with one person lately, across every source in scope,
+  newest first: their one-to-one messages, mail, calendar events and recorded meetings and calls, the same reads a
+  deal's and an organization's context make. `limit` (10 by default) ends a page and `next` is the `until` of the
+  older one; `since`, `until`, `accounts` and `deniedKinds` narrow it, and `coverage` says what was read.
+- **A touch of a deal's context, and of a person's history, carries what was said**: a message's `text`, and on a
+  recorded call its `call` (direction, the employee, the other side's number), `duration_ms` and the start of its
+  transcript as `text`. A calendar event a call was held for carries them too.
+- **A recorded meeting in a person's context has `snippet`**, the start of its transcript on one line, beside
+  `has_transcript`.
+
+### Changed — may break callers
+
+- **A saved `exclude` query that matches a page with sub-pages, or a folder, drops the whole branch.** The sub-pages
+  stayed in the documents and were listed at the top of the catalog with no parent; the next sync now removes them,
+  and the sync no longer lists what is below an excluded folder. A file that also sits under a parent the query keeps
+  stays. A selected folder the query matches drops only its own row, as before. Once the folder stops matching, the
+  next sync brings the whole branch back. See [Bind a provider](docs/dev/DOCUMENTS.md#bind-a-provider).
+- **`inScope` and `within` take `folders: Record<string, M>`**, the type of the files they check, instead of
+  `Record<string, SourceFile>`; `within` is generic and takes an optional `cut` after `seen`.
+
+### Fixed
+
+- **A documents sync with a deadline shorter than its margin moves on.** The run's budget stops 5 s or more before
+  the deadline, and it was asked before the first folder listing and the first file read, so `sync --timeout 3s`
+  said "sync again" forever with nothing done. Each call now makes its first listing and its first read while one
+  request still fits before the deadline itself, as it already did for the entry bound. See
+  [Walks over several syncs](docs/dev/DOCUMENTS.md#walks-over-several-syncs).
+- **`setup apply --dry-run` opens the keyring only when the answers reach a secret.** It read every secret's saved
+  state up front, so a dry run of the first step touched the keyring, and the shared deny contract (`cli-contract`,
+  WC-PERM-23) failed amo's `contracts:check` once 0.678.0 let an empty dry run through.
+
 ## 0.678.0 — 16.11.2026
 
 ### Added
