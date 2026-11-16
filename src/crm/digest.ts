@@ -30,6 +30,14 @@ const WORDS = {
     contacts: "новые контакты",
     hidden: "Часть копии CRM скрыта от этого профиля: см. примечание команды",
   },
+  es: {
+    won: "ganada",
+    lost: "perdida",
+    newDeal: "nueva",
+    newOwner: "nuevo responsable",
+    contacts: "contactos nuevos",
+    hidden: "Parte de la copia del CRM está oculta para este perfil: consulta la nota del comando",
+  },
 } as const
 
 export interface CrmDigestOptions {
@@ -39,7 +47,7 @@ export interface CrmDigestOptions {
   now: number
   /** The owner's zone: the end of today. */
   zone: string
-  /** The owner's language, `ru` or `en`, for the few words the digest writes itself. */
+  /** The owner's language, `ru`, `es` or `en`, for the few words the digest writes itself. */
   language: string
   /** The profile's name, for the sync's age. */
   profile: string
@@ -71,7 +79,7 @@ export const crmDigest = async (
   options: CrmDigestOptions,
 ): Promise<Record<string, unknown>> => {
   const { since, until, now, zone, viewer } = options
-  const words = options.language === "ru" ? WORDS.ru : WORDS.en
+  const words = WORDS[options.language as keyof typeof WORDS] ?? WORDS.en
   const cap = SECTION_CAPS.crm
   const window = { since, until, ...(viewer ? { viewer } : {}) }
   const counts = await store.crm.changeCounts(account, window)

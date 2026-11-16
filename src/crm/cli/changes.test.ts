@@ -12,6 +12,7 @@ import { openCache } from "../../store/open.js"
 import { usedParams } from "../../store/sqlite/crm-changes.js"
 import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
+import { crmDigest } from "../digest.js"
 import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource, SALES_PIPELINE } from "../testing/index.js"
 import { addCrmCommands, type CrmRun } from "./index.js"
 
@@ -328,6 +329,18 @@ describe("the CRM digest", () => {
     // 3 closed + 9 overdue + 14 new deals + 1 new contacts line, 7 shown.
     expect(section?.more).toBe(3 + 9 + 14 + 1 - 7)
     expect(JSON.stringify(digest)).not.toContain("+34 600")
+  })
+
+  it("writes its own words in the owner's language, Spanish included, and English for any other", async () => {
+    const { cli, run } = await setup()
+    await cli("sync")
+    const words = async (language: string) => {
+      const options = { since: NOW - 2 * DAY, until: NOW, now: NOW, zone: "UTC", language, profile: "work" }
+      return JSON.stringify(await crmDigest(run.store, run.account, options))
+    }
+    expect(await words("es")).toContain("ganada")
+    expect(await words("ru")).toContain("выиграна")
+    expect(await words("de")).toMatch(/"won"|: won/)
   })
 
   it("starts each scheduled run where the last one ended, so nothing shows twice", async () => {
