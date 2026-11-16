@@ -475,7 +475,7 @@ export class NoProfileHere extends CliError {
       "validation_error",
       `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
         "(any name in place of personal)",
-      { profiles: [] },
+      { reason: "profile.missing", profiles: [] },
     )
   }
 
@@ -486,7 +486,7 @@ export class NoProfileHere extends CliError {
       "validation_error",
       `name a profile: there is none on this computer yet — any name works, such as \`${command}\` ` +
         `(or set ${envName(this.app, "PROFILE")})`,
-      { profiles: [] },
+      { reason: "profile.missing", profiles: [] },
     )
   }
 }
@@ -621,7 +621,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     throw new CliError(
       "validation_error",
       `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
-      { profiles: here },
+      { reason: "profile.missing", profiles: here },
     )
   }
 

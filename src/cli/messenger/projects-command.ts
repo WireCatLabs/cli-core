@@ -83,7 +83,8 @@ const archiveFetcher = (
 }
 
 interface Options {
-  purpose: string[]
+  purposes: string[]
+  purpose?: string[]
   includeProposed?: boolean
   alias: string[]
   contextQuery: string[]
@@ -99,6 +100,15 @@ interface Options {
   syncFirst?: boolean
   syncTime: string
 }
+
+/** The purposes asked: `--purposes`, and the hidden `--purpose` it replaced, kept for one version. */
+const purposesAsked = (options: { purposes: string[]; purpose?: string[] }) => [
+  ...options.purposes,
+  ...(options.purpose ?? []),
+]
+
+const oldPurpose = () =>
+  new Option("--purpose <purposes>", "replaced by --purposes; kept for one version").argParser(purposeList).hideHelp()
 
 const purposeHelp = (messenger: Messenger) =>
   `the linked chats' purposes to read, comma separated (${(messenger.purposes?.purposes ?? BUILT_IN_PURPOSES).join(", ")}), ` +
@@ -134,7 +144,8 @@ export const projectsCommand = (messenger: Messenger): Command => {
       .option("--alias <name>", "another name of the project, searched on its own; repeat for more", collect, [])
       .option("--context-query <words>", "more words that all appear in one text; repeat for another", collect, [])
       .option("--contact <person>", "a name to search, or person:<id> to read what that person wrote", collect, [])
-      .option("--purpose <purposes>", purposeHelp(messenger), purposeList, [])
+      .option("--purposes <purposes>", purposeHelp(messenger), purposeList, [])
+      .addOption(oldPurpose())
       .option(
         "--include-proposed",
         "also read chats and members proposed for the project and not yet confirmed; each item they bring is marked",
@@ -176,7 +187,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
               ...(options.contact.length ? { people: options.contact } : {}),
               ...(options.maxPages === undefined ? {} : { maxReads: options.maxPages }),
               ...(options.cursor === undefined ? {} : { checkpoint: options.cursor }),
-              ...(options.purpose.length ? { purposes: options.purpose } : {}),
+              ...(purposesAsked(options).length ? { purposes: purposesAsked(options) } : {}),
               ...(messenger.purposes ? { purposeConfig: messenger.purposes } : {}),
               ...(options.includeProposed ? { includeProposed: true } : {}),
               ...(fetcher ? { fetcher, maxFetchMs, onFetchProgress: progressNote(context.renderer.note) } : {}),
@@ -233,7 +244,8 @@ const statusCommand = (messenger: Messenger): Command =>
       .argument("<project>", "an existing project's id, key, exact name or alias")
       .option("--since-time <time>", "how far back: days (60d, at most 730d) or a start date (2026-09-01)", "60d")
       .option("--before-time <time>", "fixed exclusive end: ISO 8601 timestamp with UTC offset")
-      .option("--purpose <purposes>", purposeHelp(messenger), purposeList, [])
+      .option("--purposes <purposes>", purposeHelp(messenger), purposeList, [])
+      .addOption(oldPurpose())
       .option(
         "--context-query <words>",
         "words that all appear in one text; reports their last mention per side. Repeat for another",
@@ -245,7 +257,8 @@ const statusCommand = (messenger: Messenger): Command =>
           sinceTime: string
           beforeTime?: string
           contextQuery: string[]
-          purpose: string[]
+          purposes: string[]
+          purpose?: string[]
         }>()
         const context = messengerContext(this, messenger)
         let profile: AccountKey | undefined
@@ -257,7 +270,7 @@ const statusCommand = (messenger: Messenger): Command =>
             ...projectWindowOf(options.sinceTime),
             ...(options.beforeTime === undefined ? {} : { asOf: projectCutoffTime(options.beforeTime) }),
             contextQueries: options.contextQuery,
-            ...(options.purpose.length ? { purposes: options.purpose } : {}),
+            ...(purposesAsked(options).length ? { purposes: purposesAsked(options) } : {}),
             ...(messenger.purposes ? { purposeConfig: messenger.purposes } : {}),
           })
         })

@@ -547,6 +547,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           has_transcript: one.hasTranscript,
           event: one.event,
           people: one.people,
+          ...(one.call ? { call: one.call } : {}),
         }))
         return itemOf({
           ...(dealKeys(found) as object),

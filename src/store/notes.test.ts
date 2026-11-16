@@ -130,6 +130,21 @@ describe("the notes store", () => {
     })
   })
 
+  it("gives back a note's first subject, which the store keeps on the note and not as a link", async () => {
+    const store = await open(fresh())
+    const project = await store.knowledge.addProject({ name: "Lighthouse" })
+    const other = await store.knowledge.addProject({ name: "Harbour" })
+
+    const about = await store.notes.addNote({ text: "Budget is tight", about: [project.ref, other.ref] })
+    const toSelf = await store.notes.addNote({ text: "Call the bank" })
+
+    expect(about.subject).toBe(project.ref)
+    expect((await store.notes.note(about.ref)).subject).toBe(project.ref)
+    expect((await store.notes.notes({ about: project.ref })).items[0]?.subject).toBe(project.ref)
+    expect((await store.notes.links({ from: about.ref })).map((link) => link.to)).toEqual([other.ref])
+    expect(toSelf.subject).toBeNull()
+  })
+
   it("writes internal notes about anything, guards stale edits, and keeps the owner's links on re-import", async () => {
     const store = await open(fresh())
     const project = await store.knowledge.addProject({ name: "Lighthouse" })

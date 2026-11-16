@@ -1225,7 +1225,9 @@ describe("a run with no profile named", () => {
         "name a profile: there is none on this computer yet — any name works, such as `app personal chats list` " +
         "(or set APP_PROFILE)",
       details: { profiles: [] },
+      reason: "profile.missing",
     })
+    expect(withSetup.error.reason).toBe("profile.missing")
     expect(suggested.code).toBe(0)
   })
 

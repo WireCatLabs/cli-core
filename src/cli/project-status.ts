@@ -171,7 +171,7 @@ export const heldInWindow = (one: { messages: number; firstAt: string | null; la
 
 const leftOutWhy = (one: LeftOut, read: string | null) =>
   `${one.chat}, purpose ${one.purpose}, not read: ${heldInWindow(one)}` +
-  (read ? `; read it: ${read}` : "; add its purpose to --purpose to read it")
+  (read ? `; read it: ${read}` : "; add its purpose to --purposes to read it")
 
 const missingOf = (found: ProjectStatus, hints: ProjectStatusHints): Missing[] => {
   const held = found.chats.filter((chat) => partial(found, chat))

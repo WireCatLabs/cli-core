@@ -1335,5 +1335,14 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER person_kind_identity_au AFTER UPDATE OF provider, external_id, name, username, phone, email, bot ON identities\nWHEN OLD.provider IS NOT NEW.provider OR OLD.external_id IS NOT NEW.external_id OR OLD.name IS NOT NEW.name OR OLD.username IS NOT NEW.username OR OLD.phone IS NOT NEW.phone OR OLD.email IS NOT NEW.email OR OLD.bot IS NOT NEW.bot BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT person_id FROM identity_links WHERE identity_id = NEW.id);\nEND;",
       "UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND trim(coalesce(name, '')) = '';"
     ]
+  },
+  {
+    "name": "20261113154357_version-67-fact-removals-call-fields",
+    "statements": [
+      "CREATE TABLE `fact_removals` (\n\t`id` integer PRIMARY KEY,\n\t`fact_id` integer NOT NULL,\n\t`subject` text,\n\t`removed_by` text NOT NULL,\n\t`bot` text,\n\t`reason` text,\n\t`removed_at` integer NOT NULL\n);",
+      "ALTER TABLE `meetings` ADD `direction` text;",
+      "ALTER TABLE `meetings` ADD `client_phone` text;",
+      "CREATE INDEX `fact_removals_by_removed_at` ON `fact_removals` (`removed_at`);"
+    ]
   }
 ]

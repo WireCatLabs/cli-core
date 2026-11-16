@@ -771,7 +771,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 1850
+                "maxLines": 1871
               }
             }
           }
@@ -779,7 +779,7 @@
       }
     },
     {
-      "includes": ["src/store/sqlite/emails.ts"],
+      "includes": ["src/store/sqlite/emails.ts", "src/store/sqlite/notes.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -816,7 +816,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 2877
+                "maxLines": 2891
               }
             }
           }

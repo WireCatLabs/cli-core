@@ -38,7 +38,7 @@ import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
 import { oneOf, textOf } from "./text-input.js"
-import { type Thing, thingOf } from "./things.js"
+import { referenceUnlessOwner, type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 import { trigramPart } from "./trigram-match.js"
 
@@ -75,6 +75,8 @@ export interface Note {
   contentHash: string | null
   revision: number
   exportPath: string | null
+  /** A note's first `about`, kept on the note and not among its links; `null` for a document or a note to self. */
+  subject: string | null
   /**
    * When the source dates the note: a local file's front matter date or modification time, a Drive file's last
    * edit; `null` when the source gave none. `createdAt` and `updatedAt` are the store's own times.
@@ -231,6 +233,7 @@ export const keepRevision = (database: CacheDatabase, row: Row, at: number) =>
 export const documentOf = (row: Row): Note => ({
   id: String(row.id),
   ref: `document:${row.id}`,
+  subject: null,
   source: "file",
   folderId: String(row.account_id),
   path: String(row.external_id),
@@ -246,9 +249,10 @@ export const documentOf = (row: Row): Note => ({
   deletedAt: optionalIso(row.deleted_at),
 })
 
-export const noteOf = (row: Row): Note => ({
+export const noteOf = (row: Row, database: CacheDatabase): Note => ({
   id: String(row.id),
   ref: `note:${row.id}`,
+  subject: referenceUnlessOwner(database, { type: String(row.notable_type), id: Number(row.notable_id) } as Thing),
   source: "internal",
   folderId: null,
   path: null,
@@ -269,7 +273,8 @@ export const noteRowOf = (database: CacheDatabase, reference: string): Note | un
   const thing = thingOf(database, reference.includes(":") ? reference : `note:${reference}`)
   if (thing?.type === "document")
     return documentOf(database.prepare("SELECT * FROM documents WHERE id = ?").get(thing.id) as Row)
-  if (thing?.type === "note") return noteOf(database.prepare("SELECT * FROM notes WHERE id = ?").get(thing.id) as Row)
+  if (thing?.type === "note")
+    return noteOf(database.prepare("SELECT * FROM notes WHERE id = ?").get(thing.id) as Row, database)
   return undefined
 }
 
@@ -807,7 +812,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const id = Number(row?.id)
         for (const reference of about.slice(1))
           insertLink(context, { from: `note:${id}`, to: reference, kind: "about", origin: "owner" })
-        return noteOf(noteRow(String(id)))
+        return noteOf(noteRow(String(id)), database)
       }),
     note: async (reference) => anyNote(reference),
     resolveNote: async (reference) => {
@@ -859,7 +864,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
                   `${noteText ? `AND ${noteText.sql} ` : ""}ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
               )
               .all(aboutType, aboutType, aboutId, aboutType, aboutId, ...(noteText?.params ?? []), limit + offset + 1)
-              .map(noteOf)
+              .map((row) => noteOf(row, database))
       const all = [...files, ...written].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.ref.localeCompare(a.ref),
       )
@@ -895,7 +900,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         database
           .prepare("INSERT INTO note_revisions (note_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
           .run(Number(bare), String(found.body), revision, now())
-        return noteOf(noteRow(bare))
+        return noteOf(noteRow(bare), database)
       }),
     removeNote: async (id) =>
       write(database, () => {

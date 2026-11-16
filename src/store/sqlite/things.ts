@@ -142,6 +142,13 @@ export const emailThreadOf = (database: CacheDatabase, account: string, thread: 
   return row ? { type: "email_thread", id: Number(row.id) } : undefined
 }
 
+/** `referenceOfThing`, but `null` for the owner's own person and for a row that is gone. */
+export const referenceUnlessOwner = (database: CacheDatabase, thing: Thing): string | null => {
+  const owner =
+    thing.type === "person" && database.prepare("SELECT owner FROM persons WHERE id = ?").get(thing.id)?.owner
+  return owner ? null : (referenceOfThing(database, thing) ?? null)
+}
+
 /** The reference people and agents read for a row; `undefined` once the row is gone. */
 export const referenceOfThing = (database: CacheDatabase, thing: Thing): string | undefined => {
   if (["meeting", "meeting_transcript", "meeting_transcript_row"].includes(thing.type)) {
