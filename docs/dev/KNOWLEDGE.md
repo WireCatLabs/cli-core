@@ -459,7 +459,8 @@ custom values, a field left out keeping its stored value (not `person`, which a 
 A company's record keeps its owner and times the same way. A deal or lead whose assignee changes gets a
 `crm.owner-change` record (`<kind>/<id>/<updated at>`, `from`, `to`, `at`), since a CRM without admin rights lists no
 users to link. An activity may be on a contact or company the copy holds, and keeps `done_at`, the CRM's change that
-closed it; one that arrives done with no due date was done when it was made (`created_at`).
+closed it; a comment, call, e-mail or meeting that arrives done with no due
+date was done when it was made (`created_at`).
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

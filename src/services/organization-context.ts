@@ -3,7 +3,15 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import type { CrmViewing } from "../crm/index.js"
 import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isUsable } from "../domain/relations.js"
-import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, Organization } from "../store/index.js"
+import type {
+  AccountKey,
+  Deal,
+  DealFilter,
+  FinancePayment,
+  Invoice,
+  MessageStore,
+  Organization,
+} from "../store/index.js"
 import { isClosedState } from "../tasks/index.js"
 import {
   type Category,
@@ -11,6 +19,7 @@ import {
   coverageFor,
   edgesOf,
   grouped,
+  keyOf,
   namesOf,
   notRejected,
   organizationCategories,
@@ -176,16 +185,26 @@ export const organizationContext = async (
 
   const deals: Deal[] = []
   let dealsFull = false
+  // A viewer's `deals.list` filter hides every row not assigned to it, so each limited copy is read on its own and
+  // the rest without it: a page then holds only rows the profile may read.
+  const limited = new Set(scope.viewers.map(({ account }) => keyOf(account)))
+  const reads: Partial<DealFilter>[] = limited.size
+    ? [
+        { accounts: (accounts ?? (await store.accounts.accounts())).filter((one) => !limited.has(keyOf(one))) },
+        ...scope.viewers
+          .filter(({ account }) => scope.has(account))
+          .map((viewer) => ({ account: viewer.account, viewer })),
+      ]
+    : [accounts === undefined ? {} : { accounts }]
   for (const kind of DEAL_KINDS.filter((one) => !scope.denied.has(one))) {
-    const found = await store.deals.list({
-      kind,
-      organization: ref,
-      status: "open",
-      limit: STORE_PAGE,
-      ...(accounts === undefined ? {} : { accounts }),
-    })
-    dealsFull ||= found.hasMore
-    for (const deal of found.items) if (scope.sees(deal)) deals.push(deal)
+    const ofKind: Deal[] = []
+    for (const read of reads) {
+      const found = await store.deals.list({ kind, organization: ref, status: "open", limit: STORE_PAGE, ...read })
+      dealsFull ||= found.hasMore
+      for (const deal of found.items) ofKind.push(deal)
+    }
+    ofKind.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || Number(b.id) - Number(a.id))
+    for (const deal of ofKind) deals.push(deal)
   }
   const catalog = new Map((await store.knowledge.projects()).map((project) => [project.ref, project]))
   const projects = new Map<string, ProjectLine>()

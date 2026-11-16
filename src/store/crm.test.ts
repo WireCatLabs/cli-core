@@ -385,7 +385,14 @@ it("keeps a company's owner and times, a deal's owner changes, and when an activ
     { ...activity, externalId: "a1", updatedAt: 1, on: [{ kind: "person", externalId: "c1" }] },
     { ...activity, externalId: "a2", updatedAt: 1, on: [{ kind: "organization", externalId: "o1" }] },
     { ...activity, externalId: "a3", dueAt: 30, updatedAt: 40, done: true, on: [{ kind: "deal", externalId: "d1" }] },
-    { ...activity, externalId: "a5", updatedAt: 40, done: true, on: [{ kind: "deal", externalId: "d1" }] },
+    {
+      ...activity,
+      kind: "comment" as const,
+      externalId: "a5",
+      updatedAt: 40,
+      done: true,
+      on: [{ kind: "deal", externalId: "d1" }],
+    },
     { ...activity, externalId: "a4", updatedAt: 1, on: [{ kind: "person", externalId: "elsewhere" }] },
   ])
   expect(saved).toEqual({ saved: 4, outOfScope: 1 })
@@ -396,7 +403,7 @@ it("keeps a company's owner and times, a deal's owner changes, and when an activ
   const doneAt = Object.fromEntries(
     (await recordsOf(path, "crm.activity")).map(({ externalId, fields }) => [externalId, fields.done_at]),
   )
-  // One that arrives done with no due date was done when it was made.
+  // A comment that arrives done with no due date was done when it was made; a task keeps the CRM's change.
   expect(doneAt).toEqual({ a1: 50, a2: null, a3: 40, a5: 1 })
 })
 

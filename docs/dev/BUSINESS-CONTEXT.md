@@ -35,7 +35,8 @@ projects, money and communications — so memo, Desktop and MCP read the same th
   `knowledge.listRelations`, which applies the scope and the deny in SQL.
 - **A CRM copy's viewer rule.** `viewing`, one `CrmViewing` per CRM account from `crmViewerOf`
   ([CRM.md, "Offline reads of the copy"](CRM.md#offline-reads-of-the-copy)): a deal or lead the profile may not read is
-  not listed or named, a deal context of one is `not_found` (`deal.not-readable`), and each rule's note is in
+  not listed or named (an organization's deals are read per limited copy with `deals.list`'s `viewer`, so a page is never short), a
+  deal context of one is `not_found` (`deal.not-readable`), a lead's `deal` it may not read is `null`, and each rule's note is in
   `coverage.notRead` with the account as its source. Relationships pass the rule's viewers to `knowledge.listRelations`
   (`viewers`), which leaves those rows out in SQL; a caller listing relationships passes the same.
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
