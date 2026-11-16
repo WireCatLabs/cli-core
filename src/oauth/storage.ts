@@ -281,6 +281,19 @@ const keyringFailure = (thrown: unknown, secret?: string) => {
   return failure
 }
 
+// cli-base's message quotes the keyring's own words; they stay in the cause, for --debug and the run record.
+const keyringUnreachable = (thrown: CliError) => {
+  const failure = new CliError(
+    "configuration_error",
+    "the OS keyring did not answer. On Linux a restarted session bus is a known cause: log out and back in, or " +
+      "set DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus. On a machine with no keyring, sign in with " +
+      "file storage.",
+    { reason: "keyring.unreachable" },
+  )
+  failure.cause = new Error(thrown.message)
+  return failure
+}
+
 export const credentialStorage = (options: CredentialStorageOptions): TokenStorage => {
   if (!options.credentials.keyring)
     throw new CliError("configuration_error", "a sign-in store needs its keyring passed in, never a default")
@@ -300,17 +313,19 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     try {
       return credentials.read(name)?.secret
     } catch (error) {
-      // cli-base's own error already says what to do, in words safe for the answer.
+      if (error instanceof CliError && error.details.reason === "keyring.unreachable") throw keyringUnreachable(error)
       if (error instanceof CliError) throw error
       throw keyringFailure(error)
     }
   }
   // A sign-in on a machine with no keyring writes to the file, so an old entry it cannot read is no old entry.
+  // Keyring-only storage has no file to fall back to, so there the sign-in must stop before the browser.
   const replaced = (name: string) => {
     try {
       return raw(name)
     } catch (error) {
-      if (error instanceof CliError && error.details.reason === "keyring.unreachable") return undefined
+      const unreachable = error instanceof CliError && error.details.reason === "keyring.unreachable"
+      if (unreachable && options.credentials.storage !== "keyring") return undefined
       throw error
     }
   }

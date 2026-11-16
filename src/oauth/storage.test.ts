@@ -291,9 +291,9 @@ describe("a keyring that cannot be reached", () => {
       throw new Error("No storage access: collection is locked")
     },
   }
-  const storage = (keyring = refusing) =>
+  const storage = (keyring = refusing, kind: "keyring" | "auto" = "keyring") =>
     credentialStorage({
-      credentials: { service: "cal-cli", configDir: folder(), storage: "keyring", keyring },
+      credentials: { service: "cal-cli", configDir: folder(), storage: kind, keyring },
       account: oauthAccount("google", "personal"),
       codec: standardCodec("google"),
     })
@@ -341,12 +341,17 @@ describe("a keyring that cannot be reached", () => {
     delete: () => false,
   }
 
-  it("shows cli-base's own keyring error on a read", () => {
-    expect(failureOf(() => storage(unreadable).read())).toBe(unreachable)
+  it("names an unreachable keyring and how to fix it, without the keyring's own words", () => {
+    const failure = failureOf(() => storage().read())
+    expect(errorObjectOf(failure).error).toMatchObject({
+      reason: "keyring.unreachable",
+      message: expect.stringContaining("log out and back in"),
+    })
+    expect(JSON.stringify(errorObjectOf(failure))).not.toContain("Failed to connect")
   })
 
-  it("signs in when the old entry cannot be read for an unreachable keyring", () => {
-    const signingIn = storage(unreadable)
+  it("signs in to the file when the old entry cannot be read for an unreachable keyring", () => {
+    const signingIn = storage(unreadable, "auto")
     signingIn.probe()
     signingIn.write(
       { client: { clientId: "client" }, tokens: { refreshToken: "synthetic-refresh", scopes: [] } },
