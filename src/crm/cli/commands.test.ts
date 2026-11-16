@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
@@ -14,6 +15,7 @@ import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
 import type { CrmActivity, CrmStageEntry } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { pull } from "../../meetings/index.js"
@@ -71,10 +73,11 @@ const setup = async (
   options: Partial<CrmCommandOptions> & {
     permissions?: Record<string, Level>
     idempotent?: boolean
+    storeNow?: () => number
   } = {},
 ) => {
   const path = join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db")
-  const store = await openStore({ path })
+  const store = await openStore({ path, ...(options.storeNow ? { now: options.storeNow } : {}) })
   opened.push(store)
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -130,7 +133,7 @@ const setup = async (
       .option("--timeout <duration>")
       .option("--yes")
       .option("--dry-run")
-    const { permissions: _permissions, idempotent: _idempotent, ...mount } = options
+    const { permissions: _permissions, idempotent: _idempotent, storeNow: _storeNow, ...mount } = options
     addCrmCommands(root, { app: APP, open: async () => runOf, ...mount })
     provide(root, {
       streams: { data: (text: string) => (data += text), diagnostic: () => undefined },
@@ -326,6 +329,12 @@ describe("CRM commands", () => {
     await cli("sync")
     const d2 = (await cli("deals", "list", "status:won")).items.find(({ external_id }) => external_id === "d2")
     expect(d2).toMatchObject({ title: "Renamed", closed_date: "2026-10-03" })
+
+    const lost = Date.UTC(2026, 10, 14, 23, 30)
+    source.put("deal", exampleDeal("d2", { stage: "lost", updatedAt: lost }))
+    await cli("sync")
+    const again = (await cli("deals", "list", "status:lost")).items.find(({ external_id }) => external_id === "d2")
+    expect(again).toMatchObject({ closed_date: dayIn(lost, timezoneOf()) })
   })
 
   it("deals list narrows by when it changed, was made or closed, and by its owner", async () => {
@@ -352,6 +361,9 @@ describe("CRM commands", () => {
     expect(await ids("owner:none", "status:open")).toEqual(["d1"])
     const listed = await cli("deals", "list", "updated:>=1d")
     expect(listed.meta).toMatchObject({ timezone: expect.any(String), window: { since: expect.any(String) } })
+    const both = await cli("deals", "list", "updated:>=1d", "created:>=30d")
+    expect(both.meta).toMatchObject({ timezone: expect.any(String) })
+    expect(both.meta).not.toHaveProperty("window")
   })
 
   it("pipelines show over a window: the cohort, what closed in it, the cycle, owners and lost reasons", async () => {
@@ -383,7 +395,9 @@ describe("CRM commands", () => {
     )
     source.put("deal", exampleDeal("d5", { assignee: "9", createdAt: now - 3 * DAY, amount: "10", currency: "EUR" }))
     await cli("sync")
-    const report = (await cli("pipelines", "show", "--since-time", "30d")).item
+    const shown = await cli("pipelines", "show", "--since-time", "30d")
+    expect(shown.meta).toMatchObject({ timezone: expect.any(String), window: { since: expect.any(String) } })
+    const report = shown.item
     expect(report.totals).toMatchObject({ items: 3, open: 1, won: 1, lost: 1, win_rate: 0.5 })
     expect(report.closed).toMatchObject({ won: 1, lost: 1, win_rate: 0.5 })
     expect(report.cycle).toEqual({ median_days: 8, items: 1 })
@@ -400,6 +414,9 @@ describe("CRM commands", () => {
     expect(text).toContain("closed in the window: won 1 (—) · lost 1 · win rate 50%")
     expect(text).toContain("days to win: 8 (median of 1)")
     expect((await cli("pipelines", "show")).item.totals).toMatchObject({ items: 5 })
+    const empty = (await cli("pipelines", "show", "--until-time", "2000-01-01")).item
+    expect(empty.totals).toMatchObject({ items: 0, win_rate: null })
+    expect(empty.cycle).toEqual({ median_days: null, items: 0 })
   })
 
   it("deals show lists the stages a deal entered, and stages list names each stage's task rule", async () => {
@@ -888,8 +905,11 @@ describe("CRM stage tasks", () => {
 
   describe("from the CRM's own stage history", () => {
     const HOUR = 3_600_000
-    const withHistory = async (entries: CrmStageEntry[]) => {
-      const harness = await setup({}, { now: () => NOW })
+    const withHistory = async (entries: CrmStageEntry[], clock: { cli?: () => number; store?: () => number } = {}) => {
+      const harness = await setup(
+        {},
+        { now: clock.cli ?? (() => NOW), ...(clock.store ? { storeNow: clock.store } : {}) },
+      )
       const asked: (string | undefined)[] = []
       Object.assign(harness.source, {
         stageHistory: async (kind: DealKind, since: number, after?: string) => {
@@ -944,6 +964,30 @@ describe("CRM stage tasks", () => {
       source.put("deal", exampleDeal("d9", { stage: "quote" }))
       expect(await stageTasks(cli)).toBe(1)
       expect(await stageTasks(cli)).toBe(0)
+    })
+
+    it("an entry older than a week opens no task when its deal arrives later", async () => {
+      let now = NOW
+      const { path, cli, source } = await withHistory([entry("31", "d9", "quote", NOW + HOUR)], { cli: () => now })
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
+      now = NOW + 30 * 24 * HOUR
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(0)
+    })
+
+    it("counts the history from when the rules were first set, not from the last sync", async () => {
+      let now = NOW + 2 * HOUR
+      const clock = () => now
+      const { path, cli, source } = await withHistory([entry("41", "d9", "quote", NOW + HOUR)], {
+        cli: clock,
+        store: clock,
+      })
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
+      now = NOW + 3 * HOUR
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(1)
     })
 
     it("reads the history without rules, counts it in the funnel once its deal arrives, and opens no older task", async () => {

@@ -431,11 +431,14 @@ between syncs, so A→B→C in between is seen as A→C. A source with `stageHis
 `crm.stagehistory.list`) closes that gap: every `sync` reads each kind the source has after the last history id it
 read (`crm:stage-history:<kind>`; the first read goes 90 days back), rules or not, and keeps each entry into a stored
 stage as a `crm.stage-entry` record, on a deal the copy holds or not yet: it counts once the deal arrives. An entry no
-stored deal claimed for 90 days is marked deleted. `openStageTasks` opens tasks from the entries on stored rows made
-since the rules were first set (the mark's `at`, which stays), instead of from `pipeline_stage_changes`, with source
-`deal:<id>/history/<history id>`, then marks them `handled` in their fields. One reader, `stageEntriesOf`, gives a
+stored deal claimed for 90 days is marked deleted, not removed: WC-DATA-7 allows a removal only by an explicit owner
+command. `openStageTasks` opens tasks from the entries on stored rows made since the rules were first set (the mark's
+`at`, which stays) and in the last 7 days (`STAGE_TASK_DAYS`), instead of from `pipeline_stage_changes`, with source
+`deal:<id>/history/<history id>`, then marks them `handled` in their fields. The 7 days cover a deal a sync or two
+missed; a deal that joins the copy later (given to the owner, or a wider `scope`) opens no task for its older moves. One reader, `stageEntriesOf`, gives a
 row's stages to the funnel, `deals.stages` and `deals show`'s `stage_history`: the CRM's entries where the row has any,
-else `pipeline_stage_changes`, never both, each marked `exact` or not. `dealContext` lists the deal's open tasks by
+else `pipeline_stage_changes`, never both, each marked `exact` or not. Once a row has an exact entry, its copied
+changes older than the CRM's history are left out. `dealContext` lists the deal's open tasks by
 group with its project's.
 
 `pipelines show --since-time --until-time` (`deals.pipeline(ref, { since, until, zone })`, counted in
@@ -443,8 +446,10 @@ group with its project's.
 window in the owner's zone (`closed`, with the won amounts per currency), the median days from made to won (`cycle`:
 the CRM's entry into the won stage, else the closed day), the cohort by owner (`owners`), the ten most common lost
 reasons and how many rows had an exact history (`history`). A row first seen closed counts as having reached the
-first stage, and a stage the CRM removed stays only while a row stands in it. A closed row keeps the closed day first
-stored when the CRM gives none, so a later edit does not move it. `deals list` takes `updated:`, `created:`,
+first stage, and a stage the CRM removed stays only while a row stands in it. A `YYYY-MM-DD` bound is that day in
+`zone`. A closed row keeps the closed day first stored when the CRM gives none, so a later edit does not move it; a
+row that turns from won to lost or back takes the day of that change. The day is the owner's, of the CRM's last edit
+time. `deals list` takes `updated:`, `created:`,
 `closed:` (time ranges, `closed` by the owner's day) and `owner:` (`me`, the `self` setting's user, refused without
 one; `none`; or the CRM's user id), and answers `meta.window`.
 

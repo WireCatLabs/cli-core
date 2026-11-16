@@ -47,11 +47,14 @@ and `crm.assign-others` for an owner other than the sign-in's user. The CRM's an
 `saveOrganizations`, as a sync would, but only when it is the sign-in's own client: a write of anyone else's answers
 it without phones and e-mails, spends none of the day's views, and says `stored: false`. An update that gives a
 contact or company to someone else removes it from the copy (`store.crm.removeContact`, `remove`), the contact with its
-identity's phones and e-mails.
+identity's phones and e-mails, and the activities on nothing but it are marked deleted. The answer says `removed`.
+`removed: false` means the copy keeps the contact: one of the owner's kept deals or leads names it (the sync would copy
+it back), the owner decided about its identity link, or something else points at it.
 
 `--email <address>` and `--phone <phone>`, each repeated for more, replace the contact's or company's whole list
 (`CrmPersonFields`, `CrmOrganizationFields`); a phone is taken in international form only and sent as E.164. An
-adapter maps both lists for both kinds; `crmWriteContract` checks a company's phone.
+empty value clears the list. An adapter maps both lists for both kinds; `crmWriteContract` checks a company's phone
+and e-mail.
 
 ## Foreign contacts
 

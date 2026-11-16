@@ -516,7 +516,10 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       const terms = queryTerms(words, query, name, TIME_FIELDS)
       const times = nativeTerms(listQuery(typedQuery(words), query, name), name)
       const bounds = Object.fromEntries(TIME_FIELDS.map((field) => [field, timeBounds(times.get(field))]))
-      const window = Object.values(bounds).find((one) => one.meta)?.meta
+      const metas = Object.values(bounds).flatMap((one) => (one.meta ? [one.meta] : []))
+      const timezone = metas.find((one) => one.timezone)?.timezone
+      // One window names one field's bounds; with two time terms it would name only the first.
+      const window = metas.length === 1 ? metas[0] : timezone ? { timezone } : undefined
       const read = async (run: CrmRun) =>
         run.store.deals.list({
           kind,
@@ -838,7 +841,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     .action(
       async (reference: string | undefined, opts: { sinceTime?: string; untilTime?: string }, command: Command) => {
         const zone = timezoneOf()
-        const { since, until } = dateWindow({ ...opts, zone, now: now() })
+        const { since, until, meta } = dateWindow({ ...opts, zone, now: now() })
         await within(
           command,
           async (run) => {
@@ -847,7 +850,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
               ...(until === undefined ? {} : { until: new Date(until).toISOString() }),
               zone,
             })
-            return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
+            return itemOf(
+              { ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED },
+              // The closed counts take their days in this zone, whatever the window.
+              { meta: { ...meta, timezone: zone } },
+            )
           },
           (body) => pipelineView(body, outputFor(command).color),
         )

@@ -21,7 +21,12 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
-import { type CrmActivitiesSaved, crmActivitiesOver, type StoredActivity } from "./crm-activities.js"
+import {
+  type CrmActivitiesSaved,
+  crmActivitiesOver,
+  forgetActivitiesOn,
+  type StoredActivity,
+} from "./crm-activities.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import {
   type CrmSkipped,
@@ -193,8 +198,11 @@ export interface CrmCopies {
   stageTasksSince(key: AccountKey): Promise<number | null>
   /** Entries from the CRM's stage history, on deals and leads stored or not yet; answers how many were new. */
   saveStageEntries(key: AccountKey, entries: readonly CrmStageEntry[]): Promise<number>
-  /** The history entries on stored rows made since the rules were first set whose task is not handled yet. */
-  stageEntries(key: AccountKey): Promise<CrmStageMove[]>
+  /**
+   * The history entries on stored rows whose task is not handled yet, made since the rules were first set and within
+   * `STAGE_TASK_DAYS` of `now`: a deal that joins the copy late opens tasks for its recent moves only.
+   */
+  stageEntries(key: AccountKey, now: number): Promise<CrmStageMove[]>
   handleStageEntries(ids: readonly number[]): Promise<void>
   /** Drops the history entries no stored row claimed within `STAGE_ENTRY_DAYS`; answers how many. */
   expireStageEntries(key: AccountKey): Promise<number>
@@ -872,6 +880,14 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     const at = now()
     for (const row of rows) mark.run(at, Number(row.id))
     const accountId = findAccountPk(context, key)
+    if (kind === "organization" && accountId !== undefined)
+      forgetActivitiesOn(
+        database,
+        accountId,
+        kind,
+        rows.map((row) => String(row.external_id)),
+        at,
+      )
     if (isItemKind(kind) && accountId !== undefined && rows.length) {
       const pending = pendingBook(accountId)
       for (const row of rows) pending.forget(`${kind}:${row.external_id}`)
@@ -982,9 +998,9 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     markStageMoves: async (key, through) => saveStageMovesMark(database, key, through, now()),
     stageTasksSince: async (key) => crmStageTasksSince(database, key),
     saveStageEntries: async (key, entries) => stageEntryStore.save(key, entries),
-    stageEntries: async (key) => {
+    stageEntries: async (key, at) => {
       const since = crmStageTasksSince(database, key)
-      return since === null ? [] : stageEntryStore.pending(key, since)
+      return since === null ? [] : stageEntryStore.pending(key, since, at)
     },
     handleStageEntries: async (ids) => stageEntryStore.handled(ids),
     expireStageEntries: async (key) => stageEntryStore.expire(key),

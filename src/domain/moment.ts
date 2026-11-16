@@ -22,6 +22,10 @@ export const calendarMoment = (wanted: string, flag: string, { zone, end = false
   }
 }
 
+/** The `YYYY-MM-DD` day `at` falls on in `zone`. */
+export const dayIn = (at: number, zone: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)
+
 export const MINUTE = 60_000
 export const YEAR = 365 * 24 * 60 * MINUTE
 const RELATIVE = /^(\d+)(m|h|d)$/

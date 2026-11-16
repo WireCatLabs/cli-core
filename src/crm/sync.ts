@@ -800,6 +800,9 @@ export const syncCrm = async (
   }
   // A relationship held back for an end a later page or kind brought is written now; it costs no request.
   run.droppedPending += (await store.crm.retryPending(account)).dropped
+  // Activities and the stage history name no contact: their stop leaves the rows whole, and their catch-up may take
+  // several runs.
+  const rowsStopped = stopped
   if (!stopped && kinds.some(isItemKind)) {
     try {
       stopped = await stopping(() => readActivities(run))
@@ -831,7 +834,7 @@ export const syncCrm = async (
     (one) => one.state === "complete" && one.error === undefined && !one.held && one.pass !== "held",
   )
   // Contacts have no scope of their own and no deletion check: they leave with the last deal or lead naming them.
-  if (scope.mode === "mine" && (options.rescan || narrowed) && whole && !stopped && kinds.includes("person"))
+  if (scope.mode === "mine" && (options.rescan || narrowed) && whole && !rowsStopped && kinds.includes("person"))
     report.contactsRemoved = await store.crm.removeContacts(account, { users: scopeIds(scope) ?? [], before: now })
   if (run.unlistedUsers)
     report.issues.push({

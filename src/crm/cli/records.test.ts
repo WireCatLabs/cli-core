@@ -378,7 +378,7 @@ describe("people and organizations writes", () => {
     const identity = { provider: PORTAL.provider, id: crmIdentityId(PORTAL, "p3") }
     expect(await store.people.personOf(identity)).toBeDefined()
     const before = await store.crm.count(PORTAL, "person")
-    expect((await cli("people", "update", "p3", "--owner", "9")).item).toMatchObject({ stored: false })
+    expect((await cli("people", "update", "p3", "--owner", "9")).item).toMatchObject({ stored: false, removed: true })
     expect(await store.crm.count(PORTAL, "person")).toBe(before - 1)
     expect(await store.people.personOf(identity)).toBeUndefined()
   })
@@ -395,6 +395,8 @@ describe("people and organizations writes", () => {
       details: { reason: "crm.record-field", param: "--phone" },
     })
     expect(source.writes).toHaveLength(2)
+    const cleared = await cli("people", "update", "p3", "--phone", "", "--email", "")
+    expect(cleared.item.person).toMatchObject({ emails: [], phones: [] })
   })
 
   it("a lost answer is outcome_unknown, journaled, and the copy not stored", async () => {

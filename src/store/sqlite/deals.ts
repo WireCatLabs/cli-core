@@ -13,6 +13,7 @@ import {
   STAGE_OUTCOMES,
   type StageOutcome,
 } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { notOverriddenSql } from "../../domain/relations.js"
 import { correctWords, type Vocabulary } from "../../search/correct.js"
@@ -31,7 +32,6 @@ import type { StoreContext } from "./open.js"
 import {
   bounded,
   boundOf,
-  dayIn,
   type FunnelCounts,
   type PipelinePeriod,
   pipelinePeriod,
@@ -571,8 +571,8 @@ export const dealOperationsOver = (context: StoreContext) => {
 
   const funnelOf = (pipeline: Pipeline, { since, until, zone = timezoneOf() }: PipelineOptions): PipelineReport => {
     const window = {
-      since: boundOf(since, "the first day counted"),
-      until: boundOf(until, "the last day counted", true),
+      since: boundOf(since, "the first day counted", zone),
+      until: boundOf(until, "the last day counted", zone, true),
     }
     const { stages, ...period } = pipelinePeriod(context, pipeline, window, zone)
     const at = (bound: number | null) => (bound === null ? null : new Date(bound).toISOString())

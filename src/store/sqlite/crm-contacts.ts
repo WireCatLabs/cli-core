@@ -1,5 +1,6 @@
 import type { AccountKey } from "../types.js"
 import { findAccountPk, OWN, referencesTo } from "./accounts.js"
+import { forgetActivitiesOn } from "./crm-activities.js"
 import { crmAccountPrefix, crmIdentityId, PERSON_RECORD } from "./crm-rows.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
@@ -36,8 +37,9 @@ const NONE: CrmContactsRemoved = { contacts: 0, persons: 0, personsKept: 0, name
  * assign to one of `users`. A contact the owner decided about, or one anything else points at, stays; so does one
  * saved at or after `before`, whose deal may still be on its way. A person the removed contacts leave empty is
  * deleted unless anything still points at them. People named after a contact keep that name without the import's
- * `null #<id>`; the owner's person is never renamed. `only` removes just these contacts, by the CRM's id, whatever
- * names them and whenever they were saved.
+ * `null #<id>`; the owner's person is never renamed. `only` removes just these contacts, by the CRM's id, whenever they
+ * were saved and whatever company names them, unless a kept deal or lead does. Activities on nothing but a removed
+ * contact are marked deleted.
  */
 export const removeCrmContacts = (
   context: StoreContext,
@@ -103,7 +105,9 @@ export const removeCrmContacts = (
               "AND +k.to_type = 'organization' AND k.kind = 'member-of' AND k.role = 'contact' AND k.source = 'crm' " +
               `AND k.deleted_at IS NULL AND r.account_id = ${accountId} AND r.type = 'organization' ` +
               "AND r.deleted_at IS NULL) "
-            : "AND i.external_id IN (SELECT value FROM json_each(?)) ") +
+            : "AND i.external_id IN (SELECT value FROM json_each(?)) " +
+              // A contact on the owner's own deal stays: the next sync would copy it back from that deal.
+              `AND NOT ${named("deals", "deal")} AND NOT ${named("leads", "lead")} `) +
           "AND NOT EXISTS (SELECT 1 FROM identity_link_events e WHERE e.identity_id = i.id AND e.author = 'owner') " +
           "AND NOT EXISTS (SELECT 1 FROM temp.crm_proposed c WHERE c.decided AND c.ref = i.provider || ':' || " +
           "i.external_id)",
@@ -163,6 +167,16 @@ export const removeCrmContacts = (
           `(SELECT substr(external_id, ?) FROM identities WHERE id IN ${gone})`,
       )
       .run(context.now(), accountId, PERSON_RECORD, prefix.length + 1)
+    forgetActivitiesOn(
+      database,
+      accountId,
+      "person",
+      database
+        .prepare(`SELECT substr(external_id, ?) AS id FROM identities WHERE id IN ${gone}`)
+        .all(prefix.length + 1)
+        .map((row) => String(row.id)),
+      context.now(),
+    )
     for (const table of ["identity_revisions", "identity_link_events", "identity_links", "account_identities"])
       database.exec(`DELETE FROM ${table} WHERE identity_id IN ${gone}`)
     const contacts = database.prepare(`DELETE FROM identities WHERE id IN ${gone}`).run().changes

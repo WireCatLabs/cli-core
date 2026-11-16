@@ -117,7 +117,10 @@ export const deal = v.strictObject({
   activities: v.optional(v.array(activity)),
   /** `show` of a CRM copy: the newest recorded meetings and calls of its people, in its account's scope. */
   meetings: v.optional(v.array(recordedMeeting)),
-  /** `show` of a CRM copy: every stage it entered, oldest first. */
+  /**
+   * `show` of a CRM copy: every stage it entered, oldest first. Once the CRM's own history names any, it alone is
+   * listed, from as far back as it was read; the copy's changes between syncs are left out.
+   */
   stage_history: v.optional(v.array(stageEntry)),
   untrusted,
 })

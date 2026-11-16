@@ -397,3 +397,35 @@ it("keeps a company's owner and times, a deal's owner changes, and when an activ
   )
   expect(doneAt).toEqual({ a1: 50, a2: null, a3: 40 })
 })
+
+it("removing one contact or company forgets activities on it alone, and keeps a contact of the owner's own deal", async () => {
+  const { store, path } = await openAt()
+  await store.crm.savePeople(PORTAL, [
+    { externalId: "c1", name: "Gone Person" },
+    { externalId: "c2", name: "Client Person" },
+  ])
+  await store.crm.saveOrganizations(PORTAL, [{ externalId: "o1", name: "Example LLC" }])
+  const deal = { externalId: "d1", title: "Example deal", pipeline: "p1", stage: "s1", updatedAt: 10 }
+  await store.crm.saveItems(PORTAL, "deal", [{ ...deal, people: [{ externalId: "c2", role: "contact" }] }])
+  const activity = { kind: "task" as const, subject: "Call", createdAt: 1, updatedAt: 1, done: false }
+  await store.crm.saveActivities(PORTAL, [
+    { ...activity, externalId: "a1", on: [{ kind: "person", externalId: "c1" }] },
+    { ...activity, externalId: "a2", on: [{ kind: "organization", externalId: "o1" }] },
+    {
+      ...activity,
+      externalId: "a3",
+      on: [
+        { kind: "person", externalId: "c1" },
+        { kind: "deal", externalId: "d1" },
+      ],
+    },
+  ])
+
+  expect((await store.crm.removeContact(PORTAL, "c1")).contacts).toBe(1)
+  expect((await store.crm.removeContact(PORTAL, "c2")).contacts).toBe(0)
+  expect(await store.crm.remove(PORTAL, "organization", ["o1"])).toBe(1)
+  const deleted = Object.fromEntries(
+    (await recordsOf(path, "crm.activity")).map(({ externalId, deleted }) => [externalId, deleted]),
+  )
+  expect(deleted).toEqual({ a1: true, a2: true, a3: false })
+})

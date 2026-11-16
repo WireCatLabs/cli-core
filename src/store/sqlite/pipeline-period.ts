@@ -1,9 +1,11 @@
+import { zonedMoment } from "@wirecat/cli-base/query"
 import type { DealKind, StageOutcome } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { formatDecimal, scaleOf } from "../../domain/money.js"
 import type { CacheDatabase } from "../driver.js"
 import { stageEntriesOf } from "./crm-stage-entries.js"
 import type { StoreContext } from "./open.js"
-import { isoDate, refuse } from "./reviewed.js"
+import { refuse } from "./reviewed.js"
 import { type StageAmount, type StageAmounts, stageAmountsOf } from "./stage-amounts.js"
 
 const TABLES = { deal: "deals", lead: "leads" } as const
@@ -19,12 +21,15 @@ export const bounded = (
   ...(bounds?.until === undefined ? [] : [{ sql: `${column} <= ?`, params: [bounds.until] }]),
 ]
 
-/** A window's bound, a `YYYY-MM-DD` day (its UTC start, or its end for `end`) or an ISO time, as epoch ms. */
-export const boundOf = (value: string | undefined, what: string, end = false): number | null => {
+/** A window's bound, a `YYYY-MM-DD` day in `zone` (its start, or its end for `end`) or an ISO time, as epoch ms. */
+export const boundOf = (value: string | undefined, what: string, zone: string, end = false): number | null => {
   if (value === undefined) return null
-  const day = /^\s*\d{4}-\d{2}-\d{2}\s*$/.test(value) ? isoDate(value, what) : null
-  const at = day === null ? Date.parse(value) : Date.parse(`${day}T00:00:00Z`) + (end ? 86_399_999 : 0)
-  return Number.isFinite(at) ? at : refuse(`${what} is a YYYY-MM-DD day or an ISO time, not ${value}`, "deal.field")
+  const typed = value.trim()
+  try {
+    return zonedMoment(typed, zone, { start: 0, end: typed.length }, { end })
+  } catch {
+    return refuse(`${what} is a YYYY-MM-DD day or an ISO time, not ${value}`, "deal.field")
+  }
 }
 
 /** A stage the CRM removed stays in a pipeline only while a row stands in it (BUG-7). */
@@ -80,10 +85,6 @@ const median = (values: number[]): number | null => {
     sorted.length % 2 ? (sorted[middle] as number) : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2
   return Math.round((value / DAY) * 10) / 10
 }
-
-/** The `YYYY-MM-DD` day `at` falls on in `zone`. */
-export const dayIn = (at: number, zone: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)
 
 const rate = (won: number, lost: number) => share(won, won + lost)
 
@@ -165,8 +166,11 @@ export const pipelinePeriod = (
   const lostStage = new Set(stages.filter((stage) => stage.outcome === "lost").map(({ id }) => id))
   const wonStage = new Set(stages.filter((stage) => stage.outcome === "won").map(({ id }) => id))
   const entries = new Map<number, ReturnType<typeof stageEntriesOf>>()
-  for (const entry of stageEntriesOf(database, kind, { pipeline: pipelineId }))
-    entries.set(entry.itemId, [...(entries.get(entry.itemId) ?? []), entry])
+  for (const entry of stageEntriesOf(database, kind, { pipeline: pipelineId })) {
+    const own = entries.get(entry.itemId) ?? []
+    own.push(entry)
+    entries.set(entry.itemId, own)
+  }
 
   const furthest = cohort.map((item) => {
     if (item.status === "won") return Number.POSITIVE_INFINITY
@@ -185,7 +189,9 @@ export const pipelinePeriod = (
     const own = entries.get(item.id) ?? []
     own.slice(0, -1).forEach((entry, at) => {
       const next = own[at + 1] as (typeof own)[number]
-      stays.set(entry.toStageId, [...(stays.get(entry.toStageId) ?? []), next.at - entry.at])
+      const days = stays.get(entry.toStageId) ?? []
+      days.push(next.at - entry.at)
+      stays.set(entry.toStageId, days)
     })
   }
   const standing = stageAmountsOf(
@@ -217,7 +223,11 @@ export const pipelinePeriod = (
     return at === null ? [] : [Math.max(0, at - item.createdAt)]
   })
   const owners = new Map<string | null, Item[]>()
-  for (const item of cohort) owners.set(item.assignee, [...(owners.get(item.assignee) ?? []), item])
+  for (const item of cohort) {
+    const own = owners.get(item.assignee) ?? []
+    own.push(item)
+    owners.set(item.assignee, own)
+  }
   const reasons = new Map<string, number>()
   for (const item of closedLost) if (item.reason) reasons.set(item.reason, (reasons.get(item.reason) ?? 0) + 1)
   const exact = cohort.filter((item) => entries.get(item.id)?.[0]?.exact === true).length

@@ -194,9 +194,9 @@ export const CRM_ACTIVITY_KINDS = ["call", "email", "meeting", "todo", "task", "
 export type CrmActivityKind = (typeof CRM_ACTIVITY_KINDS)[number]
 
 /**
- * An activity on the CRM's deals, leads, contacts and companies, as the CRM has it. `externalId` is unique among the account's activities
- * of every kind (a source with separate lists prefixes them). Contact data the CRM keeps on it, such as a call's
- * phone number, is never part of it: it would bypass the limits on reading clients' contacts.
+ * An activity on the CRM's deals, leads, contacts and companies, as the CRM has it. `externalId` is unique among the
+ * account's activities of every kind (a source with separate lists prefixes them). Contact data the CRM keeps on it,
+ * such as a call's phone number, is never part of it: it would bypass the limits on reading clients' contacts.
  */
 export interface CrmActivity {
   externalId: string

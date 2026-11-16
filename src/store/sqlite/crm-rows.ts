@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { CrmItem, CrmPipeline } from "../../domain/crm.js"
 import { type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { currencyOf, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
@@ -246,14 +248,14 @@ export const crmRowsOver = (context: StoreContext) => {
           "WHERE account_id = ? AND external_id = ?",
       )
       .get(accountId, item.externalId)
-    // A CRM that gives no closed day: the day it was first seen closed, never the day of a later edit (BUG-8).
+    // A CRM that gives no closed day: the owner's day it was first seen so closed, never that of a later edit (BUG-8).
     const closed =
       status === "open"
         ? null
         : (day(item.closedDate, "a closed day") ??
-          (held && held.status !== "open" && held.closed_date != null
+          (held && held.status === status && held.closed_date != null
             ? String(held.closed_date)
-            : new Date(epoch(item.updatedAt, at)).toISOString().slice(0, 10)))
+            : dayIn(epoch(item.updatedAt, at), timezoneOf())))
     const deal =
       writer.deal !== undefined
         ? writer.deal === null

@@ -154,11 +154,20 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
                   { firstName: "Anna", lastName: "Example", emails: ["anna@example.com"] },
                   operation(),
                 )
-              : await writer.create(kind, { name: "Example contract company", phones: ["+34600000003"] }, operation())
+              : await writer.create(
+                  kind,
+                  { name: "Example contract company", phones: ["+34600000003"], emails: ["company@example.com"] },
+                  operation(),
+                )
           assert.ok(made.externalId, `${kind}: an id`)
           assert.ok(made.name, `${kind}: a name`)
-          if (kind === "organization")
+          if (kind === "organization") {
             assert.ok(((made as CrmOrganization).phones ?? []).includes("+34600000003"), "organization: its phone")
+            assert.ok(
+              ((made as CrmOrganization).emails ?? []).includes("company@example.com"),
+              "organization: its e-mail",
+            )
+          }
           if (!writer.capabilities.verbs.includes("update")) continue
           const changed =
             kind === "person"

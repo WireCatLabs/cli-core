@@ -1,6 +1,7 @@
 import type { CrmActivity, CrmActivityKind, CrmKind } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import { recordFingerprint } from "../../domain/records.js"
+import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
@@ -8,6 +9,29 @@ import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
 export const ACTIVITY_RECORD = "crm.activity"
+
+/**
+ * Marks deleted the activities on nothing but these contacts or companies: their subject and body leave the copy with
+ * the rows they were on. Answers how many.
+ */
+export const forgetActivitiesOn = (
+  database: CacheDatabase,
+  accountId: number,
+  kind: "person" | "organization",
+  externalIds: readonly string[],
+  at: number,
+): number => {
+  const removed = "rr.target_type = ? AND rr.target_external_id IN (SELECT value FROM json_each(?))"
+  const ids = JSON.stringify(externalIds)
+  return database
+    .prepare(
+      "UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL " +
+        `AND EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' AND ${removed}) ` +
+        "AND NOT EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' " +
+        `AND NOT (${removed}))`,
+    )
+    .run(at, accountId, ACTIVITY_RECORD, kind, ids, kind, ids).changes
+}
 
 /** A CRM's text field holds what people typed or pasted, a whole e-mail thread too. */
 const MOST_BODY = 20_000

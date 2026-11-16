@@ -592,6 +592,11 @@ export interface CrmRecordWritten<K extends CrmRecordKind> {
   record: K extends "person" ? CrmPerson : CrmOrganization
   /** Whether the copy keeps it: only the sign-in's own clients are stored (NEED-2661). */
   stored: boolean
+  /**
+   * After an update that gave it to someone else, whether the copy let it go: `false` when it stays, because the
+   * owner decided about the contact, something else points at it, or one of the owner's deals names it.
+   */
+  removed?: boolean
 }
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/u
@@ -668,10 +673,10 @@ const keptRecord = async (context: CrmWriteContext, kind: CrmRecordKind, record:
  * A contact or company the update gave to someone else leaves the copy (NEED-2661), as `removeCrmItem` removes a deal:
  * a contact with its identity, which held the phones and e-mails it was saved with.
  */
-const forgotten = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) => {
-  if (kind === "organization") await context.store.crm.remove(context.account, kind, [record.externalId])
-  else await context.store.crm.removeContact(context.account, record.externalId)
-}
+const forgotten = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) =>
+  (kind === "organization"
+    ? await context.store.crm.remove(context.account, kind, [record.externalId])
+    : (await context.store.crm.removeContact(context.account, record.externalId)).contacts) > 0
 
 const writeRecord = async <K extends CrmRecordKind>(
   context: CrmWriteContext,
@@ -686,16 +691,22 @@ const writeRecord = async <K extends CrmRecordKind>(
   const rule = foreignContacts(context.source(), undefined)
   const record = await written(context, keysOf(context, kind, verb, { owner: fields.owner }), operationId, act)
   const stored = await rule.own(kind, record)
+  let removed: boolean | undefined
   try {
     if (stored) await keptRecord(context, kind, record)
-    else if (verb === "update") await forgotten(context, kind, record)
+    else if (verb === "update") removed = await forgotten(context, kind, record)
   } catch (error) {
     if (isCliError(error))
       throw new CliError(error.code, error.message, { ...error.details, operation_id: operationId })
     throw error
   }
   const [shown] = stored ? [record] : await rule.strip(kind, [record])
-  return { operationId, record: shown as CrmRecordWritten<K>["record"], stored }
+  return {
+    operationId,
+    record: shown as CrmRecordWritten<K>["record"],
+    stored,
+    ...(removed === undefined ? {} : { removed }),
+  }
 }
 
 /** A new contact or company in the CRM, through the guarded path; the CRM's answer is stored as a sync stores it. */

@@ -212,9 +212,9 @@ export const nativeTermLists = (
 
 /**
  * A store that compares whole values: each field's `field:value` or `field:"two words"`, enum values lowercased
- * as validation already accepts them. A range or wildcard is refused rather than read as a value.
+ * as validation already accepts them. A range or wildcard is refused rather than read as a value. `ranged` are fields
+ * the caller reads itself, with `nativeTerms`: they are left out.
  */
-/** `ranged` are fields the caller reads itself, with `nativeTerms`: they are left out. */
 export const queryTerms = (
   words: QueryWords,
   registry: QueryRegistry,

@@ -12,6 +12,8 @@ export const STAGE_ENTRY_RECORD = "crm.stage-entry"
 
 /** An entry whose deal never reached the copy is dropped after this long: the history is read this far back. */
 export const STAGE_ENTRY_DAYS = 90
+/** A stage entered longer ago than this opens no task: the copy missed the deal for more than a sync or two. */
+const STAGE_TASK_DAYS = 7
 const DAY = 86_400_000
 
 /** One stage a deal or lead entered, from the CRM's own history (`exact`) or from the copy's diffs between syncs. */
@@ -29,26 +31,29 @@ export interface StageEntry {
 export const stageEntriesOf = (
   database: CacheDatabase,
   kind: DealKind,
-  { pipeline = null, item = null }: { pipeline?: number | null; item?: number | null },
+  filter: { pipeline: number } | { item: number },
 ): StageEntry[] => {
+  const one = "item" in filter
   const exact = database
     .prepare(
       `SELECT d.id AS item_id, s.id AS stage_id, json_extract(r.fields, '$.at') AS at FROM records r ` +
         "JOIN record_relations rr ON rr.record_id = r.id AND rr.role = 'on' AND rr.target_type = ? " +
         `JOIN ${TABLES[kind]} d ON d.account_id = r.account_id AND d.external_id = rr.target_external_id ` +
-        "JOIN pipeline_stages s ON s.id = json_extract(r.fields, '$.stage_id') " +
-        "WHERE r.type = ? AND (? IS NULL OR s.pipeline_id = ?) AND (? IS NULL OR d.id = ?) " +
+        "JOIN pipeline_stages s ON s.id = json_extract(r.fields, '$.stage_id') WHERE r.type = ? " +
+        (one
+          ? `AND rr.target_external_id = (SELECT external_id FROM ${TABLES[kind]} WHERE id = ?) AND d.id = ? `
+          : "AND s.pipeline_id = ? ") +
         "ORDER BY d.id, json_extract(r.fields, '$.at'), r.id",
     )
-    .all(kind, STAGE_ENTRY_RECORD, pipeline, pipeline, item, item)
+    .all(kind, STAGE_ENTRY_RECORD, ...(one ? [filter.item, filter.item] : [filter.pipeline]))
     .map((row) => ({ itemId: Number(row.item_id), toStageId: Number(row.stage_id), at: Number(row.at), exact: true }))
   const withHistory = new Set(exact.map(({ itemId }) => itemId))
   const copied = database
     .prepare(
       "SELECT item_id, to_stage_id, changed_at FROM pipeline_stage_changes WHERE item_type = ? " +
-        "AND (? IS NULL OR pipeline_id = ?) AND (? IS NULL OR item_id = ?) ORDER BY item_id, id",
+        `AND ${one ? "item_id" : "pipeline_id"} = ? ORDER BY item_id, id`,
     )
-    .all(kind, pipeline, pipeline, item, item)
+    .all(kind, one ? filter.item : filter.pipeline)
     .filter((row) => !withHistory.has(Number(row.item_id)))
     .map((row) => ({
       itemId: Number(row.item_id),
@@ -109,10 +114,10 @@ export const crmStageEntriesOver = (context: StoreContext) => {
     })
 
   /**
-   * The entries on rows the copy holds whose stage task is not handled yet, made at or after `since`, oldest first, as
-   * stage moves whose task source names the CRM's history row.
+   * The entries on rows the copy holds whose stage task is not handled yet, made at or after `since` and within
+   * `STAGE_TASK_DAYS` of `at`, oldest first, as stage moves whose task source names the CRM's history row.
    */
-  const pending = (key: AccountKey, since: number): CrmStageMove[] => {
+  const pending = (key: AccountKey, since: number, at: number): CrmStageMove[] => {
     const accountId = findAccountPk(context, key)
     if (accountId === undefined) return []
     return database
@@ -129,7 +134,7 @@ export const crmStageEntriesOver = (context: StoreContext) => {
           "AND json_extract(r.fields, '$.handled') IS NULL AND json_extract(r.fields, '$.at') >= ? " +
           "ORDER BY json_extract(r.fields, '$.at'), r.id",
       )
-      .all(accountId, STAGE_ENTRY_RECORD, since)
+      .all(accountId, STAGE_ENTRY_RECORD, Math.max(since, at - STAGE_TASK_DAYS * DAY))
       .map((row) => {
         const ref = `${String(row.kind)}:${String(row.item_id)}`
         return {
