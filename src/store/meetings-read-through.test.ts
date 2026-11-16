@@ -449,6 +449,31 @@ describe("what a live read keeps, and what it says it could not read", () => {
     })
   })
 
+  it("stops a list and a show at the run's stop signal, and hands the service the signal", async () => {
+    for (const words of [["list"], ["show", "svc-1"]]) {
+      const controller = new AbortController()
+      const stop = new CliError("cancelled", "the run was stopped")
+      const signals: (AbortSignal | undefined)[] = []
+      const aborting = (signal?: AbortSignal): never => {
+        signals.push(signal)
+        controller.abort(stop)
+        throw new Error("The operation was aborted")
+      }
+      const { source } = serviceOf([ROADMAP], {
+        async find(_window, _terms, _cursor, signal) {
+          return aborting(signal)
+        },
+        async get(_id, signal) {
+          return aborting(signal)
+        },
+      })
+      const { run, keep } = await fixture(source, { signal: () => controller.signal })
+      await keep(ROADMAP)
+      await expect(run(...words), words[0]).rejects.toBe(stop)
+      expect(signals, words[0]).toEqual([controller.signal])
+    }
+  })
+
   it("names a rate limit as one: a list answers from the store, a show of an unstored meeting is no not_found", async () => {
     const limited = new CliError("rate_limited", "Google rate limit reached; retry the command")
     const { source } = serviceOf([ROADMAP], { fail: limited })

@@ -33,10 +33,15 @@ None open.
 - **CORE-67** · P2 · `src/cli/messenger/serve-relay.test.ts` failed once in a full run and passed alone (DEBT-360).
   A lock path too long for a socket puts the relay socket under the temporary folder or `/tmp`, named by a hash of
   the path (`src/background/relay.ts:69`), so parallel sessions may clash there; not verified.
+- **CORE-70** · P2 · gcal-cli and zoom-cli pass no `signal` to `addMeetingCommands`, so `meetings list` and `show`
+  still answer from the store when the run is stopped mid-read. Pass `signal` in the deps after a release
+  (gcal `src/commands/meetings.ts` `depsOf`, zoom `src/program-bindings.ts:289`). `src/meetings/read-through.ts`.
 - **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
   loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
   gcal keeps its own Calendar-only `forbiddenForNonOrganizer` → `event.organizer-only` mapping and its reason
   registration before calling `googleError`, which maps that reason to the generic 403 `access.denied`. `src/google/`.
+  The request transport is not shared either: gcal (`src/google-api.ts`, Meet reuses it) and drive
+  (`src/google-api.ts`) each have one; cli-core has none, so there is no third copy.
 - **CORE-56** · P2 · A Drive document's own answer (drive's `documents show`, built in drive-cli from the `document`
   entity) does not name its meeting yet; `search all` hits do (`meeting`). Add an optional `meeting` ref to the
   entity, read through `store.meetings.documentMeetings`. `src/entities/document.ts`.

@@ -74,7 +74,7 @@ export interface MeetingCommandDeps {
    * asks when the command's key is at `ask` and refuses when nobody can answer. Without it the writes refuse.
    */
   askFirst?: (command: Command) => Promise<void>
-  /** The run's stop signal; the meeting writes and `meetings invitation` pass it to the service. */
+  /** The run's stop signal; `list`, `show`, the meeting writes and `meetings invitation` pass it to the service. */
   signal?: () => AbortSignal | undefined
 }
 // Whoever sent the invitation wrote these, as on a calendar CLI's `events list`.
@@ -120,12 +120,16 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
   }
-  const access = (command: Command, backend: Backend | undefined): MeetingServerAccess => ({
-    ...(backend === undefined ? {} : { backend }),
-    offline: command.optsWithGlobals().offline === true,
-    timezone: timezoneOf(deps.timezone),
-    ...(deps.now ? { now: deps.now() } : {}),
-  })
+  const access = (command: Command, backend: Backend | undefined): MeetingServerAccess => {
+    const signal = deps.signal?.()
+    return {
+      ...(backend === undefined ? {} : { backend }),
+      offline: command.optsWithGlobals().offline === true,
+      timezone: timezoneOf(deps.timezone),
+      ...(deps.now ? { now: deps.now() } : {}),
+      ...(signal ? { signal } : {}),
+    }
+  }
   const list = queryWordsAfterOptions(
     group.command("list").description("meetings, newest first: the service's and the stored ones, kept in the store"),
   )
