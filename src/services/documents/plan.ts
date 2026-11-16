@@ -107,7 +107,15 @@ export const planDocuments = async <M extends SourceFile>(
   const walked = (id: string) => !initial && state.folders[id] !== undefined && !state.folders[id]?.trashed
   let walk = resumed
   let cursor = state.cursor ?? ""
+  // Each read takes a request from the budget, the start token and a root's own metadata as much as a listing: a run
+  // that left them out would reach its deadline with no margin.
+  const charge = () => {
+    const taken = options.signal?.aborted ? "cancelled" : budget?.take()
+    return taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
+  }
   if (!walk && initial) {
+    const before = charge()
+    if (before) return { walk: { folders_left: roots.length, entries: 0, listed: 0, stopped: before } }
     const start = await source.startToken()
     walk = {
       scope,
@@ -119,6 +127,10 @@ export const planDocuments = async <M extends SourceFile>(
       discovered: 0,
     }
   } else if (!walk) {
+    // The roots' metadata below stays free: a run stopped between them and the changes would read the same page again
+    // in every call.
+    const before = charge()
+    if (before) return { walk: { folders_left: 0, entries: 0, listed: 0, stopped: before } }
     const page = await source.changes(cursor)
     const latest = new Map(page.items.map((change) => [change.id, change]))
     const entering: M[] = []
@@ -210,10 +222,17 @@ export const planDocuments = async <M extends SourceFile>(
             : budget?.take()
         stopped = taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
         if (stopped) break
-        const folder = step.folder ?? (await source.metadata(step.id))
-        if (!step.folder && (!isFolder(folder) || folder.trashed))
-          throw new CliError("validation_error", "configured root is not an accessible folder")
-        if (!step.folder) container(folder)
+        if (!step.folder) {
+          const root = await source.metadata(step.id)
+          if (!isFolder(root) || root.trashed)
+            throw new CliError("validation_error", "configured root is not an accessible folder")
+          container(root)
+          // Kept on the step, so a call stopped before the listing does not read the root again.
+          step.folder = root
+          stopped = charge()
+          if (stopped) break
+        }
+        const folder = step.folder
         let children: M[]
         let more: string | undefined
         try {
