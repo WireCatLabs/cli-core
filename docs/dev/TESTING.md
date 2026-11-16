@@ -31,6 +31,11 @@ check, `validation / parity / downstream`, sums the matrix
 A new CLI on cli-core is one line in that file; a private repository cannot be listed (the job checks out without a
 token).
 
+The same blocking steps run locally before a push: [`bin/downstream-check`](../../bin/downstream-check) packs the
+checkout and builds each CLI (or only those named, `bin/downstream-check tg max`) one at a time, then its typecheck
+and a `--help` start with a throwaway home and no D-Bus. A CLI listed in `known-broken.json` is reported, not
+failed.
+
 What a CLI's failure does:
 
 - **Blocks:** the CLI no longer builds against the branch, fails `pnpm typecheck`, or fails to start (`<cli> --help`,
