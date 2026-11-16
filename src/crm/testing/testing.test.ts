@@ -54,6 +54,18 @@ describe("fake CRM source", () => {
         source,
         deadCursor: { kind: "deal", cursor },
         live: { person: ["p1", "p2", "p3"], organization: ["c1"] },
+        faults: {
+          deny: () => {
+            source.deny("person", "p2")
+            return { kind: "person", id: "p2" }
+          },
+          skewed: () => source,
+          change: () => {
+            source.put("deal", exampleDeal("d1", { title: "Changed" }))
+            return { kind: "deal", id: "d1" }
+          },
+          sameToken: () => source,
+        },
       }
     }))
       it(`${c.name} (removedInChanges: ${removedInChanges})`, c.run)
