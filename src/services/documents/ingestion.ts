@@ -8,6 +8,8 @@ export interface IngestionOptions<M extends SourceFile> {
    * `{ provider, account: principal }`. Without it they live in a notes folder named `collectionName(principal)`.
    */
   provider?: string
+  /** The CLI's command (`notion`), which names its profiles: with `provider`, a sync records which account each is. */
+  command?: string
   collectionName?(principal: string): string
   externalId(id: string): string
   catalogInput(file: M): CatalogInput
@@ -15,7 +17,7 @@ export interface IngestionOptions<M extends SourceFile> {
   observed?(principal: string, file: M, documentId: string): Promise<void>
 }
 export const documentIngestion = <M extends SourceFile>(
-  store: Pick<MessageStore, "notes" | "catalog" | "memories">,
+  store: Pick<MessageStore, "notes" | "catalog" | "memories" | "accounts">,
   options: IngestionOptions<M>,
 ) => {
   const folder = async (principal: string, create: boolean) => {
@@ -81,6 +83,13 @@ export const documentIngestion = <M extends SourceFile>(
       },
     },
     collection: folder,
+    /** Names the profile's account in the store, so a search hit says `notion`/`work`, not `notes`/`1`. */
+    registerProfile: async (name: string, principal: string) => {
+      if (!options.provider || !options.command)
+        throw new CliError("configuration_error", "a profile is recorded for a documents provider and its command")
+      await folder(principal, true)
+      await store.accounts.saveProfile(options.command, name, { provider: options.provider, account: principal })
+    },
     // A store fake that predates `indexWritten` leaves the text for the next search to index.
     settle: async ({ until }: { until: () => boolean }) => store.notes.indexWritten?.({ until }),
     save: async (principal: string, content: SourceContent<M>, hash: string) => {

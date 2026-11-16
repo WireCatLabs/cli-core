@@ -7,6 +7,8 @@ export interface SyncOptions<M extends SourceFile> {
   index: SourceIndex<M>
   state: SourceStatePort<M>
   principal: string
+  /** The profile being synced, recorded against `principal` once the signed-in account is checked. */
+  profile?: string
   roots: string[]
   query?: SourceQuery<M>
   textLimit: number

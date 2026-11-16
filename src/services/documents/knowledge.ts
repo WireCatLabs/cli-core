@@ -158,7 +158,14 @@ export const documentKnowledge = (
     },
     addLink: async (principal, ref, input) => {
       await document(principal, ref)
-      return store.notes.addLink({ ...input, from: ref, origin: input.by === "owner" ? "owner" : "suggested" })
+      const by = writer(input.by)
+      return store.notes.addLink({
+        ...input,
+        from: ref,
+        ...(by === "owner"
+          ? { origin: "owner" }
+          : { origin: "suggested", confirmed: false, provenance: `agent:${by.bot}: ${by.reason.trim()}` }),
+      })
     },
     removeLink: async (principal, ref, id, by) => {
       const links = await port.links(principal, ref)
