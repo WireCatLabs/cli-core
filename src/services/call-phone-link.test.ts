@@ -127,6 +127,75 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
   })
 })
 
+describe("one mobile a CRM contact, a WhatsApp account and a call each have (BUG-774, BUG-775)", () => {
+  const MOBILE = "+79161234567"
+  const WA = { provider: "whatsapp", account: "1", scope: "personal" as const }
+  const AMO = { provider: "amocrm", account: "other.example", scope: "work" as const }
+  const crm = { provider: CRM.provider, id: "contact/20" }
+  const wa = { provider: WA.provider, id: "79161234567" }
+  const call = { provider: CALLS.provider, id: `phone:${MOBILE}` }
+
+  const empty = async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "one-mobile-")), "store.db") })
+    opened.push(store)
+    return store
+  }
+  const add = {
+    crm: (store: MessageStore) =>
+      store.people.savePeople(CRM, [{ id: crm.id, name: "Ana Example", phone: "8 (916) 123-45-67" }]),
+    wa: (store: MessageStore) => store.people.savePeople(WA, [{ id: wa.id, name: "Ana", phone: "79161234567" }]),
+    call: async (store: MessageStore) => {
+      const accountId = await store.accounts.saveAccount(CALLS, { name: null })
+      const source = fakeMeetingSource({ provider: CALLS.provider, participants: async () => [client(MOBILE)] })
+      await pull(source, { ...store.meetings, linkCallers: undefined }, { accountId, now: 4000 })
+    },
+  }
+  const uids = async (store: MessageStore) =>
+    new Set(await Promise.all([crm, wa, call].map(async (ref) => (await store.people.personOf(ref))?.uid)))
+
+  it.each([
+    ["all three, then one scan", ["crm", "wa", "call"], false],
+    ["a scan after each, the CRM contact last", ["wa", "call", "crm"], true],
+    ["a scan after each, the WhatsApp account last", ["crm", "call", "wa"], true],
+  ] as const)("is one person without the owner: %s", async (_, order, scanEach) => {
+    const store = await empty()
+    for (const source of order) {
+      await add[source](store)
+      if (scanEach) await store.people.scanMatches()
+    }
+    if (!scanEach) await store.people.scanMatches()
+    expect((await uids(store)).size).toBe(1)
+    expect((await store.people.linkProposals({ limit: 10, offset: 0 })).items).toEqual([])
+  })
+
+  it("joins over a proposal still open for the pair, once a WhatsApp account has the number too", async () => {
+    const store = await empty()
+    await add.crm(store)
+    await store.people.savePeople(AMO, [{ id: "contact/9", name: "Ana E.", phone: MOBILE }])
+    await store.people.scanMatches()
+    expect((await store.people.linkProposals({ limit: 10, offset: 0 })).items).toHaveLength(1)
+
+    await add.wa(store)
+    const scan = await store.people.scanMatches()
+
+    expect(scan.merged).toHaveLength(2)
+    const amo = await store.people.personOf({ provider: AMO.provider, id: "contact/9" })
+    expect(amo?.uid).toBe((await store.people.personOf(crm))?.uid)
+    expect((await store.people.personOf(wa))?.uid).toBe(amo?.uid)
+    expect((await store.people.linkProposals({ limit: 10, offset: 0 })).items).toEqual([])
+  })
+
+  it("is strong evidence for an agent's link while all three are still apart", async () => {
+    const store = await empty()
+    for (const source of ["crm", "wa", "call"] as const) await add[source](store)
+
+    const done = await store.people.agentLink({ identity: crm, with: wa, bot: "claude-code", reason: "", apply: true })
+
+    expect(done).toMatchObject({ outcome: "merged", evidence: { strong: true } })
+    expect(done.evidence.facts[0]).toMatchObject({ others: 1, strong: true, weak: null })
+  })
+})
+
 describe("a sync that saved a call's client, with no people scan run (memo absent)", () => {
   it("**links the call to the CRM contact by the number**, and leaves the scan's other rules and cursor to the scan", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "phone-link-sync-")), "store.db") })
