@@ -441,7 +441,9 @@ export const accountRemoveCommand = (
         if (removed.some((one) => one.kind === "store") && account) {
           const store = await openStore({ env, command: app.command })
           try {
-            await store.accounts.purge(account)
+            // A CRM file the CLI downloaded goes with the account; a copy saved with --dir elsewhere is the owner's.
+            for (const target of await store.accounts.purge(account))
+              if (within(target, state) && !inOwners(target)) removed.push({ kind: "file", target })
             await store.accounts.forgetProfile(app.command, profile)
           } finally {
             await store.close()

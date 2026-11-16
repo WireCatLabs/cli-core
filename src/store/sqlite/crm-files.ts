@@ -67,6 +67,10 @@ export interface CrmFileStore {
 }
 
 const MOST = 500
+
+const CURRENTLY = (table: "deals" | "leads") =>
+  `EXISTS (SELECT 1 FROM ${table} r WHERE r.account_id = f.account_id AND r.external_id = f.owner_id ` +
+  "AND r.deleted_at IS NULL AND json_extract(r.metadata, '$.assignee') = ?)"
 const EXCERPT = 240
 
 const COLUMNS =
@@ -186,11 +190,11 @@ export const crmFilesOver = (context: StoreContext): CrmFileStore => {
         )
     })
 
-  const rowsOf = (key: AccountKey, where: string, ...params: (string | number)[]) => {
+  const rowsOf = (key: AccountKey, columns: string, where: string, ...params: (string | number)[]) => {
     const accountId = findAccountPk(context, key)
     if (accountId === undefined) return []
     return database
-      .prepare(`SELECT ${COLUMNS}, f.text FROM crm_files f WHERE f.account_id = ? AND ${where}`)
+      .prepare(`SELECT ${columns} FROM crm_files f WHERE f.account_id = ? AND ${where}`)
       .all(accountId, ...params)
   }
 
@@ -215,9 +219,17 @@ export const crmFilesOver = (context: StoreContext): CrmFileStore => {
       for (const id of scoped) params.push(id)
     }
     for (const one of limits) {
-      sql += one.assignee === null ? " AND f.account_id <> ?" : " AND (f.account_id <> ? OR f.owner_assignee = ?)"
-      params.push(one.id)
-      if (one.assignee !== null) params.push(one.assignee)
+      if (one.assignee === null) {
+        sql += " AND f.account_id <> ?"
+        params.push(one.id)
+        continue
+      }
+      // A deal's or lead's file follows the copy's current assignee, so a reassigned deal takes its files along.
+      sql +=
+        " AND (f.account_id <> ? OR CASE f.owner_kind " +
+        `WHEN 'deal' THEN ${CURRENTLY("deals")} WHEN 'lead' THEN ${CURRENTLY("leads")} ` +
+        "ELSE f.owner_assignee = ? END)"
+      params.push(one.id, one.assignee, one.assignee, one.assignee)
     }
     sql += " ORDER BY w.rank, f.downloaded_at DESC, f.id DESC LIMIT ?"
     params.push(most + 1)
@@ -237,19 +249,26 @@ export const crmFilesOver = (context: StoreContext): CrmFileStore => {
   return {
     save: async (key, file) => save(key, file),
     get: async (key, externalId) => {
-      const [row] = rowsOf(key, "f.external_id = ?", externalId)
+      const [row] = rowsOf(key, `${COLUMNS}, f.text`, "f.external_id = ?", externalId)
       return row ? { ...rowOf(row), text: text(row.text) } : undefined
     },
     ofOwner: async (key, kind, id) =>
-      rowsOf(key, "f.owner_kind = ? AND f.owner_id = ? ORDER BY f.downloaded_at DESC, f.id DESC", kind, id).map(rowOf),
+      rowsOf(
+        key,
+        COLUMNS,
+        "f.owner_kind = ? AND f.owner_id = ? ORDER BY f.downloaded_at DESC, f.id DESC",
+        kind,
+        id,
+      ).map(rowOf),
     storedBytes: async (key, folder) =>
-      rowsOf(key, `f.local_path IS NOT NULL AND ${under}`, folder, folder).reduce(
-        (sum, row) => sum + Number(row.size ?? 0),
+      rowsOf(key, "coalesce(sum(f.size), 0) AS bytes", `f.local_path IS NOT NULL AND ${under}`, folder, folder).reduce(
+        (sum, row) => sum + Number(row.bytes),
         0,
       ),
     droppable: async (key, folder) =>
       rowsOf(
         key,
+        COLUMNS,
         `f.local_path IS NOT NULL AND ${under} AND coalesce(f.text, '') <> '' ORDER BY f.downloaded_at, f.id`,
         folder,
         folder,

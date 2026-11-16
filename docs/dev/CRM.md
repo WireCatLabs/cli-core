@@ -153,15 +153,19 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
   `parseCrmFileId`), and `open()`, which asks the CRM for a fresh link each time and keeps it inside the adapter: a
   tokened link reaches no record, store row, error or answer. A kind of file the sign-in may not read is a
   `context.gap` naming the scope; the others still list. `null`: no such record, or the sign-in cannot see it.
-- `withoutFileLinks(body)`: what a CLI's `api call` answers, with every file link replaced by `[link removed]`:
-  `urlMachine`, `downloadUrlMachine`, `pdfUrlMachine`, `imageUrlMachine`, `DOWNLOAD_URL`, amoCRM's `_links.download`
-  and any URL string holding `auth=` or `token=`.
+- `withoutFileLinks(body)`: what a CLI's `api call` answers, with every file link replaced by `[link removed]`: the
+  values of the download keys, folded (every `…Machine`, `DOWNLOAD_URL`, `downloadUrl`, `fileUrl`, `CALL_RECORD_URL`,
+  `archiveLink`, `publicUrl`), amoCRM's `_links.download`, and any string holding a webhook (`/rest/<user>/<code>/`),
+  `auth=`, `access_token=`, `api_token=` or `X-Amz-Signature=`, or a portal path (`/rest/`, `show_file.php`) with
+  `token=`. A site the owner typed with `?token=promo` stays. `crmValuesOf` applies it to every custom value.
 - Only a downloaded file has a row: `crm_files` (store version 68), with the owner record, its assignee at download
   as the identity a deal's assignee is kept as, the local path and the extracted text, in its own word index
   `crm_file_words`. It is not `attachments`, so no generic reader (`attachments list`, MCP `attachments_show`) shows a
   colleague's contract. `store.crmFiles` reads and writes it; `find` takes the copy's viewers: a limited profile finds
-  only the files of records assigned to its user (NEED-2707 A), the administrator all. The account's purge removes
-  the rows. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
+  only the files of records assigned to its user (NEED-2707 A), the administrator all. A deal's or lead's file follows
+  the copy's current assignee, so it goes with a reassigned deal and is hidden while the copy lacks the deal; a
+  contact's or company's keeps its assignee at download. The account's purge removes the rows and answers their
+  paths; `account remove --delete-data` deletes those under the CLI's state folder. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
   that have text are dropped, the row and the text stay.
 
 ## Adapter helpers

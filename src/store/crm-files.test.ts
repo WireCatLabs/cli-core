@@ -55,14 +55,18 @@ describe("crm_files", () => {
   })
 
   it("finds the text by its words, a limited viewer only its own records' files (NEED-2707 A)", async () => {
-    await store.crmFiles.save(PORTAL, fileOf("1"))
-    await store.crmFiles.save(PORTAL, fileOf("2", { ownerAssignee: BORIS }))
+    // A contact's file: the assignee at download decides. A deal's follows the copy (src/crm/files.test.ts).
+    const contact = (id: string, fields: Partial<CrmFileRow> = {}) =>
+      fileOf(id, { externalId: `person:${id}:record:${id}`, ownerKind: "person", ...fields })
+    await store.crmFiles.save(PORTAL, contact("1"))
+    await store.crmFiles.save(PORTAL, contact("2", { ownerAssignee: BORIS }))
+    await store.crmFiles.save(PORTAL, fileOf("9"))
     await store.crmFiles.save(OTHER, fileOf("3", { ownerAssignee: BORIS }))
     const names = async (viewers?: { account: typeof PORTAL; assignee: string | null }[]) =>
       (await store.crmFiles.find({ words: ["kitchen"], ...(viewers ? { viewers } : {}) })).items
         .map((hit) => `${hit.account.account}:${hit.file.ownerId}`)
         .sort()
-    expect(await names()).toEqual(["other:3", "portal:1", "portal:2"])
+    expect(await names()).toEqual(["other:3", "portal:1", "portal:2", "portal:9"])
     expect(await names([{ account: PORTAL, assignee: ANNA }])).toEqual(["other:3", "portal:1"])
     expect(await names([{ account: PORTAL, assignee: BORIS }])).toEqual(["other:3", "portal:2"])
     expect(await names([{ account: PORTAL, assignee: null }])).toEqual(["other:3"])
