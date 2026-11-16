@@ -146,7 +146,8 @@ id and not by account, so it resolves when any Drive profile imports the file (`
   named; a replay of an old version replaces nothing. It never removes or changes a listed link, nor another source's.
 - **Where it shows.** `meetings show` lists the links as `documents[]`. A `search all` document hit names its meeting
   (`meeting`) when the search read the meeting's account, and a transcript's hit is dropped when its meeting is among
-  the hits. A file two Drive profiles imported stays unresolved (CORE-54).
+  the hits. A file two Drive profiles imported
+  links the older of its two documents.
 
 ## A participant's phone
 

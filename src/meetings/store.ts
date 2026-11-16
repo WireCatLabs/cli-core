@@ -72,7 +72,7 @@ export interface MeetingDocument {
   fileId: string
   role: MeetingDocumentRole
   title: string | null
-  /** `null` while no Drive account holds the file, while two do (CORE-54), or while its document is deleted. */
+  /** `null` while no Drive account holds the file, or while its document is deleted. */
   documentId: number | null
 }
 export interface ChatInput extends Omit<NewRecord<ChatLine>, "meetingId" | "senderParticipantId"> {

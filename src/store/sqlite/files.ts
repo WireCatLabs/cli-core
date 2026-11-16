@@ -87,15 +87,18 @@ export const logFileLink = (
 /** How an `attached` link names a Drive file it waits for: by its Drive id, since no row may hold it yet. */
 export const driveFileTarget = (fileId: string): string => `google-drive:${fileId}`
 
-/** The document of the Drive file with this id; `null` when no Drive account holds it, or two do. */
+/**
+ * The document of the Drive file with this id; `null` when no Drive account holds it. A file two Drive profiles hold
+ * (one shared with both) is the oldest document: it stays the same whichever profile imports again.
+ */
 export const driveDocumentOf = (database: CacheDatabase, fileId: string): number | null => {
-  const rows = database
+  const row = database
     .prepare(
-      "SELECT DISTINCT f.document_id AS id FROM files f JOIN accounts a ON a.id = f.account_id WHERE a.provider = 'google-drive' " +
-        "AND f.external_id = ? AND f.deleted_at IS NULL AND f.document_id IS NOT NULL LIMIT 2",
+      "SELECT MIN(f.document_id) AS id FROM files f JOIN accounts a ON a.id = f.account_id " +
+        "WHERE a.provider = 'google-drive' AND f.external_id = ? AND f.deleted_at IS NULL AND f.document_id IS NOT NULL",
     )
-    .all(fileId)
-  return rows.length === 1 ? Number(rows[0]?.id) : null
+    .get(fileId)
+  return row?.id == null ? null : Number(row.id)
 }
 
 /** Calendar entries that named this Drive file before Drive stored it now link its document. */

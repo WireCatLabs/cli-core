@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { EntryInput } from "../meetings/index.js"
+import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const opened: MessageStore[] = []
@@ -11,7 +12,8 @@ afterEach(async () => {
 })
 
 const setup = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "attachments-")), "store.db") })
+  const path = join(mkdtempSync(join(tmpdir(), "attachments-")), "store.db")
+  const store = await openStore({ path })
   opened.push(store)
   const accountId = await store.accounts.saveAccount(
     { provider: "google-calendar", account: "owner-1" },
@@ -34,7 +36,7 @@ const setup = async () => {
   const drive = String(
     await store.accounts.saveAccount({ provider: "google-drive", account: "owner-1" }, { name: null }),
   )
-  return { store, calendar: calendar?.id as number, drive }
+  return { store, path, calendar: calendar?.id as number, drive }
 }
 
 const driveFile = (store: MessageStore, drive: string, fileId: string) =>
@@ -153,18 +155,52 @@ describe("a calendar entry's Drive attachments", () => {
     expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
   })
 
-  it("make no link while two Drive accounts hold the same file", async () => {
-    const { store, calendar, drive } = await setup()
+  const shared = async () => {
+    const fixture = await setup()
     const other = String(
-      await store.accounts.saveAccount({ provider: "google-drive", account: "owner-2" }, { name: null }),
+      await fixture.store.accounts.saveAccount({ provider: "google-drive", account: "owner-2" }, { name: null }),
     )
-    await driveFile(store, drive, "shared")
+    return { ...fixture, other }
+  }
+
+  it("link the older document of a file two Drive accounts imported before the entry was saved", async () => {
+    const { store, calendar, drive, other } = await shared()
+    const { note } = await driveFile(store, drive, "shared")
     await driveFile(store, other, "shared")
 
     const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 1)
 
-    expect(await attachmentsOf(store, entry?.eventId ?? null)).toEqual([
-      { fileId: "shared", title: null, documentId: null },
-    ])
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
+  })
+
+  it("keep the older document when either Drive account imports the shared file again", async () => {
+    const { store, calendar, drive, other } = await shared()
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 1)
+    const { note } = await driveFile(store, drive, "shared")
+    await driveFile(store, other, "shared")
+
+    await driveFile(store, other, "shared")
+    await driveFile(store, drive, "shared")
+    await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 2)
+
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
+  })
+
+  it("resolve a link left waiting on a file two Drive accounts hold when the entry is saved again", async () => {
+    const { store, path, calendar, drive, other } = await shared()
+    const { note } = await driveFile(store, drive, "shared")
+    await driveFile(store, other, "shared")
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 1)
+    // An older store left such links waiting: it refused to choose between the two documents.
+    const db = await openCache(path)
+    try {
+      db.prepare("UPDATE links SET to_id = NULL WHERE kind = 'attached'").run()
+    } finally {
+      db.close()
+    }
+
+    await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 2)
+
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
   })
 })

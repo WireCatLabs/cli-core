@@ -71,7 +71,7 @@ export interface EntryAttachment {
   entryId: number
   fileId: string
   title: string | null
-  /** `null` while no Drive account holds the file, while two do, or while its document is deleted. */
+  /** `null` while no Drive account holds the file, or while its document is deleted. */
   documentId: number | null
 }
 

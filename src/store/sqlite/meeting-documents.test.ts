@@ -134,16 +134,19 @@ describe("a meeting's Drive documents", () => {
     expect(await shown(store, meeting?.id ?? 0)).toEqual([])
   })
 
-  it("a deleted document, or a file two Drive profiles hold, shows no document", async () => {
+  it("a file two Drive profiles hold shows the older document, and a deleted document shows none", async () => {
     const { store, accountId } = await fixture()
-    const both = await importDoc(store, "doc-n")
+    const older = await importDoc(store, "doc-n")
     await importDoc(store, "doc-n", "other@example.invalid")
     const { meetingId } = await pullWith(store, accountId, async () => [transcript, notes])
-    expect(both).toBeGreaterThan(0)
     const stored = await importDoc(store, "doc-t")
-    expect((await shown(store, meetingId))[0]?.document).toBe(`document:${stored}`)
+    await importDoc(store, "doc-n", "other@example.invalid")
+    expect((await shown(store, meetingId)).map(({ document }) => document)).toEqual([
+      `document:${stored}`,
+      `document:${older}`,
+    ])
     await drive(store).remove("owner@example.invalid", "doc-t")
-    expect((await shown(store, meetingId)).map(({ document }) => document)).toEqual([null, null])
+    expect((await shown(store, meetingId)).map(({ document }) => document)).toEqual([null, `document:${older}`])
   })
 
   const versions = (store: MessageStore, accountId: number) => {
