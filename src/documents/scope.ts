@@ -15,7 +15,8 @@ export const within = <F extends SourceFile>(
   return file.parents.some((id) => {
     const folder = folders[id]
     if (!folder) return roots.includes(id)
-    return !cut?.(folder) && within(folder, roots, folders, next, cut)
+    // A selected folder is never cut: the owner chose it, so an exclude that matches it drops only its own row.
+    return (roots.includes(id) || !cut?.(folder)) && within(folder, roots, folders, next, cut)
   })
 }
 

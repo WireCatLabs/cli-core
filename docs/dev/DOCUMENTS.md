@@ -29,8 +29,9 @@ domain, SQL/transport/vendor imports in services, and private document imports f
    still be a folder, so a source whose pages can hold sub-pages calls every page one. Give such a
    page catalog kind `file`: its children name it as a parent, and the catalog places them under it.
    A saved `exclude` query that matches such a page, or a plain folder, drops the whole branch:
-   the page and everything below it leave the documents and the catalog. A file that also sits
-   under another parent the query keeps stays in scope.
+   the page and everything below it leave the documents and the catalog, and the sync does not
+   list below it. A file that also sits under another parent the query keeps stays in scope. A
+   selected folder the query matches drops only its own row.
 2. Bind `documentIngestion` to the public store. Supply the provider, external-ID mapping, catalog
    metadata and content front matter. The optional `observed` callback registers provider
    identities/roles. Identity mapping remains the provider's responsibility. A provider is a

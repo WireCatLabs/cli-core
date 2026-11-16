@@ -51,6 +51,20 @@ export const planDocuments = async <M extends SourceFile>(
   walks?: WalkStore<M>,
 ): Promise<Plan<M>> => {
   const { isFolder, skipReason, retryable, maxEntries, errorOf, query, budget } = options
+  const answers = new Map<string, boolean>()
+  // Asked once per node, as every file below a folder asks about it again on its way up.
+  const cut =
+    query?.mode === "exclude"
+      ? (file: M) => {
+          const known = answers.get(file.id)
+          if (known !== undefined) return known
+          const found = query.matches(file)
+          answers.set(file.id, found)
+          return found
+        }
+      : undefined
+  const scoped = cut && query ? { ...query, matches: cut } : query
+  const excluded = (folder: M) => !roots.includes(folder.id) && cut?.(folder) === true
   const scope = scopeHash(roots, query, options.isDocument !== undefined)
   if (!roots.length && query?.mode !== "include")
     return {
@@ -137,7 +151,7 @@ export const planDocuments = async <M extends SourceFile>(
       }
     }
     const stack = entering
-      .filter((folder) => within(folder, roots, folders))
+      .filter((folder) => !excluded(folder) && within(folder, roots, folders, new Set(), cut))
       .reverse()
       .map((folder) => ({ id: folder.id, ancestry: [], folder }))
     if (stack.length)
@@ -233,6 +247,7 @@ export const planDocuments = async <M extends SourceFile>(
         for (const file of children)
           if (isFolder(file)) {
             container(file)
+            if (excluded(file)) continue
             if (walked(file.id)) folders[file.id] = file
             else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
           } else keep(file)
@@ -276,7 +291,7 @@ export const planDocuments = async <M extends SourceFile>(
   for (const root of roots)
     if (folders[root]?.trashed) skipped.push({ id: root, reason: "selected folder is unavailable" })
   for (const [id, file] of files) {
-    if (!inScope(file, roots, folders, matched, query)) continue
+    if (!inScope(file, roots, folders, matched, scoped)) continue
     const previousSkip = state.skipped.find((item) => item.id === id)
     const reason = skipReason(file)
     const retry = previousSkip && !reason && retryable(previousSkip, limit)
@@ -300,11 +315,13 @@ export const planDocuments = async <M extends SourceFile>(
   }
   for (const id of Object.keys(state.documents)) {
     const file = files.get(id)
-    if (!file || !inScope(file, roots, folders, matched, query)) jobs.push({ id, kind: "remove" })
+    if (!file || !inScope(file, roots, folders, matched, scoped)) jobs.push({ id, kind: "remove" })
   }
   // Only retain metadata for selected ancestry; the account-wide feed includes unrelated folders.
   const scopedFolders = Object.fromEntries(
-    Object.entries(folders).filter(([, file]) => within(file, roots, folders) || roots.includes(file.id)),
+    Object.entries(folders).filter(
+      ([, file]) => roots.includes(file.id) || (!excluded(file) && within(file, roots, folders, new Set(), cut)),
+    ),
   )
   return {
     pending: {
