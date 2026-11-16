@@ -9,7 +9,8 @@
 
 - **An agent's `relationships add` on a shared documents CLI is saved.** It is written as an unconfirmed suggestion
   for the owner, with the agent and its reason in the provenance. The store used to refuse it, so nothing was written
-  although the error said it would be saved unconfirmed.
+  although the error said it would be saved unconfirmed. The owner decides it in the same commands: adding the same
+  relationship confirms it, and removing it rejects it.
 - **A folder in a documents account stays out of search.** A Drive folder, a Notion workspace or a Notion database
   is a catalog entry, not a document: word search, the newest-first read memo's digest makes, meaning search and
   embedding now leave it out, as document lists already did. It used to show up with an empty excerpt, and
