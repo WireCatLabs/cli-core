@@ -4,7 +4,7 @@ import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
-import { skillResource } from "@wirecat/cli-base/skill"
+import { skillResources } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { findCommand } from "../cli/command-contract.js"
@@ -224,7 +224,8 @@ export const createServer = (
         ...(messenger.diagnose ? { [messenger.provider]: await messenger.diagnose(command, context) } : {}),
       }),
   })
-  const skill = messenger.skill ? skillResource(app, messenger.skill) : undefined
+  const skills = messenger.skill ? skillResources(app, messenger.skill) : []
+  const skill = skills[0]
   const log = agentLog(() => openStore({ env: context.env, command: app.command, version: app.version }))
   const audit = async (call: ToolCall, caller: RunCaller | undefined) => {
     if (!recalledAccount(app, provider, settings.profile, context.env)) return
@@ -448,10 +449,8 @@ export const createServer = (
             })
         },
       })
-    if (skill) {
-      const { uri, name: resource, title, description, mimeType, read } = skill
-      server.registerResource(resource, uri, { title, description, mimeType }, read)
-    }
+    for (const { uri, name, title, description, mimeType, read } of skills)
+      server.registerResource(name, uri, { title, description, mimeType }, read)
     return server
   }
   return { session, embedders, build, log, offered: [...commands.map((one) => one.command), ...pictured] }

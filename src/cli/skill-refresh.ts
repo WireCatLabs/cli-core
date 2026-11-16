@@ -1,4 +1,5 @@
-import { lstatSync, readFileSync, writeFileSync } from "node:fs"
+import { lstatSync, readFileSync } from "node:fs"
+import { dirname } from "node:path"
 import { isMovedRun, loadConfigFile, saveConfigFile } from "@wirecat/cli-base"
 import {
   hermesCopyPath,
@@ -7,7 +8,7 @@ import {
   type SkillTarget,
   skillStatus,
   skillVersion,
-  withVersion,
+  writeSkillFolder,
 } from "@wirecat/cli-base/skill"
 import { isNewer } from "@wirecat/cli-base/update"
 import * as v from "valibot"
@@ -53,7 +54,7 @@ const refreshHermesCopy = (app: SkillApp, skill: URL, env: Env): boolean => {
   if (!isPlainFile(path)) return false
   const installed = skillVersion(readFileSync(path, "utf8"))
   if (installed === undefined || !isNewer(app.version, installed)) return false
-  writeFileSync(path, withVersion(readFileSync(skill, "utf8"), app.version))
+  writeSkillFolder(app, skill, dirname(path))
   return true
 }
 

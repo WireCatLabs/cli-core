@@ -13,8 +13,10 @@ const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", descripti
 const setup = () => {
   const root = mkdtempSync(join(tmpdir(), "skill-refresh-"))
   const env = { HOME: join(root, "home"), HERMES_HOME: join(root, "hermes") }
-  const skill = join(root, "SKILL.md")
+  const skill = join(root, "skill", "SKILL.md")
+  mkdirSync(join(root, "skill", "references"), { recursive: true })
   writeFileSync(skill, "---\nname: chat-cli\n---\n\n# chat, new\n")
+  writeFileSync(join(root, "skill", "references", "search.md"), "# search\n")
   const claude = join(env.HOME, ".claude", "skills", "chat-cli", "SKILL.md")
   const agents = join(env.HOME, ".agents", "skills", "chat-cli", "SKILL.md")
   const hermes = join(env.HERMES_HOME, "skills", "chat-cli", "SKILL.md")
@@ -77,6 +79,7 @@ describe("refreshing installed skills on a new version", () => {
 
     expect(refresh()).toBe("Updated the chat instructions for Hermes to 2.0.0")
     expect(readFileSync(hermes, "utf8")).toContain('version: "2.0.0"')
+    expect(readFileSync(join(dirname(hermes), "references", "search.md"), "utf8")).toBe("# search\n")
   })
 
   it("tries once per version: the next run does nothing, even after the copy is old again", () => {

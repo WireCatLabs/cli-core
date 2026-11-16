@@ -3,7 +3,7 @@ import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { mcpErrorResult } from "@wirecat/cli-base"
 import { flatten } from "@wirecat/cli-base/commands"
-import { skillResource } from "@wirecat/cli-base/skill"
+import { skillResources } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { BotMessenger } from "../../cli/bot/port.js"
@@ -84,7 +84,8 @@ export const createBotServer = (options: BotServerOptions) => {
   const writes = tools
     .filter((tool) => tool.writes && tool.availability?.().available !== false)
     .map((tool) => tool.command)
-  const skill = options.skill ? skillResource(bot.app, options.skill) : undefined
+  const skills = options.skill ? skillResources(bot.app, options.skill) : []
+  const skill = skills[0]
 
   // One at a time: the commands share the journal, the registry and the local copy.
   let queue: Promise<unknown> = Promise.resolve()
@@ -123,10 +124,8 @@ export const createBotServer = (options: BotServerOptions) => {
         }),
       },
     )
-    if (skill) {
-      const { uri, name, title, description, mimeType, read } = skill
+    for (const { uri, name, title, description, mimeType, read } of skills)
       server.registerResource(name, uri, { title, description, mimeType }, read)
-    }
 
     const commands: Record<string, McpCommand> = Object.fromEntries(
       tools.map((tool) => [

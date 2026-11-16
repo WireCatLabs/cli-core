@@ -3,7 +3,7 @@ import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError, mcpErrorResult } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
-import { skillResource } from "@wirecat/cli-base/skill"
+import { skillResources } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import { type BaseContext, environmentOf } from "../cli/context.js"
 import { changesAuthorityAt, fetchesOnlyAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
@@ -136,7 +136,8 @@ export const createAppServer = (command: Command, context: BaseContext, options:
       },
     ]),
   )
-  const skill = options.skill ? skillResource(app, options.skill) : undefined
+  const skills = options.skill ? skillResources(app, options.skill) : []
+  const skill = skills[0]
   const build = (): McpServer => {
     const server = new McpServer(
       { name: app.command, version: app.version },
@@ -151,10 +152,8 @@ export const createAppServer = (command: Command, context: BaseContext, options:
       },
     )
     registerCommands(server, app.command, commands, app.errors, undefined, app.messenger)
-    if (skill) {
-      const { uri, name, title, description, mimeType, read } = skill
+    for (const { uri, name, title, description, mimeType, read } of skills)
       server.registerResource(name, uri, { title, description, mimeType }, read)
-    }
     return server
   }
   return { build, offered: Object.keys(commands) }
