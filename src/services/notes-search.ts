@@ -310,10 +310,8 @@ const enrichedFirst = async (
     throw error
   }
   if (!enrichment) return embedded
-  const more =
-    enrichment.status !== "failed" &&
-    enrichment.left > 0 &&
-    (enrichment.enriched > 0 || enrichment.reason_id === "enrichment.deadline")
+  // A run that enriched nothing for lack of time would only repeat itself: it is not `left` to run again.
+  const more = enrichment.status !== "failed" && enrichment.left > 0 && enrichment.enriched > 0
   return { ...embedded, left: embedded.left || more, enrichment }
 }
 

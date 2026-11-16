@@ -175,3 +175,44 @@ describe("chunksLeft", () => {
     expect(await notes.chunksLeft(MODEL)).toBe(given.length)
   })
 })
+
+describe("chunksLeft on a large store", () => {
+  it("counts in one query, within 25 times a plain count, without building any note's text", async () => {
+    const context = await openStoreContext({
+      path: join(mkdtempSync(join(tmpdir(), "note-vectors-")), "large.db"),
+      now: () => 1,
+    })
+    opened.push(context)
+    const { database } = context
+    const insert = database.prepare(
+      "INSERT INTO notes (notable_type, notable_id, title, body, created_at, updated_at) VALUES ('account', 1, ?, ?, 1, 1)",
+    )
+    const words = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho".split(" ")
+    database.exec("BEGIN")
+    for (let note = 0; note < 6_000; note++)
+      insert.run(
+        `note ${note}`,
+        Array.from(
+          { length: 900 },
+          (_, at) => `${words[(note * 7 + at * 13) % words.length]}${at % 50 === 0 ? ` ${note}.\n\n` : ""}`,
+        ).join(" "),
+      )
+    database.exec("COMMIT")
+    const notes = noteSearchOver(context)
+    await notes.chunksToEmbed(MODEL, { limit: 1 })
+    let started = performance.now()
+    const plain = database
+      .prepare(
+        `SELECT count(DISTINCT k.content_hash) AS left FROM chunks k
+          WHERE NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)`,
+      )
+      .get(MODEL)
+    const plainMs = performance.now() - started
+    started = performance.now()
+    const left = await notes.chunksLeft(MODEL)
+    const ms = performance.now() - started
+    expect(left).toBe(Number(plain?.left))
+    expect(left).toBeGreaterThan(30_000)
+    expect(ms).toBeLessThan(Math.max(100, plainMs * 25))
+  }, 60_000)
+})

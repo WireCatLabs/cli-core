@@ -181,7 +181,10 @@ record adds at most five facts and three questions of at most 400 characters.
 With the run's deadline (`sync --embed` passes it), a batch starts only while it is expected to end before the
 deadline less its margin: 30 s a batch, or the slowest batch of the run if that was longer, plus 0.5 s. A paid request
 is not started only to be cut and sent again at the next sync. A batch cut by the deadline all the same is
-`stopped` with `enrichment.deadline`; its records are not counted as `failed`, and the next sync sends them.
+`stopped` with `enrichment.deadline`; its records are not counted as `failed`, and the next sync sends them. Over
+MCP a sync has 45 s, so enrichment can start only in its first 7.75 s or so. A run that enriched nothing for lack of
+time does not answer `left`, since the same run would not move either. The shared documents `sync` then adds a
+`sync.longer` step (`sync --embed --timeout 15m`, not safe to run unasked) for a run in a terminal.
 
 When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
 (`models keys set openai`), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),

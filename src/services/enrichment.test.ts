@@ -153,6 +153,23 @@ describe("enrichment", () => {
     expect(exact.items).toEqual([])
   })
 
+  it("does not answer left when enrichment never had the time to send a batch, so the run is not repeated", async () => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat dog" })
+    const model = fakeModel(() => ({ facts: ["fish"], questions: [] }))
+    const deadline = { endsAt: Date.now() + 26_000, ms: 26_000 }
+
+    const run = await embedNotes(store, { env, threads: 1, deadline, enrichWith: { ...model, key: () => "test-key" } })
+
+    expect(model.requests).toHaveLength(0)
+    expect(run).toMatchObject({
+      embedded: 1,
+      left: false,
+      enrichment: { status: "stopped", enriched: 0, left: 1, reason_id: "enrichment.deadline" },
+    })
+  })
+
   it("embeds the model's text as a chunk of its own, so search by meaning finds the record by it", async () => {
     const { env, store } = await machine()
     turnOn(env)

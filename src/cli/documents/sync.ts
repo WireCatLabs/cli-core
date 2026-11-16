@@ -29,6 +29,8 @@ export interface DocumentSyncAnswer {
   names_only?: number
   removed?: number
   unchanged?: number
+  /** What `--embed` did, as `embedNotes` answers it, or what the CLI says instead. */
+  embeddings?: object
 }
 
 export interface DocumentSyncCommands {
@@ -47,6 +49,15 @@ export interface DocumentSyncCommands {
   sync(args: DocumentSyncArgs): Promise<DocumentSyncAnswer>
   /** What `status` answers: the last sync, imported documents and pending work, from local files only. */
   status(): object | Promise<object>
+}
+
+/** `embedNotes`' answer says enrichment never had the time to send a batch. */
+const enrichmentOutOfTime = (embeddings: object | undefined): boolean => {
+  const enrichment =
+    embeddings && "enrichment" in embeddings
+      ? (embeddings.enrichment as { reason_id?: unknown; enriched?: unknown } | undefined)
+      : undefined
+  return enrichment?.reason_id === "enrichment.deadline" && enrichment.enriched === 0
 }
 
 const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSyncCommands) => {
@@ -82,7 +93,7 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
       const again = `${wording.app} ${helpers.profile()} sync`
       const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
       // The same sync again, never --rescan, which would start the pass over; a run that moved nothing gets no step.
-      const next =
+      const resume =
         unfinished && !result.errors.length && moved
           ? [
               {
@@ -99,6 +110,23 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
               },
             ]
           : []
+      // Enrichment starts a batch only when it ends before the deadline; one that never had the time would not move in
+      // a run like this one either, so the step asks for a longer run and is not run unasked.
+      const longer = enrichmentOutOfTime(result.embeddings)
+        ? [
+            {
+              kind: "command" as const,
+              step: "sync.longer",
+              command: "sync",
+              args: { limit: args.limit, embed: true, timeout: "15m" },
+              why:
+                "enrichment needs more time than this run had left, so it sent nothing; run this in a terminal, " +
+                "where a sync may take 15 minutes",
+              safe_to_auto_execute: false,
+            },
+          ]
+        : []
+      const next = [...resume, ...longer]
       output(
         itemOf(result, {
           meta: result.errors.length

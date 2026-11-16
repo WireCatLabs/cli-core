@@ -3,8 +3,11 @@
 - **Enrichment takes the run's `deadline`** (`EnrichOptions.deadline`, and `batchMs` for the expected time of one
   batch, 30 s by default). A batch starts only while it is expected to end before the deadline less its margin, so a
   paid request is not cut and sent again at every sync. A batch cut all the same stops the run with the new
-  `enrichment.deadline` reason, not `failed`. `embedNotes` and `embedMail` pass their `deadline` on. See
+  `enrichment.deadline` reason, not `failed`. `embedNotes` and `embedMail` pass their `deadline` on. A run that
+  enriched nothing for lack of time does not answer `left`, and the shared documents `sync` asks for a longer run
+  with a `sync.longer` step that is not safe to run unasked, so an agent does not repeat a run that cannot move. See
   [the enrichment section](../docs/search/ai-providers.md).
+- **`DocumentSyncAnswer.embeddings`**: what `--embed` did, which the shared `sync` reads for that step.
 
 ### Fixed
 
@@ -13,5 +16,5 @@
   [Walks over several syncs](../docs/dev/DOCUMENTS.md#walks-over-several-syncs).
 - **An embed whose last batch ends as the run is cut answers that it is done**, not `left: true` with
   `remaining: 0`.
-- **`remaining` after an embed stop counts only the chunks the embed would still be given.** It counted chunks of
-  gone notes and enrichments too, so it never reached 0.
+- **`remaining` after an embed stop counts only the chunks the embed would still be given**, in one query that shares
+  its conditions with the embed's own. It counted chunks of gone enrichments too, so it never reached 0.
