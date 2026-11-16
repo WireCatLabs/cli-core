@@ -157,8 +157,11 @@ describe("shared document knowledge", () => {
         provenance: expect.stringContaining("claude-code"),
       })
       expect(await f.k.links(f.principal, f.ref, { confirmed: false })).toEqual([proposed])
-      const owned = await f.k.addLink(f.principal, f.ref, { by: "owner", to: note.ref, kind: "evidence" })
-      expect(owned).toMatchObject({ origin: "owner", confirmed: true })
+      const owned = await f.k.addLink(f.principal, f.ref, { by: "owner", to: note.ref, kind: "about" })
+      expect(owned).toMatchObject({ id: proposed.id, origin: "owner", confirmed: true })
+      const pending = await f.k.addLink(f.principal, f.ref, { by, to: note.ref, kind: "evidence" })
+      expect(await f.k.removeLink(f.principal, f.ref, pending.id, "owner")).toEqual({ id: pending.id, removed: true })
+      expect(await f.k.links(f.principal, f.ref)).toEqual([owned])
       await expect(f.k.addLink(f.principal, f.ref, { to: note.ref, kind: "about" })).rejects.toMatchObject({
         details: { reason: "proposal.decider-required" },
       })

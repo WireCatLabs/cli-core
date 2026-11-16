@@ -159,18 +159,24 @@ export const documentKnowledge = (
     addLink: async (principal, ref, input) => {
       await document(principal, ref)
       const by = writer(input.by)
-      return store.notes.addLink({
+      const link = await store.notes.addLink({
         ...input,
         from: ref,
         ...(by === "owner"
           ? { origin: "owner" }
           : { origin: "suggested", confirmed: false, provenance: `agent:${by.bot}: ${by.reason.trim()}` }),
       })
+      // The store answers an agent's pending link for the same pair; the owner adding it is the owner confirming it.
+      if (by !== "owner" || link.confirmed) return link
+      return (await store.knowledge.decideSuggestedLink(link.id, { confirm: true, by })) ?? link
     },
     removeLink: async (principal, ref, id, by) => {
-      const links = await port.links(principal, ref)
-      if (!links.some((link) => link.id === id && link.origin === "owner"))
-        throw new CliError("not_found", "owner link is not attached to this document")
+      const link = (await port.links(principal, ref)).find((item) => item.id === id)
+      if (link && !link.confirmed) {
+        await store.knowledge.decideSuggestedLink(id, { confirm: false, by })
+        return { id, removed: true as const }
+      }
+      if (link?.origin !== "owner") throw new CliError("not_found", "owner link is not attached to this document")
       return store.notes.removeLink(id, by)
     },
     notes: async (principal, ref, options) => {

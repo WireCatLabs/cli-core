@@ -41,7 +41,18 @@ export const documentIngestion = <M extends SourceFile>(
       }
     }
   }
+  const { provider, command } = options
   return {
+    // Only where both are known: a sync calls it whenever it is there and a profile is given.
+    ...(provider && command
+      ? {
+          /** Names the profile's account in the store, so a search hit says `notion`/`work`, not `notes`/`1`. */
+          registerProfile: async (name: string, principal: string) => {
+            await folder(principal, true)
+            await store.accounts.saveProfile(command, name, { provider, account: principal })
+          },
+        }
+      : {}),
     catalog: {
       import: async (principal: string, files: M[]) => {
         const selected = await folder(principal, true)
@@ -83,13 +94,6 @@ export const documentIngestion = <M extends SourceFile>(
       },
     },
     collection: folder,
-    /** Names the profile's account in the store, so a search hit says `notion`/`work`, not `notes`/`1`. */
-    registerProfile: async (name: string, principal: string) => {
-      if (!options.provider || !options.command)
-        throw new CliError("configuration_error", "a profile is recorded for a documents provider and its command")
-      await folder(principal, true)
-      await store.accounts.saveProfile(options.command, name, { provider: options.provider, account: principal })
-    },
     // A store fake that predates `indexWritten` leaves the text for the next search to index.
     settle: async ({ until }: { until: () => boolean }) => store.notes.indexWritten?.({ until }),
     save: async (principal: string, content: SourceContent<M>, hash: string) => {
