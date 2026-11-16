@@ -8,7 +8,9 @@
 - **`changes list --format report`** prints a CRM morning digest document: deals won and lost first, then overdue CRM
   tasks, those due today, stage moves, new deals, new owners, new contacts and the tasks the stage rules opened, with
   "and N more" counted in full. It names a failed or stale sync. Run by a schedule, each digest starts where the last
-  one ended, so a late or missed run loses nothing and no deal shows twice. Scheduled with `schedule command`, it is
+  one ended, and each ends where the last complete sync started, so a late or missed run or a sync that copies a
+  change after the digest loses nothing, and no deal shows twice. Phone numbers and e-mail addresses in its text are
+  masked. Scheduled with `schedule command`, it is
   rendered and delivered like an agent's digest.
 - **`activities list [query]`** in a CLI that copies the CRM's activities: open ones overdue first, then by due time,
   then undated; `status:`, `due:`, `overdue:`, `kind:`, `deal:`, `lead:`, `person:`, `organization:` and `owner:`.

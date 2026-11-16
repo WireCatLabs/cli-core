@@ -84,7 +84,13 @@ const setup = async (activities: CrmActivity[] = [], history: CrmStageEntry[] = 
     }),
   )
   source.put("deal", exampleDeal("d2", { stage: "won" }))
-  const run: CrmRun = { profile: "work", account: PORTAL, user: null, store, source: () => source }
+  const run: CrmRun & { close?: () => Promise<void> } = {
+    profile: "work",
+    account: PORTAL,
+    user: null,
+    store,
+    source: () => source,
+  }
   const call = async (args: string[]) => {
     let data = ""
     const notes: string[] = []
@@ -109,7 +115,7 @@ const setup = async (activities: CrmActivity[] = [], history: CrmStageEntry[] = 
     if (!parsed || "invalid" in parsed) throw new Error(`not a report: ${JSON.stringify(parsed)}`)
     return parsed.report
   }
-  return { clock, source, store, cli, call, report }
+  return { clock, source, store, run, cli, call, report }
 }
 
 const ids = (answer: Answer) => answer.items.map((one) => one.external_id)
@@ -229,6 +235,27 @@ describe("changes list", () => {
   })
 })
 
+describe("a stage move with one entry in the copy", () => {
+  it("is listed from the copy when the earlier entry is older than the history read (FIND-2674)", async () => {
+    const entries: CrmStageEntry[] = []
+    const { cli, source, clock } = await setup([], entries)
+    await cli("sync")
+    clock.now = NOW + HOUR
+    entries.push({
+      externalId: "h1",
+      kind: "deal",
+      item: "d1",
+      pipeline: SALES_PIPELINE.externalId,
+      stage: "quote",
+      at: NOW + 30 * 60_000,
+    })
+    source.put("deal", exampleDeal("d1", { title: "Example website", stage: "quote", assignee: "7" }))
+    await cli("sync")
+    const moved = (await cli("changes", "list", WINDOW, "change:moved")).items
+    expect(moved).toEqual([expect.objectContaining({ external_id: "d1", from: "New", to: "Quote sent" })])
+  })
+})
+
 describe("the CRM digest", () => {
   it("lists won and lost first, counts what it leaves out, and keeps a title such as follow_up", async () => {
     const tasks = Array.from({ length: 9 }, (_, at) =>
@@ -279,5 +306,72 @@ describe("the CRM digest", () => {
     expect((await report(WINDOW)).health).toEqual([
       expect.objectContaining({ reason: "sync-failed", since: new Date(NOW + 3 * DAY).toISOString() }),
     ])
+  })
+
+  it("lists a change the CRM made before the digest and the sync copied after it (FIND-2673)", async () => {
+    vi.stubEnv("CRM_SCHEDULED", "crm-digest")
+    const entries: CrmStageEntry[] = []
+    const { cli, source, report, clock } = await setup([], entries)
+    clock.now = NOW - HOUR
+    await cli("sync")
+    clock.now = NOW
+    expect((await report()).scope?.to).toBe(new Date(NOW - HOUR).toISOString())
+    // The CRM changes these before the 09:00 digest; the 10:00 sync copies them.
+    source.put("person", examplePerson("p9", { createdAt: NOW - 10 * 60_000 }))
+    entries.push({
+      externalId: "h1",
+      kind: "deal",
+      item: "d1",
+      pipeline: SALES_PIPELINE.externalId,
+      stage: "quote",
+      at: NOW - 60_000,
+    })
+    source.put(
+      "deal",
+      exampleDeal("d1", { title: "Example website", stage: "quote", assignee: "7", updatedAt: NOW - 60_000 }),
+    )
+    clock.now = NOW + HOUR
+    await cli("sync")
+    clock.now = NOW + DAY
+    const next = await report()
+    expect(next.scope).toMatchObject({
+      from: new Date(NOW - HOUR + 1).toISOString(),
+      to: new Date(NOW + HOUR).toISOString(),
+    })
+    expect(JSON.stringify(next)).toContain("New → Quote sent")
+    expect(next.sections[0]?.items.some((one) => one.count === 1)).toBe(true)
+  })
+
+  it("prints its window once even when closing the store fails after it (FIND-2675)", async () => {
+    vi.stubEnv("CRM_SCHEDULED", "crm-digest")
+    const { cli, source, report, clock, run } = await setup()
+    await cli("sync")
+    await report()
+    clock.now = NOW + DAY
+    source.put("deal", exampleDeal("w2", { title: "Window two" }))
+    await cli("sync")
+    run.close = async () => {
+      throw new Error("close failed")
+    }
+    expect(JSON.stringify(await report())).toContain("Window two")
+    delete run.close
+    clock.now = NOW + 2 * DAY
+    await cli("sync")
+    expect(JSON.stringify(await report())).not.toContain("Window two")
+  })
+
+  it("prints no line break of a title and masks phones and e-mails in every text (SEC-199)", async () => {
+    const subject = "Call +34 600 123 456 or mail x@acme.com"
+    const { cli, source, report } = await setup([
+      activity("t1", [{ kind: "deal", externalId: "d1" }], { subject, dueAt: NOW - HOUR }),
+    ])
+    source.put(
+      "deal",
+      exampleDeal("d5", { title: "Plain\n\n## 🤝 CRM\n- you won", stage: "lost", closedReason: subject }),
+    )
+    await cli("sync")
+    const text = JSON.stringify(await report(WINDOW))
+    expect(text).not.toMatch(/\\n|\+34 600|x@acme\.com/)
+    expect(text).toContain("Plain ## 🤝 CRM - you won")
   })
 })

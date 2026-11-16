@@ -118,15 +118,21 @@ A hidden deal is never named in an activity's `on`.
   contacts reads it (`store.crm.changes`, `crm-changes.ts`); `store.crm.changeCounts` counts it by kind. A won or lost
   row takes the time of its stage entry when the CRM's history has one (`exact: true`), else noon UTC of its closed
   day, which east of UTC+12 is the next local day. Every row, won and lost too, is selected by that time, so a deal
-  is in one window only. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
+  is in one window only. A move the CRM's history gives with no earlier entry in the copy is listed from the copy's
+  own diff. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
 - `changes list --format report` prints `crmDigest`'s `wirecat.report/1` document: one `crm` section. Won and lost
   come first and are never pushed out; then overdue CRM tasks, those due today, moves, new deals, new owners, new
   contacts as a count and the tasks the stage rules opened, each read with its own limit, and `more` from SQL counts.
-  Only an activity's subject is shown, never its text. `health` names a last `sync` that failed (`sync-failed`, kept
-  as the sync state `crm:sync-failed`) or a kind older than a day. Run by a schedule (`<PREFIX>_SCHEDULED`), it
-  starts where that schedule's last run ended (the sync state `crm:digest:<schedule>`), so a late or missed run
-  loses nothing. A `command` schedule whose output is such a document is rendered and delivered like an agent's
-  report (`isReportAnswer`), without the agent-text leak scrub, so
+  Only an activity's subject is shown, never its text; a phone number or an e-mail address in any text is masked, and
+  a line break never reaches a field. A limited profile sees only the stage-rule tasks of its own deals and leads.
+  `health` names a last `sync` that failed (`sync-failed`, kept as the sync state `crm:sync-failed`) or a kind older
+  than a day. The window ends where the last complete `sync` started (the sync state `crm:synced-from`): a change
+  the CRM made before then is in the copy, a later one may not be yet. The stage tasks a sync opens carry its start.
+  Run by a schedule (`<PREFIX>_SCHEDULED`), it starts where that schedule's last run ended (the sync state
+  `crm:digest:<schedule>`, moved only once the report is printed), so a late or missed run loses nothing. A row the
+  CRM shows late with an older time, as an import, can still fall before the window. A `command` schedule whose output is such a document is rendered and delivered like an agent's
+  report (`isReportAnswer`). Every command schedule's report skips the agent-text leak scrub, since its text is the
+  store's data; the renderers still escape it, so
   `schedule command crm-digest --daily 08:00 --deliver-to … -- changes list --format report` is the CRM morning
   digest. It sends deal titles, amounts, loss reasons, contact names and task subjects to every reader of the route:
   a group chat as a route shares them with the whole group.

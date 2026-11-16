@@ -8,7 +8,7 @@ const DAY = 86_400_000
 /**
  * Opens the owner's task for each stage a deal or lead of the account entered that its `stage-tasks` setting names:
  * one per entry, so a dismissed task never comes back and a later entry into the same stage opens a new one.
- * Answers how many it opened.
+ * Answers how many it opened. `now` is the sync's start: the tasks then fall in the digest window that sync closes.
  */
 export const openStageTasks = async (
   store: MessageStore,

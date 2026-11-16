@@ -24,6 +24,7 @@ import type { AppIdentity } from "../../ports/app.js"
 import { foldName } from "../../resolve.js"
 import { CRM_CHANGES, type CrmChange, type CrmChangeKind } from "../../store/sqlite/crm-changes.js"
 import { crmDigest } from "../digest.js"
+import { SYNCED_FROM } from "../sync.js"
 import { shortened, viewerOf } from "../viewer.js"
 import { addCrmActivityCommands } from "./activities.js"
 import { csvColumnPaths, printCsv, refuseCsvConflict } from "./csv.js"
@@ -228,25 +229,35 @@ export const addCrmChangeCommands = (program: Command, options: CrmChangeCommand
       const schedule = env[`${options.app.envPrefix}_SCHEDULED`]
       return inCommandRun(command, async () => {
         const run = await options.open(command, { readOnly: schedule === undefined })
-        let document: Record<string, unknown>
+        let printed = false
         try {
           const last = schedule && (await run.store.sync.syncState(run.account, digestState(schedule)))?.value
-          const window = last ? { since: Number(last) + 1, until: clock } : position
-          const viewer = await viewerOf(run)
-          document = await crmDigest(run.store, run.account, {
+          // A change the CRM made before the last complete sync started is in the copy; a later one may not be yet.
+          const synced = Number((await run.store.sync.syncState(run.account, SYNCED_FROM))?.value || Number.NaN)
+          const end = Math.min(last ? clock : position.until, Number.isNaN(synced) ? clock : synced)
+          const since = last ? Number(last) + 1 : position.since
+          const window = { since, until: Math.max(since, end) }
+          const document = await crmDigest(run.store, run.account, {
             ...window,
             now: clock,
             zone,
             language: await ownerLanguageOf(run.env ?? env),
             profile: run.profile,
-            viewer,
+            viewer: await viewerOf(run),
             ...(shortened.has(run) ? { hidden: true } : {}),
           })
           outputFor(command).streams.data(`${JSON.stringify(document)}\n`)
           noted(run)
-          if (schedule) await run.store.sync.setSyncState(run.account, digestState(schedule), String(window.until))
+          // Moved only once the report is out, so a run that fails before then shows its window next time.
+          if (schedule)
+            await run.store.sync.setSyncState(run.account, digestState(schedule), String(Math.max(since - 1, end)))
+          printed = true
         } finally {
-          await run.close?.()
+          // Once the report is out and its window spent, a failed close must not fail the run: it would go unsent.
+          await run.close?.().catch((error: unknown) => {
+            if (!printed) throw error
+            outputFor(command).renderer.note(`the store did not close cleanly: ${String(error)}`)
+          })
         }
       })
     }

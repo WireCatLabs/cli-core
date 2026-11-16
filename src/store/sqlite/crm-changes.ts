@@ -108,7 +108,9 @@ const changesQuery = (context: StoreContext, key: AccountKey, filter: ChangeFilt
       "FROM pipeline_stage_changes c JOIN items i ON i.kind = c.item_type AND i.id = c.item_id " +
       "WHERE c.from_stage_id IS NOT NULL AND c.changed_at BETWEEN ?6 AND ?7 " +
       "AND (SELECT outcome FROM pipeline_stages WHERE id = c.to_stage_id) NOT IN ('won', 'lost') " +
-      "AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.kind = i.kind AND e.item = i.id)",
+      // The CRM's own entry of this move replaces it; an entry with no earlier one in the copy cannot say where from.
+      "AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.kind = i.kind AND e.item = i.id " +
+      "AND e.stage = c.to_stage_id AND e.before IS NOT NULL)",
     // The closed day only narrows the rows; the window is checked on `at`, so a deal is listed in one window only.
     `SELECT i.status, coalesce(${closedAt}, CAST(strftime('%s', i.closed_date) AS INTEGER) * 1000 + ${HALF_DAY}), ` +
       `i.kind, i.id, NULL, NULL, NULL, ${closedAt} IS NOT NULL, i.owner, i.pipeline_id FROM items i ` +

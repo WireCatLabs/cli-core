@@ -232,7 +232,9 @@ const checked = (document: unknown, trusted: boolean): { report: Report; leaks: 
   const text = (value: unknown, field: TextField, at: string): string | null => {
     if (value === undefined || value === null) return null
     if (typeof value !== "string") throw new Invalid(at)
-    const clean = trusted ? { text: value.trim(), leaks: 0 } : withoutLeaks(value.trim())
+    // A line break inside a field would draw a line of its own, as if the report had written it.
+    const flat = value.replace(/\s+/g, " ").trim()
+    const clean = trusted ? { text: flat, leaks: 0 } : withoutLeaks(flat)
     leaks += clean.leaks
     return clean.text ? cut(clean.text, TEXT_LIMITS[field]) : null
   }

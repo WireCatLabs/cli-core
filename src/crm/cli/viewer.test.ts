@@ -132,7 +132,7 @@ const setup = async () => {
     return cli
   }
   await as(ADMIN, true)("sync")
-  return { store, as }
+  return { store, as, path, adminSource: () => sources.get(`${ADMIN}:true:portal`) as ReturnType<typeof fakeCrmSource> }
 }
 
 const titles = (answer: Answer) => answer.items.map((one) => one.title).sort()
@@ -300,5 +300,29 @@ describe("offline reads of a copy another profile synced (SEC-197)", () => {
       expect(answer.printed).not.toMatch(/Harbour|Lighthouse/)
       expect(answer.notes.join("")).toContain("names no CRM user")
     }
+  })
+
+  it("the digest of a colleague leaves out the tasks stage rules opened on deals it may not read (SEC-198)", async () => {
+    const { as, path, adminSource } = await setup()
+    const database = await openCache(path)
+    saveCrmSetting(
+      database,
+      crmSettingKey(PORTAL, "stage-tasks"),
+      { quote: { title: "Send the quote", due_days: 2 } },
+      1,
+    )
+    database.close()
+    const source = adminSource()
+    source.put("deal", exampleDeal("da", { title: "Harbour", assignee: ADMIN, stage: "quote" }))
+    source.put("deal", exampleDeal("dc", { title: "Lighthouse", assignee: COLLEAGUE, stage: "quote" }))
+    const admin = as(ADMIN, true)
+    await admin("sync")
+    const report = (await as(COLLEAGUE)("changes", "list", WINDOW, "--format", "report")) as unknown as {
+      printed: string
+    }
+    const tasks = (
+      JSON.parse(report.printed) as { sections: { items: { topic: string }[] }[] }
+    ).sections[0]?.items.filter((one) => one.topic === "Send the quote")
+    expect(tasks).toHaveLength(1)
   })
 })

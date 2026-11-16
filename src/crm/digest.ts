@@ -3,7 +3,7 @@ import { REPORT_FORMAT } from "../background/report/schema.js"
 import { SECTION_CAPS } from "../background/report/view.js"
 import { dayIn } from "../domain/moment.js"
 import { taskAccount } from "../services/task-rules.js"
-import type { CopyViewer } from "../store/sqlite/copy-viewer.js"
+import { type CopyViewer, viewerSql } from "../store/sqlite/copy-viewer.js"
 import type { ListedActivity } from "../store/sqlite/crm-activities.js"
 import type { CrmChange, CrmChangeKind } from "../store/sqlite/crm-changes.js"
 import type { MessageStore } from "../store/store.js"
@@ -127,12 +127,16 @@ export const crmDigest = async (
     fact(change, change.reason ? `${words.lost}: ${change.reason}` : words.lost),
   )
   const people = counts.person_added
+  const seen = viewerSql("d", viewer)
   const opened = await store.tasks.find({
     where: {
       sql:
         "t.source = 'rule' AND t.source_kind IN ('deal', 'lead') AND t.created_at BETWEEN ? AND ? " +
-        "AND t.project_id IN (SELECT id FROM projects WHERE name = ?)",
-      params: [since, until, taskAccount(account)],
+        "AND t.project_id IN (SELECT id FROM projects WHERE name = ?) " +
+        // A rule task names its deal or lead: a viewer reads it only on one of its own.
+        `AND (EXISTS (SELECT 1 FROM deals d WHERE 'deal:' || d.id = t.source_group AND ${seen.sql}) ` +
+        `OR EXISTS (SELECT 1 FROM leads d WHERE 'lead:' || d.id = t.source_group AND ${seen.sql}))`,
+      params: [since, until, taskAccount(account), ...seen.params, ...seen.params],
     },
     limit: cap,
   })
@@ -165,7 +169,7 @@ export const crmDigest = async (
     kind: "morning-digest",
     date: dayIn(now, zone),
     summary: options.hidden ? words.hidden : null,
-    sections: shown.length ? [{ kind: "crm", items: shown, more: Math.max(0, total - shown.length) }] : [],
+    sections: shown.length ? [{ kind: "crm", items: shown.map(masked), more: Math.max(0, total - shown.length) }] : [],
     health: await healthOf(store, account, options),
     scope: {
       from: new Date(since).toISOString(),
@@ -175,6 +179,24 @@ export const crmDigest = async (
     },
   }
 }
+
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu
+/** Nine digits or more, or a `+` and seven: a phone, never a date or an amount. */
+const PHONE = /\+?\d[\d\s().-]{5,}\d/g
+const maskText = (text: string) =>
+  text.replace(EMAIL, "[e-mail]").replace(PHONE, (found) => {
+    const digits = found.replace(/\D/g, "").length
+    return digits >= 9 || (found.startsWith("+") && digits >= 7) ? "[phone]" : found
+  })
+
+/** A digest goes to messengers: no CRM text in it carries a phone number or an e-mail address. */
+const masked = (item: Item): Item =>
+  Object.fromEntries(
+    Object.entries(item).map(([key, value]) => [
+      key,
+      typeof value === "string" && key !== "due" && key !== "time" ? maskText(value) : value,
+    ]),
+  ) as Item
 
 /** A last sync that failed, else a copy whose oldest kind is more than a day old; a copy never synced is neither. */
 const healthOf = async (store: MessageStore, account: AccountKey, { now, profile }: CrmDigestOptions) => {

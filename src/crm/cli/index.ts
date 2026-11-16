@@ -125,7 +125,6 @@ export interface CrmCommandOptions {
    * `source.list`/`get`, `user` mounts `users` list/show over `source.users`. None when absent.
    */
   live?: readonly CrmLiveRecord[]
-  /** The CLI copies the CRM's activities (its `activities` setting): mounts `activities list`. */
   activities?: boolean
   now?: () => number
 }
@@ -385,13 +384,14 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       const { signal } = environmentOf(command)
       await within(command, async (run) => {
         const source = run.source()
+        const started = now()
         const report = await syncRecorded(source, run.store, run.account, {
-          now: now(),
+          now: started,
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { rescan: true } : {}),
         })
-        const stageTasks = await openStageTasks(run.store, run.account, now(), {
+        const stageTasks = await openStageTasks(run.store, run.account, started, {
           history: source.stageHistory !== undefined,
         })
         const failed = report.synced.filter((one) => one.error !== undefined)
