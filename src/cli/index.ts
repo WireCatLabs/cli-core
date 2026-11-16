@@ -658,6 +658,13 @@ export {
   writeSchedule,
 } from "./schedule/schedule-command.js"
 export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"
+export {
+  type ServiceApiOperation,
+  type ServiceApiOptions,
+  type ServiceApiPermissionsInput,
+  serviceApiDeletes,
+  serviceApiPermissions,
+} from "./service-api.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,
@@ -735,6 +742,7 @@ export {
   sendsCommand,
   serveCommand,
   serverCommand,
+  serviceApiCommand,
   setupCommand,
   skillCommand,
   starCommands,
