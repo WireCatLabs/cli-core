@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type CrmScopeSetting, isCrmUserId, normalCrmUserId } from "../../domain/crm.js"
+import { type CrmScopeSetting, isCrmUserId } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
@@ -234,11 +234,14 @@ export const parseCrmSettingValue = (name: CrmSettingName, value: string): unkno
   if (name === "links") return picked(name, text, CRM_LINK_MODES)
   if (name === "scope") return picked(name, text, CRM_SCOPES)
   if (name === "activities") return picked(name, text, CRM_ACTIVITIES)
-  if (name === "self") {
-    if (!isCrmUserId(text))
-      throw new CliError("validation_error", `self takes the CRM's numeric user id: not "${text}"`)
-    return normalCrmUserId(text)
-  }
+  // The copy's viewers read their rule by it (SEC-201): a typed id could name the administrator.
+  if (name === "self")
+    throw new CliError(
+      "validation_error",
+      "self is whose copy it is, and only the copy's first sync records it: unset it to give the copy to the next " +
+        "sign-in's sync",
+      { reason: "crm.self-from-sync" },
+    )
   if (name === "unassigned") {
     const ids = [...new Set(text.split(",").map((one) => one.trim()))]
     const bad = ids.find((one) => !isCrmUserId(one))

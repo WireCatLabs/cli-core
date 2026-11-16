@@ -142,6 +142,15 @@ export const crmActivitiesOver = (context: StoreContext) => {
             .prepare(`SELECT 1 FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL`)
             .get(accountId, externalId)) !== undefined
 
+  /**
+   * When it was done, as near as the copy can tell: the CRM's change that closed it, kept once seen. One that arrives
+   * done with no due date, as a note or a logged call, was done when it was made, and `changes list` lists it once.
+   */
+  const doneAt = (activity: CrmActivity, held: Record<string, unknown> | undefined): number | null => {
+    if (!activity.done) return null
+    if (held?.done) return (held.done_at as number | null) ?? null
+    return held === undefined && activity.dueAt == null ? activity.createdAt : activity.updatedAt
+  }
   const save = (key: AccountKey, activities: readonly CrmActivity[]): CrmActivitiesSaved =>
     write(database, () => {
       const accountId = accountPk(context, key)
@@ -168,8 +177,7 @@ export const crmActivitiesOver = (context: StoreContext) => {
           body: textOf(activity.body, MOST_BODY),
           due_at: activity.dueAt ?? null,
           done: activity.done,
-          // When it was done, as near as the copy can tell: the CRM's change that closed it, kept once seen.
-          done_at: activity.done ? (held?.done ? ((held.done_at as number | null) ?? null) : activity.updatedAt) : null,
+          done_at: doneAt(activity, held),
           assignee: activity.assignee ? crmIdentityId(key, activity.assignee, "user") : null,
           created_at: activity.createdAt,
           updated_at: activity.updatedAt,

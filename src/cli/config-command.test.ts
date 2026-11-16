@@ -388,8 +388,12 @@ describe("config", () => {
       expect(refused.code).toBe(5)
       expect(refused.stderr).toContain(`${key}.${name} is the owner's to set`)
       expect((await call({ CLAUDECODE: "1" }, "unset", `${key}.${name}`)).code).toBe(5)
-      expect((await call({}, "set", `${key}.${name}`, value)).code).toBe(0)
+      const set = await call({}, "set", `${key}.${name}`, value)
+      // Only a sync records whose copy it is (SEC-201); the owner may still unset it.
+      if (name === "self") expect(set.stderr).toContain("only the copy's first sync records it")
+      else expect(set.code).toBe(0)
     }
+    expect((await call({}, "unset", `${key}.self`)).code).toBe(0)
     expect((await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.links`, "review")).code).toBe(0)
     expect((await call({}, "set", `${key}.stage-tasks`, '{"WON":{"title":"x"}}')).stderr).toContain("due_days")
     const program = new Command("chat").addCommand(configCommand(tool, own))

@@ -90,7 +90,8 @@ to do, and `complete: false`.
 the stage counts, the funnel and the deals whose contacts' e-mails and phones `search all` matches; `show` of a row
 the viewer may not read is `not_found`. A deal's contacts are then the profile's own clients, so no quota applies
 offline; another client is read live, under the rule above. `search all` of a limited profile reads only its own
-account's copy; anyone else's reads each other account's copy by that copy's rule for its owner (the `self` setting),
+account's copy; anyone else's reads each other account's copy by that copy's rule for its owner (the `self` setting,
+which only a sync records: `config set` of it is refused, SEC-201),
 and a copy with no owner as none. `store status` counts the whole copy and says so to a limited profile.
 
 Known limits:
@@ -119,7 +120,8 @@ A hidden deal is never named in an activity's `on`.
   row takes the time of its stage entry when the CRM's history has one (`exact: true`), else noon UTC of its closed
   day, which east of UTC+12 is the next local day. Every row, won and lost too, is selected by that time, so a deal
   is in one window only. A move the CRM's history gives with no earlier entry in the copy is listed from the copy's
-  own diff. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
+  own diff. An activity that arrives done with no due date, as an amoCRM or Bitrix24 note, is listed once, as
+  `activity_added`. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
 - `changes list --format report` prints `crmDigest`'s `wirecat.report/1` document: one `crm` section. Won and lost
   come first and are never pushed out; then overdue CRM tasks, those due today, moves, new deals, new owners, new
   contacts as a count and the tasks the stage rules opened, each read with its own limit, and `more` from SQL counts.

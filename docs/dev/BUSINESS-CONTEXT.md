@@ -33,6 +33,11 @@ projects, money and communications — so memo, Desktop and MCP read the same th
   title, ref or count of a denied kind appears anywhere, a deal context of one is refused (`deal.denied`), and
   `coverage.notRead` says `{ source: "deals", reason: "denied" }`. Relationship sections read through
   `knowledge.listRelations`, which applies the scope and the deny in SQL.
+- **A CRM copy's viewer rule.** `viewing`, one `CrmViewing` per CRM account from `crmViewerOf`
+  ([CRM.md, "Offline reads of the copy"](CRM.md#offline-reads-of-the-copy)): a deal or lead the profile may not read is
+  not listed or named, a deal context of one is `not_found` (`deal.not-readable`), and each rule's note is in
+  `coverage.notRead` with the account as its source. Relationships pass the rule's viewers to `knowledge.listRelations`
+  (`viewers`), which leaves those rows out in SQL; a caller listing relationships passes the same.
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
   accounts read; a group chat is not read, since what another member wrote there is not theirs. Each message, mail
   and event counts once however many of the people it involves. The owner is never one of the people read, even as a

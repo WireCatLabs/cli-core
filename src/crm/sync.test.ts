@@ -257,9 +257,9 @@ it("refuses a source whose own user is not a user id, before it claims the copy"
   }
 })
 
-it("stores the owner's self as the CRM spells it once normalised", () => {
-  expect(parseCrmSettingValue("self", "015")).toBe("15")
-  expect(() => parseCrmSettingValue("self", "bot")).toThrow(/numeric user id/)
+it("takes self from the sync only: config set of any id is refused, so it cannot name the administrator (SEC-201)", () => {
+  for (const value of ["015", "bot"])
+    expect(() => parseCrmSettingValue("self", value)).toThrow(expect.objectContaining({ code: "validation_error" }))
 })
 
 it("holds the default mine's deletions of the stored copy, still reading new pages under mine, until the owner sets it", async () => {
