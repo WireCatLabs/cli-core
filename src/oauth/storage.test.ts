@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { errorObjectOf, errorRecordOf, type KeyringStore } from "@wirecat/cli-base"
+import { CliError, errorObjectOf, errorRecordOf, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
@@ -326,6 +326,33 @@ describe("a keyring that cannot be reached", () => {
     const cause = (failure as Error).cause as Error
     expect(cause.message).toContain("collection is locked")
     expect(cause.message).not.toContain(SECRET)
+  })
+
+  // cli-base's `Credentials#read` throws this when the keyring fails and the file holds no entry (cli-base #605).
+  const unreachable = new CliError("configuration_error", "the keyring cannot be reached; use file storage", {
+    reason: "keyring.unreachable",
+  })
+  const saved = memoryKeyring()
+  const unreadable: KeyringStore = {
+    get: () => {
+      throw unreachable
+    },
+    set: (service, account, secret) => saved.set(service, account, secret),
+    delete: () => false,
+  }
+
+  it("shows cli-base's own keyring error on a read", () => {
+    expect(failureOf(() => storage(unreadable).read())).toBe(unreachable)
+  })
+
+  it("signs in when the old entry cannot be read for an unreachable keyring", () => {
+    const signingIn = storage(unreadable)
+    signingIn.probe()
+    signingIn.write(
+      { client: { clientId: "client" }, tokens: { refreshToken: "synthetic-refresh", scopes: [] } },
+      { signIn: true },
+    )
+    expect(JSON.parse(saved.get("cal-cli", "oauth:google:personal") ?? "{}").refreshToken).toBe("synthetic-refresh")
   })
 })
 

@@ -300,7 +300,18 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     try {
       return credentials.read(name)?.secret
     } catch (error) {
+      // cli-base's own error already says what to do, in words safe for the answer.
+      if (error instanceof CliError) throw error
       throw keyringFailure(error)
+    }
+  }
+  // A sign-in on a machine with no keyring writes to the file, so an old entry it cannot read is no old entry.
+  const replaced = (name: string) => {
+    try {
+      return raw(name)
+    } catch (error) {
+      if (error instanceof CliError && error.details.reason === "keyring.unreachable") return undefined
+      throw error
     }
   }
   const save = (value: string, writeOptions?: WriteOptions) => {
@@ -327,7 +338,7 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     moved,
     ...(codec.rotating ? { rotating: true } : {}),
     probe: () => {
-      raw(account)
+      replaced(account)
     },
     read: () => {
       const value = current()
@@ -335,7 +346,7 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     },
     write: (input, writeOptions) =>
       save(
-        codec.encode({ ...input, previous: raw(account), ...(writeOptions?.signIn ? { signIn: true } : {}) }),
+        codec.encode({ ...input, previous: replaced(account), ...(writeOptions?.signIn ? { signIn: true } : {}) }),
         writeOptions,
       ),
     remove: () => {
