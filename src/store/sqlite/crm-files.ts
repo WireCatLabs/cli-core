@@ -1,3 +1,4 @@
+import { sep } from "node:path"
 import type { CacheDatabase } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
 import type { AccountKey } from "../types.js"
@@ -61,6 +62,8 @@ export interface CrmFileStore {
   storedBytes(key: AccountKey, folder: string): Promise<number>
   /** Files under `folder` whose text is stored, oldest download first: what the disk cap may drop. */
   droppable(key: AccountKey, folder: string): Promise<Omit<CrmFileRow, "text">[]>
+  /** Where the account's downloaded files were saved, for `account remove` to list and delete. */
+  savedPaths(key: AccountKey): Promise<string[]>
   /** The saved file is gone; the row and its text stay, so search still finds it. */
   forgetFile(key: AccountKey, externalId: string): Promise<void>
   find(search: CrmFileSearch): Promise<{ items: CrmFileHit[]; hasMore: boolean }>
@@ -149,6 +152,8 @@ export const resetCrmFileWords = (database: CacheDatabase): number => {
 export const crmFilesOver = (context: StoreContext): CrmFileStore => {
   const { database } = context
   const under = "substr(f.local_path, 1, length(?)) = ?"
+  // `…/portal` must not take in `…/portal2/…`: the folder is matched with its separator.
+  const inside = (folder: string) => (folder.endsWith(sep) ? folder : `${folder}${sep}`)
 
   const save = (key: AccountKey, file: CrmFileRow) =>
     write(database, () => {
@@ -261,18 +266,23 @@ export const crmFilesOver = (context: StoreContext): CrmFileStore => {
         id,
       ).map(rowOf),
     storedBytes: async (key, folder) =>
-      rowsOf(key, "coalesce(sum(f.size), 0) AS bytes", `f.local_path IS NOT NULL AND ${under}`, folder, folder).reduce(
-        (sum, row) => sum + Number(row.bytes),
-        0,
-      ),
+      rowsOf(
+        key,
+        "coalesce(sum(f.size), 0) AS bytes",
+        `f.local_path IS NOT NULL AND ${under}`,
+        inside(folder),
+        inside(folder),
+      ).reduce((sum, row) => sum + Number(row.bytes), 0),
     droppable: async (key, folder) =>
       rowsOf(
         key,
         COLUMNS,
         `f.local_path IS NOT NULL AND ${under} AND coalesce(f.text, '') <> '' ORDER BY f.downloaded_at, f.id`,
-        folder,
-        folder,
+        inside(folder),
+        inside(folder),
       ).map(rowOf),
+    savedPaths: async (key) =>
+      rowsOf(key, "f.local_path", "f.local_path IS NOT NULL ORDER BY f.id").map((row) => String(row.local_path)),
     forgetFile: async (key, externalId) => {
       const accountId = findAccountPk(context, key)
       if (accountId === undefined) return

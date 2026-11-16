@@ -21,5 +21,5 @@
 - **The daily limit on other people's records covers deals and leads.** `foreignContacts(...).spend` takes any CRM
   kind and a record with only `externalId` and `assignee`; a deal or lead is the sign-in's own when assigned to its
   user. The refusal says "records that are not yours" instead of "contacts and companies".
-- **`store.accounts.purge` answers the files the account's rows named on disk**, and `account remove --delete-data`
-  deletes the CRM files the CLI downloaded under its state folder; a copy saved elsewhere stays.
+- **`account remove --delete-data` lists and deletes the CRM files the CLI downloaded** under its state folder
+  (`store.crmFiles.savedPaths`), in `--dry-run` and the confirmation too; a copy saved elsewhere stays.

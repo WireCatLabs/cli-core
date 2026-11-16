@@ -23,10 +23,10 @@ export interface AccountAccounts {
   accountName(key: AccountKey): Promise<string | null>
   /**
    * Everything one account holds — its chats, messages, members, state, leases, transcripts and whom
-   * it has seen — for `cache clear`. Other accounts, and identities they share, stay. Answers the files the account's
-   * rows named on disk, such as downloaded CRM files, for the caller to delete: the store never touches a file.
+   * it has seen — for `cache clear`. Other accounts, and identities they share, stay. The store never touches a file
+   * on disk: `account remove` deletes the downloaded CRM files `crmFiles.savedPaths` names.
    */
-  purge(key: AccountKey): Promise<string[]>
+  purge(key: AccountKey): Promise<void>
 }
 
 export interface AccountGroupChange {
@@ -83,8 +83,8 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
     accountName: async (key) => accounts.accountName(context, key),
     purge: async (key) => {
       const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return []
-      return write(database, () => purgeAccount(context, accountKey))
+      if (accountKey === undefined) return
+      write(database, () => purgeAccount(context, accountKey))
     },
   }
 }

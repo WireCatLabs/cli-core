@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, lstatSync, rmSync } from "node:fs"
 import { homedir } from "node:os"
 import { resolve as absolute, isAbsolute, join, sep } from "node:path"
 import {
@@ -349,6 +349,20 @@ export const accountRemoveCommand = (
       // The tool's own sign-out deletes its session where the run's state folder says; here that folder is the owner's.
       const signsOut = !(movedFolders && inOwners(state))
       const removed: Entry[] = signsOut ? [signIn] : []
+      // Single files, removed without `recursive`: a path the store names is never a folder to empty.
+      const crmFiles = new Set<string>()
+      const crmFilesOf = async (key: AccountKey, root: string, guard: (paths: string[]) => string[]) => {
+        const store = await openStore({ env, command: app.command })
+        try {
+          // Only what the CLI downloaded into its state folder; a copy saved with --dir elsewhere is the owner's.
+          const saved = (await store.crmFiles.savedPaths(key)).map((path) => absolute(path))
+          return guard(saved.filter((path) => within(path, root))).filter(
+            (path) => existsSync(path) && lstatSync(path).isFile(),
+          )
+        } finally {
+          await store.close()
+        }
+      }
       const kept: Kept[] = [...ownersKept, ...(signsOut ? [] : [{ ...signIn, reason: ownersReason }])]
       // An entry the environment supplies is not this tool's to remove.
       const saved = (store: Credentials, name: string) => (store.read(name)?.source ?? "environment") !== "environment"
@@ -367,8 +381,13 @@ export const accountRemoveCommand = (
         for (const file of dataFiles.filter(present)) removed.push({ kind: "file", target: file })
         if (accountName && storeHere && ownersStore)
           kept.push({ kind: "store", target: accountName, reason: ownersReason })
-        else if (accountName && storeHere) removed.push({ kind: "store", target: accountName })
-        else
+        else if (accountName && storeHere && account) {
+          removed.push({ kind: "store", target: accountName })
+          for (const file of await crmFilesOf(account, state, theRun)) {
+            removed.push({ kind: "file", target: file })
+            crmFiles.add(file)
+          }
+        } else
           kept.push({
             kind: "store",
             target: accountName ?? profile,
@@ -441,9 +460,7 @@ export const accountRemoveCommand = (
         if (removed.some((one) => one.kind === "store") && account) {
           const store = await openStore({ env, command: app.command })
           try {
-            // A CRM file the CLI downloaded goes with the account; a copy saved with --dir elsewhere is the owner's.
-            for (const target of await store.accounts.purge(account))
-              if (within(target, state) && !inOwners(target)) removed.push({ kind: "file", target })
+            await store.accounts.purge(account)
             await store.accounts.forgetProfile(app.command, profile)
           } finally {
             await store.close()
@@ -451,7 +468,9 @@ export const accountRemoveCommand = (
         }
         if (unit) await removeUnit(app, system, unit, env)
         if (schedules.length > 0) await removeSchedules(app, system, state, schedules, env)
-        for (const entry of removed) if (entry.kind === "file") rmSync(entry.target, { recursive: true, force: true })
+        for (const entry of removed)
+          if (entry.kind === "file")
+            rmSync(entry.target, crmFiles.has(entry.target) ? { force: true } : { recursive: true, force: true })
         if (removal.forgetConfig && !ownersConfig)
           for (const target of removal.forgetConfig(profile, hooks)) removed.push({ kind: "config", target })
         else if (sections.length > 0) removeSections(settings.configPath, sections)

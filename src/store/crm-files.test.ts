@@ -89,6 +89,18 @@ describe("crm_files", () => {
     expect((await store.crmFiles.find({ words: ["number", "1"] })).items.map((hit) => hit.file.ownerId)).toContain("1")
   })
 
+  it("matches the folder with its separator, so a sibling folder's files are neither counted nor dropped", async () => {
+    await store.crmFiles.save(PORTAL, fileOf("1"))
+    await store.crmFiles.save(PORTAL, fileOf("2", { localPath: "/state/crm/files/example-crm-portal2/deal-2/b.pdf" }))
+    const folder = FOLDER.slice(0, -1)
+    expect(await store.crmFiles.storedBytes(PORTAL, folder)).toBe(100)
+    expect((await store.crmFiles.droppable(PORTAL, folder)).map((one) => one.ownerId)).toEqual(["1"])
+    expect(await store.crmFiles.savedPaths(PORTAL)).toEqual([
+      `${FOLDER}deal-1/contract-1.pdf`,
+      "/state/crm/files/example-crm-portal2/deal-2/b.pdf",
+    ])
+  })
+
   it("goes with its account's purge, words and all", async () => {
     await store.crmFiles.save(PORTAL, fileOf("1"))
     await store.accounts.purge(PORTAL)

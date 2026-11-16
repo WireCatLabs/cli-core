@@ -34,7 +34,7 @@ import {
 import { dropUnusedVectors } from "./vector-index.js"
 
 /** Everything the account holds, children before parents: the foreign keys are enforced. */
-export const purgeAccount = (context: StoreContext, accountKey: number): string[] => {
+export const purgeAccount = (context: StoreContext, accountKey: number): void => {
   const { orm, database, now } = context
   const unseenBefore = unreferenced(database, "identities")
   const at = now()
@@ -141,10 +141,6 @@ export const purgeAccount = (context: StoreContext, accountKey: number): string[
   orm.run(sql`DELETE FROM documents WHERE account_id = ${accountKey}`)
   purgeCrmCopies(database, accountKey)
   orm.run(sql`DELETE FROM crm_fields WHERE account_id = ${accountKey}`)
-  const saved = database
-    .prepare("SELECT local_path FROM crm_files WHERE account_id = ? AND local_path IS NOT NULL")
-    .all(accountKey)
-    .map((row) => String(row.local_path))
   orm.run(sql`DELETE FROM crm_files WHERE account_id = ${accountKey}`)
   // An entity made from a record is the owner's and stays; only what the source said goes.
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`
@@ -156,7 +152,6 @@ export const purgeAccount = (context: StoreContext, accountKey: number): string[
   dropUnusedVectors(database, hashes)
   // The links' delete trigger writes a revision naming the account it is purging; the history goes with the links.
   orm.run(sql`DELETE FROM link_revisions WHERE account_id = ${accountKey}`)
-  return saved
 }
 
 /**

@@ -164,8 +164,10 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
   colleague's contract. `store.crmFiles` reads and writes it; `find` takes the copy's viewers: a limited profile finds
   only the files of records assigned to its user (NEED-2707 A), the administrator all. A deal's or lead's file follows
   the copy's current assignee, so it goes with a reassigned deal and is hidden while the copy lacks the deal; a
-  contact's or company's keeps its assignee at download. The account's purge removes the rows and answers their
-  paths; `account remove --delete-data` deletes those under the CLI's state folder. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
+  contact's or company's keeps its assignee at download. The account's purge removes the rows.
+  `account remove --delete-data` lists and deletes, before and after its confirmation alike, the files
+  `store.crmFiles.savedPaths` names inside the CLI's state folder, one file at a time; a consumer must save its
+  downloads under that state folder, or account removal leaves them on disk. A copy saved elsewhere is the owner's. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
   that have text are dropped, the row and the text stay.
 
 ## Adapter helpers
