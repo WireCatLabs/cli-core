@@ -50,6 +50,18 @@ shape of this file.
   20 messages per chat. On a test store of 10 chats (4 large groups) with 40 questions, a key message reached the top
   20 for 19 questions instead of 10, and the top 5 for 11 instead of 8, at about 0.7 s more per query. One chat
   (`--chat`) is searched as before. `QueryExecution` takes `perChat`, the most hits a page takes from one chat.
+- **`meetings list` and `meetings show` stop when the run is stopped.** A read of the service that the run's stop
+  signal cut short was taken as a failed service and answered from the store. Now the stop is the answer, and the
+  service's `find` and `get` receive the signal as a new last argument. A host passes `signal` in
+  `addMeetingCommands`' deps; `MeetingServerAccess.signal` carries it for a direct call.
+- **A sign-in with `storage: "keyring"` stops before the browser when the keyring does not answer.** #3041 made the
+  check before a sign-in read an unreachable keyring as "no old entry", so the browser opened and the save failed
+  after it. That holds only where the save can fall back to the file; with keyring-only storage the check fails up
+  front again, with cli-base's `keyring.unreachable`.
+- **A sign-in store passes cli-base's own keyring errors through.** `credentialStorage` turned every failed read
+  into `oauth.not-saved`. A `CliError` from cli-base, such as `keyring.unreachable` (the keyring failed and the file
+  holds no entry), now reaches the answer with its own words. Before a sign-in, an old entry that cannot be read for
+  `keyring.unreachable` counts as no old entry, so a sign-in on a machine with no keyring still saves to the file.
 
 ## 0.686.0 — 16.11.2026
 
