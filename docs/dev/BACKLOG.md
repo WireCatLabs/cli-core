@@ -50,9 +50,6 @@ None open.
   reads `documentMeetings`. Drop it at the next breaking release. `src/meetings/transcript-store.ts`.
 - **CORE-61** · P2 · A shared Google sign-in module in `./google` (`accountEmail`, `session start`/`status`/`end`):
   gcal, drive and meet each copy ~450 lines of it. `src/google/`.
-- **CORE-54** · P2 · A Drive file two Drive profiles both imported (a Meet transcript shared with both) never resolves
-  its `attached` link: `driveDocumentOf` refuses two documents, so the meeting and its document both show in
-  `search all`. Pick one document or link both. `src/store/sqlite/files.ts` (`driveDocumentOf`).
 - **CORE-52** · P2 · Tasks from an external task tool, Todoist first (owner, 2026-11-09: soon, not now). Import
   the owner's tasks into the store with `external_id` and `source_url` (`src/entities/task.ts:40`), so the morning
   digest and Desktop show them with their due dates. One-way read first; writing back is a later decision.
