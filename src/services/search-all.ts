@@ -15,7 +15,14 @@ import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { type Period, questionPeriod } from "../search/question-period.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
-import type { AccountKey, BusinessKind, BusinessSource, MessageStore, StoredAccount } from "../store/store.js"
+import type {
+  AccountKey,
+  BusinessKind,
+  BusinessSource,
+  CopyViewer,
+  MessageStore,
+  StoredAccount,
+} from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -149,6 +156,8 @@ export interface SearchAllRequest {
   meetingsAsked?: boolean
   /** The CRM kinds `crm` reads; absent, deals and leads. */
   crmKinds?: readonly DealKind[]
+  /** A CRM CLI's profile that may read only part of its account's copy (SEC-197). */
+  crmViewer?: CopyViewer
   /**
    * Search harder: a hosted model reorders the first 30 hits, only with the owner's consent and a key. Absent, nothing
    * is read of the consent or the key and nothing is sent.
@@ -504,6 +513,7 @@ export const searchAll = async (
             anyWord: anyWord || discover,
             ...(request.exact ? { exact: true } : {}),
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
+            ...(request.crmViewer === undefined ? {} : { viewer: request.crmViewer }),
             limit: Math.min(depth, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })

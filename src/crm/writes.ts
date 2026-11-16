@@ -155,7 +155,7 @@ export const pipelineOf = async (
   kind: DealKind | undefined,
   reference: string | undefined,
   param = "--pipeline",
-  window: Pick<PipelineOptions, "since" | "until" | "zone"> = {},
+  window: Pick<PipelineOptions, "since" | "until" | "zone" | "viewer"> = {},
 ): Promise<PipelineReport> => {
   const scope = { ...window, ...(kind ? { kind } : {}), account: context.account }
   if (reference !== undefined) {

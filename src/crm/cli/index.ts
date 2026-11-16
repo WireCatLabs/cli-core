@@ -39,6 +39,7 @@ import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { openStageTasks } from "../stage-tasks.js"
 import { crmStatus, syncCrm } from "../sync.js"
+import { crmViewerOf } from "../viewer.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
   type CrmFieldsInput,
@@ -92,6 +93,12 @@ export interface CrmRun {
   store: MessageStore
   /** The CRM, built on first use: a command that only reads the store never reads the sign-in. */
   source: () => CrmSource
+  /**
+   * The sign-in's own user id in the CRM, as the sign-in entry keeps it, read without the network. The copy's deals
+   * and leads read offline are only this user's unless a sync found it the CRM's administrator; left out, a CRM that
+   * limits its users shows none of them (SEC-197).
+   */
+  user?: string
   /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */
   locked?: boolean
   /** The CRM's writer and the profile's levels, built on first use; needed by every write command. */
@@ -297,15 +304,15 @@ const collect = (value: string, previous: string[] = []) => {
 }
 
 /** `owner:` as the identity a deal's assignee is stored as; `none` is no assignee. */
-const ownerOf = async (run: Pick<CrmRun, "store" | "account">, owner: string): Promise<string | null> => {
+const ownerOf = async (run: Pick<CrmRun, "store" | "account" | "user">, owner: string): Promise<string | null> => {
   if (owner === "none") return null
   if (owner === "me") {
-    const self = await run.store.crm.ownUser(run.account)
+    const self = run.user ?? (await run.store.crm.ownUser(run.account))
     if (!self)
       throw new CliError("validation_error", "this CRM names no user for the sign-in: use owner:<user id>", {
         reason: "crm.owner-unknown",
       })
-    return crmIdentityId(run.account, self, "user")
+    return crmIdentityId(run.account, normalCrmUserId(self), "user")
   }
   if (!isCrmUserId(owner))
     throw new CliError("validation_error", `owner takes me, none or the CRM's user id, not ${owner}`, {
@@ -313,6 +320,9 @@ const ownerOf = async (run: Pick<CrmRun, "store" | "account">, owner: string): P
     })
   return crmIdentityId(run.account, normalCrmUserId(owner), "user")
 }
+
+/** Whose deals and leads of the copy this profile reads offline; undefined is every one. */
+const viewerOf = (run: Pick<CrmRun, "store" | "account" | "user">) => crmViewerOf(run.store, run.account, run.user)
 
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */
 const pathOf = (command: Command): string[] =>
@@ -524,6 +534,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         run.store.deals.list({
           kind,
           account: run.account,
+          viewer: await viewerOf(run),
           ...(terms.has("status") ? { status: terms.get("status") as DealFilter["status"] } : {}),
           ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
           ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
@@ -568,7 +579,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       `${plural} show ${kind}:12`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
-        const found = await ownCopy(run, kind, reference)
+        const found = await readableCopy(run, kind, reference)
         const activities =
           found.externalId !== null && (await run.store.crm.activitiesOn(run.account))
             ? (await run.store.crm.activitiesOf(run.account, kind, found.externalId, SHOWN_ACTIVITIES)).map((one) => ({
@@ -628,6 +639,15 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       })
     const found = await run.store.deals.get(reference)
     if (found.account?.provider !== run.account.provider || found.account.account !== run.account.account)
+      throw new CliError("not_found", `${reference} is not a copy from this profile's CRM account`)
+    return found
+  }
+
+  /** A row this profile may read: one assigned to another user is not found, as another account's is not. */
+  const readableCopy = async (run: CrmRun, kind: DealKind, reference: string): Promise<Deal> => {
+    const found = await ownCopy(run, kind, reference)
+    const viewer = await viewerOf(run)
+    if (viewer && found.assignee !== viewer.assignee)
       throw new CliError("not_found", `${reference} is not a copy from this profile's CRM account`)
     return found
   }
@@ -813,6 +833,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     await within(command, async (run) => {
       const found = await run.store.deals.pipelines({
         account: run.account,
+        viewer: await viewerOf(run),
         ...(terms.has("kind") ? { kind: terms.get("kind") as DealKind } : {}),
       })
       return listOf(pathOf(command).join(" "), {
@@ -847,6 +868,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           command,
           async (run) => {
             const report = await pipelineOf(run, undefined, reference, "pipeline", {
+              viewer: await viewerOf(run),
               ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
               ...(until === undefined ? {} : { until: new Date(until).toISOString() }),
               zone,
@@ -878,11 +900,13 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     const terms = queryTerms(words, STAGES_QUERY, "stages list")
     await within(command, async (run) => {
       const kind = terms.has("kind") ? (terms.get("kind") as DealKind) : undefined
-      const all = await run.store.deals.pipelines({ account: run.account, ...(kind ? { kind } : {}) })
+      const viewer = await viewerOf(run)
+      const all = await run.store.deals.pipelines({ account: run.account, viewer, ...(kind ? { kind } : {}) })
       const chosen: Pipeline[] = terms.has("pipeline")
         ? [
             await run.store.deals.pipeline(terms.get("pipeline") as string, {
               account: run.account,
+              viewer,
               ...(kind ? { kind } : {}),
             }),
           ]

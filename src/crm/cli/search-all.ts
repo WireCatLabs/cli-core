@@ -14,6 +14,7 @@ import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
 import { type SearchedResource, searchAll } from "../../services/search-all.js"
+import { crmViewerOf } from "../viewer.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 
 /** What a CRM CLI's `search all` reads: its deals and leads first, then what the other tools stored. */
@@ -79,6 +80,7 @@ export const addCrmSearchAll = (
       const limit = opts.limit ?? DEFAULT_LIMIT
       const offset = offsetOf(opts.page, limit)
       const env = run.env ?? process.env
+      const viewer = await crmViewerOf(run.store, run.account, run.user)
       const found = await searchAll(
         run.store,
         run.account,
@@ -92,6 +94,7 @@ export const addCrmSearchAll = (
           only,
           ...(opts.only?.includes("meetings") ? { meetingsAsked: true } : {}),
           ...(crmKinds.length < DEAL_KINDS.length ? { crmKinds } : {}),
+          ...(viewer ? { crmViewer: viewer } : {}),
           ...(opts.source === undefined ? {} : { source: opts.source }),
           ...(run.locked ? { scope: { crm: [run.account] } } : {}),
         },

@@ -73,6 +73,20 @@ field types.
 read clients and calls `refuseForeignClientReads(source, readsClients, method)` before sending
 (`crm.client-reads-admin-only`), as Bitrix24's `readsClients` does.
 
+### Offline reads of the copy
+
+One account's copy is kept once, whichever profile synced it, so another profile on the same account must not read it
+past the rule above. `CrmRun.user` is the profile's own CRM user, read from its sign-in entry without the network. Each
+`sync` records, as a sync state the `config` command cannot set, whether the CRM limits its users (the source has
+`self()` or `isAdmin()`) and whether its sign-in's user is the administrator; it records this before it refuses a
+sign-in that is not the copy's owner, so another administrator's first sync is enough. `crmViewerOf` turns that into a
+`CopyViewer`: none for the administrator or a CRM that limits nobody, otherwise only the deals and leads assigned to
+`user` (also while no sync recorded the rule), and none of them when `user` is unknown. `deals`, `leads`, `pipelines`
+and `stages` reads and `search all` pass it to the store, which filters the rows, the stage counts, the funnel and the
+deals whose contacts' e-mails and phones `search all` matches. A deal's contacts are then the profile's own clients, so
+no quota applies offline; another client is read live, under the rule above. Not narrowed: `store status` counts, and
+the copies of other CRM accounts that `search all` reads without a profile lock.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on

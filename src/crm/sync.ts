@@ -19,6 +19,7 @@ import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { ungroupedHint } from "./group-hint.js"
 import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "./source.js"
+import { recordCrmViewer } from "./viewer.js"
 
 const DAY = 86_400_000
 /** A row the CRM changed this close to the id pass's start may be newer than the list, by the two clocks' skew. */
@@ -662,6 +663,7 @@ export const syncCrm = async (
   const self = source.self ? normalCrmUserId(await source.self()) : undefined
   if (self !== undefined && !isCrmUserId(self))
     throw new CliError("invalid_response", `${source.provider} named its sign-in's user as "${self}", not a user id`)
+  await recordCrmViewer(source, store, account, self)
   if (self !== undefined) {
     const owner = await store.crm.ownUser(account)
     if (owner === undefined) await store.crm.saveOwnUser(account, self)
