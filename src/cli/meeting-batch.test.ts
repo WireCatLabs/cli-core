@@ -11,6 +11,7 @@ import { sampleMeeting } from "../meetings/testing/index.js"
 import { createMeetingBatchReader } from "../services/meeting-batch.js"
 import { searchMeetingHits } from "../services/meeting-hit-search.js"
 import { openStore } from "../store/store.js"
+import { provide } from "./context.js"
 import { addMeetingBatchCommand, formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 
 const opened: { close(): unknown }[] = []
@@ -228,4 +229,36 @@ it("uses compact passage formatting with one coverage statement for each result"
   expect(text).toContain("00:00:01")
   expect(text.match(/Cues:/g)).toHaveLength(2)
   expect(markdown).toContain(`\`${f.ref(1)}\``)
+})
+
+it("marks cue text and hit excerpts in a scheduled agent's text and markdown batch, and only there", async () => {
+  const f = await fixture()
+  const MARK = "0123456789abcdef"
+  const app = { command: "example", appName: "example-cli", envPrefix: "EXAMPLE", description: "", version: "1.0.0" }
+  const batch = async (format: string, env: NodeJS.ProcessEnv) => {
+    const program = new Command("example").option("--json").option("--jsonl")
+    provide(program, { app, env })
+    let printed = ""
+    addMeetingBatchCommand(program, {
+      reader: f.reader,
+      input: async () => input([request("p", "passage", f.ref(1)), request("q", "search", "budget")]),
+      meta,
+      signal: () => undefined,
+      fields: () => undefined,
+      output: (_body, report, chosen) => {
+        if (chosen !== "json") printed = formatMeetingBatch(report, chosen)
+      },
+    })
+    await program.parseAsync(["batch", "-", "--format", format], { from: "user" })
+    return printed
+  }
+  const block = new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*⟦/untrusted:${MARK}⟧`, "gu")
+  for (const format of ["text", "markdown"]) {
+    const content = await batch(format, { EXAMPLE_READ_ONLY: "1", EXAMPLE_UNTRUSTED_MARK: MARK })
+    expect(content, format).toMatch(new RegExp(`⟦untrusted:${MARK} source=text[^⟧]*⟧budget sample 1`, "u"))
+    expect(content, format).toMatch(new RegExp(`⟦untrusted:${MARK} source=excerpt[^⟧]*⟧`, "u"))
+    expect(content.replace(block, ""), format).not.toContain("sample")
+    expect(content.replace(block, ""), format).toContain("p: meetings passage")
+    expect(await batch(format, {}), format).not.toContain("⟦untrusted")
+  }
 })

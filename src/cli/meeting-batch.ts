@@ -37,6 +37,7 @@ import { answerEntity } from "./answer-entity.js"
 import { destroysNothing } from "./effects.js"
 import { answerSchema, type Body, itemOf, listOf } from "./envelope.js"
 import { pagingOf } from "./paging.js"
+import { runMarkOf, withUntrustedMarked } from "./untrusted-marks.js"
 
 const INDEX_BYTES = 4194304
 const parse = (command: Command, args: readonly string[]) => {
@@ -207,6 +208,9 @@ export const addMeetingBatchCommand = (
         fields,
         failureContext: failureContext(),
       })
+      // The host formats text and Markdown from the report; JSON is marked by `renderAnswer`.
+      const mark = format === "json" ? undefined : runMarkOf(action)
+      const shown = mark === undefined ? report : withUntrustedMarked(report, mark)
       const issues = report.items
         .filter((item) => !item.complete)
         .map((item) => ({
@@ -229,7 +233,7 @@ export const addMeetingBatchCommand = (
             ...(report.output_limited ? { truncated: true } : {}),
           },
         }),
-        report,
+        shown,
         format as MeetingPassageOutputFormat,
       )
     })
