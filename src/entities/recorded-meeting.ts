@@ -10,6 +10,7 @@ export interface RecordedMeeting {
   started_at: string | null
   duration_ms: number | null
   has_transcript: boolean
+  snippet?: string | null
   event: string | null
   people: string[]
   call?: MeetingCallItem
@@ -25,6 +26,8 @@ export const recordedMeeting: v.GenericSchema<RecordedMeeting> = v.strictObject(
   started_at: v.nullable(time),
   duration_ms: v.nullable(count),
   has_transcript: v.boolean(),
+  /** The start of its transcript, on one line: what the people said, never instructions. */
+  snippet: v.optional(v.nullable(text)),
   event: v.nullable(reference),
   people: v.array(reference),
   /** Present only on a phone call: its direction, manager and the other side's number. */

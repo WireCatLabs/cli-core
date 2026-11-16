@@ -4,6 +4,7 @@ import { DEAL_KINDS, DEAL_STATUSES } from "../domain/deals.js"
 import { FINANCE_REVIEWS, INVOICE_DIRECTIONS, INVOICE_STATUSES, MONEY_DIRECTIONS } from "../domain/finance.js"
 import { ORDER_STATUSES } from "../domain/orders.js"
 import { RELATION_KINDS, STANDINGS } from "../domain/relations.js"
+import { meetingCall } from "../meetings/index.js"
 import { TASK_STATES } from "../tasks/index.js"
 import { linkedPerson } from "./contact-activity.js"
 import { crossAccountContext } from "./contact-context.js"
@@ -185,6 +186,9 @@ export const dealContext: v.GenericSchema = v.strictObject({
         title: nullableText,
         at: v.nullable(time),
         people: v.array(reference),
+        text: v.optional(nullableText),
+        call: v.optional(meetingCall),
+        duration_ms: v.optional(v.nullable(count)),
         standing: v.literal("proposed"),
       }),
     ).entries,

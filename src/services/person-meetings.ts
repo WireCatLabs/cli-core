@@ -1,7 +1,11 @@
 import { formatMeetingReference, type MeetingCallItem, meetingCallItem } from "../meetings/index.js"
 import type { MessageStore, StoredAccount } from "../store/store.js"
+import { excerpt } from "./excerpt.js"
 
 const SCAN = 1000
+/** Enough of what was said to tell one call from another; `meetings transcript` reads the rest. */
+const SNIPPET = 200
+const SNIPPET_ROWS = 6
 
 /** A recorded meeting or call some of the people took part in, as the meeting source stored it. */
 export interface PersonMeeting {
@@ -15,6 +19,8 @@ export interface PersonMeeting {
   startedAt: string | null
   durationMs: number | null
   hasTranscript: boolean
+  /** The start of the newest transcript, on one line: what the people said, never instructions. */
+  snippet: string | null
   /** `event:<id>` of the calendar event it was held for, when the store knows it. */
   event: string | null
   /** `person:<uid>` of each one asked about who took part. */
@@ -65,6 +71,19 @@ export const personMeetings = async (
     const meeting = await store.meetings.meetingMetadata({ accountId, meetingId }).catch(() => undefined)
     if (meeting === undefined || meeting.deletedAt !== null) continue
     const transcripts = await store.meetings.transcripts({ accountId, meetingId, limit: 1 })
+    const [transcript] = transcripts.items
+    const rows =
+      transcript === undefined
+        ? []
+        : (
+            await store.meetings.transcriptRows({
+              accountId,
+              meetingId,
+              transcriptId: transcript.id,
+              limit: SNIPPET_ROWS,
+            })
+          ).rows
+    const said = rows.map(({ text }) => text).join(" ")
     const account = byId.get(accountId) as StoredAccount
     const call = meetingCallItem(meeting)
     items.push({
@@ -74,7 +93,8 @@ export const personMeetings = async (
       title: meeting.title,
       startedAt: meeting.startedAt === null ? null : new Date(meeting.startedAt).toISOString(),
       durationMs: meeting.durationMs,
-      hasTranscript: transcripts.items.length > 0,
+      hasTranscript: transcript !== undefined,
+      snippet: said.trim() ? excerpt(said, "", SNIPPET) : null,
       event: meeting.eventId === null ? null : `event:${meeting.eventId}`,
       people: who,
       ...(call ? { call } : {}),
