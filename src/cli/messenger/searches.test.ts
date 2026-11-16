@@ -191,6 +191,49 @@ describe("searches", () => {
       expect([path, right.code, json(right).items.length > 0]).toEqual([path, 0, true])
     }
   })
+
+  it("answers the date, --around and --only flags agents guess with the form that runs", async () => {
+    const call = await setup()
+    const message = async (...argv: string[]) => {
+      const failed = await call(...argv, "--json")
+      expect([argv.join(" "), failed.code]).toEqual([argv.join(" "), 2])
+      return JSON.parse(failed.stderr).error.message as string
+    }
+    for (const path of ["messages", "all", "notes"]) {
+      for (const flag of ["--since", "--after", "--until", "--before"])
+        expect(await message("search", path, "invoice", flag, "2026-10-01")).toContain(
+          `search ${path} 'words date>=2026-10-01 date<2026-10-20', or 'words date:7d'`,
+        )
+      expect((await call("search", path, "invoice date>=2000-01-01 date<2100-01-01", "--json")).code).toBe(0)
+    }
+    expect(await message("search", "conversations", "invoice", "--since", "7d")).toContain(
+      "--since-time 7d, or --since-time 2026-10-01",
+    )
+    expect(await message("search", "conversations", "invoice", "--until", "2026-10-20")).toContain(
+      "--filter 'date<2026-10-20'",
+    )
+    const conversations = ["search", "conversations", "invoice", "--since-time", "7d", "--filter", "date<2026-10-20"]
+    expect((await call(...conversations, "--offline", "--json")).code).toBe(0)
+    for (const path of ["messages", "notes", "conversations"])
+      expect(await message("search", path, "invoice", "--only", "messages")).toContain(
+        "search all 'words' --only messages",
+      )
+
+    const hit = json(await call("search", "messages", "invoice", "--json")).items[0].ref as string
+    for (const argv of [
+      ["search", "messages", "invoice"],
+      ["search", "all", "invoice"],
+      ["messages", "list", "7"],
+      ["messages", "show", hit],
+    ])
+      expect(await message(...argv, "--around", "101")).toContain("messages context <hit ref> --before-n 5 --after-n 5")
+    expect(
+      (await call("messages", "context", hit, "--before-n", "1", "--after-n", "1", "--offline", "--json")).code,
+    ).toBe(0)
+    expect(await message("messages", "context", hit, "--after", "3")).toContain("--after-n <n>")
+    expect(await message("messages", "list", "--chat", "7")).toContain("messages list <chat>")
+    expect(await message("messages", "list", "7", "--after", "2026-10-01")).toContain("date>=2026-10-01")
+  })
 })
 
 it("tells in each search's help what transcript:, content: and filename: narrow to and which keys hold the answer", async () => {

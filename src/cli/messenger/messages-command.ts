@@ -13,7 +13,7 @@ import type { AccountKey } from "../../store/store.js"
 import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
-import { withOptionHints } from "../option-hints.js"
+import { AROUND_HINT, END_FLAGS, hintsFor, START_FLAGS, withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
 import { marksUntrusted } from "../untrusted-marks.js"
 import { syncCommand } from "./backfill-command.js"
@@ -130,12 +130,14 @@ export const messagesCommand = (messenger: Messenger): Command => {
       )
     })
   annotate(list, { output: { entity: "message" }, query: history })
-  withOptionHints(
-    list,
-    Object.fromEntries(
-      TIME_FLAGS.map((flag) => [flag, `messages list reads a window by its query: '${WINDOW_EXAMPLE}'`]),
+  withOptionHints(list, {
+    ...hintsFor(
+      [...TIME_FLAGS, ...START_FLAGS, ...END_FLAGS],
+      `messages list reads a window by its query: '${WINDOW_EXAMPLE}'`,
     ),
-  )
+    "--chat": CHAT_FIRST("list"),
+    "--around": AROUND_HINT,
+  })
 
   const readWindow = async (command: Command, chat: string, message: string | undefined, window: Window) => {
     const context = messengerContext(command, messenger)
@@ -247,8 +249,21 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(commentsCommand(messenger))
   messages.addCommand(linksCommand(messenger))
   messages.addCommand(syncCommand(messenger))
+  for (const name of ["show", "context"]) {
+    const command = messages.commands.find((one) => one.name() === name)
+    if (command)
+      withOptionHints(command, {
+        "--chat": CHAT_FIRST(name),
+        "--around":
+          name === "show" ? AROUND_HINT : "the window is around the message already; --before-n 5 --after-n 5",
+        ...(name === "context" ? { "--before": "--before-n <n>", "--after": "--after-n <n>" } : {}),
+      })
+  }
   return hideNever(messenger, messages)
 }
+
+const CHAT_FIRST = (name: string) =>
+  `the chat is the first argument: messages ${name} <chat>${name === "list" ? "" : " <message>, or a hit's msg: ref"}`
 
 type Window = { before: number; after: number }
 
