@@ -30,7 +30,7 @@ export interface DocumentSyncAnswer {
   removed?: number
   unchanged?: number
   /** What `--embed` did, as `embedNotes` answers it, or what the CLI says instead. */
-  embeddings?: object
+  embeddings?: unknown
 }
 
 export interface DocumentSyncCommands {
@@ -52,9 +52,9 @@ export interface DocumentSyncCommands {
 }
 
 /** `embedNotes`' answer says enrichment never had the time to send a batch. */
-const enrichmentOutOfTime = (embeddings: object | undefined): boolean => {
+const enrichmentOutOfTime = (embeddings: unknown): boolean => {
   const enrichment =
-    embeddings && "enrichment" in embeddings
+    typeof embeddings === "object" && embeddings !== null && "enrichment" in embeddings
       ? (embeddings.enrichment as { reason_id?: unknown; enriched?: unknown } | undefined)
       : undefined
   return enrichment?.reason_id === "enrichment.deadline" && enrichment.enriched === 0
