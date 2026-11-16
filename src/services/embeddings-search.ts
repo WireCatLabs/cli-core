@@ -25,6 +25,14 @@ import { refreshSearch } from "./search-refresh.js"
 
 /** How deep each list is read before the two are merged. */
 const CANDIDATES = 50
+/** Conversations the meaning half reads across chats before it gives each chat its share. */
+const ACROSS_CHATS = 500
+/**
+ * What one chat brings to each list when several are searched, so a large chat cannot fill them. Its meaning hits
+ * count by how far they lead its 20th best: a large chat holds some text near any question, and a small chat's
+ * clear best must not lose to that.
+ */
+const PER_CHAT = 20
 /** Messages the word search reads: one long thread can hold many of them. */
 const WORD_HITS = 200
 /** Reciprocal rank fusion's usual constant (phase 5 E9). */
@@ -67,6 +75,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     )
     const { items } = await store.queries.matchQuery({
       ...lexical.execution,
+      perChat: PER_CHAT,
       ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
       ...(conversations === undefined ? {} : { conversationIds: conversations }),
       ...(since === undefined ? {} : { conversationSince: Date.parse(since) }),
@@ -217,7 +226,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           return { hits: [], outside: new Map<string, { account: AccountKey; chats: Set<Id> }>(), sources: new Map() }
         },
       )
-      const meaning: ConversationHit[] = []
+      const meaning: { hit: ConversationHit; lead: number }[] = []
       const sources = words.sources
       if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
         await withEmbedder(deps, target, choice, {}, async (embedder) => {
@@ -225,16 +234,16 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           for (const one of prepared.scopeAccounts) {
             const scope = scopeOf(one)
             if (scope === null) continue
+            // One chat needs no share, and mail's threads are too many to share among.
+            const whole = "chatId" in scope || one.provider === MAIL
             const hits = await store.vectors.nearestConversations(one, {
               ...scope,
               ...(since === undefined ? {} : { since }),
               model: target.key,
-              limit: Math.max(limit, CANDIDATES),
+              limit: whole ? Math.max(limit, CANDIDATES) : Math.max(limit, ACROSS_CHATS),
               query: vector as Float32Array,
               ...(eligibility ? { conversations: eligibility.conversations } : {}),
             })
-            for (const hit of hits) sources.set(hit.summary.id, one)
-            meaning.push(...hits)
             const images = await store.vectors.nearestImages(one, {
               ...scope,
               ...(since === undefined ? {} : { since }),
@@ -242,15 +251,16 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
               limit: Math.max(limit, CANDIDATES),
               query: vector as Float32Array,
             })
-            for (const hit of images) {
-              if (eligibility && !eligibility.conversations.includes(hit.summary.id)) continue
-              sources.set(hit.summary.id, one)
-              meaning.push(hit)
-            }
+            const found = [
+              ...hits,
+              ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
+            ].sort((a, b) => b.score - a.score)
+            for (const hit of found) sources.set(hit.summary.id, one)
+            meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
           }
         })
       }
-      meaning.sort((a, b) => b.score - a.score)
+      meaning.sort((a, b) => b.lead - a.lead)
       const scoped: { source: AccountKey; readiness: SearchReadiness }[] = []
       const elsewhere: string[] = []
       for (const one of prepared.scopeAccounts) {
@@ -301,7 +311,11 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         model: target.id,
         meaning: target.installed ? "searched" : "unavailable",
         ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
-        hits: fused(meaning, words.hits, meaningFloor(target.key))
+        hits: fused(
+          meaning.map(({ hit }) => hit),
+          words.hits,
+          meaningFloor(target.key),
+        )
           .slice(0, limit)
           .map((hit) => {
             const source = sources.get(hit.summary.id) as AccountKey
@@ -356,6 +370,19 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       }
     },
   }
+}
+
+/**
+ * Each chat's best hits, as many as the page holds, with each one's lead over the chat's `PER_CHAT`th best (or its
+ * last, in a chat with fewer).
+ */
+const shared = (hits: ConversationHit[], limit: number) => {
+  const chats = new Map<Id, ConversationHit[]>()
+  for (const hit of hits) chats.set(hit.summary.chatId, [...(chats.get(hit.summary.chatId) ?? []), hit])
+  return [...chats.values()].flatMap((own) => {
+    const level = own[Math.min(PER_CHAT, own.length) - 1]?.score ?? 0
+    return own.slice(0, Math.max(limit, PER_CHAT)).map((hit) => ({ hit, lead: hit.score - level }))
+  })
 }
 
 /** Reciprocal rank fusion of the two lists: each conversation scores 1 / (k + rank) in every list it is in. */

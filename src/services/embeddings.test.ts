@@ -160,6 +160,35 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**gives each chat a share**: a large chat full of near matches does not hide a small chat's clear best", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: [
+        message("1", "cat dog"),
+        ...Array.from({ length: 5 }, (_, at) => message(`${100 * (at + 1)}`, "fish")),
+      ],
+    })
+    await store.chats.saveChats(account, [
+      { id: "8", title: "Large", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    const large = Array.from({ length: 60 }, (_, at) => ({
+      ...message(`${100 * (at + 1)}`, "cat cat zebra"),
+      chatId: "8",
+    }))
+    await store.messages.saveMessages(account, "8", large, { via: "history" })
+    await conversations.build("8")
+    for (const chat of ["8", "9"]) await embeddings.embed(chat, { model: "tiny", threads: 1 })
+
+    const byMeaning = (await embeddings.search("kitten", { model: "tiny", limit: 3 })).hits
+    expect(byMeaning[0]).toMatchObject({ summary: { chatId: "9", firstMessageId: "1" }, by: ["meaning"] })
+
+    await store.messages.saveMessages(account, "9", [message("1000", "zebra")], { via: "history" })
+    await conversations.build("9")
+    const byWords = (await embeddings.search("zebra", { model: "tiny-2", limit: 100 })).hits
+    expect(byWords.filter(({ summary }) => summary.chatId === "8")).toHaveLength(20)
+    expect(byWords.map(({ summary }) => summary.chatId)).toContain("9")
+    await store.close()
+  })
+
   it("**answers by meaning when the word half runs out of time**, and says the words were not searched", async () => {
     const { store, embeddings } = await setUp({ messages: [message("1", "cat cat"), message("40", "dog zebra")] })
     await embeddings.embed("9", { model: "tiny", threads: 1 })
