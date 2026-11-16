@@ -21,9 +21,23 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
-import { type CrmActivitiesSaved, crmActivitiesOver, type StoredActivity } from "./crm-activities.js"
+import {
+  type CrmActivitiesSaved,
+  crmActivitiesOver,
+  forgetActivitiesOn,
+  type StoredActivity,
+} from "./crm-activities.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
-import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
+import {
+  type CrmSkipped,
+  crmAccountPrefix,
+  crmIdentityId,
+  crmRowsOver,
+  PERSON_RECORD,
+  SOURCE,
+  TABLES,
+  textOf,
+} from "./crm-rows.js"
 import {
   type CrmStageMove,
   type CrmStageTasks,
@@ -180,13 +194,18 @@ export interface CrmCopies {
    */
   stageMoves(key: AccountKey): Promise<{ moves: CrmStageMove[]; through: number }>
   markStageMoves(key: AccountKey, through: number): Promise<void>
-  /** When stage tasks were last opened, or the rules first set; null without rules. */
+  /** When the stage-task rules were first set; null without rules. */
   stageTasksSince(key: AccountKey): Promise<number | null>
-  /** Entries from the CRM's stage history on kept deals and leads; answers how many were new. */
+  /** Entries from the CRM's stage history, on deals and leads stored or not yet; answers how many were new. */
   saveStageEntries(key: AccountKey, entries: readonly CrmStageEntry[]): Promise<number>
-  /** The stored history entries whose stage task is not handled yet, oldest first. */
-  stageEntries(key: AccountKey): Promise<CrmStageMove[]>
+  /**
+   * The history entries on stored rows whose task is not handled yet, made since the rules were first set and within
+   * `STAGE_TASK_DAYS` of `now`: a deal that joins the copy late opens tasks for its recent moves only.
+   */
+  stageEntries(key: AccountKey, now: number): Promise<CrmStageMove[]>
   handleStageEntries(ids: readonly number[]): Promise<void>
+  /** Drops the history entries no stored row claimed within `STAGE_ENTRY_DAYS`; answers how many. */
+  expireStageEntries(key: AccountKey): Promise<number>
   /** Whether the owner turned on reading activities and tasks (`activities` setting). */
   activitiesOn(key: AccountKey): Promise<boolean>
   /** Activities and tasks, each on the kept deals and leads it names; one on none of them is not stored. */
@@ -212,6 +231,11 @@ export interface CrmCopies {
     key: AccountKey,
     options: { users?: readonly string[]; before: number; dryRun?: boolean },
   ): Promise<CrmContactsRemoved>
+  /**
+   * Removes one contact from the copy, as `removeContacts` removes those outside the scope: a write made it another
+   * user's client, which the copy does not keep (NEED-2661). Answers what went.
+   */
+  removeContact(key: AccountKey, externalId: string): Promise<CrmContactsRemoved>
   /** How many of the kind the account holds, not deleted; every contact it ever saved. */
   count(key: AccountKey, kind: CrmKind): Promise<number>
   /** The stored copy's `deal:<id>` or `lead:<id>`, deleted or not; `null` when the store holds none. */
@@ -231,6 +255,9 @@ const relationNotes = ({ issues, skippedOwnerRejected, unlistedUsers, droppedPen
   ...(unlistedUsers ? { unlistedUsers } : {}),
   ...(droppedPending ? { droppedPending } : {}),
 })
+
+/** The fields of a contact's record that are not its custom values. */
+const PERSON_FIELDS = new Set(["name", "assignee", "created_at", "updated_at", "url"])
 
 /** At most this many of a contact's phones or addresses: a CRM field holds what people typed into it. */
 const MOST_CONTACTS = 20
@@ -575,6 +602,59 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       .run(user, user, key.provider, crmIdentityId(key, externalId), user)
   }
 
+  /** Owner and times as the CRM gave them; one left out keeps what was stored. */
+  const ownerAndTimes = (
+    key: AccountKey,
+    previous: Record<string, unknown>,
+    record: Pick<CrmPerson, "assignee" | "createdAt" | "updatedAt">,
+  ) => {
+    const given = {
+      ...(record.assignee === undefined
+        ? {}
+        : { assignee: record.assignee ? crmIdentityId(key, normalCrmUserId(record.assignee), "user") : null }),
+      ...(record.createdAt == null ? {} : { created_at: record.createdAt }),
+      ...(record.updatedAt == null ? {} : { updated_at: record.updatedAt }),
+    }
+    return Object.fromEntries(
+      ["assignee", "created_at", "updated_at"].flatMap((field) =>
+        field in given
+          ? [[field, given[field as keyof typeof given]]]
+          : field in previous
+            ? [[field, previous[field]]]
+            : [],
+      ),
+    )
+  }
+
+  /** The contact's record beside its identity: a custom value list given replaces the stored one whole. */
+  const savePersonRecord = (key: AccountKey, accountId: number, contact: CrmPerson, at: number) => {
+    const held = database
+      .prepare("SELECT id, fields FROM records WHERE account_id = ? AND type = ? AND external_id = ?")
+      .get(accountId, PERSON_RECORD, contact.externalId)
+    const previous = held ? (JSON.parse(String(held.fields)) as Record<string, unknown>) : {}
+    const url = contact.url === undefined ? previous.url : contact.url
+    const custom =
+      contact.metadata ?? Object.fromEntries(Object.entries(previous).filter(([field]) => !PERSON_FIELDS.has(field)))
+    const fields = {
+      name: textOf(contact.name, 200),
+      ...ownerAndTimes(key, previous, contact),
+      ...(url ? { url } : {}),
+      ...custom,
+    }
+    const fingerprint = recordFingerprint(fields, [])
+    if (held)
+      database
+        .prepare("UPDATE records SET fields = ?, fingerprint = ?, updated_at = ?, deleted_at = NULL WHERE id = ?")
+        .run(JSON.stringify(fields), fingerprint, at, Number(held.id))
+    else
+      database
+        .prepare(
+          "INSERT INTO records (account_id, type, external_id, fields, fingerprint, batch_id, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(accountId, PERSON_RECORD, contact.externalId, JSON.stringify(fields), fingerprint, SOURCE, at, at)
+  }
+
   const saveItems = (key: AccountKey, kind: DealKind, items: CrmItem[], users: boolean): CrmSaved =>
     write(database, () => {
       const accountId = account(key)
@@ -600,18 +680,19 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       const at = now()
       for (const organization of organizations) {
         const name = textOf(organization.name, 200) ?? `${key.provider} company ${organization.externalId}`
+        const held = database
+          .prepare("SELECT * FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ?")
+          .get(accountId, organization.externalId)
+        const previous = held ? (JSON.parse(String(held.fields)) as Record<string, unknown>) : {}
         const fields = {
           name,
           ...(organization.url ? { url: organization.url } : {}),
           ...(organization.own ? { own: true } : {}),
           ...(organization.type === undefined ? {} : { type: organization.type }),
+          ...ownerAndTimes(key, previous, organization),
           ...(organization.metadata ?? {}),
         }
         const fingerprint = recordFingerprint(fields, [])
-        const held = database
-          .prepare("SELECT * FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ?")
-          .get(accountId, organization.externalId)
-        const previous = held ? (JSON.parse(String(held.fields)) as { name?: unknown; own?: unknown }) : {}
         const before = previous.name
         let entity = held?.entity_type === "organization" && held.entity_id != null ? Number(held.entity_id) : null
         if (entity === null)
@@ -799,6 +880,14 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     const at = now()
     for (const row of rows) mark.run(at, Number(row.id))
     const accountId = findAccountPk(context, key)
+    if (kind === "organization" && accountId !== undefined)
+      forgetActivitiesOn(
+        database,
+        accountId,
+        kind,
+        rows.map((row) => String(row.external_id)),
+        at,
+      )
     if (isItemKind(kind) && accountId !== undefined && rows.length) {
       const pending = pendingBook(accountId)
       for (const row of rows) pending.forget(`${kind}:${row.external_id}`)
@@ -826,8 +915,10 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
         const accountId = account(key)
         const tally = tallied()
         const pending = pendingBook(accountId)
+        const at = now()
         for (const contact of contacts) {
           if (contact.assignee !== undefined) assignContact(key, contact.externalId, contact.assignee)
+          savePersonRecord(key, accountId, contact, at)
           const person = nameUnnamed(key, contact.externalId, "contact", textOf(contact.name, 200))
           const email = textOf(contact.email, 320)?.toLowerCase()
           const sharing = email ? peopleSharing(key, contact.externalId, email) : 0
@@ -907,8 +998,12 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     markStageMoves: async (key, through) => saveStageMovesMark(database, key, through, now()),
     stageTasksSince: async (key) => crmStageTasksSince(database, key),
     saveStageEntries: async (key, entries) => stageEntryStore.save(key, entries),
-    stageEntries: async (key) => stageEntryStore.pending(key),
+    stageEntries: async (key, at) => {
+      const since = crmStageTasksSince(database, key)
+      return since === null ? [] : stageEntryStore.pending(key, since, at)
+    },
     handleStageEntries: async (ids) => stageEntryStore.handled(ids),
+    expireStageEntries: async (key) => stageEntryStore.expire(key),
     activitiesOn: async (key) => crmActivitiesOn(database, key),
     saveActivities: async (key, activities) => activityStore.save(key, activities),
     activitiesOf: async (key, kind, externalId, limit) => activityStore.of(key, kind, externalId, limit),
@@ -931,6 +1026,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
         ...options,
         users: options.users ?? crmScopeUsers(database, key).map(normalCrmUserId),
       }),
+    removeContact: async (key, externalId) => removeCrmContacts(context, key, { before: now(), only: [externalId] }),
     count: async (key, kind) =>
       kind === "person"
         ? Number(

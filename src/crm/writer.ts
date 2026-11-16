@@ -60,6 +60,9 @@ export interface CrmPersonFields {
 /** A company's fields; `null` clears one. */
 export interface CrmOrganizationFields {
   name?: string
+  /** Each list replaces the CRM's whole list. */
+  emails?: string[]
+  phones?: string[]
   owner?: string | null
   custom?: Record<string, string | string[] | null>
 }

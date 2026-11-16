@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
@@ -14,6 +15,7 @@ import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
 import type { CrmActivity, CrmStageEntry } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { pull } from "../../meetings/index.js"
@@ -71,10 +73,11 @@ const setup = async (
   options: Partial<CrmCommandOptions> & {
     permissions?: Record<string, Level>
     idempotent?: boolean
+    storeNow?: () => number
   } = {},
 ) => {
   const path = join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db")
-  const store = await openStore({ path })
+  const store = await openStore({ path, ...(options.storeNow ? { now: options.storeNow } : {}) })
   opened.push(store)
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -130,7 +133,7 @@ const setup = async (
       .option("--timeout <duration>")
       .option("--yes")
       .option("--dry-run")
-    const { permissions: _permissions, idempotent: _idempotent, ...mount } = options
+    const { permissions: _permissions, idempotent: _idempotent, storeNow: _storeNow, ...mount } = options
     addCrmCommands(root, { app: APP, open: async () => runOf, ...mount })
     provide(root, {
       streams: { data: (text: string) => (data += text), diagnostic: () => undefined },
@@ -298,6 +301,140 @@ describe("CRM commands", () => {
     expect(text).toContain("1 500.80 EUR")
     expect(text).toContain("in open stages: 5 · 1 500.80 EUR, 200.00 USD")
     expect(text).toContain("won: 1 · lost: 0 · win rate 100%")
+  })
+
+  it("a deal first synced already lost reached the first stage, and a removed stage nobody stands in leaves (BUG-7)", async () => {
+    const { cli, source } = await setup()
+    source.setPipelines("lead", [])
+    source.put("deal", exampleDeal("d3", { stage: "lost" }))
+    source.put("deal", exampleDeal("d4", { stage: "lost" }))
+    await cli("sync")
+    const funnel = (await cli("pipelines", "show")).item.stages as { name: string; reached: number }[]
+    expect(funnel.find(({ name }) => name === "New")?.reached).toBe(4)
+
+    source.setPipelines("deal", [
+      { ...SALES_PIPELINE, stages: SALES_PIPELINE.stages.filter(({ externalId }) => externalId !== "quote") },
+    ])
+    await cli("sync")
+    const names = ((await cli("pipelines", "show")).item.stages as { name: string }[]).map(({ name }) => name)
+    expect(names).toEqual(["New", "Won", "Lost"])
+  })
+
+  it("a closed deal edited later keeps the day it closed (BUG-8)", async () => {
+    const { cli, source } = await setup()
+    const won = Date.UTC(2026, 9, 3, 12)
+    source.put("deal", exampleDeal("d2", { stage: "won", updatedAt: won }))
+    await cli("sync")
+    source.put("deal", exampleDeal("d2", { stage: "won", title: "Renamed", updatedAt: Date.UTC(2026, 10, 14, 12) }))
+    await cli("sync")
+    const d2 = (await cli("deals", "list", "status:won")).items.find(({ external_id }) => external_id === "d2")
+    expect(d2).toMatchObject({ title: "Renamed", closed_date: "2026-10-03" })
+
+    const lost = Date.UTC(2026, 10, 14, 23, 30)
+    source.put("deal", exampleDeal("d2", { stage: "lost", updatedAt: lost }))
+    await cli("sync")
+    const again = (await cli("deals", "list", "status:lost")).items.find(({ external_id }) => external_id === "d2")
+    expect(again).toMatchObject({ closed_date: dayIn(lost, timezoneOf()) })
+  })
+
+  it("deals list narrows by when it changed, was made or closed, and by its owner", async () => {
+    const { cli, path, source } = await setup()
+    const DAY = 86_400_000
+    const now = Date.now()
+    source.put("deal", exampleDeal("d3", { assignee: "7", createdAt: now - 40 * DAY, updatedAt: now - 3_600_000 }))
+    source.put("deal", exampleDeal("d4", { assignee: "9", createdAt: now - 2 * DAY, updatedAt: now - 3 * DAY }))
+    source.put(
+      "deal",
+      exampleDeal("d5", { stage: "won", closedDate: new Date(now - 2 * DAY).toISOString().slice(0, 10) }),
+    )
+    await cli("sync")
+    const ids = async (...query: string[]) =>
+      (await cli("deals", "list", ...query)).items.map(({ external_id }) => external_id).sort()
+
+    await expect(cli("deals", "list", "owner:me")).rejects.toMatchObject({ details: { reason: "crm.owner-unknown" } })
+    const database = await openCache(path)
+    saveCrmSetting(database, crmSettingKey(PORTAL, "self"), "7", now)
+    database.close()
+    expect(await ids("updated:>=1d", "owner:me")).toEqual(["d3"])
+    expect(await ids("created:>=30d", "owner:9")).toEqual(["d4"])
+    expect(await ids("closed:>=7d")).toEqual(["d5"])
+    expect(await ids("owner:none", "status:open")).toEqual(["d1"])
+    const listed = await cli("deals", "list", "updated:>=1d")
+    expect(listed.meta).toMatchObject({ timezone: expect.any(String), window: { since: expect.any(String) } })
+    const both = await cli("deals", "list", "updated:>=1d", "created:>=30d")
+    expect(both.meta).toMatchObject({ timezone: expect.any(String) })
+    expect(both.meta).not.toHaveProperty("window")
+  })
+
+  it("pipelines show over a window: the cohort, what closed in it, the cycle, owners and lost reasons", async () => {
+    const { cli, printed, source } = await setup()
+    const DAY = 86_400_000
+    const now = Date.now()
+    const today = (days: number) => new Date(now - days * DAY).toISOString().slice(0, 10)
+    source.setPipelines("lead", [])
+    source.put("deal", exampleDeal("d1", { createdAt: now - 400 * DAY }))
+    source.put("deal", exampleDeal("d2", { stage: "won", createdAt: now - 400 * DAY, closedDate: today(400) }))
+    source.put(
+      "deal",
+      exampleDeal("d3", {
+        stage: "won",
+        assignee: "7",
+        createdAt: Date.parse(`${today(10)}T00:00:00Z`),
+        closedDate: today(2),
+      }),
+    )
+    source.put(
+      "deal",
+      exampleDeal("d4", {
+        stage: "lost",
+        assignee: "7",
+        createdAt: now - 5 * DAY,
+        closedDate: today(1),
+        closedReason: "price",
+      }),
+    )
+    source.put("deal", exampleDeal("d5", { assignee: "9", createdAt: now - 3 * DAY, amount: "10", currency: "EUR" }))
+    await cli("sync")
+    const shown = await cli("pipelines", "show", "--since-time", "30d")
+    expect(shown.meta).toMatchObject({ timezone: expect.any(String), window: { since: expect.any(String) } })
+    const report = shown.item
+    expect(report.totals).toMatchObject({ items: 3, open: 1, won: 1, lost: 1, win_rate: 0.5 })
+    expect(report.closed).toMatchObject({ won: 1, lost: 1, win_rate: 0.5 })
+    expect(report.cycle).toEqual({ median_days: 8, items: 1 })
+    expect(report.lost_reasons).toEqual([{ reason: "price", items: 1 }])
+    expect(report.owners).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ assignee: "portal/user/7", won: 1, lost: 1, open: 0 }),
+        expect.objectContaining({ assignee: "portal/user/9", open: 1 }),
+      ]),
+    )
+    expect(report.history).toEqual({ exact: 0, copy: 3 })
+    expect(report.window).toMatchObject({ since: expect.any(String), until: null })
+    const text = await printed(["pipelines", "show", "--since-time", "30d"], true)
+    expect(text).toContain("closed in the window: won 1 (—) · lost 1 · win rate 50%")
+    expect(text).toContain("days to win: 8 (median of 1)")
+    expect((await cli("pipelines", "show")).item.totals).toMatchObject({ items: 5 })
+    const empty = (await cli("pipelines", "show", "--until-time", "2000-01-01")).item
+    expect(empty.totals).toMatchObject({ items: 0, win_rate: null })
+    expect(empty.cycle).toEqual({ median_days: null, items: 0 })
+  })
+
+  it("deals show lists the stages a deal entered, and stages list names each stage's task rule", async () => {
+    const { cli, path, source } = await setup()
+    await cli("sync")
+    source.put("deal", exampleDeal("d1", { title: "Example website", organization: "c1", stage: "quote" }))
+    await cli("sync")
+    const ref = (await cli("deals", "list")).items.find(({ external_id }) => external_id === "d1")?.ref as string
+    expect((await cli("deals", "show", ref)).item.stage_history).toEqual([
+      { from: null, to: "New", at: expect.any(String), exact: false },
+      { from: "New", to: "Quote sent", at: expect.any(String), exact: false },
+    ])
+    const database = await openCache(path)
+    saveCrmSetting(database, crmSettingKey(PORTAL, "stage-tasks"), { quote: { title: "Send it", due_days: 2 } }, 1)
+    database.close()
+    const stages = (await cli("stages", "list", "kind:deal")).items
+    expect(stages.find(({ name }) => name === "Quote sent")?.stage_task).toEqual({ title: "Send it", due_days: 2 })
+    expect(stages.find(({ name }) => name === "New")?.stage_task).toBeNull()
   })
 
   it("pipelines show names the pipeline when the CRM has several, and never reads the owner's own", async () => {
@@ -768,8 +905,11 @@ describe("CRM stage tasks", () => {
 
   describe("from the CRM's own stage history", () => {
     const HOUR = 3_600_000
-    const withHistory = async (entries: CrmStageEntry[]) => {
-      const harness = await setup({}, { now: () => NOW })
+    const withHistory = async (entries: CrmStageEntry[], clock: { cli?: () => number; store?: () => number } = {}) => {
+      const harness = await setup(
+        {},
+        { now: clock.cli ?? (() => NOW), ...(clock.store ? { storeNow: clock.store } : {}) },
+      )
       const asked: (string | undefined)[] = []
       Object.assign(harness.source, {
         stageHistory: async (kind: DealKind, since: number, after?: string) => {
@@ -814,14 +954,56 @@ describe("CRM stage tasks", () => {
       ])
 
       expect(await stageTasks(cli)).toBe(0)
-      expect(asked.at(-1)).toBe("13")
+      expect(asked).toContain("13")
     })
 
-    it("reads no history while the account has no stage rules", async () => {
-      const { cli, asked } = await withHistory([entry("1", "d1", "quote", NOW + HOUR)])
+    it("an entry on a deal the copy gets only later still opens its task (BUG-10)", async () => {
+      const { path, cli, source } = await withHistory([entry("21", "d9", "quote", NOW + HOUR)])
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(1)
+      expect(await stageTasks(cli)).toBe(0)
+    })
+
+    it("an entry older than a week opens no task when its deal arrives later", async () => {
+      let now = NOW
+      const { path, cli, source } = await withHistory([entry("31", "d9", "quote", NOW + HOUR)], { cli: () => now })
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
+      now = NOW + 30 * 24 * HOUR
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(0)
+    })
+
+    it("counts the history from when the rules were first set, not from the last sync", async () => {
+      let now = NOW + 2 * HOUR
+      const clock = () => now
+      const { path, cli, source } = await withHistory([entry("41", "d9", "quote", NOW + HOUR)], {
+        cli: clock,
+        store: clock,
+      })
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
+      now = NOW + 3 * HOUR
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(1)
+    })
+
+    it("reads the history without rules, counts it in the funnel once its deal arrives, and opens no older task", async () => {
+      const { path, cli, source, asked } = await withHistory([entry("1", "d9", "quote", NOW - HOUR)])
+      source.setPipelines("lead", [])
       await cli("sync")
+      source.put("deal", exampleDeal("d9", { stage: "lost" }))
       await cli("sync")
-      expect(asked).toEqual([])
+      expect(asked).toContain("1")
+      const board = (await cli("pipelines", "show")).item
+      const funnel = board.stages as { name: string; reached: number }[]
+      // d2 is won; d9, lost, reached Quote sent only by the CRM's own history.
+      expect(funnel.find(({ name }) => name === "Quote sent")?.reached).toBe(2)
+      expect(board.history).toEqual({ exact: 1, copy: 2 })
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 } })
+      expect(await stageTasks(cli)).toBe(0)
     })
   })
 

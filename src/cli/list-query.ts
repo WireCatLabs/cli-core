@@ -212,11 +212,18 @@ export const nativeTermLists = (
 
 /**
  * A store that compares whole values: each field's `field:value` or `field:"two words"`, enum values lowercased
- * as validation already accepts them. A range or wildcard is refused rather than read as a value.
+ * as validation already accepts them. A range or wildcard is refused rather than read as a value. `ranged` are fields
+ * the caller reads itself, with `nativeTerms`: they are left out.
  */
-export const queryTerms = (words: QueryWords, registry: QueryRegistry, command: string): Map<string, string> => {
+export const queryTerms = (
+  words: QueryWords,
+  registry: QueryRegistry,
+  command: string,
+  ranged: readonly string[] = [],
+): Map<string, string> => {
   const terms = new Map<string, string>()
   for (const [field, node] of nativeTerms(listQuery(typedQuery(words), registry, command), command)) {
+    if (ranged.includes(field)) continue
     if (node.operator !== "term" && node.operator !== "phrase")
       queryError("query.unsupported-placement", node.span, `${field} takes one whole value here`, {
         command,

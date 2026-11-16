@@ -1,4 +1,6 @@
 import type { CrmStageEntry } from "../../domain/crm.js"
+import type { DealKind } from "../../domain/deals.js"
+import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { SOURCE, TABLES } from "./crm-rows.js"
@@ -8,33 +10,81 @@ import { write } from "./transaction.js"
 
 export const STAGE_ENTRY_RECORD = "crm.stage-entry"
 
+/** An entry whose deal never reached the copy is dropped after this long: the history is read this far back. */
+export const STAGE_ENTRY_DAYS = 90
+/** A stage entered longer ago than this opens no task: the copy missed the deal for more than a sync or two. */
+const STAGE_TASK_DAYS = 7
+const DAY = 86_400_000
+
+/** One stage a deal or lead entered, from the CRM's own history (`exact`) or from the copy's diffs between syncs. */
+export interface StageEntry {
+  itemId: number
+  toStageId: number
+  at: number
+  exact: boolean
+}
+
 /**
- * The CRM's own record of each stage a deal or lead entered, kept until its stage task is handled: a run stopped
- * between reading the history and opening the tasks opens them next time. A handled entry stays, marked deleted, so
- * reading the same history again opens nothing.
+ * Every stage entry of the kind's rows in one pipeline, or of one row, oldest first per row: the CRM's own history
+ * where a row has any, else the copy's diffs, never both for one row. Entries handled or expired stay history.
+ */
+export const stageEntriesOf = (
+  database: CacheDatabase,
+  kind: DealKind,
+  filter: { pipeline: number } | { item: number },
+): StageEntry[] => {
+  const one = "item" in filter
+  const exact = database
+    .prepare(
+      `SELECT d.id AS item_id, s.id AS stage_id, json_extract(r.fields, '$.at') AS at FROM records r ` +
+        "JOIN record_relations rr ON rr.record_id = r.id AND rr.role = 'on' AND rr.target_type = ? " +
+        `JOIN ${TABLES[kind]} d ON d.account_id = r.account_id AND d.external_id = rr.target_external_id ` +
+        "JOIN pipeline_stages s ON s.id = json_extract(r.fields, '$.stage_id') WHERE r.type = ? " +
+        (one
+          ? `AND rr.target_external_id = (SELECT external_id FROM ${TABLES[kind]} WHERE id = ?) AND d.id = ? `
+          : "AND s.pipeline_id = ? ") +
+        "ORDER BY d.id, json_extract(r.fields, '$.at'), r.id",
+    )
+    .all(kind, STAGE_ENTRY_RECORD, ...(one ? [filter.item, filter.item] : [filter.pipeline]))
+    .map((row) => ({ itemId: Number(row.item_id), toStageId: Number(row.stage_id), at: Number(row.at), exact: true }))
+  const withHistory = new Set(exact.map(({ itemId }) => itemId))
+  const copied = database
+    .prepare(
+      "SELECT item_id, to_stage_id, changed_at FROM pipeline_stage_changes WHERE item_type = ? " +
+        `AND ${one ? "item_id" : "pipeline_id"} = ? ORDER BY item_id, id`,
+    )
+    .all(kind, one ? filter.item : filter.pipeline)
+    .filter((row) => !withHistory.has(Number(row.item_id)))
+    .map((row) => ({
+      itemId: Number(row.item_id),
+      toStageId: Number(row.to_stage_id),
+      at: Number(row.changed_at),
+      exact: false,
+    }))
+  return [...exact, ...copied]
+}
+
+/**
+ * The CRM's own record of each stage a deal or lead entered, read on every sync. An entry waits for its stage task
+ * until it is handled; one on a deal the copy does not hold yet is kept, and counts once the deal arrives.
  */
 export const crmStageEntriesOver = (context: StoreContext) => {
   const { database, now } = context
 
-  /** Answers how many were new; an entry on a deal or lead the copy does not hold, or into an unknown stage, is not. */
+  /** Answers how many were new; an entry into a stage the copy does not hold is not kept. */
   const save = (key: AccountKey, entries: readonly CrmStageEntry[]): number =>
     write(database, () => {
       const accountId = accountPk(context, key)
       const at = now()
       let saved = 0
       for (const entry of entries) {
-        const item = database
-          .prepare(
-            `SELECT id FROM ${TABLES[entry.kind]} WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL`,
-          )
-          .get(accountId, entry.item)
         const stage = database
           .prepare(
             "SELECT s.id FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id " +
               "WHERE p.account_id = ? AND p.kind = ? AND p.external_id = ? AND s.external_id = ?",
           )
           .get(accountId, entry.kind, entry.pipeline, entry.stage)
-        if (!item || !stage) continue
+        if (!stage) continue
         const externalId = `${entry.kind}/${entry.externalId}`
         const inserted = database
           .prepare(
@@ -45,7 +95,7 @@ export const crmStageEntriesOver = (context: StoreContext) => {
             accountId,
             STAGE_ENTRY_RECORD,
             externalId,
-            JSON.stringify({ kind: entry.kind, item_id: Number(item.id), stage_id: Number(stage.id), at: entry.at }),
+            JSON.stringify({ kind: entry.kind, item: entry.item, stage_id: Number(stage.id), at: entry.at }),
             externalId,
             SOURCE,
             at,
@@ -63,20 +113,28 @@ export const crmStageEntriesOver = (context: StoreContext) => {
       return saved
     })
 
-  /** The entries not handled yet, oldest first, as stage moves whose task source names the CRM's history row. */
-  const pending = (key: AccountKey): CrmStageMove[] => {
+  /**
+   * The entries on rows the copy holds whose stage task is not handled yet, made at or after `since` and within
+   * `STAGE_TASK_DAYS` of `at`, oldest first, as stage moves whose task source names the CRM's history row.
+   */
+  const pending = (key: AccountKey, since: number, at: number): CrmStageMove[] => {
     const accountId = findAccountPk(context, key)
     if (accountId === undefined) return []
     return database
       .prepare(
-        "SELECT r.id, r.external_id, json_extract(r.fields, '$.kind') AS kind, " +
-          "json_extract(r.fields, '$.item_id') AS item_id, s.external_id AS stage, s.name AS stage_name, " +
-          "p.name AS pipeline_name FROM records r " +
+        "SELECT r.id, r.external_id, json_extract(r.fields, '$.kind') AS kind, coalesce(d.id, l.id) AS item_id, " +
+          "s.external_id AS stage, s.name AS stage_name, p.name AS pipeline_name FROM records r " +
+          "JOIN record_relations rr ON rr.record_id = r.id AND rr.role = 'on' " +
+          "LEFT JOIN deals d ON rr.target_type = 'deal' AND d.account_id = r.account_id " +
+          "AND d.external_id = rr.target_external_id AND d.deleted_at IS NULL " +
+          "LEFT JOIN leads l ON rr.target_type = 'lead' AND l.account_id = r.account_id " +
+          "AND l.external_id = rr.target_external_id AND l.deleted_at IS NULL " +
           "JOIN pipeline_stages s ON s.id = json_extract(r.fields, '$.stage_id') JOIN pipelines p ON p.id = s.pipeline_id " +
-          "WHERE r.account_id = ? AND r.type = ? AND r.deleted_at IS NULL " +
+          "WHERE r.account_id = ? AND r.type = ? AND r.deleted_at IS NULL AND coalesce(d.id, l.id) IS NOT NULL " +
+          "AND json_extract(r.fields, '$.handled') IS NULL AND json_extract(r.fields, '$.at') >= ? " +
           "ORDER BY json_extract(r.fields, '$.at'), r.id",
       )
-      .all(accountId, STAGE_ENTRY_RECORD)
+      .all(accountId, STAGE_ENTRY_RECORD, Math.max(since, at - STAGE_TASK_DAYS * DAY))
       .map((row) => {
         const ref = `${String(row.kind)}:${String(row.item_id)}`
         return {
@@ -94,8 +152,31 @@ export const crmStageEntriesOver = (context: StoreContext) => {
   const handled = (ids: readonly number[]): void =>
     write(database, () => {
       const at = now()
-      for (const id of ids) database.prepare("UPDATE records SET deleted_at = ? WHERE id = ?").run(at, id)
+      for (const id of ids)
+        database
+          .prepare("UPDATE records SET fields = json_set(fields, '$.handled', 1), updated_at = ? WHERE id = ?")
+          .run(at, id)
     })
 
-  return { save, pending, handled }
+  /** Entries no stored row has claimed for `STAGE_ENTRY_DAYS`: their deal is outside the copy for good. */
+  const expire = (key: AccountKey): number =>
+    write(database, () => {
+      const accountId = findAccountPk(context, key)
+      if (accountId === undefined) return 0
+      const at = now()
+      return database
+        .prepare(
+          "UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL " +
+            "AND json_extract(fields, '$.handled') IS NULL AND json_extract(fields, '$.at') < ? " +
+            "AND NOT EXISTS (SELECT 1 FROM record_relations rr JOIN deals d ON rr.target_type = 'deal' " +
+            "AND d.account_id = records.account_id AND d.external_id = rr.target_external_id " +
+            "WHERE rr.record_id = records.id) " +
+            "AND NOT EXISTS (SELECT 1 FROM record_relations rr JOIN leads l ON rr.target_type = 'lead' " +
+            "AND l.account_id = records.account_id AND l.external_id = rr.target_external_id " +
+            "WHERE rr.record_id = records.id)",
+        )
+        .run(at, accountId, STAGE_ENTRY_RECORD, at - STAGE_ENTRY_DAYS * DAY).changes
+    })
+
+  return { save, pending, handled, expire }
 }

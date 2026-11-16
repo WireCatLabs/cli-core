@@ -374,23 +374,19 @@ const readActivities = async (run: Run): Promise<BudgetStop | null> => {
 }
 
 const STAGE_HISTORY = "crm:stage-history:"
+/** As far back as activities: the funnel and the changes of the last quarter count exact moves. */
+const HISTORY_DAYS = ACTIVITY_DAYS
 
 /**
- * The CRM's own stage history of each kind with `stage-tasks` rules, after the last entry read: the first read goes
- * from when stage tasks were last opened, so no entry is missed and none before the rules counts. Without rules the
- * history is not read, and its place is dropped, so rules set again later start from then.
+ * The CRM's own stage history of each kind, after the last entry read, on every sync: the funnel and the stage
+ * tasks count it. A first read goes `HISTORY_DAYS` back.
  */
 const readStageHistory = async (run: Run): Promise<BudgetStop | null> => {
   const { source, store, account } = run
   if (!source.stageHistory) return null
-  const rules = await store.crm.stageTasks(account)
-  const since = await store.crm.stageTasksSince(account)
-  for (const kind of DEAL_KINDS) {
+  const since = run.now - HISTORY_DAYS * DAY
+  for (const kind of DEAL_KINDS.filter((one) => source.traits.kinds.includes(one))) {
     const key = `${STAGE_HISTORY}${kind}`
-    if (since === null || Object.keys(rules[kind]).length === 0) {
-      await store.sync.clearSyncState(account, key)
-      continue
-    }
     let after = (await store.sync.syncState(account, key))?.value
     for (;;) {
       const why = run.budget.take()
@@ -407,6 +403,7 @@ const readStageHistory = async (run: Run): Promise<BudgetStop | null> => {
       if (run.signal?.aborted) return "cancelled"
     }
   }
+  await store.crm.expireStageEntries(account)
   return null
 }
 
@@ -803,6 +800,9 @@ export const syncCrm = async (
   }
   // A relationship held back for an end a later page or kind brought is written now; it costs no request.
   run.droppedPending += (await store.crm.retryPending(account)).dropped
+  // Activities and the stage history name no contact: their stop leaves the rows whole, and their catch-up may take
+  // several runs.
+  const rowsStopped = stopped
   if (!stopped && kinds.some(isItemKind)) {
     try {
       stopped = await stopping(() => readActivities(run))
@@ -834,7 +834,7 @@ export const syncCrm = async (
     (one) => one.state === "complete" && one.error === undefined && !one.held && one.pass !== "held",
   )
   // Contacts have no scope of their own and no deletion check: they leave with the last deal or lead naming them.
-  if (scope.mode === "mine" && (options.rescan || narrowed) && whole && !stopped && kinds.includes("person"))
+  if (scope.mode === "mine" && (options.rescan || narrowed) && whole && !rowsStopped && kinds.includes("person"))
     report.contactsRemoved = await store.crm.removeContacts(account, { users: scopeIds(scope) ?? [], before: now })
   if (run.unlistedUsers)
     report.issues.push({

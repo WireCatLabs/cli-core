@@ -158,8 +158,9 @@ export interface CrmSource {
   /**
    * The kind's entries into a stage that the CRM's own history recorded, oldest first, a page at a time: after the
    * entry `after` (its `externalId`), or from `since` (epoch ms) without it; the last page's `cursor` is the last entry
-   * read, or `after` when none came. With it, stage tasks open on each stage entered, one passed between two syncs too.
-   * Read only while the account has `stage-tasks` rules for the kind.
+   * read, or `after` when none came. Read on every sync, 90 days back at first: the funnel and the changes count each
+   * stage entered, one passed between two syncs too, and stage tasks open on them. An entry on a deal outside the copy
+   * is kept and counts once the deal arrives.
    */
   stageHistory?(
     kind: DealKind,

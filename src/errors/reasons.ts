@@ -493,6 +493,7 @@ const OTHERS: Entry[] = [
   validation("field.not-filterable", "the CRM cannot filter a list by that custom field"),
   validation("query.bad-value", "a term's value is not the kind its field takes, such as an id or a number"),
   validation("crm.record-field", "a contact's or company's field is not valid"),
+  validation("crm.owner-unknown", "owner: names no CRM user: me without a known sign-in user, or not a user id"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
   validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
   validation(

@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
+import { runBudget } from "../background/budget.js"
 import { openCache } from "../store/open.js"
 import { crmIdentityId } from "../store/sqlite/crm.js"
 import { type MessageStore, openStore } from "../store/store.js"
@@ -144,4 +145,19 @@ it("under mine keeps a contact the CRM assigns to a user in scope, on no deal, a
 
   await syncCrm(source, store, PORTAL, { rescan: true })
   expect(await personOf("6")).toMatchObject({ name: "Fay" })
+})
+
+it("a stage history that runs out of budget does not hold back the contact removal", async () => {
+  const { store, source, set } = await portal()
+  let page = 0
+  Object.assign(source, {
+    stageHistory: async () => {
+      page += 1
+      return { items: [], hasMore: true, nextCursor: String(page) }
+    },
+  })
+  await set("scope", "mine")
+  const report = await syncCrm(source, store, PORTAL, { rescan: true, budget: runBudget({ requests: 100 }) })
+  expect(report.stopped).toBe("requests")
+  expect(report.contactsRemoved?.contacts).toBe(3)
 })

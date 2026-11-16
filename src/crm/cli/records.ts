@@ -456,6 +456,7 @@ const users = (program: Command, { within, example }: CrmRecordCommandOptions) =
 const crmRecordWrite = v.strictObject({
   operation_id: v.string(),
   stored: v.boolean(),
+  removed: v.optional(v.boolean()),
   person: v.optional(crmPersonSchema),
   organization: v.optional(crmOrganizationSchema),
   untrusted,
@@ -472,7 +473,19 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
         .option("--first-name <name>", "the first name; empty clears it")
         .option("--last-name <name>", "the last name; empty clears it")
         .option("--position <title>", "the job title; empty clears it")
+    const repeated = (value: string, previous: string[] = []) => [...previous, value]
     command
+      .option(
+        "--email <address>",
+        "an e-mail address to give it; repeat it for more; replaces its list, and an empty one clears it",
+        repeated,
+      )
+      .option(
+        "--phone <phone>",
+        "a phone number to give it, in international form starting with +; repeat it for more; replaces its list, " +
+          "and an empty one clears it",
+        repeated,
+      )
       .option(
         "--owner <user>",
         "the CRM user it is assigned to; anyone but the sign-in's own user checks crm.assign-others",
@@ -497,10 +510,14 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
   }
   type Typed = Omit<CrmRecordInput, "custom" | "emails" | "phones"> & {
     field?: string[]
+    email?: string[]
+    phone?: string[]
     operationId?: string
   }
-  const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmRecordInput => ({
+  const inputOf = ({ field, email, phone, operationId: _id, ...rest }: Typed): CrmRecordInput => ({
     ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+    ...(email ? { emails: email } : {}),
+    ...(phone ? { phones: phone } : {}),
     ...(field?.length ? { custom: fieldPairsOf(field) } : {}),
   })
   const contextOf = (run: CrmRun, command: Command): CrmWriteContext => {
@@ -514,10 +531,11 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
       names: { id: "--operation-id" },
     }
   }
-  const answered = ({ operationId, record, stored }: CrmRecordWritten<CrmLiveKind>): Body =>
+  const answered = ({ operationId, record, stored, removed }: CrmRecordWritten<CrmLiveKind>): Body =>
     itemOf({
       operation_id: operationId,
       stored,
+      ...(removed === undefined ? {} : { removed }),
       [noun.kind]: noun.of(record),
       untrusted: (person ? PERSON_UNTRUSTED : ORGANIZATION_UNTRUSTED).map((one) => `${noun.kind}.${one}`),
     })
@@ -529,7 +547,12 @@ const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }
     ).description(description)
   if (writes.verbs.includes("create"))
     example(
-      fields(command("create", `make a ${noun.kind} in the CRM, then store the CRM's copy of it`)),
+      fields(
+        command(
+          "create",
+          `make ${noun.kind === "organization" ? "an" : "a"} ${noun.kind} in the CRM, then store the CRM's copy of it`,
+        ),
+      ),
       person
         ? `${noun.noun} create --first-name Anna --last-name Example --position Buyer`
         : `${noun.noun} create --name "Example LLC"`,

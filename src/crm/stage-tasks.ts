@@ -20,7 +20,7 @@ export const openStageTasks = async (
   if (Object.keys(rules.deal).length + Object.keys(rules.lead).length === 0) return 0
   const changes = await store.crm.stageMoves(account)
   // A CRM with a stage history names every stage entered; the copy's own changes miss one passed between two syncs.
-  const moves = history ? await store.crm.stageEntries(account) : changes.moves
+  const moves = history ? await store.crm.stageEntries(account, now) : changes.moves
   // Every deal entering a stage gets the same title, so the duplicate review would pair tasks of different deals.
   const { reviewDuplicates: _review, ...tasks } = store.tasks
   const service = createTaskService({ store: tasks, now: () => new Date(now) })

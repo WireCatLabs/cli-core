@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { CrmItem, CrmPipeline } from "../../domain/crm.js"
 import { type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
+import { dayIn } from "../../domain/moment.js"
 import { currencyOf, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
@@ -48,6 +50,15 @@ const moneyOf = (item: CrmItem) => {
 
 /** Who writes a CRM's copies: the sync, not an agent, so `author.kind` is `rule`. */
 export const SOURCE = "crm"
+
+/** A deal or lead given to another CRM user, as the sync saw it. */
+export const OWNER_CHANGE_RECORD = "crm.owner-change"
+
+/**
+ * A contact's own fields beside its identity: who it is assigned to, when the CRM made and changed it, its page and
+ * its custom values. Not `person`: a records import's `person` without an entity is matched into people.
+ */
+export const PERSON_RECORD = "crm.person"
 
 /**
  * A contact's identity id: identities are unique per provider, and two portals of one CRM both have a contact 5.
@@ -178,6 +189,32 @@ export const crmRowsOver = (context: StoreContext) => {
       .get(accountId, externalId)
     return row?.entity_id == null ? null : Number(row.entity_id)
   }
+  /** Who a deal or lead went from and to, as `crm.owner-change` on it: a CRM's users are often not listed. */
+  const ownerChanged = (
+    accountId: number,
+    kind: DealKind,
+    item: CrmItem,
+    change: { from: string | null; to: string | null },
+    at: number,
+  ) => {
+    const when = epoch(item.updatedAt, at)
+    const externalId = `${kind}/${item.externalId}/${when}`
+    const fields = { kind, ...change, at: when }
+    const inserted = database
+      .prepare(
+        "INSERT INTO records (account_id, type, external_id, fields, fingerprint, batch_id, created_at, updated_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING id",
+      )
+      .get(accountId, OWNER_CHANGE_RECORD, externalId, JSON.stringify(fields), externalId, SOURCE, at, at)
+    if (inserted)
+      database
+        .prepare(
+          "INSERT INTO record_relations (record_id, role, target_type, target_external_id, created_at) " +
+            "VALUES (?, 'on', ?, ?, ?)",
+        )
+        .run(Number(inserted.id), kind, item.externalId, at)
+  }
+
   /** The deal or lead row of `(account, external id)`; `writer` gives what another writer than CRM sync resolved. */
   const saveItemRow = (
     key: AccountKey,
@@ -204,10 +241,21 @@ export const crmRowsOver = (context: StoreContext) => {
     if (item.status != null && !(STAGE_OUTCOMES as readonly string[]).includes(item.status))
       throw new CliError("validation_error", `${kind} ${item.externalId}'s status is open, won or lost`)
     const status = item.status ?? String(stage.outcome)
+    const table = TABLES[kind]
+    const held = database
+      .prepare(
+        `SELECT id, status, closed_date, json_extract(metadata, '$.assignee') AS assignee FROM ${table} ` +
+          "WHERE account_id = ? AND external_id = ?",
+      )
+      .get(accountId, item.externalId)
+    // A CRM that gives no closed day: the owner's day it was first seen so closed, never that of a later edit (BUG-8).
     const closed =
       status === "open"
         ? null
-        : (day(item.closedDate, "a closed day") ?? new Date(epoch(item.updatedAt, at)).toISOString().slice(0, 10))
+        : (day(item.closedDate, "a closed day") ??
+          (held && held.status === status && held.closed_date != null
+            ? String(held.closed_date)
+            : dayIn(epoch(item.updatedAt, at), timezoneOf())))
     const deal =
       writer.deal !== undefined
         ? writer.deal === null
@@ -243,13 +291,12 @@ export const crmRowsOver = (context: StoreContext) => {
       created: epoch(item.createdAt, at),
       updated: epoch(item.updatedAt, at),
     }
-    const table = TABLES[kind]
-    const held = database
-      .prepare(`SELECT id FROM ${table} WHERE account_id = ? AND external_id = ?`)
-      .get(accountId, item.externalId)
     let id: number
     if (held) {
       id = Number(held.id)
+      const owner = item.assignee === undefined ? undefined : (metadata.assignee ?? null)
+      if (owner !== undefined && owner !== (held.assignee ?? null))
+        ownerChanged(accountId, kind, item, { from: (held.assignee as string | null) ?? null, to: owner }, at)
       database
         .prepare(
           `UPDATE ${table} SET title = ?, organization_id = ?, stage_id = ?, status = ?, currency = ?, amount = ?, ` +

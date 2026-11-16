@@ -116,6 +116,18 @@ it("sums what stands in each stage per currency, from the same rows a since day 
   expect(recent.totals.items).toBe(4)
 })
 
+it("reads a window's days in the owner's zone, not in UTC", async () => {
+  let now = Date.parse("2026-11-09T23:30:00Z")
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "deals-")), "store.db"), now: () => now })
+  stores.push(store)
+  const sales = await store.deals.addPipeline({ name: "Sales", stages: ["Call"], by: "owner" })
+  await store.deals.add({ by: "owner", title: "after midnight in Madrid", stage: "Call" })
+  now = Date.parse("2026-11-10T22:30:00Z")
+  await store.deals.add({ by: "owner", title: "the same day in Madrid", stage: "Call" })
+  const day = await store.deals.pipeline(sales.ref, { since: "2026-11-10", until: "2026-11-10", zone: "Europe/Madrid" })
+  expect(day.totals.items).toBe(2)
+})
+
 it("starts a lead in the seeded lead pipeline, and asks for a reference when a name is shared", async () => {
   const { store } = await fixture()
   const lead = await store.deals.add({ kind: "lead", by: { bot: "claude-code" }, title: "Звонок с сайта" })

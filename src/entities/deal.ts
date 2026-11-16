@@ -37,6 +37,21 @@ const activity: v.GenericSchema<DealActivity> = v.strictObject({
   updated_at: time,
 })
 
+/** One stage a deal or lead entered: `exact` from the CRM's own history, else as a sync saw the copy change. */
+export interface DealStageEntry {
+  from: string | null
+  to: string
+  at: string
+  exact: boolean
+}
+
+const stageEntry: v.GenericSchema<DealStageEntry> = v.strictObject({
+  from: nullableText,
+  to: text,
+  at: time,
+  exact: v.boolean(),
+})
+
 /**
  * A deal (`deal:<id>`), the owner's own or a CRM's copy: one shape for memo and every CRM CLI. Money is a decimal
  * string in its currency, both `null` when no amount is expected.
@@ -102,11 +117,52 @@ export const deal = v.strictObject({
   activities: v.optional(v.array(activity)),
   /** `show` of a CRM copy: the newest recorded meetings and calls of its people, in its account's scope. */
   meetings: v.optional(v.array(recordedMeeting)),
+  /**
+   * `show` of a CRM copy: every stage it entered, oldest first. Once the CRM's own history names any, it alone is
+   * listed, from as far back as it was read; the copy's changes between syncs are left out.
+   */
+  stage_history: v.optional(v.array(stageEntry)),
   untrusted,
 })
 
 /** A lead (`lead:<id>`): a deal's shape, in a lead pipeline. */
 export const lead = deal
+
+const amount = v.strictObject({ amount: text, currency: text, items: count })
+const winRate = v.nullable(v.number())
+
+/** `pipelines show`: the rows made in the window, by their CRM assignee. */
+export interface PipelineOwner {
+  assignee: string | null
+  name: string | null
+  open: number
+  won: number
+  lost: number
+  win_rate: number | null
+}
+
+const pipelineOwner: v.GenericSchema<PipelineOwner> = v.strictObject({
+  assignee: nullableText,
+  name: nullableText,
+  open: count,
+  won: count,
+  lost: count,
+  win_rate: winRate,
+})
+
+export interface PipelineClosed {
+  won: number
+  lost: number
+  win_rate: number | null
+  won_amounts: { amount: string; currency: string; items: number }[]
+}
+
+const pipelineClosed: v.GenericSchema<PipelineClosed> = v.strictObject({
+  won: count,
+  lost: count,
+  win_rate: winRate,
+  won_amounts: v.array(amount),
+})
 
 const pipelineStage = v.strictObject({
   name: text,
@@ -120,8 +176,26 @@ const pipelineStage = v.strictObject({
   conversion: v.optional(v.nullable(v.number())),
   /** With a funnel: rows standing in it now, and their sum per currency, never converted. */
   items: v.optional(count),
-  amounts: v.optional(v.array(v.strictObject({ amount: text, currency: text, items: count }))),
+  amounts: v.optional(v.array(amount)),
+  /** With a funnel: the median days a row of the window stayed in it before it moved on. */
+  median_days: v.optional(v.nullable(v.number())),
 })
+
+/** One stage in a pipeline's answer, typed by name for the same reason as `activity`. */
+export interface PipelineStageAnswer {
+  name: string
+  position: number
+  outcome: "open" | "won" | "lost"
+  external_id: string | null
+  open: number
+  reached?: number
+  conversion?: number | null
+  items?: number
+  amounts?: { amount: string; currency: string; items: number }[]
+  median_days?: number | null
+}
+
+const pipelineStageAnswer: v.GenericSchema<PipelineStageAnswer> = pipelineStage
 
 /** A pipeline (`pipeline:<id>`) with its stages in order; `pipelines show` adds the funnel. */
 export const pipeline = v.strictObject({
@@ -131,20 +205,38 @@ export const pipeline = v.strictObject({
   kind: v.picklist(["deal", "lead"]),
   account: crmAccount,
   external_id: nullableText,
-  stages: v.array(pipelineStage),
+  stages: v.array(pipelineStageAnswer),
   created_at: time,
-  totals: v.optional(
-    v.strictObject({ items: count, open: count, won: count, lost: count, win_rate: v.nullable(v.number()) }),
-  ),
+  /** `show`: the rows made in the window. */
+  totals: v.optional(v.strictObject({ items: count, open: count, won: count, lost: count, win_rate: winRate })),
+  window: v.optional(v.strictObject({ since: v.nullable(time), until: v.nullable(time) })),
   since: v.optional(day),
+  /** `show`: rows closed on a day in the window, in the owner's zone. */
+  closed: v.optional(pipelineClosed),
+  /** `show`: days from made to won, of the rows won in the window. */
+  cycle: v.optional(v.strictObject({ median_days: v.nullable(v.number()), items: count })),
+  owners: v.optional(v.array(pipelineOwner)),
+  lost_reasons: v.optional(v.array(v.strictObject({ reason: text, items: count }))),
+  /** `show`: rows whose stages came from the CRM's own history, and from the copy's diffs. */
+  history: v.optional(v.strictObject({ exact: count, copy: count })),
   untrusted,
 })
 
 /** One stage of a pipeline, with the pipeline it is in: what `stages list` answers. */
-export const stage = v.strictObject({
+export interface StageAnswer extends PipelineStageAnswer {
+  pipeline: string
+  pipeline_name: string
+  kind: "deal" | "lead"
+  stage_task?: { title: string; due_days: number } | null
+  untrusted?: string[]
+}
+
+export const stage: v.GenericSchema<StageAnswer> = v.strictObject({
   ...pipelineStage.entries,
   pipeline: reference,
   pipeline_name: text,
   kind: v.picklist(["deal", "lead"]),
+  /** A CRM's stage: the task its `stage-tasks` rule opens when a row enters it, or `null`. */
+  stage_task: v.optional(v.nullable(v.strictObject({ title: text, due_days: count }))),
   untrusted,
 })

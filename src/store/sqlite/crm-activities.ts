@@ -1,6 +1,7 @@
-import type { CrmActivity, CrmActivityKind } from "../../domain/crm.js"
+import type { CrmActivity, CrmActivityKind, CrmKind } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import { recordFingerprint } from "../../domain/records.js"
+import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
@@ -8,6 +9,29 @@ import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
 export const ACTIVITY_RECORD = "crm.activity"
+
+/**
+ * Marks deleted the activities on nothing but these contacts or companies: their subject and body leave the copy with
+ * the rows they were on. Answers how many.
+ */
+export const forgetActivitiesOn = (
+  database: CacheDatabase,
+  accountId: number,
+  kind: "person" | "organization",
+  externalIds: readonly string[],
+  at: number,
+): number => {
+  const removed = "rr.target_type = ? AND rr.target_external_id IN (SELECT value FROM json_each(?))"
+  const ids = JSON.stringify(externalIds)
+  return database
+    .prepare(
+      "UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL " +
+        `AND EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' AND ${removed}) ` +
+        "AND NOT EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' " +
+        `AND NOT (${removed}))`,
+    )
+    .run(at, accountId, ACTIVITY_RECORD, kind, ids, kind, ids).changes
+}
 
 /** A CRM's text field holds what people typed or pasted, a whole e-mail thread too. */
 const MOST_BODY = 20_000
@@ -47,17 +71,29 @@ export const activityTexts = (database: StoreContext["database"], kind: DealKind
 
 export interface CrmActivitiesSaved {
   saved: number
-  /** On no deal or lead this copy keeps, so not stored. */
+  /** On no deal, lead, contact or company this copy keeps, so not stored. */
   outOfScope: number
 }
 
 export const crmActivitiesOver = (context: StoreContext) => {
   const { database, now } = context
 
-  const kept = (accountId: number, kind: DealKind, externalId: string): boolean =>
-    database
-      .prepare(`SELECT 1 FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL`)
-      .get(accountId, externalId) !== undefined
+  /** A deal or lead the copy keeps, a contact it holds, or a company it keeps. */
+  const kept = (key: AccountKey, accountId: number, kind: CrmKind, externalId: string): boolean =>
+    (kind === "person"
+      ? database
+          .prepare("SELECT 1 FROM identities WHERE provider = ? AND external_id = ?")
+          .get(key.provider, crmIdentityId(key, externalId))
+      : kind === "organization"
+        ? database
+            .prepare(
+              "SELECT 1 FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ? " +
+                "AND deleted_at IS NULL",
+            )
+            .get(accountId, externalId)
+        : database
+            .prepare(`SELECT 1 FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL`)
+            .get(accountId, externalId)) !== undefined
 
   const save = (key: AccountKey, activities: readonly CrmActivity[]): CrmActivitiesSaved =>
     write(database, () => {
@@ -66,9 +102,12 @@ export const crmActivitiesOver = (context: StoreContext) => {
       let saved = 0
       let outOfScope = 0
       for (const activity of activities) {
-        const on = activity.on.filter((one) => kept(accountId, one.kind, one.externalId))
+        const on = activity.on.filter((one) => kept(key, accountId, one.kind, one.externalId))
         const held = database
-          .prepare("SELECT id FROM records WHERE account_id = ? AND type = ? AND external_id = ?")
+          .prepare(
+            "SELECT id, json_extract(fields, '$.done') AS done, json_extract(fields, '$.done_at') AS done_at " +
+              "FROM records WHERE account_id = ? AND type = ? AND external_id = ?",
+          )
           .get(accountId, ACTIVITY_RECORD, activity.externalId)
         if (on.length === 0) {
           // It left every kept deal: one stored before goes with it.
@@ -82,6 +121,8 @@ export const crmActivitiesOver = (context: StoreContext) => {
           body: textOf(activity.body, MOST_BODY),
           due_at: activity.dueAt ?? null,
           done: activity.done,
+          // When it was done, as near as the copy can tell: the CRM's change that closed it, kept once seen.
+          done_at: activity.done ? (held?.done ? ((held.done_at as number | null) ?? null) : activity.updatedAt) : null,
           assignee: activity.assignee ? crmIdentityId(key, activity.assignee, "user") : null,
           created_at: activity.createdAt,
           updated_at: activity.updatedAt,

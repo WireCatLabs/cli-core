@@ -307,6 +307,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `splits` | collection | parts of one transaction, each with its own amount and category |  |
 | `users` | collection | people who work in the owner's account at a service, such as a CRM's employees |  |
 | `fields` | collection | a record type's field definitions: code, label, type and options, such as a CRM's custom fields |  |
+| `activities` | collection | a CRM's calls, e-mails, meetings, to-dos and comments on its records |  |
+| `changes` | collection | what changed in a copied source over a time: records added, moved, closed or reassigned |  |
 | `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
@@ -817,6 +819,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--max-chars` | `<n>` | count | at most this many characters read | characters |
 | `--tag` | `<name>` | string | a tag, by its name or an alias: only what carries it is read |  |
 | `--matching` | `<query>` | string | every stored thing a search with this query finds, in its query language; the command acts on each |  |
+| `--email` | `<address>` | string | an e-mail address to give it; repeat it for more |  |
+| `--phone` | `<phone>` | string | a phone number to give it, in international form starting with +; repeat it for more |  |
 | `--pipeline` | `<pipeline>` | string | a CRM pipeline: pipeline:<id>, or a name only one pipeline has |  |
 | `--stage` | `<stage>` | string | a stage of the record's pipeline, by the CRM's id or its name |  |
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |

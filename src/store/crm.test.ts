@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import type { CrmPipeline } from "../domain/crm.js"
+import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -303,4 +304,128 @@ it("keeps every phone and address of a contact, the first ones as its phone and 
     phones: ["+34 600 000 001", "+34 600 000 003"],
     emails: ["lev@acme.ru", "lev.home@mail.ru"],
   })
+})
+
+const recordsOf = async (path: string, type: string) => {
+  const database = await openCache(path)
+  const rows = database
+    .prepare("SELECT external_id, fields, deleted_at FROM records WHERE type = ? ORDER BY id")
+    .all(type)
+    .map((row) => ({
+      externalId: String(row.external_id),
+      fields: JSON.parse(String(row.fields)) as Record<string, unknown>,
+      deleted: row.deleted_at != null,
+    }))
+  database.close()
+  return rows
+}
+
+const openAt = async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "crm-")), "store.db")
+  const store = await openStore({ path })
+  stores.push(store)
+  await store.crm.savePipelines(PORTAL, "deal", [SALES])
+  return { store, path }
+}
+
+it("keeps a contact's owner, times, page and custom values; one left out stays; removal marks them deleted", async () => {
+  const { store, path } = await openAt()
+  await store.crm.savePeople(PORTAL, [
+    {
+      externalId: "c1",
+      name: "Example Person",
+      assignee: "7",
+      createdAt: 1000,
+      updatedAt: 2000,
+      url: "https://crm.example.com/c1",
+      metadata: { UF_TIER: { label: "Tier", value: "Gold" } },
+    },
+  ])
+  await store.crm.savePeople(PORTAL, [{ externalId: "c1", name: "Example Person", updatedAt: 3000 }])
+  expect((await recordsOf(path, "crm.person"))[0]).toEqual({
+    externalId: "c1",
+    fields: {
+      name: "Example Person",
+      assignee: "portal-a/user/7",
+      created_at: 1000,
+      updated_at: 3000,
+      url: "https://crm.example.com/c1",
+      UF_TIER: { label: "Tier", value: "Gold" },
+    },
+    deleted: false,
+  })
+  await store.crm.savePeople(PORTAL, [{ externalId: "c1", name: "Example Person", metadata: {} }])
+  expect((await recordsOf(path, "crm.person"))[0]?.fields).not.toHaveProperty("UF_TIER")
+  await store.crm.removeContact(PORTAL, "c1")
+  expect((await recordsOf(path, "crm.person"))[0]?.deleted).toBe(true)
+})
+
+it("keeps a company's owner and times, a deal's owner changes, and when an activity was done", async () => {
+  const { store, path } = await openAt()
+  await store.crm.saveOrganizations(PORTAL, [{ externalId: "o1", name: "Example LLC", assignee: "7", createdAt: 5 }])
+  expect((await recordsOf(path, "organization"))[0]?.fields).toMatchObject({
+    assignee: "portal-a/user/7",
+    created_at: 5,
+  })
+  const deal = { externalId: "d1", title: "Example deal", pipeline: "p1", stage: "s1", assignee: "7", updatedAt: 10 }
+  await store.crm.saveItems(PORTAL, "deal", [deal])
+  await store.crm.saveItems(PORTAL, "deal", [{ ...deal, title: "Renamed", updatedAt: 20 }])
+  await store.crm.saveItems(PORTAL, "deal", [{ ...deal, assignee: "9", updatedAt: 30 }])
+  expect(await recordsOf(path, "crm.owner-change")).toEqual([
+    {
+      externalId: "deal/d1/30",
+      fields: { kind: "deal", from: "portal-a/user/7", to: "portal-a/user/9", at: 30 },
+      deleted: false,
+    },
+  ])
+
+  await store.crm.savePeople(PORTAL, [{ externalId: "c1", name: "Example Person" }])
+  const activity = { kind: "task" as const, subject: "Call", createdAt: 1, done: false }
+  const saved = await store.crm.saveActivities(PORTAL, [
+    { ...activity, externalId: "a1", updatedAt: 1, on: [{ kind: "person", externalId: "c1" }] },
+    { ...activity, externalId: "a2", updatedAt: 1, on: [{ kind: "organization", externalId: "o1" }] },
+    { ...activity, externalId: "a3", updatedAt: 40, done: true, on: [{ kind: "deal", externalId: "d1" }] },
+    { ...activity, externalId: "a4", updatedAt: 1, on: [{ kind: "person", externalId: "elsewhere" }] },
+  ])
+  expect(saved).toEqual({ saved: 3, outOfScope: 1 })
+  await store.crm.saveActivities(PORTAL, [
+    { ...activity, externalId: "a1", updatedAt: 50, done: true, on: [{ kind: "person", externalId: "c1" }] },
+    { ...activity, externalId: "a3", updatedAt: 60, done: true, on: [{ kind: "deal", externalId: "d1" }] },
+  ])
+  const doneAt = Object.fromEntries(
+    (await recordsOf(path, "crm.activity")).map(({ externalId, fields }) => [externalId, fields.done_at]),
+  )
+  expect(doneAt).toEqual({ a1: 50, a2: null, a3: 40 })
+})
+
+it("removing one contact or company forgets activities on it alone, and keeps a contact of the owner's own deal", async () => {
+  const { store, path } = await openAt()
+  await store.crm.savePeople(PORTAL, [
+    { externalId: "c1", name: "Gone Person" },
+    { externalId: "c2", name: "Client Person" },
+  ])
+  await store.crm.saveOrganizations(PORTAL, [{ externalId: "o1", name: "Example LLC" }])
+  const deal = { externalId: "d1", title: "Example deal", pipeline: "p1", stage: "s1", updatedAt: 10 }
+  await store.crm.saveItems(PORTAL, "deal", [{ ...deal, people: [{ externalId: "c2", role: "contact" }] }])
+  const activity = { kind: "task" as const, subject: "Call", createdAt: 1, updatedAt: 1, done: false }
+  await store.crm.saveActivities(PORTAL, [
+    { ...activity, externalId: "a1", on: [{ kind: "person", externalId: "c1" }] },
+    { ...activity, externalId: "a2", on: [{ kind: "organization", externalId: "o1" }] },
+    {
+      ...activity,
+      externalId: "a3",
+      on: [
+        { kind: "person", externalId: "c1" },
+        { kind: "deal", externalId: "d1" },
+      ],
+    },
+  ])
+
+  expect((await store.crm.removeContact(PORTAL, "c1")).contacts).toBe(1)
+  expect((await store.crm.removeContact(PORTAL, "c2")).contacts).toBe(0)
+  expect(await store.crm.remove(PORTAL, "organization", ["o1"])).toBe(1)
+  const deleted = Object.fromEntries(
+    (await recordsOf(path, "crm.activity")).map(({ externalId, deleted }) => [externalId, deleted]),
+  )
+  expect(deleted).toEqual({ a1: true, a2: true, a3: false })
 })
