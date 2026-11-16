@@ -4,6 +4,7 @@ import { fold, normalize } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import type { CopyViewer } from "./copy-viewer.js"
+import { type CrmFileLimits, crmFileLimits } from "./crm-settings.js"
 import type { StoreContext } from "./open.js"
 import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
@@ -67,6 +68,8 @@ export interface CrmFileStore {
   /** The saved file is gone; the row and its text stay, so search still finds it. */
   forgetFile(key: AccountKey, externalId: string): Promise<void>
   find(search: CrmFileSearch): Promise<{ items: CrmFileHit[]; hasMore: boolean }>
+  /** The account's `files.*` settings, each its default unless the owner set one in range. */
+  limits(key: AccountKey): Promise<CrmFileLimits>
 }
 
 const MOST = 500
@@ -293,5 +296,6 @@ export const crmFilesOver = (context: StoreContext): CrmFileStore => {
       )
     },
     find: async (search) => find(search),
+    limits: async (key) => crmFileLimits(database, key),
   }
 }

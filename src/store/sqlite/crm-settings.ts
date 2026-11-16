@@ -18,9 +18,35 @@ export const CRM_SCOPES = ["mine", "all"] as const
 /** `activities`: whether a sync also reads the activities and tasks on the deals and leads it keeps; off by default. */
 export const CRM_ACTIVITIES = ["on", "off"] as const
 
-const NAMES = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks", "activities"] as const
+/**
+ * What `files sync` and `files download` may take (NEED-2708 B): a run's files, a prefetched file's and a run's
+ * megabytes, a run's minutes, how many days back a run looks, and the account's folder's megabytes. A value outside
+ * its range is refused, never clamped.
+ */
+export const CRM_FILE_LIMITS = {
+  max_files: { default: 50, min: 1, max: 500 },
+  max_file_mb: { default: 20, min: 1, max: 50 },
+  max_run_mb: { default: 200, min: 10, max: 2000 },
+  run_minutes: { default: 10, min: 1, max: 60 },
+  days: { default: 7, min: 1, max: 90 },
+  max_total_mb: { default: 2000, min: 100, max: 50000 },
+} as const
+export type CrmFileLimit = keyof typeof CRM_FILE_LIMITS
+export type CrmFileLimits = Record<CrmFileLimit, number>
+const FILE_LIMIT_NAMES = Object.keys(CRM_FILE_LIMITS).map((name) => `files.${name}`) as `files.${CrmFileLimit}`[]
+
+const NAMES = [
+  "links",
+  "company-types",
+  "scope",
+  "unassigned",
+  "self",
+  "stage-tasks",
+  "activities",
+  ...FILE_LIMIT_NAMES,
+] as const
 type CrmSettingName = (typeof NAMES)[number]
-const SETTING = new RegExp(`^crm\\.([a-z0-9-]+):(.+)\\.(${NAMES.join("|")})$`)
+const SETTING = new RegExp(`^crm\\.([a-z0-9-]+):(.+)\\.(${NAMES.map((name) => name.replace(".", "\\.")).join("|")})$`)
 
 export const crmSettingKey = (key: AccountKey, name: CrmSettingName): string =>
   `crm.${key.provider}:${key.account}.${name}`
@@ -228,8 +254,32 @@ export const saveStageMovesMark = (database: CacheDatabase, key: AccountKey, thr
     .run(stageTasksMark(crmSettingKey(key, "stage-tasks")), JSON.stringify(through), now)
 }
 
+const fileLimitOf = (name: CrmSettingName): CrmFileLimit | undefined =>
+  name.startsWith("files.") ? (name.slice("files.".length) as CrmFileLimit) : undefined
+
+/** The account's file limits, each the owner's value when it is a whole number in range, else the default. */
+export const crmFileLimits = (database: CacheDatabase, key: AccountKey): CrmFileLimits =>
+  Object.fromEntries(
+    Object.entries(CRM_FILE_LIMITS).map(([name, range]) => {
+      const value = stored(database, crmSettingKey(key, `files.${name as CrmFileLimit}`))
+      const fits = Number.isSafeInteger(value) && (value as number) >= range.min && (value as number) <= range.max
+      return [name, fits ? (value as number) : range.default]
+    }),
+  ) as CrmFileLimits
+
 export const parseCrmSettingValue = (name: CrmSettingName, value: string): unknown => {
   const text = value.trim()
+  const limit = fileLimitOf(name)
+  if (limit) {
+    const { min, max } = CRM_FILE_LIMITS[limit]
+    if (!/^\d+$/u.test(text) || Number(text) < min || Number(text) > max)
+      throw new CliError("validation_error", `${name} takes a whole number from ${min} to ${max}, not "${text}"`, {
+        reason: "crm.files-limit-range",
+        min,
+        max,
+      })
+    return Number(text)
+  }
   if (name === "stage-tasks") return parseStageTasks(text)
   if (name === "links") return picked(name, text, CRM_LINK_MODES)
   if (name === "scope") return picked(name, text, CRM_SCOPES)
@@ -295,6 +345,8 @@ const settingValue = (database: CacheDatabase, key: AccountKey, name: CrmSetting
   if (name === "self") return crmOwnUser(database, key) ?? null
   if (name === "stage-tasks") return stored(database, crmSettingKey(key, name)) ?? {}
   if (name === "activities") return crmActivitiesOn(database, key) ? "on" : "off"
+  const limit = fileLimitOf(name)
+  if (limit) return crmFileLimits(database, key)[limit]
   return userIds(stored(database, crmSettingKey(key, name)))
 }
 

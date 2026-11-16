@@ -1,5 +1,6 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
+import { crmViewerOf } from "../crm/index.js"
 import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
@@ -43,8 +44,11 @@ export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 export type SearchAllItem = SearchAllRecordItem | MeetingSearchItem
 
 export interface SearchAllRecordItem {
-  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead" | BusinessKind
-  /** `msg:…` for a message or a mail, `note:…`, `event:…`, `deal:…`, `lead:…`, or a business ref: `invoice:…`. */
+  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead" | "crm_file" | BusinessKind
+  /**
+   * `msg:…` for a message or a mail, `note:…`, `event:…`, `deal:…`, `lead:…`, `crmfile:<file id>` for a downloaded CRM
+   * file, or a business ref: `invoice:…`.
+   */
   ref: string
   provider: string
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
@@ -158,6 +162,8 @@ export interface SearchAllRequest {
   crmKinds?: readonly DealKind[]
   /** The CRM accounts' copies a CRM CLI's profile may read only part of, each by its own rule (SEC-197). */
   crmViewers?: CopyViewer[]
+  /** `crm` also reads the text of downloaded CRM files under the same viewers; false when the profile denies it. */
+  crmFiles?: boolean
   /**
    * Search harder: a hosted model reorders the first 30 hits, only with the owner's consent and a key. Absent, nothing
    * is read of the consent or the key and nothing is sent.
@@ -285,6 +291,16 @@ const sourceScope = async (
 }
 
 /** The accounts of every CRM the store holds copies of. */
+/** Each CRM copy's viewer for the user its own sync signed in as (SEC-197): what a run outside its CLI may read. */
+const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
+  const viewers: CopyViewer[] = []
+  for (const account of await crmAccounts(store)) {
+    const { viewer } = await crmViewerOf(store, account, (await store.crm.ownUser(account)) ?? null)
+    if (viewer) viewers.push(viewer)
+  }
+  return viewers
+}
+
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
 
@@ -508,12 +524,14 @@ export const searchAll = async (
         } else if (resource === "crm") {
           const { words, anyWord } = titleWords(request.text)
           const chosen = scope?.crm
+          // memo's, tg's and the MCP's search all pass no viewers: each copy's own rule decides, as a CRM CLI's does.
+          const viewers = request.crmViewers ?? (await copyViewers(store))
           const found = await store.deals.find({
             words,
             anyWord: anyWord || discover,
             ...(request.exact ? { exact: true } : {}),
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
-            ...(request.crmViewers === undefined ? {} : { viewers: request.crmViewers }),
+            viewers,
             limit: Math.min(depth, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
@@ -534,6 +552,29 @@ export const searchAll = async (
                 ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
               })),
           )
+          if (request.crmFiles !== false) {
+            const files = await store.crmFiles.find({
+              words,
+              anyWord: anyWord || discover,
+              ...(request.exact ? { exact: true } : {}),
+              ...(chosen === undefined ? {} : { accounts: chosen }),
+              viewers,
+              limit: Math.min(depth, 500),
+            })
+            hasMore ||= files.hasMore
+            lists.push(
+              files.items.map((hit) => ({
+                kind: "crm_file" as const,
+                ref: `crmfile:${hit.file.externalId}`,
+                provider: hit.account.provider,
+                account: hit.account.account,
+                title: hit.file.name,
+                timestamp: new Date(hit.file.downloadedAt).toISOString(),
+                text: hit.excerpt,
+                foundBy: ["words"],
+              })),
+            )
+          }
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {

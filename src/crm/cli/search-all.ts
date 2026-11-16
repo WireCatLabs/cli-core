@@ -73,7 +73,7 @@ export const addCrmSearchAll = (
         )
       const asked = opts.only ?? SEARCHED
       const denied = deniedKinds(leaf, app, [
-        ...(asked.includes("crm") ? DEAL_KINDS : []),
+        ...(asked.includes("crm") ? [...DEAL_KINDS, "crm_file" as const] : []),
         ...asked.filter((one): one is Exclude<typeof one, "crm" | "mail"> => one !== "crm" && one !== "mail"),
       ])
       const out = new Set<string>(denied.map(({ kind }) => kind))
@@ -119,7 +119,8 @@ export const addCrmSearchAll = (
           only,
           ...(opts.only?.includes("meetings") ? { meetingsAsked: true } : {}),
           ...(crmKinds.length < DEAL_KINDS.length ? { crmKinds } : {}),
-          ...(viewers.length ? { crmViewers: viewers } : {}),
+          crmViewers: viewers,
+          ...(out.has("crm_file") ? { crmFiles: false } : {}),
           ...(opts.source === undefined ? {} : { source: opts.source }),
           ...(alone ? { scope: { crm: [run.account] } } : {}),
         },

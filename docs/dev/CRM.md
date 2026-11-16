@@ -170,6 +170,57 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
   downloads under that state folder, or account removal leaves them on disk. A copy saved elsewhere is the owner's. `store.crmFiles.droppable` and `forgetFile` serve the disk cap: only files under the account's own folder
   that have text are dropped, the row and the text stay.
 
+`addCrmCommands(program, { files: true })` mounts the commands, for a CLI whose adapter has `files`:
+
+- `files list --deal|--lead|--person|--organization <id>` reads one record's files live (`--lead` only when the CRM
+  has leads) and marks the downloaded ones with their `path`. A missing scope is a note and `complete: false`.
+- `files download <id>` saves one file under `<state>/crm/files/<provider>-<account>/<kind>-<id>/` (folders 700, file
+  600, the name through `safeName`, with the provider's id in front when another file holds the name), or under
+  `--dir`, which is the owner's own copy: a file there that is not this file's earlier copy is never overwritten (then
+  `<provider id>-<name>`, and `crm.file-exists` when both are taken). A repeat download removes the earlier copy the
+  CLI kept in its folder. It takes 100 MB unless
+  `--max-size <MB>`, up to 2048; a bigger file, or one of unknown size that passes the cap while it streams, is
+  `crm.file-too-large` and leaves no part. The text goes through `extractText` into the row; the answer gives the first
+  4,000 characters with `untrusted: ["name", "mime", "path", "text"]` (`files list` marks `name`, `mime` and `path`),
+  never the bytes. A failed download never names the link
+  (`crm.file-unavailable`); a cut-off one names `--timeout 10m`.
+- Both read `files(owner)` first, then spend the day's slot of a colleague's record, then look the id up: a made-up id
+  on a colleague's record still costs its slot and is `not_found`. Listing and downloading the same record that day
+  cost one slot. Admins and sources without `isAdmin` have no limit.
+- `files sync` prefetches the files of the sign-in's own deals and leads (assigned to `self()`), changed since its
+  last complete round and at most `files.days` back, newest first, paging through all of them. A record the CRM now
+  assigns to someone else is skipped whatever the copy says, so it never downloads a colleague's file and never spends
+  the limit; it never reads a contact's or company's files. A file the CRM did not give (`unavailable`) leaves its
+  record for the next run. `run_minutes` also bounds each download: one cut off at the deadline keeps no part. It keeps its place in the sync state `crm:files-round` and answers `complete: false`
+  at a limit; the next run goes on. Run it with `schedule command crm-files --every 1h -- files sync`. `sync` never
+  downloads a file. `files sync` checks `files.download` too, so denying downloads stops it.
+- `files.download` is allowed by default (NEED-2708 B); `files.list` denied leaves file text out of `search all`.
+- The account's limits are owner-only store settings `crm.<provider>:<account>.files.<name>`, refused out of range:
+
+  | Setting | Default | Range |
+  | --- | --- | --- |
+  | `max_files` (a `files sync` run) | 50 | 1–500 |
+  | `max_file_mb` (a prefetched file) | 20 | 1–50 |
+  | `max_run_mb` (a `files sync` run) | 200 | 10–2000 |
+  | `run_minutes` (a `files sync` run) | 10 | 1–60 |
+  | `days` (how far back) | 7 | 1–90 |
+  | `max_total_mb` (the account's folder) | 2000 | 100–50000 |
+
+  A skipped file is in the answer with its reason, `too-large`, `run-files`, `run-mb`, `deadline`, `disk-full` or
+  `unavailable`, and the `files download <id>` step. A download that would pass `max_total_mb` even after dropping is
+  refused before it starts. Once it is saved, the oldest other saved files whose text is kept lose their file until
+  it fits; a scan is never dropped, and the file's own earlier copy is not counted. Still full, the new file is
+  deleted, `files sync` stops with `disk-full` and `files download` is `crm.files-disk-full`.
+- `search all` finds the stored text (`--only crm` too) as `crm_file` hits under the copy's viewer rule. memo's, tg's
+  and the MCP's `search all` read them through the same `searchAll`, which then takes each copy's viewer for the
+  user its own sync signed in as (`crmViewerOf`) for deal, lead and file hits alike, so a limited copy's colleagues'
+  deals and files stay out there too. Only a CRM
+  CLI knows its profile's `files.list` level.
+- `fetchCrmFile(link, { hosts, headers })` is the adapters' download: https only, the account's own hosts only,
+  redirects only on them, an HTML page refused, and no error naming the link.
+- `crmFilesContract` in `@wirecat/cli-core/crm/testing` checks an adapter's `files`: the listing's shape and ids, a
+  download saved 600 with its text found and its token nowhere, refused links, and the day's limit.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on

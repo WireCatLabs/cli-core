@@ -8,6 +8,7 @@ export {
   type AcmeScenario,
   acmeScenario,
 } from "./acme-scenario.js"
+export { type CrmFilesFixture, crmFilesContract } from "./files-contract.js"
 export {
   exampleDeal,
   exampleLead,

@@ -6,6 +6,7 @@ import { openCache } from "../../store/open.js"
 import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
+  crmFilesContract,
   crmSourceContract,
   crmSyncContract,
   crmWriteContract,
@@ -14,6 +15,7 @@ import {
   exampleOrganization,
   examplePerson,
   FAKE_CRM_ALIASES,
+  FAKE_FILE_TOKEN,
   fakeCrmSource,
   SALES_PIPELINE,
 } from "./index.js"
@@ -35,6 +37,34 @@ describe("sync engine over a store", () => {
       database.close()
     }
     return { store, account, activitiesOn }
+  }))
+    it(c.name, c.run)
+})
+
+describe("fake CRM files", () => {
+  for (const c of crmFilesContract(() => {
+    const deal = (id: string) => ({ kind: "deal" as const, id })
+    const source = fakeCrmSource({
+      self: "7",
+      admin: false,
+      files: [
+        { owner: deal("d1"), id: "f1", name: "../../Contract.txt", bytes: "Example kitchen supply contract" },
+        { owner: deal("d1"), id: "f2", name: "away.txt", bytes: "x", host: "evil.example" },
+        { owner: deal("d1"), id: "f3", name: "page.txt", bytes: "x", html: true },
+        { owner: deal("d1"), id: "f4", name: "broken.txt", bytes: "x", broken: true },
+        { owner: deal("d2"), id: "f5", name: "Theirs.txt", bytes: "Colleague's contract" },
+      ],
+    })
+    source.put("deal", exampleDeal("d1", { assignee: "7" }))
+    source.put("deal", exampleDeal("d2", { assignee: "9" }))
+    return {
+      source,
+      own: deal("d1"),
+      word: "kitchen",
+      foreign: deal("d2"),
+      token: FAKE_FILE_TOKEN,
+      refused: ["deal:d1:record:f2", "deal:d1:record:f3", "deal:d1:record:f4"],
+    }
   }))
     it(c.name, c.run)
 })

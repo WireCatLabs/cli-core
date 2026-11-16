@@ -54,6 +54,7 @@ import {
 } from "../writes.js"
 import { addCrmChangeCommands } from "./changes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
+import { addCrmFileCommands } from "./files.js"
 import { pipelineView } from "./pipeline-view.js"
 import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
 import { addCrmSearchAll } from "./search-all.js"
@@ -125,6 +126,7 @@ export interface CrmCommandOptions {
    */
   live?: readonly CrmLiveRecord[]
   activities?: boolean
+  files?: boolean
   now?: () => number
 }
 
@@ -946,6 +948,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   })
 
   addCrmChangeCommands(program, { ...options, within, example, now, ownerOf, pathOf })
+  if (options.files) addCrmFileCommands(program, { ...options, within, example, now })
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
   const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(

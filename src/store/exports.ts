@@ -54,7 +54,15 @@ export {
   type CrmFileStore,
   resetCrmFileWords,
 } from "./sqlite/crm-files.js"
-export { crmSettingsOf, parseCrmSetting, parseCrmSettingValue, saveCrmSetting } from "./sqlite/crm-settings.js"
+export {
+  CRM_FILE_LIMITS,
+  type CrmFileLimit,
+  type CrmFileLimits,
+  crmSettingsOf,
+  parseCrmSetting,
+  parseCrmSettingValue,
+  saveCrmSetting,
+} from "./sqlite/crm-settings.js"
 export {
   type EmailMarks,
   MAIL_AGENDA_COLUMNS,

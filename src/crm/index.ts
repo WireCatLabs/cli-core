@@ -1,3 +1,4 @@
+export { type CrmFileFetchOptions, fetchCrmFile } from "./file-fetch.js"
 export { crmFileId, LINK_REMOVED, parseCrmFileId, withoutFileLinks } from "./files.js"
 export {
   DAILY_FOREIGN_CONTACTS,
