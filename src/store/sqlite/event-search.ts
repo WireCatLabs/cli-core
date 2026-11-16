@@ -91,6 +91,8 @@ export interface EventSearch {
   eventIndexState(): Promise<NoteIndexState>
   /** Live events' pieces with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<EventChunkToEmbed[]>
+  /** How many live events' pieces have no vector of `model` yet: what `chunksToEmbed` would still give, at most. */
+  chunksLeft(model: string): Promise<number>
   /** Whether any live event with a searchable copy in these accounts has a vector of `model`. */
   embedded(model: string, options?: { accountIds?: string[] }): Promise<boolean>
   /** Events nearest in meaning to `query`, one hit per series, best first. Vectors are unit length. */
@@ -193,6 +195,18 @@ export const eventSearchOver = (context: StoreContext): EventSearch => {
       })
     },
     eventIndexState: async () => corpusIndexState(database, CORPORA.event),
+    chunksLeft: async (model) => {
+      drain()
+      const scope = live(undefined)
+      const row = database
+        .prepare(
+          `SELECT count(DISTINCT k.content_hash) AS left FROM chunks k
+            WHERE 1${scope.sql}
+              AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)`,
+        )
+        .get(...scope.params, model)
+      return Number(row?.left ?? 0)
+    },
     chunksToEmbed: async (model, { after, limit }) => {
       drain()
       const scope = live(undefined)

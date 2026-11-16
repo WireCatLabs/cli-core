@@ -350,6 +350,7 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
       if (command.optsWithGlobals<{ full?: boolean }>().full)
         throw new CliError("validation_error", "sync starts over with --rescan; --full only widens output")
       const { signal } = environmentOf(command)
+      const deadline = environmentOf(command).deadline?.()
       await within(command, async (run) => {
         if (opts.embed && !run.messages) throw new CliError("configuration_error", "this tool cannot embed events")
         const report = await syncWithFeeds(run.source(), run.feeds?.(), run.store, {
@@ -365,6 +366,8 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
           opts.embed && !report.stopped && run.messages
             ? await embedEvents(run.messages, {
                 maxChunks: EMBED_MAX,
+                ...(deadline ? { deadline } : {}),
+                ...(signal ? { signal } : {}),
                 ...(run.env ? { env: run.env } : {}),
                 command: options.app.command,
               })

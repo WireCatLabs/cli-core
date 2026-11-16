@@ -80,7 +80,15 @@ export const calendarSync = v.strictObject({
   }),
   hint: v.optional(text),
   /** What `sync --embed` embedded: `embedEvents`' answer. */
-  embeddings: v.optional(v.strictObject({ model: text, embedded: count, left: v.boolean() })),
+  embeddings: v.optional(
+    v.strictObject({
+      model: text,
+      embedded: count,
+      left: v.boolean(),
+      stopped: v.optional(v.picklist(["deadline", "cancelled"])),
+      remaining: v.optional(count),
+    }),
+  ),
   /**
    * Each feed's events as read, and how many it could not take (`syncWithFeeds`); `unchanged` when the feed answered
    * 304 and the counts are those of the read before.

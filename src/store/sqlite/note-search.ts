@@ -507,6 +507,8 @@ export interface NoteSearch extends DocumentPictureStore {
   indexWritten(options?: { until?: () => boolean }): Promise<number>
   /** Live notes' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<NoteChunkToEmbed[]>
+  /** How many live chunks have no vector of `model` yet: what `chunksToEmbed` would still give, at most. */
+  chunksLeft(model: string): Promise<number>
   /** Whether any live chunk in this scope has a vector of `model`: none means meaning search has nothing to rank. */
   embedded(
     model: string,
@@ -598,6 +600,18 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
         // A synchronous drain would hide an abort or a timer until it ends.
         await new Promise((resolve) => setImmediate(resolve))
       }
+    },
+    chunksLeft: async (model) => {
+      drain()
+      const scope = live(undefined, undefined)
+      const row = database
+        .prepare(
+          `SELECT count(DISTINCT k.content_hash) AS left FROM chunks k
+            WHERE 1${scope.sql}
+              AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)`,
+        )
+        .get(...scope.params, model)
+      return Number(row?.left ?? 0)
     },
     chunksToEmbed: async (model, { after, limit }) => {
       drain()

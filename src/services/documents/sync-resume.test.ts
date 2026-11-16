@@ -379,20 +379,70 @@ describe("a sync of a tree larger than one call's bound", () => {
     expect(settled).toEqual([false])
   })
 
-  it("lists a folder and reads a page in every call of a run shorter than the deadline's margin, and ends", async () => {
+  it("lists a folder or reads a page in every call of a run shorter than the deadline's margin, and ends", async () => {
     const tree = treeSync(pageTree(1, 2, 2))
-    const short = () => {
-      const deadline = { endsAt: Date.now() + 3_000, ms: 3_000 }
-      return { deadline, budget: runBudget({ deadline }) }
+    const base = tree.options.source as DocumentSource
+    let requests = 0
+    const source: DocumentSource = {
+      ...base,
+      children: (id) => {
+        requests++
+        return base.children(id)
+      },
+      content: (id, limit) => {
+        requests++
+        return base.content(id, limit)
+      },
     }
-    const runs = await untilComplete(() => syncDocuments({ ...tree.options, ...short() }))
+    const perCall: number[] = []
+    const runs = await untilComplete(async () => {
+      const deadline = { endsAt: Date.now() + 3_000, ms: 3_000 }
+      const before = requests
+      const run = await syncDocuments({ ...tree.options, source, deadline, budget: runBudget({ deadline }) })
+      perCall.push(requests - before)
+      return run
+    })
     expect(runs.length).toBeGreaterThan(1)
-    for (const run of runs.slice(0, -1)) expect((run.walk?.listed ?? 0) + run.saved).toBeGreaterThan(0)
+    expect(perCall.every((count) => count === 1)).toBe(true)
     expect(Object.keys(tree.state().documents)).toHaveLength(8)
     const late = { endsAt: Date.now() + 1_000, ms: 3_000 }
     const fresh = treeSync(pageTree(1, 1, 1))
     expect(
       await syncDocuments({ ...fresh.options, deadline: late, budget: runBudget({ deadline: late }) }),
+    ).toMatchObject({ complete: false, stopped: "deadline", walk: { listed: 0 } })
+  })
+
+  it("lets only a call's first request past the deadline's margin, never a read after a slow listing", async () => {
+    const tree = treeSync(pageTree(0, 0, 0))
+    const base = tree.options.source as DocumentSource
+    let clock = 0
+    const calls: string[] = []
+    const source: DocumentSource = {
+      ...base,
+      children: async (id) => {
+        calls.push("list")
+        clock += 1_400
+        return base.children(id)
+      },
+      content: async (id, limit) => {
+        calls.push("read")
+        clock += 3_000
+        return base.content(id, limit)
+      },
+    }
+    const deadline = { endsAt: 4_000, ms: 4_000 }
+    const now = () => clock
+    const result = await syncDocuments({ ...tree.options, source, now, deadline, budget: runBudget({ deadline, now }) })
+    expect(calls).toEqual(["list"])
+    expect(result).toMatchObject({ stopped: "deadline", complete: false })
+  })
+
+  it("judges the deadline by the budget's clock, not by a sync's fixed now", async () => {
+    const late = { endsAt: Date.now() + 1_000, ms: 3_000 }
+    const tree = treeSync(pageTree(1, 1, 1))
+    const past = () => Date.parse("2026-01-01T00:00:00Z")
+    expect(
+      await syncDocuments({ ...tree.options, now: past, deadline: late, budget: runBudget({ deadline: late }) }),
     ).toMatchObject({ complete: false, stopped: "deadline", walk: { listed: 0 } })
   })
 

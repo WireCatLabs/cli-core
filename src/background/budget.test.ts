@@ -33,6 +33,20 @@ describe("runBudget", () => {
     expect([budget.take(), budget.take(), budget.take()]).toEqual([null, null, "deadline"])
   })
 
+  it("lets the first request past the margin once, while nothing has gone and it fits with time to answer", () => {
+    const deadline = { endsAt: 4_000, ms: 4_000 }
+    const at = (now: number, requestMs?: number) =>
+      runBudget({ deadline, now: () => now, ...(requestMs ? { requestMs } : {}) })
+    const fresh = at(0)
+    expect([fresh.take(), fresh.first?.(), fresh.first?.(), fresh.used]).toEqual(["deadline", true, false, 1])
+    const tight = at(1_600)
+    expect([tight.take(), tight.first?.()]).toEqual(["deadline", false])
+    const slow = at(0, 3_600)
+    expect([slow.take(), slow.first?.()]).toEqual(["deadline", false])
+    const room = runBudget({ deadline: { endsAt: 60_000, ms: 60_000 }, now: () => 0 })
+    expect([room.take(), room.first?.()]).toEqual([null, false])
+  })
+
   it("stops when the run's signal is aborted", () => {
     const stop = new AbortController()
     const budget = runBudget({ signal: stop.signal })
