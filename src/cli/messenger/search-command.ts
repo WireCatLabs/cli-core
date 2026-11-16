@@ -6,7 +6,7 @@ import { searchNotesOf } from "../../services/notes-search.js"
 import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
-import { AROUND_HINT, END_FLAGS, hintsFor, START_FLAGS, withOptionHints } from "../option-hints.js"
+import { AROUND_HINT, END_FLAGS, hintsFor, SENDER_FLAGS, START_FLAGS, withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
 import { runsSearchCommand } from "../runs/search-command.js"
 import { commandAt } from "../steps.js"
@@ -278,6 +278,10 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
           : {
               "--chat": `search in one chat with chat:<chat> in the query: search ${path} 'chat:<chat> words'`,
               "--around": AROUND_HINT,
+              ...hintsFor(
+                SENDER_FLAGS,
+                `the sender goes in the query: search ${path} 'from:<sender> words' (from:me for you)`,
+              ),
             }),
         ...(path === "all" ? {} : { "--only": ONLY_HINT }),
       })
@@ -289,6 +293,7 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
       ...hintsFor(END_FLAGS, "put the end in the filter: --filter 'date<2026-10-20'"),
       "--around": AROUND_HINT,
       "--only": ONLY_HINT,
+      ...hintsFor(SENDER_FLAGS, "the sender goes in the filter: --filter 'from:<sender>' (from:me for you)"),
     })
   return search
 }
