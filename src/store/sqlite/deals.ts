@@ -70,8 +70,6 @@ export interface PipelineReport extends Omit<Pipeline, "stages">, Omit<PipelineP
   stages: FunnelStage[]
   /** The window's bounds as ISO times; `null` is open. */
   window: { since: string | null; until: string | null }
-  /** `YYYY-MM-DD`: the UTC day `window.since` falls on; `null` for all. */
-  since: string | null
 }
 
 /**
@@ -577,7 +575,6 @@ export const dealOperationsOver = (context: StoreContext) => {
       ...period,
       stages: pipeline.stages.map((stage, index) => ({ ...stage, ...(stages[index] as FunnelCounts) })),
       window: { since: at(window.since), until: at(window.until) },
-      since: at(window.since)?.slice(0, 10) ?? null,
     }
   }
 

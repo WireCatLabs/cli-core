@@ -137,7 +137,7 @@ A hidden deal is never named in an activity's `on`.
   CRM shows late with an older time, as an import, can still fall before the window. A `command` schedule whose output is such a document is rendered and delivered like an agent's
   report (`isReportAnswer`). Every command schedule's report skips the agent-text leak scrub, since its text is the
   store's data; the renderers still escape it, so
-  `schedule command crm-digest --daily 08:00 --deliver-to … -- changes list --format report` is the CRM morning
+  `schedule command crm-digest --at 08:00 --deliver-to … -- changes list --format report` is the CRM morning
   digest. It sends deal titles, amounts, loss reasons, contact names and task subjects to every reader of the route:
   a group chat as a route shares them with the whole group.
 
