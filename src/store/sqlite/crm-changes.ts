@@ -67,6 +67,15 @@ const HALF_DAY = 43_200_000
 const DAY = 86_400_000
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10)
 
+/**
+ * `sql` with each `?N` as a plain `?`, and its values in the order they appear. node:sqlite before Node 22.23 binds
+ * no `?N` from a list of values ("column index out of range"), and every version refuses a value the SQL never uses.
+ */
+export const usedParams = <T>(sql: string, params: readonly T[]): { sql: string; params: T[] } => ({
+  sql: sql.replace(/\?\d+/g, "?"),
+  params: [...sql.matchAll(/\?(\d+)/g)].map((one) => params[Number(one[1]) - 1] as T),
+})
+
 /** The SQL of every change in `filter`'s window, unordered, and its numbered parameters (`?13`, `?14` page it). */
 const changesQuery = (context: StoreContext, key: AccountKey, filter: ChangeFilter) => {
   const accountId = findAccountPk(context, key)
@@ -131,7 +140,13 @@ const changesQuery = (context: StoreContext, key: AccountKey, filter: ChangeFilt
         `FROM (SELECT r.id, r.fields, ${itemOf("r.id")} AS item, (SELECT target_type FROM record_relations ` +
         "WHERE record_id = r.id AND role = 'on' LIMIT 1) AS target FROM records r WHERE r.account_id = ?1 " +
         `AND r.type = ?4 AND r.deleted_at IS NULL AND json_extract(r.fields, '$.${field}') ` +
-        "BETWEEN ?6 AND ?7) a " +
+        "BETWEEN ?6 AND ?7" +
+        // One that arrived done with no due date was done as it was made: its `activity_added` says it.
+        (field === "done_at"
+          ? " AND NOT (json_extract(r.fields, '$.due_at') IS NULL AND " +
+            "json_extract(r.fields, '$.done_at') = json_extract(r.fields, '$.created_at'))"
+          : "") +
+        ") a " +
         // A viewer reads an activity on its own deal or lead, or one on contacts alone that is assigned to it.
         `WHERE ?15 IS NULL OR a.item IS NOT NULL OR (NOT ${onDealOrLead} AND json_extract(a.fields, '$.assignee') = ?16)`,
     ),
@@ -183,9 +198,8 @@ export const crmChangeCounts = (
   const counts = Object.fromEntries(CRM_CHANGES.map((one) => [one, 0])) as Record<CrmChangeKind, number>
   const query = changesQuery(context, key, { ...filter, limit: 0, offset: 0 })
   if (!query) return counts
-  for (const row of context.database
-    .prepare(`SELECT change, count(*) AS n FROM (${query.sql}) GROUP BY change`)
-    .all(...query.params))
+  const counted = usedParams(`SELECT change, count(*) AS n FROM (${query.sql}) GROUP BY change`, query.params)
+  for (const row of context.database.prepare(counted.sql).all(...counted.params))
     counts[row.change as CrmChangeKind] = Number(row.n)
   return counts
 }
@@ -204,9 +218,11 @@ export const crmChanges = (
   const { database } = context
   const query = changesQuery(context, key, filter)
   if (!query) return { items: [], hasMore: false }
-  const rows = database
-    .prepare(`${query.sql} ORDER BY at DESC, change, kind, item DESC, record DESC LIMIT ?13 OFFSET ?14`)
-    .all(...query.params)
+  const paged = usedParams(
+    `${query.sql} ORDER BY at DESC, change, kind, item DESC, record DESC LIMIT ?13 OFFSET ?14`,
+    query.params,
+  )
+  const rows = database.prepare(paged.sql).all(...paged.params)
   const stageName = database.prepare("SELECT name FROM pipeline_stages WHERE id = ?")
   const nameOf = (id: unknown) =>
     id == null ? null : ((stageName.get(Number(id))?.name as string | undefined) ?? null)

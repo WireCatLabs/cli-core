@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
+import type { CrmViewing } from "../crm/index.js"
 import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isUsable } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, Organization } from "../store/index.js"
@@ -82,6 +83,11 @@ export interface OrganizationContextOptions {
   limit?: number
   /** The kinds the profile denies: none of their rows, titles or counts is answered. */
   deniedKinds?: readonly DealKind[]
+  /**
+   * Each CRM copy's rule for the profile (`crmViewerOf`, SEC-197): a deal or lead it may not read is left out, and
+   * `coverage.notRead` carries the rule's note.
+   */
+  viewing?: readonly CrmViewing[]
 }
 
 export const dealLine = (deal: Deal): DealLine => ({
@@ -139,14 +145,14 @@ const oneKind = <T>(rows: T[], commands: [(row: T) => boolean, string][]): strin
 export const organizationContext = async (
   store: MessageStore,
   reference: string,
-  { accounts, limit = SECTION_LIMIT, deniedKinds = [] }: OrganizationContextOptions = {},
+  { accounts, limit = SECTION_LIMIT, deniedKinds = [], viewing = [] }: OrganizationContextOptions = {},
 ): Promise<OrganizationContext> => {
   const id = /^(?:organization:)?(\d+)$/.exec(reference.trim())?.[1]
   if (id === undefined) throw new CliError("validation_error", "an organization is organization:<id>")
   const ref = `organization:${id}`
   const [organization] = await store.knowledge.organizations(parseLucene(`id:${id}`))
   if (!organization) throw new CliError("not_found", `no ${ref} in the store`)
-  const scope = scopeOf(accounts, deniedKinds)
+  const scope = scopeOf(accounts, deniedKinds, viewing)
   const own = (await store.knowledge.ownOrganizations()).some((one) => one.ref === ref)
   const { edges, full } = await edgesOf(store, ref, scope)
   const names = await namesOf(
@@ -179,7 +185,7 @@ export const organizationContext = async (
       ...(accounts === undefined ? {} : { accounts }),
     })
     dealsFull ||= found.hasMore
-    for (const deal of found.items) deals.push(deal)
+    for (const deal of found.items) if (scope.sees(deal)) deals.push(deal)
   }
   const catalog = new Map((await store.knowledge.projects()).map((project) => [project.ref, project]))
   const projects = new Map<string, ProjectLine>()

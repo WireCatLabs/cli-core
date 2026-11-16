@@ -9,6 +9,7 @@ import type { CrmActivity, CrmStageEntry } from "../../domain/crm.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { openCache } from "../../store/open.js"
+import { usedParams } from "../../store/sqlite/crm-changes.js"
 import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource, SALES_PIPELINE } from "../testing/index.js"
@@ -162,6 +163,7 @@ describe("changes list", () => {
     const { cli, call, source, clock } = await setup(
       [
         activity("t1", [{ kind: "deal", externalId: "d1" }], { dueAt: NOW - HOUR }),
+        activity("t2", [{ kind: "deal", externalId: "d1" }], { dueAt: NOW - HOUR, done: true }),
         activity("c1", [{ kind: "person", externalId: "p1" }], { kind: "call", done: true }),
       ],
       [
@@ -232,6 +234,39 @@ describe("changes list", () => {
     const csv = (await call(["changes", "list", WINDOW, "--format", "csv"])).data
     expect(csv.split("\n")[0]).toContain("reason")
     expect(csv).toContain("price")
+  })
+})
+
+describe("the changes SQL's values", () => {
+  it("are bound as plain placeholders in the order they appear, none left unused (Node 22.16's node:sqlite)", () => {
+    expect(usedParams("SELECT ?3, ?1 WHERE ?3 IS NULL", ["a", "b", "c"])).toEqual({
+      sql: "SELECT ?, ? WHERE ? IS NULL",
+      params: ["c", "a", "c"],
+    })
+  })
+})
+
+describe("an activity that arrives done with no due date", () => {
+  it("is listed once, as added, while a task done after it arrived is listed added and done", async () => {
+    const on = [{ kind: "deal" as const, externalId: "d1" }]
+    const activities = [
+      activity("n1", on, { kind: "comment", done: true }),
+      activity("t1", on, { updatedAt: NOW - HOUR }),
+    ]
+    const { cli, clock } = await setup(activities)
+    await cli("sync")
+    clock.now = NOW + HOUR
+    activities[1] = activity("t1", on, { done: true, updatedAt: NOW + HOUR - 60_000 })
+    await cli("sync")
+
+    const listed = (await cli("changes", "list", WINDOW)).items.filter(({ change }) =>
+      String(change).startsWith("activity_"),
+    )
+    expect(listed.map(({ change, activity }) => [change, (activity as { external_id: string }).external_id])).toEqual([
+      ["activity_done", "t1"],
+      ["activity_added", "t1"],
+      ["activity_added", "n1"],
+    ])
   })
 })
 

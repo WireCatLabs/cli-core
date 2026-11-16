@@ -358,9 +358,7 @@ const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
       ? "store-wide — no stage opens a task"
       : "store-wide — from now on, each sync opens a local task for every deal or lead that moved into one of these " +
           "stages since the last sync; moves made before the rules were first set open none"
-  return now === ""
-    ? "store-wide — the next sync gives the account's copy to its sign-in's user, and narrows it to that user's deals"
-    : "store-wide — the account's copy holds this user's deals; a sync signed in as another user is refused"
+  return "store-wide — the next sync gives the account's copy to its sign-in's user, and narrows it to that user's deals"
 }
 
 const changeCrm = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {

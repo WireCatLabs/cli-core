@@ -409,7 +409,8 @@ them in a terminal. It guards against a change by mistake and is not a boundary:
 writes the store file directly is not stopped. `self()` must answer a numeric user id (else `invalid_response`), and a source
 with it fills every deal's and lead's `assignee` (a source contract case checks it). One account's copy belongs to one user: the first sync stores it as
 `crm.<provider>:<account>.self`, a sign-in of another user is refused with the setting named, and
-`settings unset` of it gives the copy to the next sign-in. Out of scope is a deleted mark, as for a row the CRM
+`settings unset` of it gives the copy to the next sign-in. `config set` of it is refused (SEC-201): only a sync
+records it, since the copy's offline readers take its rule for that user. Out of scope is a deleted mark, as for a row the CRM
 deleted: `mine` hides those rows from lists and search, but their earlier copy stays in the store file. Deleting a
 copy touches no relationship, so the owner's confirmed links stay and return with the row. An id list that is empty
 never marks rows deleted without `--rescan`, whatever the copy's size. `store status` reads both without a sync: each deal and lead row's
@@ -458,7 +459,7 @@ custom values, a field left out keeping its stored value (not `person`, which a 
 A company's record keeps its owner and times the same way. A deal or lead whose assignee changes gets a
 `crm.owner-change` record (`<kind>/<id>/<updated at>`, `from`, `to`, `at`), since a CRM without admin rights lists no
 users to link. An activity may be on a contact or company the copy holds, and keeps `done_at`, the CRM's change that
-closed it.
+closed it; one that arrives done with no due date was done when it was made (`created_at`).
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

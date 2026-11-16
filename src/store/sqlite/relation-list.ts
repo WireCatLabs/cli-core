@@ -12,6 +12,7 @@ import {
   type Standing,
 } from "../../domain/relations.js"
 import type { AccountKey } from "../types.js"
+import type { CopyViewer } from "./copy-viewer.js"
 import { linkKind } from "./link-kinds.js"
 import { idsOf } from "./merged-persons.js"
 import { linkOf } from "./notes.js"
@@ -41,6 +42,8 @@ export interface RelationFilter {
   accounts?: AccountKey[]
   /** No row with an end of these types, such as `deal` and `lead` a profile denies. */
   deniedKinds?: string[]
+  /** No row with a deal or lead end that one of these may not read (SEC-197); each limits only its own account. */
+  viewers?: readonly CopyViewer[]
   limit?: number
   /** 1-based. */
   page?: number
@@ -148,6 +151,25 @@ export const relationListOver = (context: StoreContext): RelationList => {
       if (filter.deniedKinds?.length) {
         const list = filter.deniedKinds.map(() => "?").join(", ")
         add(`r.from_type NOT IN (${list}) AND r.to_type NOT IN (${list})`, ...filter.deniedKinds, ...filter.deniedKinds)
+      }
+      for (const viewer of filter.viewers ?? []) {
+        const account = database
+          .prepare("SELECT id FROM accounts WHERE provider = ? AND external_id = ?")
+          .get(viewer.account.provider, viewer.account.account)
+        if (!account) continue
+        // `IS NOT` keeps an unassigned row hidden: `<>` would compare with null and let it through.
+        const other = viewer.assignee === null ? "" : " AND json_extract(e.metadata, '$.assignee') IS NOT ?"
+        for (const side of ["from", "to"] as const)
+          for (const [type, table] of [
+            ["deal", "deals"],
+            ["lead", "leads"],
+          ])
+            add(
+              `NOT (r.${side}_type = '${type}' AND EXISTS (SELECT 1 FROM ${table} e WHERE e.id = r.${side}_id ` +
+                `AND e.account_id = ?${other}))`,
+              Number(account.id),
+              ...(viewer.assignee === null ? [] : [viewer.assignee]),
+            )
       }
       const rows = database
         .prepare(

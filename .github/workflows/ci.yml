@@ -66,6 +66,9 @@ jobs:
       - name: Check reviewed tags on the minimum supported Node
         run: |
           T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-tags.mjs "$T/tags.db"
+      - name: Check CRM changes and the digest's reads on the minimum supported Node
+        run: |
+          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-crm-changes.mjs "$T/crm.db"
 
   sqlite-restart:
     runs-on: ubuntu-latest

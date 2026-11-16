@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { CrmViewing } from "../crm/index.js"
 import type { DealKind } from "../domain/deals.js"
 import { isUsable } from "../domain/relations.js"
 import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
@@ -52,6 +53,11 @@ export interface CanonicalContextOptions extends ContextOptions {
   limit?: number
   /** The kinds the profile denies: no deal or lead of theirs is named. */
   deniedKinds?: readonly DealKind[]
+  /**
+   * Each CRM copy's rule for the profile (`crmViewerOf`, SEC-197): a deal or lead it may not read is not named, and
+   * `coverage.notRead` carries the rule's note.
+   */
+  viewing?: readonly CrmViewing[]
 }
 
 export const personBusiness = async (
@@ -123,13 +129,13 @@ export const personBusiness = async (
 export const canonicalPersonContext = async (
   store: MessageStore,
   reference: string,
-  { accounts, limit, deniedKinds, ...options }: CanonicalContextOptions = {},
+  { accounts, limit, deniedKinds, viewing, ...options }: CanonicalContextOptions = {},
 ): Promise<CanonicalPersonContext> => {
   const uid = /^person:(\d+)$/.exec(reference.trim())?.[1]
   if (uid === undefined) throw new CliError("validation_error", "a person is person:<id>")
   const record = await store.people.personByUid(uid)
   if (!record) throw new CliError("not_found", `no person:${uid} in the store`)
-  const scope = scopeOf(accounts, deniedKinds)
+  const scope = scopeOf(accounts, deniedKinds, viewing)
   const stored = await store.accounts.storedAccounts()
   // The scope is the caller's: every stored account it holds is readable, whatever its personal or work scope.
   const readable = stored.filter((one) => scope.has(one))

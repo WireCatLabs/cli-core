@@ -1,8 +1,9 @@
-import { crmGapsOf } from "../crm/index.js"
+import { type CrmViewing, crmGapsOf } from "../crm/index.js"
 import { CATEGORIES, type Category } from "../domain/categories.js"
 import type { DealKind } from "../domain/deals.js"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, KnowledgeRelation, MessageStore } from "../store/index.js"
+import { type CopyViewer, seenBy } from "../store/store.js"
 
 /** Items a context section lists before it says `hasMore`. */
 export const SECTION_LIMIT = 20
@@ -41,7 +42,9 @@ export const keyOf = ({ provider, account }: AccountKey): string => `${provider}
  * The accounts a context reads, the caller's `--source` or group already resolved; every account when none is
  * given. A row no account reported — the owner's, an agent's — is always in it. `left` collects every account whose
  * rows were kept out, so `coverage` can say so. `denied` holds the kinds the profile denies (`deals.list`,
- * `leads.list`): no row, title or count of them is answered, and `coverage` says they were denied.
+ * `leads.list`): no row, title or count of them is answered, and `coverage` says they were denied. `viewers` are the
+ * CRM copies' rules for the profile (SEC-197, `crmViewerOf`): a deal or lead one may not read is never named, and each
+ * note on why a copy shows less goes to `coverage`.
  */
 export interface Scope {
   accounts: AccountKey[] | undefined
@@ -50,16 +53,31 @@ export interface Scope {
   denied: ReadonlySet<DealKind>
   /** A ref the answer may name: none of a denied kind. */
   allows(ref: string): boolean
+  viewers: CopyViewer[]
+  viewerNotes: { source: string; reason: string }[]
+  /** A deal or lead row every viewer may read. */
+  sees(deal: { account: AccountKey | null; assignee: string | null }): boolean
 }
 
-export const scopeOf = (accounts: AccountKey[] | undefined, denied: readonly DealKind[] = []): Scope => {
+export const scopeOf = (
+  accounts: AccountKey[] | undefined,
+  denied: readonly DealKind[] = [],
+  viewing: readonly CrmViewing[] = [],
+): Scope => {
   const asked = accounts && new Set(accounts.map(keyOf))
   const left = new Set<string>()
   const kinds = new Set(denied)
+  const viewers = viewing.flatMap(({ viewer }) => (viewer ? [viewer] : []))
   return {
     accounts,
     left,
     denied: kinds,
+    viewers,
+    viewerNotes: viewing.flatMap(({ viewer, note }) =>
+      viewer && note ? [{ source: keyOf(viewer.account), reason: note }] : [],
+    ),
+    sees: ({ account, assignee }) =>
+      viewers.every((viewer) => seenBy(viewer, { provider: account?.provider, account: account?.account, assignee })),
     has: (account) => {
       if (account == null) return true
       const key = typeof account === "string" ? account : keyOf(account)
@@ -138,6 +156,7 @@ export const edgesOf = async (
     about: ref,
     includeEnded: true,
     deniedKinds: [...scope.denied],
+    ...(scope.viewers.length ? { viewers: scope.viewers } : {}),
     limit: STORE_PAGE,
     ...(scope.accounts === undefined ? {} : { accounts: scope.accounts }),
   })
@@ -229,6 +248,7 @@ export const coverageFor = async (store: MessageStore, base: Coverage, scope: Sc
   const notRead = [...base.notRead]
   const named = new Set(notRead.map((one) => one.source))
   for (const kind of scope.denied) notRead.push({ source: `${kind}s`, reason: "denied" })
+  for (const note of scope.viewerNotes) notRead.push(note)
   if (scope.accounts !== undefined)
     for (const key of await store.accounts.accounts()) if (!scope.has(key)) scope.left.add(keyOf(key))
   for (const key of [...scope.left].sort())

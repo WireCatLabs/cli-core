@@ -443,6 +443,7 @@ const OTHERS: Entry[] = [
   validation("deal.field", "a field of the deal or lead is not valid"),
   ["deal.denied", "permission_error", "the profile denies listing deals or leads, so none is answered"],
   ["deal.out-of-scope", "not_found", "the deal or lead is a copy from an account outside the accounts asked for"],
+  ["deal.not-readable", "not_found", "the deal or lead is a copy the profile's CRM sign-in may not read"],
   validation("deal.ref", "the reference names no deal or lead"),
   validation("deal.stage", "no stage of that name, or a stage name more than one pipeline has"),
   validation("stage.base-field", "a base stage needs a name its set has once and a position within the set"),
@@ -467,6 +468,10 @@ const OTHERS: Entry[] = [
   validation("pipeline.duplicate", "a pipeline of that name and kind is already stored"),
   validation("pipeline.field", "a pipeline needs a name and at least one stage, each named once"),
   ["pipeline.not-found", "not_found", "no stored pipeline has that name or reference"],
+  validation(
+    "crm.self-from-sync",
+    "only a sync records whose CRM copy it is; config unset hands the copy to the next sync",
+  ),
   validation("crm.stage-unknown", "a CRM item stands in a stage the store does not hold; it was not kept"),
   validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a status it does not know"),
   validation(
