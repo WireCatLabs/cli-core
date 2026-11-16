@@ -252,7 +252,7 @@ export const meetingPassage = v.strictObject({
   ),
 })
 
-/** A stored event a meeting belongs to; `id` is what `meetings update --event-id` takes. */
+/** A stored event a meeting belongs to; `id` is what `meetings link <reference> --event-id` takes. */
 export const event = v.strictObject({
   id: v.pipe(v.string(), v.minLength(1)),
   event_series_id: v.nullable(text),
