@@ -74,6 +74,7 @@ import { topicsCommand as topicsCommandDefinition } from "./messenger/topics-com
 import { watchCommand as watchCommandDefinition } from "./messenger/watch-command.js"
 import { runsCommand as runsCommandDefinition } from "./runs/command.js"
 import { scheduleCommandFor as scheduleCommandForDefinition } from "./schedule/schedule-command.js"
+import { setupCommand as setupCommandDefinition } from "./setup-command.js"
 import { sharedCommand as protectedCommand } from "./shared-contracts.js"
 
 import { skillCommand as skillCommandDefinition } from "./skill-command.js"
@@ -93,6 +94,7 @@ export const botMcpCommand = sharedCommand(botMcpCommandDefinition)
 export const botMessagesCommand = sharedCommand(botMessagesCommandDefinition)
 export const commandsCommand = sharedCommand(commandsCommandDefinition)
 export const configCommand = sharedCommand(configCommandDefinition)
+export const setupCommand = sharedCommand(setupCommandDefinition)
 export const guideCommand = sharedCommand(guideCommandDefinition)
 export const addMeetingBatchCommand = sharedCommand(addMeetingBatchCommandDefinition)
 export const addMeetingPreparationCommand = sharedCommand(addMeetingPreparationCommandDefinition)

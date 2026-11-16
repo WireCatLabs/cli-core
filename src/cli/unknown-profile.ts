@@ -4,7 +4,7 @@ import type { Settings } from "./settings.js"
 // gcal-cli raised its own oauth.missing before cli-core merged it into session.missing (FIND-2583).
 const NOT_SIGNED_IN = new Set([undefined, "session.missing", "oauth.missing"])
 const FROM_ENV = /^[A-Z0-9_]+_PROFILE$/
-const SIGN_INS = new Set(["session start", "setup"])
+const SIGN_INS = new Set(["session start", "setup", "setup apply", "setup run"])
 /** A sign-in names a new profile on purpose: a refusal there is the provider's, never an unknown profile. */
 export const isSignIn = (path: string) => SIGN_INS.has(path)
 

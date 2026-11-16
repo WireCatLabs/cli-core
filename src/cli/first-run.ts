@@ -272,7 +272,8 @@ export const setupAtStart = async (start: {
     command: start.command,
     env: start.env,
     contentLanguages: start.contentLanguages,
-    all: start.path[0] === "setup",
+    // `setup describe` and `setup apply` are a program's; only the bare walk-through asks everything again.
+    all: start.path.length === 1 && start.path[0] === "setup",
     io: {
       ask: async (prompt) => (await import("../terminal/prompt.js")).readSecret(prompt, { input, echo: true }),
       say: (text) => process.stderr.write(`${text}\n`),
