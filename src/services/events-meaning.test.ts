@@ -140,6 +140,22 @@ describe("calendar events by meaning", () => {
     expect(await embedEvents(store, { threads: 1 })).toEqual({ model: "e5-small", embedded: 2, left: false })
   })
 
+  it("answers done, not stopped, when the last batch ends as the run is cut", async () => {
+    download()
+    const store = await calendarStore([entry("a", "cat", NOW), entry("b", "dog", NOW + DAY)])
+    const stop = new AbortController()
+    const save = store.vectors.saveVectors.bind(store.vectors)
+    store.vectors.saveVectors = async (...args) => {
+      await save(...args)
+      stop.abort()
+    }
+    expect(await embedEvents(store, { threads: 1, signal: stop.signal })).toEqual({
+      model: "e5-small",
+      embedded: 2,
+      left: false,
+    })
+  })
+
   it("marks a hit found both ways once per series", async () => {
     download()
     const store = await calendarStore(weekly("s1", "cat", 3))

@@ -528,6 +528,7 @@ export interface NoteSearch extends DocumentPictureStore {
 }
 
 const SCAN_PAGE = 5_000
+const COUNT_PAGE = 500
 const SETTLE_BATCH = 50
 
 /** A note's best chunk so far, and its lowest chunk, by which the scan breaks ties. */
@@ -560,6 +561,45 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
       sql: ` AND k.chunkable_type IN (${types.map(() => "?").join(", ")}) AND ${LIVE}`,
       params: [...types, folders, folders, withInternal ? null : folders] as SqlValue[],
     }
+  }
+  /** Live chunks with no vector of `model`, by hash from `after`: what `chunksToEmbed` cuts and `chunksLeft` counts. */
+  const pendingChunks = (model: string, after: string | undefined, limit: number) => {
+    drain()
+    const scope = live(undefined, undefined)
+    return database
+      .prepare(
+        `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end,
+                k.position
+           FROM chunks k
+          WHERE k.content_hash > ?${scope.sql}
+            AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)
+          GROUP BY k.content_hash ORDER BY k.content_hash LIMIT ?`,
+      )
+      .all(after ?? "", ...scope.params, model, limit)
+  }
+  // One long note fills a whole batch; build its text once, not once per chunk.
+  const textsOf = () => {
+    const texts = new Map<string, string | undefined>()
+    return (owner: string) => {
+      if (!texts.has(owner)) {
+        const [type, id] = owner.split(":")
+        const note = read(String(type), Number(id))
+        texts.set(owner, note ? noteIndexText(note.title, note.text) : undefined)
+      }
+      return texts.get(owner)
+    }
+  }
+  /** The row as `chunksToEmbed` gives it, or `undefined` when its enrichment or its note is gone. */
+  const chunkOf = (row: Record<string, unknown>, textOf: (owner: string) => string | undefined) => {
+    if (Number(row.position) === ENRICHMENT_POSITION) {
+      const [type, id] = String(row.owner).split(":")
+      const text = enrichmentText(database, String(type), Number(id))
+      return text === undefined ? undefined : { hash: String(row.hash), text }
+    }
+    const text = textOf(String(row.owner))
+    return text === undefined
+      ? undefined
+      : { hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }
   }
   return {
     ...documentPicturesOver(context),
@@ -602,51 +642,19 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
       }
     },
     chunksLeft: async (model) => {
-      drain()
-      const scope = live(undefined, undefined)
-      const row = database
-        .prepare(
-          `SELECT count(DISTINCT k.content_hash) AS left FROM chunks k
-            WHERE 1${scope.sql}
-              AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)`,
-        )
-        .get(...scope.params, model)
-      return Number(row?.left ?? 0)
+      const textOf = textsOf()
+      let left = 0
+      let after: string | undefined
+      for (;;) {
+        const rows = pendingChunks(model, after, COUNT_PAGE)
+        left += rows.filter((row) => chunkOf(row, textOf) !== undefined).length
+        if (rows.length < COUNT_PAGE) return left
+        after = String(rows.at(-1)?.hash)
+      }
     },
     chunksToEmbed: async (model, { after, limit }) => {
-      drain()
-      const scope = live(undefined, undefined)
-      // One long note fills a whole batch; build its text once, not once per chunk.
-      const texts = new Map<string, string | undefined>()
-      const textOf = (owner: string) => {
-        if (!texts.has(owner)) {
-          const [type, id] = owner.split(":")
-          const note = read(String(type), Number(id))
-          texts.set(owner, note ? noteIndexText(note.title, note.text) : undefined)
-        }
-        return texts.get(owner)
-      }
-      return database
-        .prepare(
-          `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end,
-                  k.position
-             FROM chunks k
-            WHERE k.content_hash > ?${scope.sql}
-              AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)
-            GROUP BY k.content_hash ORDER BY k.content_hash LIMIT ?`,
-        )
-        .all(after ?? "", ...scope.params, model, limit)
-        .flatMap((row) => {
-          if (Number(row.position) === ENRICHMENT_POSITION) {
-            const [type, id] = String(row.owner).split(":")
-            const text = enrichmentText(database, String(type), Number(id))
-            return text === undefined ? [] : [{ hash: String(row.hash), text }]
-          }
-          const text = textOf(String(row.owner))
-          return text === undefined
-            ? []
-            : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
-        })
+      const textOf = textsOf()
+      return pendingChunks(model, after, limit).flatMap((row) => chunkOf(row, textOf) ?? [])
     },
     embedded: async (model, { folderIds, withInternal, source }) => {
       drain()

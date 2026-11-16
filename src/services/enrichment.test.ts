@@ -320,6 +320,36 @@ describe("enrichment", () => {
     })
   })
 
+  it("starts no batch that would not end before the deadline, and says it stopped for time", async () => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat" })
+    const model = fakeModel(() => ({ facts: ["a cat"], questions: [] }))
+    const deadline = { endsAt: Date.now() + 6_000, ms: 6_000 }
+
+    const run = await enrichRecords(store, { env, ...model, key: () => "test-key", deadline })
+
+    expect(model.requests).toHaveLength(0)
+    expect(run).toMatchObject({ status: "stopped", enriched: 0, failed: 0, left: 1, reason_id: "enrichment.deadline" })
+  })
+
+  it("reports a batch the deadline cut as stopped for time, not as the provider failing", async () => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat" })
+    const fetch = (_input: unknown, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const fail = () => reject(new TypeError("fetch failed"))
+        init?.signal?.addEventListener("abort", fail)
+        setTimeout(fail, 3_000)
+      })
+    const deadline = { endsAt: Date.now() + 6_000, ms: 6_000 }
+
+    const run = await enrichRecords(store, { env, fetch, key: () => "test-key", deadline, batchMs: 10 })
+
+    expect(run).toMatchObject({ status: "stopped", enriched: 0, failed: 0, left: 1, reason_id: "enrichment.deadline" })
+  })
+
   it.each([
     ["a refused key", async () => new Response("{}", { status: 401 }), "enrichment.key-rejected", /refused the key/],
     [

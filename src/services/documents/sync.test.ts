@@ -250,6 +250,19 @@ describe("provider-neutral document sync", () => {
     expect(f.state().documents.b?.picture).toBe("saved")
     expect(() => within(file("cycle", ["cycle"]), ["root"], { cycle: file("cycle", ["cycle"]) })).toThrow("cycle")
   })
+  it("asks the budget before a picture download, and leaves the picture for the next call when it says no", async () => {
+    const f = await setup()
+    f.files.set("b", { ...must(f.files.get("b")), mime: "image/png" })
+    let left = 2
+    const budget = { take: () => (left-- > 0 ? null : ("requests" as const)) }
+    expect(await syncDocuments({ ...f.options, pictures: true, budget })).toMatchObject({
+      stopped: "requests",
+      complete: false,
+    })
+    expect(f.source.bytes).not.toHaveBeenCalled()
+    expect(await syncDocuments({ ...f.options, pictures: true })).toMatchObject({ complete: true, pictures: 1 })
+    expect(f.source.bytes).toHaveBeenCalledOnce()
+  })
   it("goes on with a walk past its entry bound in the next call, and refuses a cyclic one without advancing state", async () => {
     const f = await setup()
     expect(await syncDocuments({ ...f.options, maxEntries: 1 })).toMatchObject({

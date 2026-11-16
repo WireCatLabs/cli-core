@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { ENRICHMENT_POSITION } from "./sqlite/enrichments.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext } from "./sqlite/open-store.js"
@@ -142,5 +143,35 @@ describe("notes and documents nearest in meaning", () => {
       expect(indexed.length, name).toBeGreaterThan(0)
       expect(answered.count, `${name}: the index answered`).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("chunksLeft", () => {
+  it("counts what chunksToEmbed gives, not an enrichment chunk whose text is gone", async () => {
+    const context = await openStoreContext({
+      path: join(mkdtempSync(join(tmpdir(), "note-vectors-")), "left.db"),
+      now: () => 1,
+    })
+    opened.push(context)
+    const { database } = context
+    const note = Number(
+      database
+        .prepare(
+          `INSERT INTO notes (notable_type, notable_id, title, body, created_at, updated_at)
+            VALUES ('account', 1, 'cat', 'dog', 1, 1) RETURNING id`,
+        )
+        .get()?.id,
+    )
+    const notes = noteSearchOver(context)
+    await notes.chunksToEmbed(MODEL, { limit: 1 })
+    database
+      .prepare(
+        `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, account_id,
+          occurred_at, created_at, updated_at) VALUES ('note', ?, ?, 0, 0, 'orphan', NULL, 1, 1, 1)`,
+      )
+      .run(note, ENRICHMENT_POSITION)
+    const given = await notes.chunksToEmbed(MODEL, { limit: 100 })
+    expect(given.length).toBeGreaterThan(0)
+    expect(await notes.chunksLeft(MODEL)).toBe(given.length)
   })
 })

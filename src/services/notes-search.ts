@@ -134,7 +134,7 @@ export interface NotesEmbedOptions {
   app?: AppIdentity
   keyring?: KeyringStore
   /** Tests give a fake model here; nothing in the suite reaches a provider. */
-  enrichWith?: Pick<EnrichOptions, "adapters" | "fetch" | "key">
+  enrichWith?: Pick<EnrichOptions, "adapters" | "fetch" | "key" | "batchMs">
   /** The run's hard limit: the run stops between batches before it, less its margin, as a sync's last step does. */
   deadline?: Deadline
   signal?: AbortSignal
@@ -244,14 +244,15 @@ const embedChunks = async (
     let after: string | undefined
     let slowest = 0
     while (embedded < maxChunks) {
-      const why = stopped(slowest)
-      if (why) return stop(embedded, why)
       const started = Date.now()
       const batch = await source.chunksToEmbed(key, {
         limit: Math.min(NOTE_BATCH, maxChunks - embedded),
         ...(after === undefined ? {} : { after }),
       })
+      // Nothing left is done, even at the deadline.
       if (batch.length === 0) break
+      const why = stopped(slowest)
+      if (why) return stop(embedded, why)
       after = batch.at(-1)?.hash
       const vectors = await embedder.embed(
         batch.map(({ text }) => text),
@@ -281,13 +282,6 @@ const enrichedFirst = async (
   embed: () => Promise<NotesEmbedded>,
 ): Promise<NotesEmbedded> => {
   let enrichment: NotesEmbedded["enrichment"]
-  const time = stopsAt(options.deadline) - Date.now()
-  // Out of time, the embed answers that it stopped; enrichment that runs into the deadline fails and is retried.
-  if (time <= 0 || options.signal?.aborted) return embed()
-  const signals = [
-    ...(options.signal ? [options.signal] : []),
-    ...(Number.isFinite(time) ? [AbortSignal.timeout(time)] : []),
-  ]
   try {
     const run = await enrichRecords(store, {
       env: options.env ?? process.env,
@@ -295,7 +289,8 @@ const enrichedFirst = async (
       ...(options.app ? { app: options.app } : {}),
       ...(options.keyring ? { keyring: options.keyring } : {}),
       ...options.enrichWith,
-      ...(signals.length ? { signal: AbortSignal.any(signals) } : {}),
+      ...(options.deadline ? { deadline: options.deadline } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     })
     if (run.status !== "off") enrichment = run
   } catch (error) {
@@ -315,7 +310,10 @@ const enrichedFirst = async (
     throw error
   }
   if (!enrichment) return embedded
-  const more = enrichment.status !== "failed" && enrichment.left > 0 && enrichment.enriched > 0
+  const more =
+    enrichment.status !== "failed" &&
+    enrichment.left > 0 &&
+    (enrichment.enriched > 0 || enrichment.reason_id === "enrichment.deadline")
   return { ...embedded, left: embedded.left || more, enrichment }
 }
 

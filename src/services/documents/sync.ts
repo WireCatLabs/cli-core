@@ -136,14 +136,20 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       if (previous?.notRead === reason && !changedSince(previous.metadata, file)) result.unchanged++
       else result.names_only++
     }
+    // A call that has listed nothing makes one request, or a short run never moves.
+    const ask = () => {
+      const taken = options.budget?.take() ?? null
+      return taken === "deadline" && options.budget?.first?.() ? null : taken
+    }
     let modelMissing = false
-    const savePictureOf = async (file: M) => {
+    /** A stop when the budget refuses the download: the file stays pending and the next call fetches it. */
+    const savePictureOf = async (file: M): Promise<WalkStop | null> => {
       const entry = state.documents[file.id] as IndexedSource<M>
-      if (!profile.picture_search || !isPicture(file) || modelMissing) return
+      if (!profile.picture_search || !isPicture(file) || modelMissing) return null
       if ((file.size ?? 0) > MAX_PICTURE_BYTES) {
         entry.picture = "too-large"
         result.pictures_too_large = (result.pictures_too_large ?? 0) + 1
-        return
+        return null
       }
       if (!source) throw new CliError("configuration_error", "a pending picture requires source sign-in")
       if (!writer) {
@@ -153,17 +159,20 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           if (!isCliError(error) || error.code !== "not_found") throw error
           modelMissing = true
           result.pictures_skipped = error.message
-          return
+          return null
         }
       }
+      const stop = ask()
+      if (stop) return stop
       const bytes = await source.bytes(file.id)
       if (bytes.length > MAX_PICTURE_BYTES) {
         entry.picture = "too-large"
         result.pictures_too_large = (result.pictures_too_large ?? 0) + 1
-        return
+        return null
       }
       if ((await writer.save(entry.reference, bytes)) === "saved") result.pictures = (result.pictures ?? 0) + 1
       entry.picture = "saved"
+      return null
     }
     // Saving the whole state after every file grows with the profile; a batch at a time keeps it bounded.
     let unsaved = 0
@@ -188,12 +197,14 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           result.removed++
         } else if (job.file && skipReason(job.file)) {
           await saveNamesOnly(job.file, skipReason(job.file) as string)
-          await savePictureOf(job.file)
+          const stop = await savePictureOf(job.file)
+          if (stop) {
+            result.stopped = stop
+            break
+          }
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
-          const taken = options.budget?.take()
-          // A call that has listed nothing reads one page, or a short run never saves one.
-          const stop = taken === "deadline" && options.budget?.first?.() ? null : taken
+          const stop = ask()
           if (stop) {
             result.stopped = stop
             break
