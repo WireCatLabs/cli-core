@@ -31,7 +31,7 @@ export interface WalkProgress {
   folders_left: number
   /** Entries the walk has found over every call so far. */
   entries: number
-  /** Folders this call listed: 0 means it moved nothing on. */
+  /** Listings this call made (a folder, or one page of it): 0 means it moved nothing on. */
   listed: number
   stopped: WalkStop
 }
@@ -185,7 +185,7 @@ export const planDocuments = async <M extends SourceFile>(
           walk.stack.pop()
           continue
         }
-        // One folder at least per call, so a folder with more children than the bound still gets listed.
+        // One listing at least per call, so a folder with more children than the bound still moves on.
         // The run's own signal too: a cooperative sync is not cut from outside, and a CLI may pass no budget.
         stopped = options.signal?.aborted
           ? "cancelled"
@@ -198,13 +198,25 @@ export const planDocuments = async <M extends SourceFile>(
           throw new CliError("validation_error", "configured root is not an accessible folder")
         if (!step.folder) container(folder)
         let children: M[]
+        let more: string | undefined
         try {
-          children = await source.children(folder.id)
+          if (source.childrenPage)
+            ({ files: children, cursor: more } = await source.childrenPage(folder.id, step.listing))
+          else children = await source.children(folder.id)
         } catch (error) {
+          if (errorOf(error).code !== "not_found") throw error
+          // A later page's 404 can be a cursor the provider no longer knows: the folder is listed again from its first
+          // page, which tells a gone folder from a stale cursor, and the files already kept are only kept again.
+          if (step.listing !== undefined) {
+            delete step.listing
+            spent++
+            listed++
+            continue
+          }
           // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
           // A listing's 404 alone can be passing, so the folder is read again and is gone only when that read is a
           // 404 too or finds it trashed; on any doubt the call fails and the next sync lists it again.
-          if (errorOf(error).code !== "not_found" || !(await vanished(folder.id))) throw error
+          if (!(await vanished(folder.id))) throw error
           walk.stack.pop()
           visited.add(folder.id)
           folders[folder.id] = { ...folder, trashed: true }
@@ -216,8 +228,6 @@ export const planDocuments = async <M extends SourceFile>(
         spent += 1 + children.length
         listed++
         walk.discovered += children.length
-        walk.stack.pop()
-        visited.add(folder.id)
         folders[folder.id] = folder
         const nested = []
         for (const file of children)
@@ -226,7 +236,11 @@ export const planDocuments = async <M extends SourceFile>(
             if (walked(file.id)) folders[file.id] = file
             else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
           } else keep(file)
+        walk.stack.pop()
         for (const entry of nested.reverse()) walk.stack.push(entry)
+        // A folder with more pages goes back on top with its cursor, above its child folders.
+        if (more) walk.stack.push({ ...step, folder, listing: more })
+        else visited.add(folder.id)
         if (now() - savedAt > SAVE_EVERY_MS) record()
       }
       if (stopped) {

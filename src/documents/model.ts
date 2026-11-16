@@ -36,6 +36,13 @@ export interface DocumentSource<M extends SourceFile = SourceFile> {
   identity(): Promise<string>
   metadata(id: string): Promise<M>
   children(id: string): Promise<M[]>
+  /**
+   * One page of a folder's children, for a provider whose folder can be too big for one step of a sync (a Notion
+   * database of 12,000 rows). A sync with it lists one page per step and saves the cursor between calls. A cursor
+   * the provider no longer accepts must fail as `not_found` (through `errorOf`): the sync then lists the folder again
+   * from its first page, where any other error fails every later sync on that page until a `--rescan`.
+   */
+  childrenPage?(id: string, cursor?: string): Promise<{ files: M[]; cursor?: string }>
   startToken(): Promise<string>
   changes(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
   content(id: string, maxChars?: number): Promise<SourceContent<M>>
@@ -89,7 +96,8 @@ export interface PictureWriter {
 export interface SourceWalk<M extends SourceFile = SourceFile> {
   scope: string
   cursor: string
-  stack: { id: string; ancestry: string[]; folder?: M }[]
+  /** `listing`: the cursor of the folder's next page, while a source with `childrenPage` is part way through it. */
+  stack: { id: string; ancestry: string[]; folder?: M; listing?: string }[]
   visited: string[]
   folders: Record<string, M>
   files: M[]
