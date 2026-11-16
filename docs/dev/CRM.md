@@ -6,6 +6,7 @@ What a CRM CLI (b24, amo) gets from `@wirecat/cli-core/crm` and `/crm/cli`, and 
 - [Live reads](#live-reads)
 - [Writes](#writes)
 - [Foreign contacts](#foreign-contacts)
+- [Activities, changes and the digest](#activities-changes-and-the-digest)
 - [Adapter helpers](#adapter-helpers)
 
 ## The port
@@ -101,6 +102,41 @@ Known limits:
 - A user that is not the administrator reads offline only the deals assigned to it, even in a copy its own sync made:
   the unassigned deals and the colleagues a `mine` scope chose stay hidden from it.
 
+## Activities, changes and the digest
+
+These read the copy only, under the offline rule above: a limited profile sees the activities on its own deals and
+leads (and those on contacts alone that are assigned to it), and the contacts linked to its deals or assigned to it.
+A hidden deal is never named in an activity's `on`.
+
+- `activities list` is mounted with `addCrmCommands(program, { activities: true })`, for a CLI whose adapter has
+  `activities`. It answers `crm_activity`: open ones first (overdue, then by due time, then undated), then the rest,
+  newest first, `status:open` unless a status or `overdue:true` is given. With the account's `activities` setting off
+  it answers no items and a `missing` entry that names the setting.
+- `changes list` is always mounted. It answers `crm_change`, newest first, over a window (`at:`, the last day by
+  default, read against the CLI's clock): `created`, `moved`, `won`, `lost`, `owner_changed`, `activity_added`,
+  `activity_done`, `person_added` (`CRM_CHANGES`). One SQL over the stage entries, owner changes, activities and
+  contacts reads it (`store.crm.changes`, `crm-changes.ts`); `store.crm.changeCounts` counts it by kind. A won or lost
+  row takes the time of its stage entry when the CRM's history has one (`exact: true`), else noon UTC of its closed
+  day, which east of UTC+12 is the next local day. Every row, won and lost too, is selected by that time, so a deal
+  is in one window only. A move the CRM's history gives with no earlier entry in the copy is listed from the copy's
+  own diff. `page.next` carries the window in `--cursor`, so the next page reads the same rows.
+- `changes list --format report` prints `crmDigest`'s `wirecat.report/1` document: one `crm` section. Won and lost
+  come first and are never pushed out; then overdue CRM tasks, those due today, moves, new deals, new owners, new
+  contacts as a count and the tasks the stage rules opened, each read with its own limit, and `more` from SQL counts.
+  Only an activity's subject is shown, never its text; a phone number or an e-mail address in any text is masked, and
+  a line break never reaches a field. A limited profile sees only the stage-rule tasks of its own deals and leads.
+  `health` names a last `sync` that failed (`sync-failed`, kept as the sync state `crm:sync-failed`) or a kind older
+  than a day. The window ends where the last complete `sync` started (the sync state `crm:synced-from`): a change
+  the CRM made before then is in the copy, a later one may not be yet. The stage tasks a sync opens carry its start.
+  Run by a schedule (`<PREFIX>_SCHEDULED`), it starts where that schedule's last run ended (the sync state
+  `crm:digest:<schedule>`, moved only once the report is printed), so a late or missed run loses nothing. A row the
+  CRM shows late with an older time, as an import, can still fall before the window. A `command` schedule whose output is such a document is rendered and delivered like an agent's
+  report (`isReportAnswer`). Every command schedule's report skips the agent-text leak scrub, since its text is the
+  store's data; the renderers still escape it, so
+  `schedule command crm-digest --daily 08:00 --deliver-to … -- changes list --format report` is the CRM morning
+  digest. It sends deal titles, amounts, loss reasons, contact names and task subjects to every reader of the route:
+  a group chat as a route shares them with the whole group.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on
@@ -119,5 +155,6 @@ Known limits:
   keeps the app's secret, the account's `host` and `userId` and saves a rotated refresh token. A new sign-in takes
   `host` and `userId` from its own `extra` only. The codec is `rotating`: a run with moved folders never refreshes it
   (`oauth.moved-rotating`), since the rotated token would land in the temporary entry and leave the owner's dead.
-- `@wirecat/cli-core/crm/testing`: `fakeCrmSource` (strict: a condition it does not know fails), `crmSourceContract`
-  and `crmWriteContract` cover the live reads and the contact and company writes.
+- `@wirecat/cli-core/crm/testing`: `fakeCrmSource` (strict: a condition it does not know fails; `stageHistory` and
+  `activities` options give it those reads), `crmSourceContract` and `crmWriteContract` cover the live reads and the
+  contact and company writes, and `crmSyncContract` the sync (a fixture's `activitiesOn` adds the activity case).

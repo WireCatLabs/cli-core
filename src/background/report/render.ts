@@ -292,6 +292,7 @@ export const prepareReport = async (
     templates: storedTemplates,
     links = DEFAULT_LINK_CONFIG,
     env = process.env,
+    trusted = false,
   }: {
     language: string
     now: number
@@ -301,9 +302,11 @@ export const prepareReport = async (
     links?: LinkConfig
     /** Read for `WIRECAT_LINKS=off`. */
     env?: NodeJS.ProcessEnv
+    /** A command's document, built from the store rather than written by an agent (`parseReport`). */
+    trusted?: boolean
   },
 ): Promise<PreparedReport | undefined> => {
-  const parsed = parseReport(answer)
+  const parsed = parseReport(answer, trusted)
   if (!parsed) return undefined
   if ("invalid" in parsed) {
     const line = INVALID_LINES[language] ?? (INVALID_LINES[DEFAULT_LANGUAGE] as string)

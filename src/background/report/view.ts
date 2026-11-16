@@ -110,6 +110,7 @@ export const SECTION_EMOJI: Record<SectionKind, string> = {
   money: "💰",
   meetings: "📅",
   projects: "🚀",
+  crm: "🤝",
   mail: "📬",
 }
 export const SECTION_CAPS: Record<SectionKind | "health", number> = {
@@ -118,6 +119,7 @@ export const SECTION_CAPS: Record<SectionKind | "health", number> = {
   money: 5,
   meetings: 5,
   projects: 5,
+  crm: 7,
   mail: 5,
   health: 3,
 }

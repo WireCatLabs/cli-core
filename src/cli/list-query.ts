@@ -244,6 +244,7 @@ export const queryTerms = (
 export const timeBounds = (
   term: Predicate | undefined,
   zone = timezoneOf(),
+  now?: number,
 ): { since?: number; until?: number; meta?: { timezone: string; window: { since?: string; until?: string } } } => {
   if (!term) return {}
   const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
@@ -254,6 +255,7 @@ export const timeBounds = (
     term.operator === "range" ? term.upper_inclusive !== false : true,
     zone,
     term.span,
+    now,
   )
   const until = range.upper === undefined ? undefined : range.upper - (range.upper_inclusive ? 0 : 1)
   return {

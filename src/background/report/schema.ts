@@ -3,13 +3,13 @@ export const REPORT_KINDS = ["morning-digest"] as const
 export type ReportKind = (typeof REPORT_KINDS)[number]
 
 /** In the order they are shown; `health` is not among them, it comes from the document's `health[]` only. */
-export const SECTION_KINDS = ["today", "decisions", "money", "meetings", "projects", "mail"] as const
+export const SECTION_KINDS = ["today", "decisions", "money", "meetings", "projects", "crm", "mail"] as const
 export type SectionKind = (typeof SECTION_KINDS)[number]
 
 export const ITEM_TYPES = ["reply", "question", "task", "fact", "risk", "money", "decision", "meeting"] as const
 export type ItemType = (typeof ITEM_TYPES)[number]
 
-export const CHANNEL_KINDS = ["telegram", "max", "whatsapp", "mail", "meeting", "task"] as const
+export const CHANNEL_KINDS = ["telegram", "max", "whatsapp", "mail", "meeting", "task", "crm"] as const
 export type ChannelKind = (typeof CHANNEL_KINDS)[number]
 
 export interface Amount {
@@ -227,12 +227,14 @@ const cut = (text: string, limit: number) => (text.length <= limit ? text : `${t
  * Checks a parsed document and keeps what the renderers may show. Any agent string loses what `withoutLeaks` finds
  * and is cut to its limit; a required field left empty by that makes the document invalid, as a missing one does.
  */
-const checked = (document: unknown): { report: Report; leaks: number } => {
+const checked = (document: unknown, trusted: boolean): { report: Report; leaks: number } => {
   let leaks = 0
   const text = (value: unknown, field: TextField, at: string): string | null => {
     if (value === undefined || value === null) return null
     if (typeof value !== "string") throw new Invalid(at)
-    const clean = withoutLeaks(value.trim())
+    // A line break inside a field would draw a line of its own, as if the report had written it.
+    const flat = value.replace(/\s+/g, " ").trim()
+    const clean = trusted ? { text: flat, leaks: 0 } : withoutLeaks(flat)
     leaks += clean.leaks
     return clean.text ? cut(clean.text, TEXT_LIMITS[field]) : null
   }
@@ -345,14 +347,29 @@ export const jsonOfAnswer = (answer: string): string | undefined => {
   return fenced ?? (text.startsWith("{") ? text : undefined)
 }
 
+/** Whether a command's stdout is a `wirecat.report/1` document, which a schedule renders and delivers as a report. */
+export const isReportAnswer = (answer: string): boolean => {
+  const json = jsonOfAnswer(answer)
+  if (json === undefined) return false
+  try {
+    const document = JSON.parse(json) as unknown
+    return (
+      typeof document === "object" && document !== null && "format" in document && document.format === REPORT_FORMAT
+    )
+  } catch {
+    return false
+  }
+}
+
 export type ParsedReport = { report: Report; leaks: number } | { invalid: string }
 
 /**
  * A run's answer as a report: one JSON object, bare or as the only fenced `json` block. Text that is neither is not a
  * report (`undefined`) and keeps the Markdown path; a JSON answer that fails the check is `invalid`, with the path
- * of the first field that failed, and is never shown.
+ * of the first field that failed, and is never shown. `trusted` is a document a command built from the store: its
+ * strings are the owner's data, such as a CRM title `follow_up`, and lose nothing to the leak patterns.
  */
-export const parseReport = (answer: string): ParsedReport | undefined => {
+export const parseReport = (answer: string, trusted = false): ParsedReport | undefined => {
   const json = jsonOfAnswer(answer)
   if (json === undefined) return undefined
   let document: unknown
@@ -362,7 +379,7 @@ export const parseReport = (answer: string): ParsedReport | undefined => {
     return { invalid: "json" }
   }
   try {
-    return checked(document)
+    return checked(document, trusted)
   } catch (error) {
     if (error instanceof Invalid) return { invalid: error.message }
     throw error

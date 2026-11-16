@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { provide } from "../../cli/context.js"
+import type { CrmActivity } from "../../domain/crm.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { openCache } from "../../store/open.js"
@@ -23,6 +24,27 @@ const PORTAL = { provider: "example-crm", account: "portal" }
 const OTHER = { provider: "example-crm", account: "other" }
 const ADMIN = "1"
 const COLLEAGUE = "7"
+
+const task = (externalId: string, subject: string, on: CrmActivity["on"], assignee: string): CrmActivity => ({
+  externalId,
+  kind: "task",
+  subject,
+  body: null,
+  dueAt: Date.UTC(2026, 0, 1),
+  done: false,
+  assignee,
+  createdAt: Date.UTC(2026, 0, 1),
+  // The sync reads activities changed in the last 90 days.
+  updatedAt: Date.now(),
+  on,
+})
+/** One task on each user's deal, and one call on the administrator's client alone. */
+const ACTIVITIES = [
+  task("ta", "Harbour call", [{ kind: "deal", externalId: "da" }], ADMIN),
+  task("tc", "Lighthouse call", [{ kind: "deal", externalId: "dc" }], COLLEAGUE),
+  task("tp", "Harbour client call", [{ kind: "person", externalId: "pa" }], ADMIN),
+]
+const WINDOW = "at>=2025-12-01"
 
 const opened: MessageStore[] = []
 afterEach(async () => {
@@ -44,6 +66,7 @@ const setup = async () => {
   const database = await openCache(path)
   saveCrmSetting(database, crmSettingKey(PORTAL, "scope"), "all", 1)
   saveCrmSetting(database, crmSettingKey(OTHER, "scope"), "all", 1)
+  saveCrmSetting(database, crmSettingKey(PORTAL, "activities"), "on", 1)
   database.close()
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -54,9 +77,13 @@ const setup = async () => {
   })
   const sources = new Map<string, ReturnType<typeof fakeCrmSource>>()
   const sourceOf = (user: string | undefined, admin: boolean) => {
-    const source = fakeCrmSource({ ...(user ? { self: user } : {}), admin })
-    source.put("person", examplePerson("pa", { email: "admin-client@example.com", phone: "+7 916 111-11-11" }))
-    source.put("person", examplePerson("pc", { email: "own-client@example.com" }))
+    const source = fakeCrmSource({ ...(user ? { self: user } : {}), admin, activities: ACTIVITIES })
+    const added = { createdAt: Date.UTC(2026, 0, 1) }
+    source.put(
+      "person",
+      examplePerson("pa", { email: "admin-client@example.com", phone: "+7 916 111-11-11", ...added }),
+    )
+    source.put("person", examplePerson("pc", { email: "own-client@example.com", ...added }))
     source.put(
       "deal",
       exampleDeal("da", {
@@ -93,17 +120,19 @@ const setup = async () => {
         .configureOutput({ writeErr: () => undefined, writeOut: () => undefined })
         .option("--json")
         .option("--offline")
-      addCrmCommands(root, { app: APP, open: async () => run })
+      addCrmCommands(root, { app: APP, open: async () => run, activities: true })
       provide(root, {
         streams: { data: (text: string) => (data += text), diagnostic: (text: string) => notes.push(text) },
       } as never)
-      await root.parseAsync([...args, "--json"], { from: "user" })
-      return { ...(JSON.parse(data) as Answer), notes }
+      await root.parseAsync([...args, ...(args.includes("--format") ? [] : ["--json"])], { from: "user" })
+      return args.includes("--format")
+        ? ({ printed: data, notes } as never)
+        : { ...(JSON.parse(data) as Answer), notes }
     }
     return cli
   }
   await as(ADMIN, true)("sync")
-  return { store, as }
+  return { store, as, path, adminSource: () => sources.get(`${ADMIN}:true:portal`) as ReturnType<typeof fakeCrmSource> }
 }
 
 const titles = (answer: Answer) => answer.items.map((one) => one.title).sort()
@@ -223,5 +252,77 @@ describe("offline reads of a copy another profile synced (SEC-197)", () => {
     const { as } = await setup()
     await as(ADMIN, false)("sync")
     expect(titles(await as(ADMIN, false)("deals", "list"))).toEqual(["Harbour"])
+  })
+
+  it("changes, activities and the digest show a colleague only its own deals, their tasks and their clients", async () => {
+    const { as } = await setup()
+    const colleague = as(COLLEAGUE)
+    const changes = await colleague("changes", "list", WINDOW)
+    expect(JSON.stringify(changes.items)).not.toMatch(/Harbour|person pa|"pa"|"ta"|"tp"/)
+    expect(changes.items.filter((one) => one.change === "person_added").map((one) => one.external_id)).toEqual(["pc"])
+    expect(changes.items.filter((one) => one.change === "activity_added").map((one) => one.external_id)).toEqual(["dc"])
+    expect((await colleague("activities", "list")).items.map((one) => one.external_id)).toEqual(["tc"])
+    const harbour = (await as(ADMIN, true)("deals", "list")).items.find((one) => one.title === "Harbour")?.ref
+    expect((await colleague("activities", "list", `deal:"${harbour}"`)).items).toEqual([])
+    const shared = await colleague("activities", "list", "status:open")
+    expect(JSON.stringify(shared.items)).not.toContain("Harbour")
+    for (const format of ["csv", "report"]) {
+      const { printed } = (await colleague("changes", "list", WINDOW, "--format", format)) as unknown as {
+        printed: string
+      }
+      expect(printed).toContain("Lighthouse")
+      expect(printed).not.toMatch(/Harbour/)
+    }
+    expect((await as(ADMIN, true)("activities", "list")).items.map((one) => one.external_id).sort()).toEqual([
+      "ta",
+      "tc",
+      "tp",
+    ])
+  })
+
+  it("changes and activities of a profile whose user is unknown are empty, incomplete and say why", async () => {
+    const { as } = await setup()
+    const nobody = as(undefined)
+    for (const args of [
+      ["changes", "list", WINDOW],
+      ["activities", "list"],
+    ]) {
+      const answer = await nobody(...args)
+      expect(answer.items).toEqual([])
+      expect(answer.meta?.complete).toBe(false)
+      expect(answer.notes.join("")).toContain("names no CRM user")
+    }
+    for (const format of ["csv", "report"]) {
+      const answer = (await nobody("changes", "list", WINDOW, "--format", format)) as unknown as {
+        printed: string
+        notes: string[]
+      }
+      expect(answer.printed).not.toMatch(/Harbour|Lighthouse/)
+      expect(answer.notes.join("")).toContain("names no CRM user")
+    }
+  })
+
+  it("the digest of a colleague leaves out the tasks stage rules opened on deals it may not read (SEC-198)", async () => {
+    const { as, path, adminSource } = await setup()
+    const database = await openCache(path)
+    saveCrmSetting(
+      database,
+      crmSettingKey(PORTAL, "stage-tasks"),
+      { quote: { title: "Send the quote", due_days: 2 } },
+      1,
+    )
+    database.close()
+    const source = adminSource()
+    source.put("deal", exampleDeal("da", { title: "Harbour", assignee: ADMIN, stage: "quote" }))
+    source.put("deal", exampleDeal("dc", { title: "Lighthouse", assignee: COLLEAGUE, stage: "quote" }))
+    const admin = as(ADMIN, true)
+    await admin("sync")
+    const report = (await as(COLLEAGUE)("changes", "list", WINDOW, "--format", "report")) as unknown as {
+      printed: string
+    }
+    const tasks = (
+      JSON.parse(report.printed) as { sections: { items: { topic: string }[] }[] }
+    ).sections[0]?.items.filter((one) => one.topic === "Send the quote")
+    expect(tasks).toHaveLength(1)
   })
 })

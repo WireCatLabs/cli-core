@@ -868,6 +868,34 @@ export const syncCrm = async (
   return report
 }
 
+/** The sync state the last failed `sync` leaves, `{ at, kinds }`; a sync with no failed kind clears it. */
+export const SYNC_FAILED = "crm:sync-failed"
+/**
+ * The sync state holding when the last complete `sync` started: everything the CRM changed before it is in the copy,
+ * so the digest's window ends there.
+ */
+export const SYNCED_FROM = "crm:synced-from"
+
+/** `syncCrm`, leaving how it ended for the digest's health: the kinds that failed, or none. */
+export const syncRecorded = async (...args: Parameters<typeof syncCrm>): ReturnType<typeof syncCrm> => {
+  const [, store, account, options] = args
+  const at = options?.now ?? Date.now()
+  const record = (kinds: readonly string[]) =>
+    store.sync
+      .setSyncState(account, SYNC_FAILED, kinds.length ? JSON.stringify({ at, kinds }) : "")
+      .catch(() => undefined)
+  try {
+    const report = await syncCrm(...args)
+    const failed = report.synced.filter((one) => one.error !== undefined).map((one) => one.kind)
+    await record(failed)
+    if (report.state === "complete" && !failed.length) await store.sync.setSyncState(account, SYNCED_FROM, String(at))
+    return report
+  } catch (error) {
+    await record(["all"])
+    throw error
+  }
+}
+
 /** Each kind's sync in the WC-LIFE-14 shape: `cursor_age_ms` growing on a `partial` one means nothing moves it. */
 export const crmStatus = async (
   store: MessageStore,

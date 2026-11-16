@@ -24,6 +24,7 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
     {%- when "meetings" %}Встречи
     {%- when "projects" %}Проекты в движении
     {%- when "mail" %}Новая почта
+    {%- when "crm" %}CRM
   {%- endcase %}</b></p>
   {%- for item in section.items -%}
     {%- capture due -%}
@@ -60,7 +61,7 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-          {%- when "mail" %}почта{% when "meeting" %}встреча{% when "task" %}задача
+          {%- when "mail" %}почта{% when "meeting" %}встреча{% when "task" %}задача{% when "crm" %}CRM
         {%- endcase -%}
         {%- assign sep = " · " -%}
       {%- endif -%}
@@ -105,7 +106,7 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
     {%- if forloop.first %}: {% else %}, {% endif -%}
     {%- case source.kind -%}
       {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-      {%- when "mail" %}почта{% when "meeting" %}встречи{% when "task" %}задачи
+      {%- when "mail" %}почта{% when "meeting" %}встречи{% when "task" %}задачи{% when "crm" %}CRM
     {%- endcase -%}
     {%- if source.accounts > 1 %} ({{ source.accounts }} {% if source.kind == "mail" %}{% case source.plural %}{% when "one" %}ящик{% when "few" %}ящика{% else %}ящиков{% endcase %}{% else %}{% case source.plural %}{% when "one" %}аккаунт{% when "few" %}аккаунта{% else %}аккаунтов{% endcase %}{% endif %}){% endif -%}
   {%- endfor -%}

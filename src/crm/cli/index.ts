@@ -38,7 +38,7 @@ import { type MessageStore, seenBy } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { openStageTasks } from "../stage-tasks.js"
-import { crmStatus, syncCrm } from "../sync.js"
+import { crmStatus, syncRecorded } from "../sync.js"
 import { shortened, viewerOf } from "../viewer.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
@@ -53,6 +53,7 @@ import {
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
+import { addCrmChangeCommands } from "./changes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
 import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
@@ -124,6 +125,7 @@ export interface CrmCommandOptions {
    * `source.list`/`get`, `user` mounts `users` list/show over `source.users`. None when absent.
    */
   live?: readonly CrmLiveRecord[]
+  activities?: boolean
   now?: () => number
 }
 
@@ -382,13 +384,14 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       const { signal } = environmentOf(command)
       await within(command, async (run) => {
         const source = run.source()
-        const report = await syncCrm(source, run.store, run.account, {
-          now: now(),
+        const started = now()
+        const report = await syncRecorded(source, run.store, run.account, {
+          now: started,
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { rescan: true } : {}),
         })
-        const stageTasks = await openStageTasks(run.store, run.account, now(), {
+        const stageTasks = await openStageTasks(run.store, run.account, started, {
           history: source.stageHistory !== undefined,
         })
         const failed = report.synced.filter((one) => one.error !== undefined)
@@ -956,6 +959,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ...(writes ? { writes } : {}),
     now,
   })
+
+  addCrmChangeCommands(program, { ...options, within, example, now, ownerOf, pathOf })
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
   const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(

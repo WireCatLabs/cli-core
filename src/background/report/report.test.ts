@@ -362,6 +362,14 @@ describe("an answer as a report", () => {
     expect(prepared?.subject).toBe("☀️ Сводка на пятницу, 6 ноября")
   })
 
+  it("keeps a command's store text as it is: a CRM title with an underscore neither empties nor cuts it", async () => {
+    const crm = [{ kind: "crm", items: [{ type: "fact", topic: "follow_up", detail: "order_42 website" }] }]
+    expect(await prepareReport(digest(crm), options)).toMatchObject({ invalid: true })
+    const kept = await prepareReport(digest(crm), { ...options, trusted: true })
+    expect(kept?.text).toContain("follow_up: order_42 website")
+    expect(kept?.run).toEqual({ language: "ru", leaks: 0 })
+  })
+
   it.each([
     ["sections[0].items[0].type", [{ kind: "today", items: [{ type: "joke", topic: "x" }] }]],
     ["sections[0].items[0].since", [{ kind: "today", items: [{ type: "reply", who: "a", topic: "b", action: "c" }] }]],
