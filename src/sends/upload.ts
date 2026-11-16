@@ -4,6 +4,7 @@ import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { StickerFile, Upload, UploadKind, UploadSource } from "../domain/attachments.js"
 import { type AppIdentity, ancestorValue, envName, readOnlyLockOf } from "../ports/app.js"
+import { WIRECAT_TOOLS } from "../ports/wirecat-tools.js"
 import { storePath, wirecatDirectory } from "../store/path.js"
 
 /** The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap. */
@@ -120,17 +121,25 @@ const CREDENTIAL_RUNS: readonly (readonly string[])[] = [
   ["AppData", "Roaming", "GitHub CLI"],
 ]
 
-/** Every WireCat app's folders hold its sessions and tokens; `max` must not send `tg`'s, nor the other way round. */
+/**
+ * Every WireCat app's folders hold its sessions and tokens; `max` must not send `tg`'s, nor the other way round. The
+ * tools come from `WIRECAT_TOOLS`, so a new tool is covered once it is listed there; the rest are apps no first
+ * screen names yet, the shared packages' own folders, and the name zoom-cli's folders had before.
+ */
 const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
-  { appName: "max-cli", prefix: "MAX" },
-  { appName: "tg-cli", prefix: "TG" },
-  { appName: "whatsapp-cli", prefix: "WA" },
-  { appName: "cli-memo", prefix: "MEMO" },
-  { appName: "drive-cli", prefix: "DRIVE" },
+  ...WIRECAT_TOOLS.map(({ appName, envPrefix }) => ({ appName, prefix: envPrefix })),
+  { appName: "amo-cli", prefix: "AMO" },
+  { appName: "beeline-cli", prefix: "BEELINE" },
   { appName: "zm", prefix: "ZM" },
   { appName: "cli-messaging", prefix: "MESSAGING" },
   { appName: "cli-common", prefix: "CLI_COMMON" },
 ]
+
+/** Kernel and device files: `/proc/self/environ` holds the process's tokens, and a device is no file to send. */
+const SYSTEM_ROOTS = ["/proc", "/sys", "/dev"]
+
+const systemPlace = (path: string, platform: NodeJS.Platform): boolean =>
+  platform !== "win32" && SYSTEM_ROOTS.some((root) => inside(path, root))
 
 /** Where `path` really is: its nearest existing ancestor's real path, as a write may create the rest under a symlink. */
 const realPathOf = (path: string): string => {
@@ -168,7 +177,10 @@ export const refuseLockedOutput = (path: string, app: AppIdentity, env: NodeJS.P
   )
 }
 
-/** Protect known credential/state paths without refusing ordinary hidden developer folders. */
+/**
+ * Protect known credential/state paths and the kernel's and devices' files, through any link, without refusing
+ * ordinary hidden developer folders.
+ */
 export const refusedPlace = (
   path: string,
   app: AppIdentity,
@@ -202,6 +214,7 @@ export const refusedPlace = (
   const same = (a: string, b: string) => fold(a) === fold(b)
   return [resolve(path), real].some(
     (candidate) =>
+      systemPlace(candidate, platform) ||
       named(candidate) ||
       own.some((dir) => inside(fold(candidate), fold(dir))) ||
       [store, `${store}-wal`, `${store}-shm`].some((file) => same(candidate, file)),
@@ -232,6 +245,10 @@ export const readUpload = async (
   }
   if (kind === "voice" && !VOICE.has(extension)) {
     throw new CliError("validation_error", `a voice message is Ogg Opus: .ogg, .oga or .opus — send ${path} as a file`)
+  }
+  // --allow-any-file is for the owner's own credential file; no one sends the kernel's view of this process.
+  if ([resolve(path), realPathOf(path)].some((candidate) => systemPlace(candidate, process.platform))) {
+    throw new CliError("validation_error", `cannot send ${path}: a file under /proc, /sys or /dev is never sent`)
   }
   if (!anyFile && refusedPlace(path, app, env)) {
     throw new CliError(

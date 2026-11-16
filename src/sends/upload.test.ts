@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { resolvePaths } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
+import { WIRECAT_TOOLS } from "../ports/wirecat-tools.js"
 import { readAttachments, readUpload, refusedPlace, uploadBlob, uploadBytes } from "./upload.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
@@ -149,6 +150,37 @@ describe("readUpload", () => {
       expect(refusedPlace(join(root, dir, "session"), app, others)).toBe(true)
     expect(refusedPlace(join(root, "notes", "session"), app, others)).toBe(false)
   })
+
+  it("**refuses the default folders of every listed WireCat tool**, zoom-cli's under its own name", () => {
+    const root = mkdtempSync(join(tmpdir(), "upload-home-"))
+    const home = { HOME: root, XDG_CONFIG_HOME: join(root, "config"), XDG_STATE_HOME: join(root, "state") }
+    const tools = WIRECAT_TOOLS.map(({ appName, envPrefix }) => ({ appName, prefix: envPrefix }))
+    for (const one of tools) {
+      const folders = resolvePaths({ ...one, env: home, platform: "linux" })
+      expect(refusedPlace(join(folders.config, "config.json"), app, home, "linux"), one.appName).toBe(true)
+    }
+    expect(tools.map((one) => one.appName)).toEqual(expect.arrayContaining(["zoom-cli", "notion-cli"]))
+    expect(refusedPlace(join(root, "notes", "plan.md"), app, home, "linux")).toBe(false)
+  })
+
+  it.runIf(process.platform === "linux")(
+    "**refuses /proc, /sys and /dev**, through a link too, even with anyFile, and anything but a regular file",
+    async () => {
+      const { root, env } = setUp()
+      for (const path of ["/proc/self/environ", "/sys/kernel/hostname", "/dev/null"]) {
+        expect(refusedPlace(path, app, env), path).toBe(true)
+        await expect(readUpload("file", path, { app, env, anyFile: true }), path).rejects.toThrow(
+          /\/proc, \/sys or \/dev/u,
+        )
+      }
+      const link = join(root, "environ.txt")
+      symlinkSync("/proc/self/environ", link)
+      expect(refusedPlace(link, app, env)).toBe(true)
+      await expect(readUpload("file", link, { app, env, anyFile: true })).rejects.toThrow(/never sent/u)
+      mkdirSync(join(root, "folder"))
+      await expect(readUpload("file", join(root, "folder"), { app, env })).rejects.toThrow(/it is a folder/u)
+    },
+  )
 
   it("**refuses the shared WireCat folder**, where the store's backups and the models are", () => {
     const { root, env } = setUp()
