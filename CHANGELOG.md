@@ -5,6 +5,39 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.681.0 — 16.11.2026
+
+### Added
+
+- **`crmViewerOf` is exported from `@wirecat/cli-core/crm`**, with its `CrmViewing` type, so a tool that reads a CRM
+  copy outside the CRM commands, as memo's agenda, applies the same offline rule: each profile sees only its own part.
+- **A CLI's skill can keep a short SKILL.md and the rest in files beside it, and every route delivers them.** With
+  cli-base 0.106.0, `skill install`, the refresh of an old installed copy and Hermes's copy write the whole skill
+  folder, `skill show <name>` prints a part by its file name (`tg skill show search`), and the MCP servers (the
+  personal, the bot and the app server) serve each part at `<command>://skill/<path>` beside `<command>://skill`.
+  An agent carries SKILL.md in every turn after it opens it, the parts only when it reads one.
+- **`validateSkill` checks the files a skill links, and can limit its size.** Each relative Markdown link's target is
+  checked like SKILL.md (its links and command paths), with problems prefixed by its file name; `maxBytes` fails a
+  larger SKILL.md.
+
+### Fixed
+
+- **One mobile number a CRM contact, a WhatsApp account and a call each have now joins them into one person**, with
+  no proposal for the owner. Before, three holders of a number counted as three people on a shared line, so
+  the scan proposed each pair at 0.4 and an agent's `people.agentLink` answered `weak: "shared"`. Holders that each come
+  from a different source are one person's number; two holders from one source, such as two contacts of one CRM,
+  still make it a shared line.
+- **A proposal still open for a pair no longer stops the scan joining it** when the pair now meets a join rule
+  (the join settles the proposal). The first scan after upgrading reads every number again, so pairs left as
+  proposals before join now.
+
+### Security
+
+- **`passageForRun(command, result, format)`** (`@wirecat/cli-core/cli`) gives a host the `meetings passage` answer
+  as it should print it. In a scheduled agent's run, the text and Markdown are formatted again from the cues with the
+  run's untrusted marks around each speaker name and line, as JSON already had them. Outside such a run, and for
+  JSON, the answer is unchanged. A host prints its `content` from the passage command's `output`.
+
 ## 0.680.0 — 16.11.2026
 
 ### Added
