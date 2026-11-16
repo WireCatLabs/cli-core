@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.675.0 — 16.11.2026
+
+### Fixed
+
+- **`--from` on a search names the sender, not a date.** `search all`, `search messages` and `search conversations`
+  answer `--from`, `--sender` and `--author` with `from:<sender>` in the query (in `--filter` for conversations),
+  as `from:me` finds what the owner wrote. 0.672.0 answered `--from` with where the dates go.
+- **`search conversations` no longer spends seconds working out which chats are behind.** The check behind the
+  "changed since the last build" hint read every chunk of the store once per built chat, because SQLite chose the
+  wrong table to start from. It now reads only the chat's own conversations. On a store with about 950,000 messages a
+  warm search went from about 12 s to about 3 s. `conversations status` and `conversations embed` use the same query
+  and are faster too.
+
 ## 0.674.0 — 16.11.2026
 
 ### Added
