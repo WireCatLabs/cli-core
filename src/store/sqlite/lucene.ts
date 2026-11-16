@@ -406,7 +406,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     ? ""
     : rankMatch
       ? "f.rank,"
-      : `${exactTier ? "exact DESC," : ""}${ranking ? `f.rank IS NULL, ${placeTier}f.rank,` : placeTier}`
+      : `${exactTier ? "m.id IN (SELECT id FROM x) DESC," : ""}${ranking ? `f.rank IS NULL, ${placeTier}f.rank,` : placeTier}`
   const order = `${tiers}m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC`
   const leaves = [...fragments.values()]
   const exact = leaves.filter(({ test }) => test === undefined)
@@ -607,7 +607,8 @@ const runCompiled = async (
     return grouped(by, where.sql, [...ranked.params, ...where.params], from, withRanking)
   // Exact forms come first, so a page they fill needs neither the stems nor their bm25: for a word in a few
   // percent of messages that was most of the cost (PERF-9). The exact tier is ranked as exact search ranks it.
-  if (stemmed && exactTier && driver && !execution.newest && leaves.every(({ test }) => !test)) {
+  const { newest, perChat } = execution
+  if (stemmed && exactTier && driver && !newest && !perChat && leaves.every(({ test }) => !test)) {
     const exactRows = database
       .prepare(
         `SELECT m.id AS id, w.rank AS relevance ${baseFrom.replace(rowsFrom, `FROM ${corpus.words} w CROSS JOIN ${corpus.rows} m`)} WHERE ${corpus.words} MATCH ? AND w.rank MATCH 'bm25(1.0, 0.0)' AND m.id=w.rowid AND ${filtered.sql} ORDER BY w.rank, m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC LIMIT ?`,
@@ -642,7 +643,9 @@ const runCompiled = async (
   if (leaves.every(({ test }) => !test)) {
     const rows = database
       .prepare(
-        `${withRanking}SELECT m.id AS id, ${relevance} AS relevance${exactColumn} ${rankedFrom} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`,
+        perChat === undefined
+          ? `${withRanking}SELECT m.id AS id, ${relevance} AS relevance${exactColumn} ${rankedFrom} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`
+          : `${withRanking}SELECT id, relevance${exactColumn ? ", exact" : ""} FROM (SELECT m.id AS id, ${relevance} AS relevance${exactColumn}, ROW_NUMBER() OVER (PARTITION BY m.chat_id ORDER BY ${order}) AS in_chat, ROW_NUMBER() OVER (ORDER BY ${order}) AS place ${rankedFrom} WHERE ${where.sql}) WHERE in_chat <= ${perChat} ORDER BY place LIMIT ?`,
       )
       .all(...ranked.params, ...where.params, execution.limit + 1)
     await new Promise<void>((resolve) => setImmediate(resolve))
@@ -658,7 +661,7 @@ const runCompiled = async (
   }
   const candidates = database
     .prepare(
-      `${withRanking}SELECT m.id AS id, ${relevance} AS relevance${exactColumn}, length(cast(m.text AS BLOB)) AS bytes ${rankedFrom} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`,
+      `${withRanking}SELECT m.id AS id, m.chat_id AS chat, ${relevance} AS relevance${exactColumn}, length(cast(m.text AS BLOB)) AS bytes ${rankedFrom} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`,
     )
     .all(...ranked.params, ...where.params, QUERY_LIMITS.candidates + 1)
   await new Promise<void>((resolve) => setImmediate(resolve))
@@ -673,6 +676,9 @@ const runCompiled = async (
     candidates.map((row) => [Number(row.id), row.relevance == null ? null : -Number(row.relevance)]),
   )
   const exactness = new Map(candidates.map((row) => [Number(row.id), Number(row.exact) === 1]))
+  const [chatOf, inChat] = [new Map(candidates.map((row) => [Number(row.id), Number(row.chat)])), new Map()]
+  const roomInChat = (chat: number) =>
+    (inChat.set(chat, (inChat.get(chat) ?? 0) + 1).get(chat) ?? 0) <= (by || !perChat ? Infinity : perChat)
   for (let offset = 0; offset < candidates.length; offset += 500) {
     if (offset > 0) await new Promise<void>((resolve) => setImmediate(resolve))
     check()
@@ -690,7 +696,10 @@ const runCompiled = async (
       check()
       const row = byPk.get(id) as Record<string, unknown>
       const attachments: unknown = JSON.parse(String(row.attachment_kinds))
-      if (evaluate(execution.root, row, String(row.body), Array.isArray(attachments) ? attachments.map(String) : []))
+      if (
+        evaluate(execution.root, row, String(row.body), Array.isArray(attachments) ? attachments.map(String) : []) &&
+        roomInChat(chatOf.get(id) as number)
+      )
         found.push(id)
       if (!by && found.length > execution.limit) break
     }

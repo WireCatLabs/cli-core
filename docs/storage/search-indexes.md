@@ -282,7 +282,12 @@ current chunk with no deleted message still uses the same text (NEED-393: a dele
 Meaning misses a rare exact word — a name, a reference number, «empadronamiento» — and words miss a
 paraphrase. So the same command also runs `messages search` over the query's plain words, joined by
 `OR` (nothing in the original question is read as a filter), and maps matching messages to their conversations. Under the current strict default these are whole-word matches; automatic prefix/typo/substring discovery is not added to the word branch. The two lists merge by **reciprocal rank fusion**: a conversation scores
-1 / (60 + its rank) in each list it is in, and the sum orders the result. At least 50 semantic candidates (or the requested limit when larger) and the conversations of up to 200 word-matched messages take part.
+1 / (60 + its rank) in each list it is in, and the sum orders the result. Over several chats each chat has a share,
+so a large group cannot fill both lists with near matches. The meaning half reads the 500 nearest conversations, keeps
+each chat's best 20 (or the requested limit when larger) and ranks them by how far each leads its chat's 20th best: a
+large group always holds some text near a question, and a small chat's clear best must not lose to that. The word
+half reads at most 20 messages per chat, 200 in all. In one chat the meaning half reads at least 50 candidates and
+ranks them by cosine.
 
 Each result says how it was found:
 

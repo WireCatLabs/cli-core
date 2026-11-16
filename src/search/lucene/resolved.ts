@@ -22,6 +22,8 @@ export interface QueryExecution {
   chat?: { account: AccountKey; chatId: string }
   senders?: { provider: string; id: string }[]
   limit: number
+  /** At most this many hits from one chat, so a large chat cannot fill the page; counts and groups ignore it. */
+  perChat?: number
   newest?: boolean
   signal?: AbortSignal
   timeLimitMs?: number
