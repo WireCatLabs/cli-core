@@ -7,7 +7,7 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
-import { defineSetup, type SetupCheckInput } from "../setup/define.js"
+import { defineSetup, type SetupCheckInput, type SetupKeep } from "../setup/define.js"
 import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
 import { ProfileTokenStore } from "./profile-token.js"
@@ -54,7 +54,15 @@ const {
   ...flow
 } = JSON.parse(readFileSync(new URL("../../test/fixtures/setup-v1/pbx.json", import.meta.url), "utf8"))
 
-const harness = ({ ownerOnly, agent = false }: { ownerOnly?: { settings: string[] }; agent?: boolean } = {}) => {
+const harness = ({
+  ownerOnly,
+  agent = false,
+  keep,
+}: {
+  ownerOnly?: { settings: string[] }
+  agent?: boolean
+  keep?: SetupKeep
+} = {}) => {
   const checks: SetupCheckInput[] = []
   const setup = defineSetup({
     ...flow,
@@ -66,7 +74,7 @@ const harness = ({ ownerOnly, agent = false }: { ownerOnly?: { settings: string[
       // A real check falls back to the kept password when the answers bring none.
       if ((input.secrets.db ?? PASSWORD) !== PASSWORD)
         throw new CliError("authentication_error", "the database refused the password")
-      return { calls_last_hour: 3 }
+      return { calls_last_hour: 3, ...(keep ? { keep } : {}) }
     },
   })
   const root = mkdtempSync(join(tmpdir(), "setup-"))
@@ -98,7 +106,7 @@ const harness = ({ ownerOnly, agent = false }: { ownerOnly?: { settings: string[
   const configPath = join(env.PBX_CONFIG_DIR, "config.json")
   const config = () => (existsSync(configPath) ? readFileSync(configPath, "utf8") : "")
   const kept = () => new ProfileTokenStore({ app, env, keyring }).readSecret("office", "db")?.secret
-  return { call, checks, kept, config }
+  return { call, checks, kept, config, env }
 }
 
 const MYSQL = {
@@ -166,6 +174,21 @@ describe("setup", () => {
     const described = await call(["office", "setup", "show", "--json"])
     expect(described.item.values).toMatchObject({ db_host: "pbx.office.local", db: { set: true } })
     expect(described.out).not.toContain(PASSWORD)
+  })
+
+  it("**a check may say what to keep** in place of a secret as typed, and which account the profile is", async () => {
+    const wrapped = JSON.stringify({ host: "pbx.office.local", password: PASSWORD })
+    const { call, kept, env } = harness({ keep: { secrets: { db: wrapped }, account: "pbx.office.local:7" } })
+    const right = await call(["office", "setup", "run", "apply", "--json", "--answer-stdin"], {
+      stdin: `${JSON.stringify(MYSQL)}\n`,
+    })
+    expect(right.code).toBe(0)
+    expect(kept()).toBe(wrapped)
+    expect(right.item).toMatchObject({ outcome: "ok", secrets: ["db"], calls_last_hour: 3 })
+    expect(right.item.keep).toBeUndefined()
+    expect(right.out).not.toContain(PASSWORD)
+    const remembered = readFileSync(join(env.PBX_STATE_DIR, "accounts", "office.json"), "utf8")
+    expect(JSON.parse(remembered)).toEqual({ account: "pbx.office.local:7" })
   })
 
   it("**the terminal asks the same questions**, re-asks a wrong answer, and checks before it saves", async () => {

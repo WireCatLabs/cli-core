@@ -76,6 +76,12 @@ After the check succeeds, cli-core writes each setting with `config set`'s own p
 profile's keyring entry: the secret named `token` is the profile's token (what `session start` keeps and
 `ProfileTokenStore.need` reads); any other name is a named secret beside it (`readSecret(profile, name)`).
 
+A CLI whose `session start` keeps more than the typed secret returns `keep` from the check: `keep.secrets` gives the
+value kept for a secret the answers gave (amo keeps the account address and its user beside the token), and
+`keep.account` the account the profile is, which `session start` would remember (the profile's name when left out).
+`keep` is taken out of the result and never printed. Keeping a secret the answers did not give is a bug in the CLI,
+and nothing is written.
+
 Only answers on steps the path visits, on inputs shown there, are checked and saved. An answer on a branch the owner
 left is dropped and listed in `dropped`.
 
