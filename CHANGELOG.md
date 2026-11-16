@@ -5,6 +5,52 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.687.0 — 16.11.2026
+
+### Added
+
+- **CRM client files in the store (store version 68).** `crm_files` keeps each downloaded file of a deal, lead,
+  contact or company with its owner record, the record's assignee at download, the local path and the extracted
+  text, in its own word index `crm_file_words`; never a download link. `store.crmFiles` saves, lists and finds them,
+  a limited profile only those of records assigned to its user: a deal's or lead's as the copy assigns it now, so a
+  reassigned deal's files go with it. `store rebuild`, `store recover` and the
+  integrity check know the new index; an account's purge removes its rows.
+- **`CrmSource.files(owner)`** (`@wirecat/cli-core/crm`): one record's files read live with the record's assignee,
+  each with an `open()` that keeps the tokened link inside the adapter; `crmFileId` and `parseCrmFileId` for the opaque
+  file id.
+- **`withoutFileLinks(body)`** replaces every file link in a CRM answer with `[link removed]`, for `api call`: the
+  download keys (every `…Machine`, `DOWNLOAD_URL`, `publicUrl`, `CALL_RECORD_URL` and the like, amoCRM's
+  `_links.download`), a webhook, `auth`, `access_token`, `api_token` and `X-Amz-Signature` anywhere, and a portal
+  path with `token`. `crmValuesOf` applies it to every custom value, so a file field's
+  link reaches neither the store nor an answer.
+- **`fakeCrmSource({ files })`** and `FAKE_FILE_TOKEN` in `@wirecat/cli-core/crm/testing`.
+
+### Changed — may break callers
+
+- **The daily limit on other people's records covers deals and leads.** `foreignContacts(...).spend` takes any CRM
+  kind and a record with only `externalId` and `assignee`; a deal or lead is the sign-in's own when assigned to its
+  user. The refusal says "records that are not yours" instead of "contacts and companies".
+- **`account remove --delete-data` lists and deletes the CRM files the CLI downloaded** under its state folder
+  (`store.crmFiles.savedPaths`), in `--dry-run` and the confirmation too; a copy saved elsewhere stays.
+
+### Fixed
+
+- **A document the sign-in may not read (403) is skipped as a gone one (404) is**, listed among the skipped files with
+  the provider's reason. Before, it stayed pending with its error on every sync: the pass never completed, the change
+  cursor did not move, and later changes were not read.
+- **A documents sync takes the start token, each root's own metadata in a full walk and each page of changes from the
+  request budget**, as it does a listing. Before, they were free, so under the MCP's 45 s deadline a provider with
+  slow reads ended the first run at the deadline itself, with no time to answer. A root's metadata is kept on the walk, so a run stopped before the
+  root's listing does not read it again.
+- **`documentSourceContract`'s fault cases follow**: the 403 case requires the pass to complete and the next pass to
+  run, and the deadline case requires each run to leave the budget's answer reserve.
+- **`search conversations` across several chats gives each chat a share**, so a large group no longer fills the
+  results with near matches and hides a small chat's clear answer. The meaning half reads the 500 nearest
+  conversations and ranks each chat's best 20 by how far they lead that chat's 20th best; the word half reads at most
+  20 messages per chat. On a test store of 10 chats (4 large groups) with 40 questions, a key message reached the top
+  20 for 19 questions instead of 10, and the top 5 for 11 instead of 8, at about 0.7 s more per query. One chat
+  (`--chat`) is searched as before. `QueryExecution` takes `perChat`, the most hits a page takes from one chat.
+
 ## 0.686.0 — 16.11.2026
 
 ### Added
