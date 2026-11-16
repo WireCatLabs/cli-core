@@ -4,11 +4,11 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { allHitItem } from "../cli/messenger/search-answers.js"
+import { allAnswer, allHitItem } from "../cli/messenger/search-answers.js"
 import type { SourceFile } from "../documents.js"
 import { hit as hitEntity } from "../entities/hit.js"
-import { type MeetingSave, READ_BUDGET_EXCEEDED } from "../meetings/index.js"
-import { sampleMeeting } from "../meetings/testing/index.js"
+import { type MeetingSave, pull, READ_BUDGET_EXCEEDED } from "../meetings/index.js"
+import { fakeMeetingSource, sampleMeeting } from "../meetings/testing/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { documentIngestion } from "./documents/ingestion.js"
 import { refreshMeetingIndex } from "./meeting-hit-search.js"
@@ -100,6 +100,22 @@ const messages = (...texts: string[]): SearchFound => ({
 })
 
 describe("meetings in search all", () => {
+  it("finds the words of a transcript a meetings sync saved, with no account left to index", async () => {
+    const { store } = await fixture()
+    const accountId = await store.accounts.saveAccount(alice, { name: "Invented" })
+    const source = fakeMeetingSource({
+      provider: "zoom",
+      async transcript() {
+        return [{ startMs: 0, endMs: 1000, speaker: "Alice Example", text: "the needle is in the budget" }]
+      },
+    })
+    await pull(source, store.meetings, { accountId, since: "1970-01-01T00:00:00.000Z", now: 4000 })
+    const found = await searchAll(store, caller, meetingsOnly())
+    expect(texts(meetingHits(found.items)).join(" ")).toContain("needle is in the budget")
+    expect(found.meetings).toEqual([expect.objectContaining({ account: alice.account, indexing: "ready" })])
+    expect(allAnswer("search all", found, { limit: 20 }).missing ?? []).toEqual([])
+  })
+
   it("reads every meeting account, names each one it read and ranks the meetings with the other sources", async () => {
     const { store, save } = await fixture()
     await save(alice, "a", ["needle from alice"], 2000)

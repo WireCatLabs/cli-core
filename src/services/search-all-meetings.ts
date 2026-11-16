@@ -48,7 +48,7 @@ export interface MeetingSearchItem {
 export interface MeetingAccountCoverage {
   provider: string
   account: string
-  /** `pending`: passages saved since the index was last built are not found yet; `search meetings` builds it. */
+  /** `pending`: passages saved since the index was last built are not found yet; a sync builds it. */
   indexing: "ready" | "pending"
   hasMore: boolean
 }

@@ -192,7 +192,10 @@ invalid bounds fail before provider discovery. `meetings list` pages by `--limit
 `@wirecat/cli-core/cli`; a test outside cli-core's run passes `flagPaging` from `/meetings/testing`). `--json [fields]` and `--jsonl` are the host program's own. A transcript's
 `language` is set when it is written (`transcriptLanguage`, or the speech model's own); `meetings repair`
 previews it for stored transcripts that have none and `--yes` stores it, through the store's optional
-`fillTranscriptLanguages`. Groups have no default action. The host owns rendering and exit codes.
+`fillTranscriptLanguages`. A sync and an import that saved meetings bring the account's search index up to date
+before they answer (`refreshMeetingIndex`, through the store's optional `indexSearch`), so `search all`, which only
+reads the index, finds their words; a failure is a warning, and a sync its budget stopped leaves it to the next run.
+Groups have no default action. The host owns rendering and exit codes.
 
 [`src/mcp/index.ts`](../../src/meetings/mcp/index.ts) exports JSON schemas, read annotations and a dispatcher
 for the meeting read tools. The server owns registration and access policy. Arguments use snake case

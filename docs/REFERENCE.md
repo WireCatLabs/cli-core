@@ -228,9 +228,11 @@ words; a question's title must hold every word, and `exact` a whole word. A quer
 `project:` or `tag:` matches no title, since a title cannot answer it. One meeting gives at most
 `MOST_HITS_PER_MEETING` (3) hits; inside one account they come best match first, then newest meeting first.
 
-Search all only reads: it never builds a meeting index. `meetings` in the answer has one entry per meeting account
-read, with `indexing: "ready" | "pending"` and `hasMore`. `pending` means passages saved since the index was last built
-are not found yet; `search meetings` builds it. The CLI answer names a pending account in `missing`.
+Search all only reads: it never builds a meeting index. `meetings sync` and `meetings import` (`pull`, `importFiles`)
+build it for what they saved, through the store's `indexSearch`, and `search meetings` builds it before it reads.
+`meetings` in the answer has one entry per meeting account read, with `indexing: "ready" | "pending"` and `hasMore`.
+`pending` means passages saved since the index was last built are not found yet, as after a sync its budget stopped;
+the CLI answer names a pending account in `missing`.
 
 A **message locator** names one message across every provider and account:
 `msg:telegram/<account>/<chat>/<message>`. A message id alone does not — Telegram numbers messages

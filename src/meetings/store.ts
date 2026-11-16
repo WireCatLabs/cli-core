@@ -14,6 +14,7 @@ import type {
   Transcript,
   TranscriptRow,
 } from "./model.js"
+import type { MeetingSearchIndexStore } from "./search-store.js"
 
 export type NewRecord<T> = Omit<T, "id" | "createdAt" | "updatedAt">
 export interface IdentityInput {
@@ -205,6 +206,8 @@ export interface MeetingStore {
   setCursor(accountId: number, value: string, now: number): Promise<void>
   /** Links the callers a sync saved, by `provider` and identity external id, to the people with their number. */
   linkCallers?(provider: string, externalIds: readonly string[]): Promise<void>
+  /** Brings the account's search index up to what is saved; a sync and an import run it so search finds their text. */
+  indexSearch?: MeetingSearchIndexStore["indexSearch"]
   /** Detects the language of the account's transcripts that have none; stores it only with `apply`. */
   fillTranscriptLanguages?(input: { accountId: number; apply: boolean; now: number }): Promise<TranscriptLanguageFill>
 }

@@ -415,6 +415,7 @@ export type {
   MeetingSearchPage,
   MeetingSearchStore,
 } from "./search-store.js"
+export { refreshMeetingIndex } from "./search-store.js"
 export { validateMeetingHitSearch } from "./search-validation.js"
 export {
   type MeetingHistoryEntry,
