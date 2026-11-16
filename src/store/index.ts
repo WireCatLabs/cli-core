@@ -250,6 +250,8 @@ export {
   type CrmSkipped,
   crmIdentityId,
 } from "./sqlite/crm.js"
+export type { ActivityFilter, ActivityTarget, ListedActivity } from "./sqlite/crm-activities.js"
+export { type ChangeFilter, CRM_CHANGES, type CrmChange, type CrmChangeKind } from "./sqlite/crm-changes.js"
 export {
   COMPANY_TYPE_MEANINGS,
   type CompanyTypeMeaning,

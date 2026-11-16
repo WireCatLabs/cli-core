@@ -53,6 +53,8 @@ import {
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
+import { addCrmActivityCommands } from "./activities.js"
+import { addCrmChangeCommands } from "./changes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
 import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
@@ -124,6 +126,8 @@ export interface CrmCommandOptions {
    * `source.list`/`get`, `user` mounts `users` list/show over `source.users`. None when absent.
    */
   live?: readonly CrmLiveRecord[]
+  /** The CLI copies the CRM's activities (its `activities` setting): mounts `activities list`. */
+  activities?: boolean
   now?: () => number
 }
 
@@ -956,6 +960,9 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ...(writes ? { writes } : {}),
     now,
   })
+
+  if (options.activities) addCrmActivityCommands(program, { within, example, now, ownerOf, pathOf })
+  addCrmChangeCommands(program, { within, example, open: options.open, now, ownerOf, pathOf })
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
   const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(

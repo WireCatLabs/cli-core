@@ -8,6 +8,7 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
+import { parseReport } from "../../background/report/schema.js"
 import { answerEntitySchema } from "../../cli/answer-entity.js"
 import { commandsCommand } from "../../cli/commands-command.js"
 import { provide } from "../../cli/context.js"
@@ -1132,5 +1133,128 @@ describe("CRM activities", () => {
     await cli("sync")
     const found = await cli("search", "all", "warehouse", "lease", "--only", "crm")
     expect(found.items).toEqual([expect.objectContaining({ kind: "deal", title: "Example deal d1" })])
+  })
+})
+
+describe("activities list, changes list and the CRM digest", () => {
+  const HOUR = 3_600_000
+  const DAY = 24 * HOUR
+  const activity = (externalId: string, on: CrmActivity["on"], fields: Partial<CrmActivity> = {}): CrmActivity => ({
+    externalId,
+    kind: "task",
+    subject: `Example task ${externalId}`,
+    body: null,
+    dueAt: null,
+    done: false,
+    assignee: "7",
+    createdAt: Date.now() - 2 * HOUR,
+    updatedAt: Date.now() - HOUR,
+    on,
+    ...fields,
+  })
+  const portal = async (listed: CrmActivity[], on = true) => {
+    const harness = await setup({}, { activities: true })
+    Object.assign(harness.source, {
+      activities: async () => ({ items: listed, hasMore: false, cursor: String(Date.now()) }),
+    })
+    if (on) {
+      const database = await openCache(harness.path)
+      saveCrmSetting(database, crmSettingKey(PORTAL, "activities"), "on", Date.now())
+      database.close()
+    }
+    return harness
+  }
+  const external = (items: Record<string, unknown>[]) => items.map(({ external_id }) => external_id)
+
+  it("activities list: open ones by due time, overdue, on a deal or a contact only, by owner; off says so", async () => {
+    const { cli } = await portal([
+      activity("t1", [{ kind: "deal", externalId: "d1" }], { dueAt: Date.now() - HOUR }),
+      activity("t2", [{ kind: "deal", externalId: "d1" }], { dueAt: Date.now() + DAY, assignee: "9" }),
+      activity("c1", [{ kind: "person", externalId: "p1" }], { kind: "call", done: true }),
+    ])
+    await cli("sync")
+    expect(external((await cli("activities", "list")).items)).toEqual(["t1", "t2"])
+    expect(external((await cli("activities", "list", "overdue:true")).items)).toEqual(["t1"])
+    expect(external((await cli("activities", "list", "owner:9")).items)).toEqual(["t2"])
+    const d1 = (await cli("deals", "list")).items.find(({ external_id }) => external_id === "d1") as {
+      ref: string
+      people: { ref: string }[]
+    }
+    expect(external((await cli("activities", "list", `deal:"${d1.ref}"`)).items)).toEqual(["t1", "t2"])
+    const done = await cli("activities", "list", "status:done", `person:"${d1.people[0]?.ref}"`)
+    expect(done.items).toEqual([
+      expect.objectContaining({
+        external_id: "c1",
+        on: [{ kind: "person", external_id: "p1", ref: d1.people[0]?.ref, title: "Example person p1" }],
+      }),
+    ])
+
+    const off = await portal([], false)
+    expect(await off.cli("activities", "list")).toMatchObject({ items: [], missing: [{ field: "activities" }] })
+    const unmounted = await setup()
+    await expect(unmounted.cli("activities", "list")).rejects.toThrow()
+  })
+
+  it("changes list: made, moved, won, lost, owner, activities and contacts, paged; --format report is a digest", async () => {
+    const { cli, printed, source } = await portal([
+      activity("t1", [{ kind: "deal", externalId: "d1" }], { dueAt: Date.now() - HOUR }),
+      activity("c1", [{ kind: "person", externalId: "p1" }], { kind: "call", done: true }),
+    ])
+    source.put("deal", exampleDeal("d2", { stage: "won", amount: "10", currency: "EUR" }))
+    source.put("deal", exampleDeal("d3", { stage: "lost", closedReason: "price", createdAt: Date.now() - 3 * DAY }))
+    source.put("person", examplePerson("p2", { createdAt: Date.now() - HOUR }))
+    source.put(
+      "deal",
+      exampleDeal("d1", {
+        title: "Example website",
+        organization: "c1",
+        people: [{ externalId: "p1", role: "contact" }],
+        assignee: "7",
+      }),
+    )
+    await cli("sync")
+    source.put(
+      "deal",
+      exampleDeal("d1", {
+        title: "Example website",
+        organization: "c1",
+        people: [{ externalId: "p1", role: "contact" }],
+        assignee: "9",
+        stage: "quote",
+      }),
+    )
+    await cli("sync")
+
+    // The fake CRM stamps its changes in January 2026.
+    const all = await cli("changes", "list", "at>=400d")
+    expect(new Set(all.items.map(({ change }) => change))).toEqual(
+      new Set(["created", "moved", "won", "lost", "owner_changed", "activity_added", "activity_done", "person_added"]),
+    )
+    expect(all.items.find(({ change }) => change === "moved")).toMatchObject({
+      title: "Example website",
+      from: "New",
+      to: "Quote sent",
+      exact: false,
+    })
+    expect(all.items.find(({ change }) => change === "lost")).toMatchObject({ reason: "price" })
+    expect(all.meta).toMatchObject({ timezone: expect.any(String), window: { since: expect.any(String) } })
+    const ats = all.items.map(({ at }) => at as string)
+    expect(ats).toEqual([...ats].sort().reverse())
+    expect(external((await cli("changes", "list", "at>=400d", "change:won")).items)).toEqual(["d2"])
+    const first = await cli("changes", "list", "at>=400d", "--limit", "2")
+    const second = await cli("changes", "list", "at>=400d", "--limit", "2", "--page", "2")
+    expect(first.page).toMatchObject({ has_more: true })
+    expect([...first.items, ...second.items]).toEqual(all.items.slice(0, 4))
+
+    const report = parseReport(await printed(["changes", "list", "at>=400d", "--format", "report"]))
+    if (!report || "invalid" in report) throw new Error(`not a report: ${JSON.stringify(report)}`)
+    const [section] = report.report.sections
+    expect(section?.kind).toBe("crm")
+    expect(section?.items[0]).toMatchObject({ type: "task", priority: "high", topic: "Example task t1" })
+    expect(section?.items[1]).toMatchObject({ type: "money", amount: { value: 10, currency: "EUR", direction: "in" } })
+    expect(section?.more).toBeGreaterThan(0)
+    await expect(printed(["changes", "list", "change:won", "--format", "report"])).rejects.toMatchObject({
+      code: "validation_error",
+    })
   })
 })

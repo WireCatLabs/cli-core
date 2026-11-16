@@ -11,6 +11,7 @@ import {
   exampleOrganization,
   examplePerson,
   type FakeCrmSource,
+  type FakeCrmSourceOptions,
   fakeCrmSource,
   LEAD_PIPELINE,
   SALES_PIPELINE,
@@ -21,6 +22,8 @@ import {
 export interface CrmSyncFixture {
   store: MessageStore
   account: AccountKey
+  /** Turns the account's `activities` setting on, as `config set` does; without it the activity case is left out. */
+  activitiesOn?: () => Promise<void>
 }
 
 /** Both ways a CRM may report deletions: the engine must handle each. */
@@ -42,12 +45,16 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
   CRM_TRAIT_COMBINATIONS.flatMap((traits) => {
     const label = traits.removedInChanges ? "(deletions in changes)" : "(deletions by id pass)"
     let now = Date.now()
-    const test = (name: string, check: (context: Context) => Promise<void>): ContractCase => ({
+    const test = (
+      name: string,
+      check: (context: Context) => Promise<void>,
+      fake: Omit<FakeCrmSourceOptions, "traits"> = {},
+    ): ContractCase => ({
       name: `${name} ${label}`,
       async run() {
         now = Date.now()
         const fixture = await make()
-        const source = fakeCrmSource({ traits })
+        const source = fakeCrmSource({ traits, ...fake })
         const sync = (options: CrmSyncOptions = {}) =>
           syncCrm(source, fixture.store, fixture.account, { now, ...options })
         const deals = async () =>
@@ -252,6 +259,75 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         const person = await store.people.personOf({ provider: "email", id: "person@example.com" })
         assert.equal(deal?.people[0]?.ref, `person:${person?.uid}`)
       }),
+      test(
+        "a stage entry on a deal the copy does not hold yet counts once the deal arrives",
+        async ({ source, sync, store, account }) => {
+          await sync()
+          source.put("deal", exampleDeal("d9", { stage: "won" }))
+          await sync()
+          const {
+            items: [deal],
+          } = await store.deals.list({ account })
+          assert.deepEqual(
+            (await store.deals.stages(deal?.ref as string)).map(({ to, exact }) => [to, exact]),
+            [["Quote sent", true]],
+          )
+        },
+        {
+          stageHistory: [
+            {
+              externalId: "h1",
+              kind: "deal",
+              item: "d9",
+              pipeline: SALES_PIPELINE.externalId,
+              stage: "quote",
+              at: Date.now() - DAY,
+            },
+          ],
+        },
+      ),
+      test(
+        "an activity on a contact the copy holds is kept, and one on a contact it does not hold is not",
+        async ({ source, sync, store, account, activitiesOn }) => {
+          if (!activitiesOn) return
+          await activitiesOn()
+          source.put("person", examplePerson("p1"))
+          await sync()
+          const { items } = await store.crm.activities(account, { limit: 10, offset: 0 })
+          assert.deepEqual(
+            items.map(({ externalId, on }) => [externalId, on.map((one) => one.kind)]),
+            [["a1", ["person"]]],
+          )
+        },
+        {
+          activities: [
+            {
+              externalId: "a1",
+              kind: "call",
+              subject: "Example call",
+              body: null,
+              dueAt: null,
+              done: false,
+              assignee: null,
+              createdAt: 1,
+              updatedAt: Date.now(),
+              on: [{ kind: "person", externalId: "p1" }],
+            },
+            {
+              externalId: "a2",
+              kind: "call",
+              subject: "Example call elsewhere",
+              body: null,
+              dueAt: null,
+              done: false,
+              assignee: null,
+              createdAt: 1,
+              updatedAt: Date.now(),
+              on: [{ kind: "person", externalId: "elsewhere" }],
+            },
+          ],
+        },
+      ),
       test("a cancelled run stops and keeps what it saved", async ({ source, sync, deals }) => {
         seeded(source, 4)
         const controller = new AbortController()

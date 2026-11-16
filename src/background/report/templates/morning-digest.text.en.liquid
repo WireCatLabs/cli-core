@@ -21,6 +21,7 @@ Plain text: the terminal, latest.txt, the desktop notice, the email's plain part
     {%- when "meetings" %}Meetings
     {%- when "projects" %}Projects in motion
     {%- when "mail" %}New mail
+    {%- when "crm" %}CRM
   {%- endcase -%}
   {%- for item in section.items -%}
     {%- capture due -%}
@@ -57,7 +58,7 @@ Plain text: the terminal, latest.txt, the desktop notice, the email's plain part
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-          {%- when "mail" %}mail{% when "meeting" %}meeting{% when "task" %}task
+          {%- when "mail" %}mail{% when "meeting" %}meeting{% when "task" %}task{% when "crm" %}CRM
         {%- endcase -%}
         {%- assign sep = " · " -%}
       {%- endif -%}
@@ -103,7 +104,7 @@ Plain text: the terminal, latest.txt, the desktop notice, the email's plain part
     {%- if forloop.first %}: {% else %}, {% endif -%}
     {%- case source.kind -%}
       {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-      {%- when "mail" %}mail{% when "meeting" %}meetings{% when "task" %}tasks
+      {%- when "mail" %}mail{% when "meeting" %}meetings{% when "task" %}tasks{% when "crm" %}CRM
     {%- endcase -%}
     {%- if source.accounts > 1 %} ({{ source.accounts }} {% if source.kind == "mail" %}{% if source.plural == "one" %}mailbox{% else %}mailboxes{% endif %}{% else %}{% if source.plural == "one" %}account{% else %}accounts{% endif %}{% endif %}){% endif -%}
   {%- endfor -%}

@@ -28,6 +28,7 @@ import {
   type ReportRun,
   type StoredTemplates,
 } from "./report/render.js"
+import { isReportAnswer } from "./report/schema.js"
 import type { ServerSystem } from "./system.js"
 import type { Timer } from "./timers.js"
 import type { When } from "./when.js"
@@ -556,7 +557,6 @@ export const runSchedule = async (
   const folder = join(file, "..")
   const runs = join(folder, "runs")
   mkdirSync(runs, { recursive: true, mode: 0o700 })
-  const agent = schedule.kind === "agent"
   const retries = untilUnlocked && !("every" in schedule.when)
   const firstAt = now().getTime()
   const first = await attemptSchedule(app, system, env, schedule, folder, {
@@ -609,11 +609,13 @@ export const runSchedule = async (
     }
   }
   const { exitCode, output } = last
-  const errors = agent ? output.replace(/\.md$/, ".log") : output
-  if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
+  // An agent's answer, or a command's that printed a report: either is rendered and delivered as a report.
+  const answered = output.endsWith(".md")
+  const errors = answered ? output.replace(/\.md$/, ".log") : output
+  if (answered && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
   const runEnv = { ...env, ...schedule.environment }
   const prepared =
-    agent && exitCode === 0
+    answered && exitCode === 0
       ? await prepareReport(readFileSync(output, "utf8"), {
           language: await ownerLanguage(runEnv).catch(() => "ru"),
           now: now().getTime(),
@@ -627,7 +629,7 @@ export const runSchedule = async (
     writeFileSync(latestText, `${prepared.terminal}\n`, { mode: 0o600 })
     if (prepared.document) writeFileSync(output.replace(/\.md$/, ".report.json"), prepared.document, { mode: 0o600 })
     last = rewriteRun(join(folder, "last.json"), { ...last, report: prepared.run })
-  } else if (agent && exitCode === 0) rmSync(latestText, { force: true })
+  } else if (answered && exitCode === 0) rmSync(latestText, { force: true })
 
   const stampOf = (file: string) => file.split(".")[0] ?? file
   const stamps = [...new Set(readdirSync(runs).map(stampOf))].sort()
@@ -638,7 +640,7 @@ export const runSchedule = async (
   const title = `${app.command} ${schedule.name}`
   // Routes the owner named for this run go whatever the schedule's notify says; none named, nobody is told.
   const mode = chosen === undefined ? notifyOf(schedule) : chosen.length ? "always" : "never"
-  if (agent && exitCode === 0) {
+  if (answered && exitCode === 0) {
     if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
       const first =
         readFileSync(output, "utf8")
@@ -683,7 +685,7 @@ export const runSchedule = async (
       exitCode === 0
         ? {
             title: `${title} · ${at}`,
-            file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${agent ? "md" : "txt"}` },
+            file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${answered ? "md" : "txt"}` },
             ...(prepared ? { rendered: prepared } : {}),
           }
         : notice
@@ -828,8 +830,8 @@ export const attemptSchedule = async (
     .replaceAll(":", "-")
     .replace(/\.\d+Z$/, "Z")
   const agent = schedule.kind === "agent"
-  const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
-  const errors = agent ? join(runs, `${stamp}.log`) : output
+  let output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
+  let errors = agent ? join(runs, `${stamp}.log`) : output
   const trace = childTrace()
   // An agent works in an empty folder of its own: one that could write where it runs never reaches its schedule file.
   const work = agent ? mkdtempSync(join(tmpdir(), "wirecat-agent-")) : folder
@@ -901,11 +903,18 @@ export const attemptSchedule = async (
     child.on("close", (code, killedBy) => {
       signal?.removeEventListener("abort", stop)
       if (kill) clearTimeout(kill)
-      const report = agent ? reportOf(Buffer.concat(out)) : { text: Buffer.concat([...out, ...err]) }
+      const printed = !agent && isReportAnswer(Buffer.concat(out).toString("utf8"))
+      if (printed) {
+        output = join(runs, `${stamp}.md`)
+        errors = join(runs, `${stamp}.log`)
+      }
+      const report = agent
+        ? reportOf(Buffer.concat(out))
+        : { text: printed ? Buffer.concat(out) : Buffer.concat([...out, ...err]) }
       costUsd = report.costUsd
       writeFileSync(output, report.text, { mode: 0o600 })
       // The error is the agent's answer, so the log keeps it beside its stderr.
-      if (agent)
+      if (agent || printed)
         writeFileSync(errors, Buffer.concat([...err, ...("failed" in report ? [report.text] : [])]), { mode: 0o600 })
       const exited = code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1)
       resolve("failed" in report && exited === 0 ? 1 : exited)

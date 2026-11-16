@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type {
+  CrmActivity,
   CrmField,
   CrmItem,
   CrmKind,
@@ -7,6 +8,7 @@ import type {
   CrmPerson,
   CrmPipeline,
   CrmRecords,
+  CrmStageEntry,
   CrmValue,
 } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
@@ -43,6 +45,10 @@ export interface FakeCrmSourceOptions {
   admin?: boolean
   /** The contacts and companies `ownClients()` counts as the sign-in's own; with it, the fake has `ownClients`. */
   ownClients?: Partial<Record<CrmLiveKind, readonly string[]>>
+  /** Gives the fake `stageHistory()` over these entries, the array read on each call so a test may add to it. */
+  stageHistory?: CrmStageEntry[]
+  /** Gives the fake `activities()` over these, the array read on each call, by `updatedAt` after `since`. */
+  activities?: CrmActivity[]
 }
 
 /** One write the fake CRM was sent, in order. */
@@ -325,6 +331,27 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       return answer as never
     },
     ...(options.admin === undefined ? {} : { isAdmin: async () => options.admin as boolean }),
+    ...(options.stageHistory === undefined
+      ? {}
+      : {
+          stageHistory: async (kind: DealKind, since: number, after?: string) => {
+            const all = options.stageHistory as CrmStageEntry[]
+            const from = after === undefined ? -1 : all.findIndex((one) => one.externalId === after)
+            const items = all.filter(
+              (one, at) => one.kind === kind && at > from && (after !== undefined || one.at >= since),
+            )
+            return { items, hasMore: false, cursor: items.at(-1)?.externalId ?? after ?? null }
+          },
+        }),
+    ...(options.activities === undefined
+      ? {}
+      : {
+          activities: async (since: number) => {
+            const items = (options.activities as CrmActivity[]).filter((one) => one.updatedAt > since)
+            const newest = Math.max(since, ...items.map((one) => one.updatedAt))
+            return { items, hasMore: false, cursor: String(newest) }
+          },
+        }),
     ...(options.ownClients === undefined
       ? {}
       : {

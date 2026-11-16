@@ -1503,6 +1503,31 @@ describe("delivery after a run", () => {
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).report).toEqual(last.report)
   })
 
+  it("renders a command's printed report as an agent's, and keeps a plain command's output as text", async () => {
+    const report = {
+      format: "wirecat.report/1",
+      kind: "morning-digest",
+      date: "2026-11-06",
+      sections: [{ kind: "crm", items: [{ type: "fact", topic: "Example deal", detail: "won", refs: [] }] }],
+    }
+    const { env, system, file, sends } = routed({
+      kind: "command",
+      argv: [process.execPath, "-e", `console.log(${JSON.stringify(JSON.stringify(report))})`],
+      to: ["email:work/me@example.com"],
+    })
+    // A command runs after the CLI's own entry; none here, so the argv is the whole command.
+    const last = await runSchedule(app, { ...system, entry: [] }, env, file, { ownerLanguage: async () => "en" })
+    expect(last.output).toMatch(/\.md$/)
+    expect(sends()[0]?.input).toMatch(/^<div /)
+    expect(sends()[0]?.input).toContain("Example deal")
+    expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toContain("🤝 CRM")
+
+    const plain = routed({ kind: "command", argv: [process.execPath, "-e", 'console.log("synced 3")'], to: [] })
+    const ran = await runSchedule(app, { ...plain.system, entry: [] }, plain.env, plain.file)
+    expect(ran.output).toMatch(/\.log$/)
+    expect(existsSync(join(plain.file, "..", "latest.md"))).toBe(false)
+  })
+
   it("mails a report as plain text when the installed mail refuses --html, and records the fallback", async () => {
     const report = {
       format: "wirecat.report/1",

@@ -2,6 +2,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { openCache } from "../../store/open.js"
+import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
   crmSourceContract,
@@ -23,9 +25,16 @@ afterEach(async () => {
 
 describe("sync engine over a store", () => {
   for (const c of crmSyncContract(async () => {
-    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-sync-")), "store.db") })
+    const path = join(mkdtempSync(join(tmpdir(), "crm-sync-")), "store.db")
+    const store = await openStore({ path })
     stores.push(store)
-    return { store, account: { provider: "example-crm", account: "portal" } }
+    const account = { provider: "example-crm", account: "portal" }
+    const activitiesOn = async () => {
+      const database = await openCache(path)
+      saveCrmSetting(database, crmSettingKey(account, "activities"), "on", Date.now())
+      database.close()
+    }
+    return { store, account, activitiesOn }
   }))
     it(c.name, c.run)
 })

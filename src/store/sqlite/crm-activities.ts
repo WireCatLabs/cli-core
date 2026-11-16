@@ -4,7 +4,7 @@ import { recordFingerprint } from "../../domain/records.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
+import { crmAccountPrefix, crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
@@ -49,6 +49,47 @@ export interface StoredActivity {
   assignee: string | null
   createdAt: number
   updatedAt: number
+}
+
+const activityOf = (externalId: string, fields: Record<string, unknown>): StoredActivity => ({
+  externalId,
+  kind: fields.kind as CrmActivityKind,
+  subject: String(fields.subject ?? ""),
+  body: (fields.body as string | null) ?? null,
+  dueAt: (fields.due_at as number | null) ?? null,
+  done: fields.done === true,
+  assignee: (fields.assignee as string | null) ?? null,
+  createdAt: Number(fields.created_at),
+  updatedAt: Number(fields.updated_at),
+})
+
+/** What `activities list` narrows by; every bound is inclusive epoch ms. */
+export interface ActivityFilter {
+  status?: "open" | "done"
+  due?: { since?: number; until?: number }
+  /** Open and due before this moment. */
+  overdueAt?: number
+  kinds?: readonly CrmActivityKind[]
+  /** On this deal, lead, contact or company, by the store's reference (`deal:12`, `person:4`, `organization:3`). */
+  on?: string
+  /** The identity `<account>/user/<id>` it is assigned to; `null` is none. */
+  owner?: string | null
+  /** 1–500. */
+  limit: number
+  offset: number
+}
+
+/** One row the activity is on, with the store's reference and title when the copy holds it. */
+export interface ActivityTarget {
+  kind: CrmKind
+  externalId: string
+  ref: string | null
+  title: string | null
+}
+
+export interface ListedActivity extends StoredActivity {
+  doneAt: number | null
+  on: ActivityTarget[]
 }
 
 /** The subjects and texts of the activities on each deal or lead of a kind, by `<account id>\u0000<external id>`. */
@@ -175,21 +216,141 @@ export const crmActivitiesOver = (context: StoreContext) => {
           "json_extract(r.fields, '$.updated_at') DESC LIMIT ?",
       )
       .all(accountId, ACTIVITY_RECORD, kind, externalId, limit)
-      .map((row) => {
-        const fields = JSON.parse(String(row.fields)) as Record<string, unknown>
-        return {
-          externalId: String(row.external_id),
-          kind: fields.kind as CrmActivityKind,
-          subject: String(fields.subject ?? ""),
-          body: (fields.body as string | null) ?? null,
-          dueAt: (fields.due_at as number | null) ?? null,
-          done: fields.done === true,
-          assignee: (fields.assignee as string | null) ?? null,
-          createdAt: Number(fields.created_at),
-          updatedAt: Number(fields.updated_at),
-        }
-      })
+      .map((row) => activityOf(String(row.external_id), JSON.parse(String(row.fields)) as Record<string, unknown>))
   }
 
-  return { save, of }
+  /** The CRM ids of the activity targets a store reference names in this account, by kind. */
+  const targetOf = (key: AccountKey, accountId: number, ref: string): { kind: CrmKind; ids: string } => {
+    const [type = "", id = ""] = ref.split(":")
+    const one = (sql: string, ...params: (string | number)[]) =>
+      JSON.stringify(
+        database
+          .prepare(sql)
+          .all(...params)
+          .map((row) => String(row.id)),
+      )
+    if (type === "deal" || type === "lead")
+      return {
+        kind: type,
+        ids: one(
+          `SELECT external_id AS id FROM ${TABLES[type]} WHERE account_id = ? AND id = ?`,
+          accountId,
+          Number(id),
+        ),
+      }
+    if (type === "organization")
+      return {
+        kind: type,
+        ids: one(
+          "SELECT external_id AS id FROM records WHERE account_id = ? AND type = 'organization' " +
+            "AND entity_type = 'organization' AND entity_id = ? AND deleted_at IS NULL",
+          accountId,
+          Number(id),
+        ),
+      }
+    const prefix = `${crmAccountPrefix(key)}contact/`
+    return {
+      kind: "person",
+      ids: one(
+        "SELECT substr(i.external_id, ?) AS id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+          "WHERE i.provider = ? AND substr(i.external_id, 1, ?) = ? AND l.person_id = ?",
+        prefix.length + 1,
+        key.provider,
+        prefix.length,
+        prefix,
+        Number(id),
+      ),
+    }
+  }
+
+  const targets = (key: AccountKey, accountId: number, recordId: number): ActivityTarget[] =>
+    database
+      .prepare("SELECT target_type, target_external_id FROM record_relations WHERE record_id = ? AND role = 'on'")
+      .all(recordId)
+      .map((row) => {
+        const kind = String(row.target_type) as CrmKind
+        const externalId = String(row.target_external_id)
+        const found =
+          kind === "deal" || kind === "lead"
+            ? database
+                .prepare(
+                  `SELECT '${kind}:' || id AS ref, title FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ?`,
+                )
+                .get(accountId, externalId)
+            : kind === "organization"
+              ? database
+                  .prepare(
+                    "SELECT 'organization:' || o.id AS ref, o.name AS title FROM records r " +
+                      "JOIN organizations o ON o.id = r.entity_id WHERE r.account_id = ? AND r.type = 'organization' " +
+                      "AND r.entity_type = 'organization' AND r.external_id = ?",
+                  )
+                  .get(accountId, externalId)
+              : database
+                  .prepare(
+                    "SELECT 'person:' || l.person_id AS ref, coalesce(p.name, i.name) AS title FROM identities i " +
+                      "LEFT JOIN identity_links l ON l.identity_id = i.id LEFT JOIN persons p ON p.id = l.person_id " +
+                      "WHERE i.provider = ? AND i.external_id = ?",
+                  )
+                  .get(key.provider, crmIdentityId(key, externalId))
+        return {
+          kind,
+          externalId,
+          ref: found?.ref == null ? null : String(found.ref),
+          title: found?.title == null ? null : String(found.title),
+        }
+      })
+
+  /** One page of the account's activities: open ones first by due time, then the rest, newest first. */
+  const list = (key: AccountKey, filter: ActivityFilter): { items: ListedActivity[]; hasMore: boolean } => {
+    const accountId = findAccountPk(context, key)
+    if (accountId === undefined) return { items: [], hasMore: false }
+    const field = (name: string) => `json_extract(r.fields, '$.${name}')`
+    const where: { sql: string; params: (string | number)[] }[] = []
+    if (filter.status) where.push({ sql: `${field("done")} = ?`, params: [filter.status === "done" ? 1 : 0] })
+    if (filter.due?.since !== undefined) where.push({ sql: `${field("due_at")} >= ?`, params: [filter.due.since] })
+    if (filter.due?.until !== undefined) where.push({ sql: `${field("due_at")} <= ?`, params: [filter.due.until] })
+    if (filter.overdueAt !== undefined)
+      where.push({ sql: `${field("done")} = 0 AND ${field("due_at")} < ?`, params: [filter.overdueAt] })
+    if (filter.kinds?.length)
+      where.push({
+        sql: `${field("kind")} IN (SELECT value FROM json_each(?))`,
+        params: [JSON.stringify(filter.kinds)],
+      })
+    if (filter.owner !== undefined)
+      where.push(
+        filter.owner === null
+          ? { sql: `${field("assignee")} IS NULL`, params: [] }
+          : { sql: `${field("assignee")} = ?`, params: [filter.owner] },
+      )
+    if (filter.on !== undefined) {
+      const target = targetOf(key, accountId, filter.on)
+      where.push({
+        sql:
+          "EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = r.id AND rr.role = 'on' " +
+          "AND rr.target_type = ? AND rr.target_external_id IN (SELECT value FROM json_each(?)))",
+        params: [target.kind, target.ids],
+      })
+    }
+    const rows = database
+      .prepare(
+        "SELECT r.id, r.external_id, r.fields FROM records r WHERE r.account_id = ? AND r.type = ? " +
+          `AND r.deleted_at IS NULL ${where.map(({ sql }) => `AND ${sql}`).join(" ")} ` +
+          `ORDER BY ${field("done")} ASC, CASE WHEN ${field("done")} THEN NULL ELSE ${field("due_at")} END ASC, ` +
+          `${field("updated_at")} DESC, r.id DESC LIMIT ? OFFSET ?`,
+      )
+      .all(accountId, ACTIVITY_RECORD, ...where.flatMap(({ params }) => params), filter.limit + 1, filter.offset)
+    return {
+      hasMore: rows.length > filter.limit,
+      items: rows.slice(0, filter.limit).map((row) => {
+        const fields = JSON.parse(String(row.fields)) as Record<string, unknown>
+        return {
+          ...activityOf(String(row.external_id), fields),
+          doneAt: (fields.done_at as number | null) ?? null,
+          on: targets(key, accountId, Number(row.id)),
+        }
+      }),
+    }
+  }
+
+  return { save, of, list }
 }

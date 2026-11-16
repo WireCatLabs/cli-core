@@ -3,13 +3,13 @@ export const REPORT_KINDS = ["morning-digest"] as const
 export type ReportKind = (typeof REPORT_KINDS)[number]
 
 /** In the order they are shown; `health` is not among them, it comes from the document's `health[]` only. */
-export const SECTION_KINDS = ["today", "decisions", "money", "meetings", "projects", "mail"] as const
+export const SECTION_KINDS = ["today", "decisions", "money", "meetings", "projects", "crm", "mail"] as const
 export type SectionKind = (typeof SECTION_KINDS)[number]
 
 export const ITEM_TYPES = ["reply", "question", "task", "fact", "risk", "money", "decision", "meeting"] as const
 export type ItemType = (typeof ITEM_TYPES)[number]
 
-export const CHANNEL_KINDS = ["telegram", "max", "whatsapp", "mail", "meeting", "task"] as const
+export const CHANNEL_KINDS = ["telegram", "max", "whatsapp", "mail", "meeting", "task", "crm"] as const
 export type ChannelKind = (typeof CHANNEL_KINDS)[number]
 
 export interface Amount {
@@ -343,6 +343,20 @@ export const jsonOfAnswer = (answer: string): string | undefined => {
   const text = answer.trim()
   const fenced = /^```json[ \t]*\n([\s\S]*?)\n```$/.exec(text)?.[1]
   return fenced ?? (text.startsWith("{") ? text : undefined)
+}
+
+/** Whether a command's stdout is a `wirecat.report/1` document, which a schedule renders and delivers as a report. */
+export const isReportAnswer = (answer: string): boolean => {
+  const json = jsonOfAnswer(answer)
+  if (json === undefined) return false
+  try {
+    const document = JSON.parse(json) as unknown
+    return (
+      typeof document === "object" && document !== null && "format" in document && document.format === REPORT_FORMAT
+    )
+  } catch {
+    return false
+  }
 }
 
 export type ParsedReport = { report: Report; leaks: number } | { invalid: string }

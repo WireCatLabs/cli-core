@@ -22,6 +22,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- when "meetings" %}Встречи
     {%- when "projects" %}Проекты в движении
     {%- when "mail" %}Новая почта
+    {%- when "crm" %}CRM
   {%- endcase %}</b>
   {%- for item in section.items -%}
     {%- capture due -%}
@@ -58,7 +59,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-          {%- when "mail" %}почта{% when "meeting" %}встреча{% when "task" %}задача
+          {%- when "mail" %}почта{% when "meeting" %}встреча{% when "task" %}задача{% when "crm" %}CRM
         {%- endcase -%}
         {%- assign sep = " · " -%}
       {%- endif -%}
@@ -104,7 +105,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- if forloop.first %}: {% else %}, {% endif -%}
     {%- case source.kind -%}
       {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
-      {%- when "mail" %}почта{% when "meeting" %}встречи{% when "task" %}задачи
+      {%- when "mail" %}почта{% when "meeting" %}встречи{% when "task" %}задачи{% when "crm" %}CRM
     {%- endcase -%}
     {%- if source.accounts > 1 %} ({{ source.accounts }} {% if source.kind == "mail" %}{% case source.plural %}{% when "one" %}ящик{% when "few" %}ящика{% else %}ящиков{% endcase %}{% else %}{% case source.plural %}{% when "one" %}аккаунт{% when "few" %}аккаунта{% else %}аккаунтов{% endcase %}{% endif %}){% endif -%}
   {%- endfor -%}
