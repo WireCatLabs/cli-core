@@ -1,7 +1,11 @@
+import { CliError } from "@wirecat/cli-base"
+import type { DealKind } from "../domain/deals.js"
 import { formatLocator } from "../domain/locator.js"
 import { kindIn } from "../domain/providers.js"
+import type { MeetingCallItem } from "../meetings/index.js"
 import type { AccountKey, LinkedIdentity, MessageStore, PersonRecord, StoredAccount } from "../store/store.js"
-import { type Coverage, keyOf, newestFirst, type Scope } from "./business-context.js"
+import { type Coverage, keyOf, newestFirst, type Scope, scopeOf } from "./business-context.js"
+import { excerpt } from "./excerpt.js"
 import { eventsOnce } from "./person-context.js"
 import { personMeetings } from "./person-meetings.js"
 
@@ -10,6 +14,11 @@ const MAIL_ROWS = 500
 const EVENT_ROWS = 1000
 /** Recorded meetings and calls listed: past it the count still counts each, and the read says `hasMore`. */
 const RECORDED_ROWS = 100
+/** Characters of a message's text in a touch: enough to know what it was about. */
+const TEXT = 200
+/** Items a person's history lists at once by default: what happened last. */
+export const HISTORY_ITEMS = 10
+export const HISTORY_MAX = 200
 
 /** A one-to-one chat, a mail, a calendar event or a recorded meeting or call with some of the people asked about. */
 export interface Touch {
@@ -21,6 +30,11 @@ export interface Touch {
   at: string | null
   /** `person:<uid>` of each one asked about it involves. */
   people: string[]
+  /** A message's text and a call's transcript, the start on one line: what people wrote, never instructions. */
+  text?: string | null
+  /** A phone call's direction, the employee and the other side's number. */
+  call?: MeetingCallItem
+  durationMs?: number | null
 }
 
 export interface Communications {
@@ -165,6 +179,7 @@ export const communicationsOf = async (
               ref: formatLocator({ ...key, chat: chat.id, message: message.id }),
               title: chat.title,
               at: message.timestamp,
+              text: message.text ? excerpt(message.text, "", TEXT) : null,
             },
             person.uid,
           )
@@ -210,7 +225,14 @@ export const communicationsOf = async (
   for (const meeting of recorded.items) {
     read.add(keyOf(meeting.account))
     const event = meeting.event === null ? undefined : Number(meeting.event.slice("event:".length))
-    if (event !== undefined && meetings.has(event)) {
+    const recording = {
+      text: meeting.snippet,
+      durationMs: meeting.durationMs,
+      ...(meeting.call ? { call: meeting.call } : {}),
+    }
+    const calendar = event === undefined ? undefined : meetings.get(event)
+    if (calendar) {
+      Object.assign(calendar, recording)
       held++
       continue
     }
@@ -220,6 +242,7 @@ export const communicationsOf = async (
       title: meeting.title,
       at: meeting.startedAt,
       people: meeting.people,
+      ...recording,
     })
   }
 
@@ -228,5 +251,62 @@ export const communicationsOf = async (
     items: [...messages.values(), ...mail.values(), ...meetings.values(), ...recordedTouches].sort(newestFirst),
     hasMore: cut,
     coverage: coverageOf(people, read, calendars.length > 0),
+  }
+}
+
+export interface PersonHistory {
+  /** Newest first: their one-to-one messages, mail, calendar events and recorded meetings and calls. */
+  items: Touch[]
+  hasMore: boolean
+  /** What `until` takes for the next, older page; set when `hasMore`. */
+  next: string | null
+  coverage: Coverage
+}
+
+export interface PersonHistoryOptions {
+  /** The accounts read; every stored one when left out (WC-ACCT-9). */
+  accounts?: AccountKey[]
+  deniedKinds?: readonly DealKind[]
+  /** ms, inclusive. */
+  since?: number
+  /** ms, inclusive. */
+  until?: number
+  limit?: number
+}
+
+/**
+ * What happened with one person lately, across every source in scope, newest first: the same reads a deal's and an
+ * organization's context make, for the identities linked to this one person. A page ends at `limit`; `next` is the
+ * `until` of the page before it. Items of one millisecond across a page's end may be cut, which a time of messages,
+ * mail and calls from separate sources almost never shares.
+ */
+export const personHistory = async (
+  store: MessageStore,
+  reference: string,
+  { accounts, deniedKinds, since, until, limit = HISTORY_ITEMS }: PersonHistoryOptions = {},
+): Promise<PersonHistory> => {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > HISTORY_MAX)
+    throw new CliError("validation_error", `the history's limit takes 1–${HISTORY_MAX}`)
+  if (since !== undefined && until !== undefined && since > until)
+    throw new CliError("validation_error", "the start of the range is after its end")
+  const uid = /^person:(\d+)$/.exec(reference.trim())?.[1]
+  if (uid === undefined) throw new CliError("validation_error", "a person is person:<id>")
+  const record = await store.people.personByUid(uid)
+  if (!record) throw new CliError("not_found", `no person:${uid} in the store`)
+  const talks = await communicationsOf(store, [record], scopeOf(accounts, deniedKinds), {
+    ...(since === undefined ? {} : { since }),
+    ...(until === undefined ? {} : { until }),
+    // One past the page per chat: a dialog alone may hold the next page's first message.
+    limit: limit + 1,
+  })
+  const dated = talks.items.filter((item) => item.at !== null)
+  const items = dated.slice(0, limit)
+  const last = items.at(-1)
+  const hasMore = dated.length > limit
+  return {
+    items,
+    hasMore,
+    next: hasMore && last?.at ? new Date(Date.parse(last.at) - 1).toISOString() : null,
+    coverage: talks.coverage,
   }
 }
