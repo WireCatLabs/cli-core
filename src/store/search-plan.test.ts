@@ -4,6 +4,7 @@ import { migrate } from "./migrations.js"
 import { matchQuery } from "./sqlite/lucene.js"
 import { openSqlite } from "./sqlite/open.js"
 import { matching, newestHits } from "./sqlite/search.js"
+import { readiness } from "./sqlite/vectors.js"
 
 const opened = async () => {
   const sqlite = await openSqlite(":memory:")
@@ -104,6 +105,39 @@ describe("the search query plan", () => {
                     WHERE m.chat_id = c.id AND f.rowid = m.id AND messages_fts MATCH ? AND c.external_id = ?`
 
     expect(perRow(planOf(context, forced, ['"valencia"', "-100"]))).toBe(true)
+    context.database.close()
+  })
+})
+
+describe("the readiness a conversation search reports", () => {
+  it("**reads only the chat's chunks**, never every chunk of the store", async () => {
+    const context = await opened()
+    context.database.exec(`
+      INSERT INTO accounts (id, provider, external_id, created_at, updated_at) VALUES (1, 'telegram', '1', 0, 0);
+      INSERT INTO chats (id, account_id, external_id, kind, updated_at, created_at) VALUES (1, 1, '-100', 'group', 0, 0);
+      INSERT INTO conversation_state (chat_id, enabled_at, built_at, algorithm_version, current_build) VALUES (1, 0, 1, 1, 1);
+    `)
+    const statements: { sql: string; params: unknown[] }[] = []
+    const { orm } = context
+    const dialect = (orm as unknown as { dialect: { sqlToQuery: (query: unknown) => (typeof statements)[number] } })
+      .dialect
+    const recording = {
+      ...context,
+      orm: {
+        get: (query: unknown) => {
+          statements.push(dialect.sqlToQuery(query))
+          return orm.get(query as never)
+        },
+      },
+    }
+
+    readiness(recording as never, 1, "e5-small")
+
+    expect(statements).toHaveLength(3)
+    for (const { sql, params } of statements) {
+      const plan = planOf(context, sql, params)
+      expect(plan, plan.join("\n")).not.toContain("SEARCH k USING INDEX sqlite_autoindex_chunks_1 (chunkable_type=?)")
+    }
     context.database.close()
   })
 })

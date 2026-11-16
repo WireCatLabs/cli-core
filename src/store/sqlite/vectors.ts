@@ -9,11 +9,13 @@ export interface ChunkToEmbed {
   lines: { id: string; sender: string | null; text: string }[]
 }
 
+/** No planner statistics in the store: without CROSS JOIN SQLite reads every chunk of the store, of every chat. */
 const currentChunks = (
   chatKey: number,
 ) => sql`SELECT k.content_hash, k.chunkable_id AS conversation_id, r.first_message_id,
-    r.last_message_id, r.text_start, r.text_end FROM chunks k JOIN chunk_messages r ON r.chunk_id = k.id
-    JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
+    r.last_message_id, r.text_start, r.text_end FROM conversations c
+    CROSS JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
+    JOIN chunk_messages r ON r.chunk_id = k.id
   WHERE c.chat_id = ${chatKey}
     AND c.build = (SELECT s.current_build FROM conversation_state s WHERE s.chat_id = ${chatKey})`
 
@@ -464,7 +466,7 @@ export const readiness = ({ orm }: StoreContext, chatKey: number, model: string)
           JOIN conversations c ON c.id = cm.conversation_id AND c.build = ${build}
           WHERE m.chat_id = ${chatKey} AND (m.deleted_at IS NOT NULL OR ${editedSince(sql`m.id`)})),
         stale AS (SELECT DISTINCT k.content_hash AS hash FROM changed g
-          JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = g.conversation_id
+          CROSS JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = g.conversation_id
           JOIN chunk_messages r ON r.chunk_id = k.id
           JOIN messages f ON f.id = r.first_message_id JOIN messages l ON l.id = r.last_message_id
           WHERE (g.sent_at, g.id) >= (f.sent_at, f.id) AND (g.sent_at, g.id) <= (l.sent_at, l.id)),
