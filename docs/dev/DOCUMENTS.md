@@ -86,13 +86,17 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   with more children than the bound still moves on. The budget is the run's `RunBudget`
   ([WC-LIFE-16](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)); the shared `sync` command passes
   `runBudgetOf(command)` as `budget` in its arguments, and the CLI hands it to `syncDocuments`. The budget is also
-  asked before each file read, and a stop there leaves the rest of the batch pending. The budget keeps a margin of
+  asked before each file read and each picture download, and a stop there leaves the rest of the batch pending. The
+  budget keeps a margin of
   5 s or more before the deadline, so a run shorter than that would never move: the first request of a call, a
   listing or a file read, goes ahead past a `deadline` stop (`RunBudget.first()`). Only one, only while the call has
   made no other request, and only while one request of the CLI's `requestMs` (2 s by default), plus 0.5 s to answer
   and save, still fits before the deadline itself. The budget judges this by its own clock, never by the sync's
   `now`, which tests fix. With `--embed`, the CLI passes the same `deadline` to `embedNotes`, which stops between
-  batches at the deadline less its margin and answers `stopped` and `remaining`.
+  batches at the deadline less its margin and answers `stopped` and `remaining`. A run whose last batch ends at the
+  stop answers that it is done, and `remaining` counts the chunks the embed would still be given, in one query. When
+  the CLI's answer carries `embeddings` with enrichment stopped by `enrichment.deadline` before it sent anything, the
+  shared `sync` adds the `sync.longer` step: `sync --embed --timeout 15m`, `safe_to_auto_execute: false`.
 - **The shared `sync` is cooperative and partial**, as the calendar and CRM syncs are. Without `--timeout` it gets a
   sync's deadline, 15 min in a terminal and 45 s over MCP, instead of a one-shot's 30 s, so its budget fits as many
   requests as that deadline allows (about 12 in 30 s with the 2 s default `requestMs`). A cancel is not cut from

@@ -175,8 +175,16 @@ enrichment of their current text, 20 to a request and four requests at once, the
 text: an edit sends it again, a re-sync does not. A batch the model answers wrongly leaves its records for the next
 sync; a rate limit, a refused key, an unreachable provider or a missing key stops the run. A run that sent records
 and got none back is `failed`. A stopped or failed run carries `reason` and a `reason_id` from a fixed list
-(`enrichment.no-key`, `key-rejected`, `unreachable`, `rate-limited`, `bad-replies`, `cancelled`, `error`). The records go as untrusted data, never as instructions; each
+(`enrichment.no-key`, `key-rejected`, `unreachable`, `rate-limited`, `bad-replies`, `cancelled`, `deadline`, `error`). The records go as untrusted data, never as instructions; each
 record adds at most five facts and three questions of at most 400 characters.
+
+With the run's deadline (`sync --embed` passes it), a batch starts only while it is expected to end before the
+deadline less its margin: 30 s a batch, or the slowest batch of the run if that was longer, plus 0.5 s. A paid request
+is not started only to be cut and sent again at the next sync. A batch cut by the deadline all the same is
+`stopped` with `enrichment.deadline`; its records are not counted as `failed`, and the next sync sends them. Over
+MCP a sync has 45 s, so enrichment can start only in its first 7.75 s or so. A run that enriched nothing for lack of
+time does not answer `left`, since the same run would not move either. The shared documents `sync` then adds a
+`sync.longer` step (`sync --embed --timeout 15m`, not safe to run unasked) for a run in a terminal.
 
 When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
 (`models keys set openai`), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),

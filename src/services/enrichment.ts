@@ -1,5 +1,6 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { ANSWER_RESERVE_MS, type Deadline, deadlineMargin } from "../background/budget.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { modelAddressAllowed, onThisComputer } from "../models/endpoint.js"
 import { type ModelAdapter, type ModelUsage, modelGateway } from "../models/index.js"
@@ -28,6 +29,11 @@ const MAX_QUESTIONS = 3
 const MAX_LINE = 400
 /** After this many failed batches in one run the provider is not answering; the rest wait for the next sync. */
 const MAX_FAILED_BATCHES = 3
+/**
+ * How long one batch is expected to take when the caller does not say: 20 records with up to 8 192 tokens out. A
+ * guess, not measured; the slowest batch of the run raises it.
+ */
+export const ENRICH_BATCH_MS = 30_000
 
 const SYSTEM = `For each record, write what a memory system would store about it.
 
@@ -89,6 +95,13 @@ export interface EnrichOptions {
   fetch?: typeof fetch
   key?: (provider: string) => string | undefined
   signal?: AbortSignal
+  /**
+   * The run's hard limit: a batch starts only while it is expected to end before the deadline less its margin, so a
+   * paid request is not cut and sent again next sync; one cut all the same stops the run as `enrichment.deadline`.
+   */
+  deadline?: Deadline
+  /** How long one batch is expected to take; `ENRICH_BATCH_MS` when absent. */
+  batchMs?: number
 }
 
 /** Why a run stopped or failed, from a fixed list, so a window can say it in its own words. */
@@ -99,6 +112,7 @@ export const ENRICHMENT_REASON_IDS = [
   "enrichment.rate-limited",
   "enrichment.bad-replies",
   "enrichment.cancelled",
+  "enrichment.deadline",
   "enrichment.local-only",
   "enrichment.address-refused",
   "enrichment.error",
@@ -108,6 +122,7 @@ export type EnrichmentReasonId = (typeof ENRICHMENT_REASON_IDS)[number]
 const REASON_TEXT: Partial<Record<EnrichmentReasonId, string>> = {
   "enrichment.key-rejected": "the provider refused the key; nothing more was sent",
   "enrichment.unreachable": "the provider could not be reached; nothing more was sent",
+  "enrichment.deadline": "out of time before the run's deadline; the next sync goes on",
 }
 
 const reasonIdOf = (error: unknown): EnrichmentReasonId => {
@@ -231,6 +246,10 @@ export const enrichRecords = async (
       reason: `no ${setting.provider} key: store one with \`models keys set ${setting.provider}\` or set ${keyVariable(setting.provider)}; nothing was sent`,
       reason_id: "enrichment.no-key",
     }
+  const until = options.deadline ? options.deadline.endsAt - deadlineMargin(options.deadline) : Number.POSITIVE_INFINITY
+  const timeUp = Number.isFinite(until) ? AbortSignal.timeout(Math.max(0, until - Date.now())) : undefined
+  const signals = [options.signal, timeUp].filter((one): one is AbortSignal => one !== undefined)
+  const signal = signals.length ? AbortSignal.any(signals) : undefined
   const gateway = modelGateway({
     resolve: () => target,
     // The setting exists only with the owner's yes for this provider and endpoint; the endpoint is checked again.
@@ -239,7 +258,7 @@ export const enrichRecords = async (
     env: options.env,
     ...(options.adapters ? { adapters: options.adapters } : {}),
     ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
+    ...(signal ? { signal } : {}),
   })
   const queue = await enrichment.pending(maxRecords, options.narrow)
   const batches: EnrichmentCandidate[][] = []
@@ -288,12 +307,28 @@ export const enrichRecords = async (
     failed += batch.length - answered.length
   }
   let next = 0
+  let slowest = 0
+  const outOfTime = () => {
+    reason = REASON_TEXT["enrichment.deadline"]
+    reasonId = "enrichment.deadline"
+  }
   const worker = async () => {
     while (reason === undefined && next < batches.length) {
+      if (Date.now() + Math.max(options.batchMs ?? ENRICH_BATCH_MS, slowest) + ANSWER_RESERVE_MS >= until) {
+        outOfTime()
+        break
+      }
       const batch = batches[next++] as EnrichmentCandidate[]
+      const started = Date.now()
       try {
         await ask(batch)
+        slowest = Math.max(slowest, Date.now() - started)
       } catch (error) {
+        // Cut by the deadline, not refused: the records were not judged, so they are not counted as failed.
+        if (timeUp?.aborted && !options.signal?.aborted) {
+          outOfTime()
+          break
+        }
         failed += batch.length
         const id = reasonIdOf(error)
         // A refused key or an unreachable provider fails every batch the same way; only a bad reply may be one-off.
