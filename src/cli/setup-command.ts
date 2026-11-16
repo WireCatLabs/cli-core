@@ -78,19 +78,32 @@ export const setupCommand = (setup: Setup): Command => {
   const currentOf = (command: Command, context: ReturnType<typeof contextFor>): Current => {
     const { settings, renderer } = context
     const current: Record<string, Value | { set: true }> = {}
-    const store = storeFor(command, renderer.warn)
+    let store: ReturnType<typeof storeFor> | undefined
+    // Read only when the path reaches the secret: a dry run of the first step must not open the keyring (WC-PERM-23).
+    const keptOf = (secret: string) => {
+      try {
+        store ??= storeFor(command, renderer.warn)
+        return readKept(store, settings.profile, secret) ? ({ set: true } as const) : undefined
+      } catch {
+        // A keyring that cannot be read says nothing about the secret; the flow asks for it again.
+        return undefined
+      }
+    }
     for (const field of allFields(document)) {
       if (field.setting !== undefined) {
         const value = fromFile<Value | undefined>(settings, field.setting, undefined).value
         if (value !== undefined) current[field.setting] = value
       }
       const secret = secretOf(field)
-      if (secret === undefined || current[secret]) continue
-      try {
-        if (readKept(store, settings.profile, secret)) current[secret] = { set: true }
-      } catch {
-        // A keyring that cannot be read says nothing about the secret; the flow asks for it again.
-      }
+      if (secret === undefined || secret in current) continue
+      let read: { value: { set: true } | undefined } | undefined
+      Object.defineProperty(current, secret, {
+        enumerable: true,
+        get: () => {
+          read ??= { value: keptOf(secret) }
+          return read.value
+        },
+      })
     }
     return current
   }
