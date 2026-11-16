@@ -41,6 +41,13 @@ export const recordCrmViewer = async (
   await store.sync.setSyncState(account, VIEWERS, JSON.stringify({ limited, admins } satisfies Viewers))
 }
 
+export interface CrmViewing {
+  /** Undefined: the whole copy. */
+  viewer: CopyViewer | undefined
+  /** Why the profile sees less than its rule would give it, and what to do; the answer is then incomplete. */
+  note?: string
+}
+
 /**
  * Whose deals and leads of the copy a profile reads offline (SEC-197): every one when the CRM limits nobody or a sync
  * found `user` its administrator; otherwise, a copy no sync recorded the rule of too, only those assigned to `user`,
@@ -49,11 +56,36 @@ export const recordCrmViewer = async (
 export const crmViewerOf = async (
   store: MessageStore,
   account: AccountKey,
-  user: string | undefined,
-): Promise<CopyViewer | undefined> => {
+  user: string | null,
+): Promise<CrmViewing> => {
   const known = await viewersOf(store, account)
-  if (known?.limited === false) return undefined
-  const id = user === undefined ? undefined : normalCrmUserId(user)
-  if (id !== undefined && known?.admins[id] === true) return undefined
-  return { account, assignee: id === undefined ? null : crmIdentityId(account, id, "user") }
+  if (known?.limited === false) return { viewer: undefined }
+  const id = user === null ? undefined : normalCrmUserId(user)
+  if (id !== undefined && known?.admins[id] === true) return { viewer: undefined }
+  if (id === undefined)
+    return {
+      viewer: { account, assignee: null },
+      note:
+        "this profile's sign-in names no CRM user, so offline reads show none of the copy's deals and leads: sign in " +
+        "again (session start) so the sign-in keeps its user",
+    }
+  const viewer = { account, assignee: crmIdentityId(account, id, "user") }
+  return known
+    ? { viewer }
+    : {
+        viewer,
+        note:
+          "no sync of this version recorded who may read this copy, so offline reads show only your own deals and " +
+          "leads: run sync once",
+      }
+}
+
+/** What a command says beside an answer the viewer rule left short, by the run it read for. */
+export const shortened = new WeakMap<object, string>()
+
+/** `crmViewerOf` for one command's run; its note waits in `shortened` for the answer. */
+export const viewerOf = async (run: { store: MessageStore; account: AccountKey; user: string | null }) => {
+  const { viewer, note } = await crmViewerOf(run.store, run.account, run.user)
+  if (note) shortened.set(run, note)
+  return viewer
 }

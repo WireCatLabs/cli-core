@@ -41,6 +41,7 @@ const definition: ProgramDefinition = {
     const root = new Command("crm")
     const open = async (): Promise<CrmRun> => ({
       profile: "work",
+      user: null,
       account: { provider: "example-crm", account: "portal" },
       store,
       source: () => source,

@@ -228,7 +228,7 @@ export interface DealSearch {
   accounts?: AccountKey[]
   /** Only these kinds; absent, deals and leads. */
   kinds?: readonly DealKind[]
-  viewer?: CopyViewer
+  viewers?: CopyViewer[]
   /** 1–500, 100 by default. */
   limit?: number
   offset?: number
@@ -819,7 +819,7 @@ export const dealOperationsOver = (context: StoreContext) => {
       return pageOfRows(rows, limit, offset)
     },
     find: async (wanted: DealSearch): Promise<ListResult<FoundDeal>> => {
-      const { words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit, offset = 0, viewer } = wanted
+      const { words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit, offset = 0, viewers = [] } = wanted
       const seen = new Set<string>()
       const clauses = words
         .map((word) => tokensOf(word).filter((token) => fold(token)))
@@ -889,7 +889,7 @@ export const dealOperationsOver = (context: StoreContext) => {
           )
           .all()
           .filter((row) => within === undefined || within.includes(`${row.provider}\u0000${row.account}`))
-          .filter((row) => seenBy(viewer, row))
+          .filter((row) => viewers.every((viewer) => seenBy(viewer, row)))
           .map((row) => ({
             kind,
             row,

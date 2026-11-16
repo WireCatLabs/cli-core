@@ -34,12 +34,12 @@ import { personMeetings } from "../../services/person-meetings.js"
 import { crmIdentityId } from "../../store/sqlite/crm-rows.js"
 import { CRM_SCOPES, crmSettingKey } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
-import type { MessageStore } from "../../store/store.js"
+import { type MessageStore, seenBy } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { openStageTasks } from "../stage-tasks.js"
 import { crmStatus, syncCrm } from "../sync.js"
-import { crmViewerOf } from "../viewer.js"
+import { shortened, viewerOf } from "../viewer.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
   type CrmFieldsInput,
@@ -95,10 +95,10 @@ export interface CrmRun {
   source: () => CrmSource
   /**
    * The sign-in's own user id in the CRM, as the sign-in entry keeps it, read without the network. The copy's deals
-   * and leads read offline are only this user's unless a sync found it the CRM's administrator; left out, a CRM that
-   * limits its users shows none of them (SEC-197).
+   * and leads read offline are only this user's unless a sync found it the CRM's administrator; `null`, a CRM that
+   * limits its users shows none of them (SEC-197). A CRM that limits nobody passes `null`.
    */
-  user?: string
+  user: string | null
   /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */
   locked?: boolean
   /** The CRM's writer and the profile's levels, built on first use; needed by every write command. */
@@ -322,7 +322,6 @@ const ownerOf = async (run: Pick<CrmRun, "store" | "account" | "user">, owner: s
 }
 
 /** Whose deals and leads of the copy this profile reads offline; undefined is every one. */
-const viewerOf = (run: Pick<CrmRun, "store" | "account" | "user">) => crmViewerOf(run.store, run.account, run.user)
 
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */
 const pathOf = (command: Command): string[] =>
@@ -350,6 +349,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         body = await work(run)
       } finally {
         await run.close?.()
+      }
+      const note = shortened.get(run)
+      if (note) {
+        outputFor(command).renderer.note(note)
+        body = { ...body, meta: { ...body.meta, complete: false } }
       }
       renderAnswer(command, outputFor(command), body, view)
     })
@@ -460,6 +464,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   ).action(async (_opts: unknown, command: Command) => {
     await within(command, async (run) => {
       const status = await crmStatus(run.store, run.account, { profile: run.profile, now: now() })
+      if (await viewerOf(run))
+        outputFor(command).renderer.note("stored counts the whole copy, more than the deals and leads you may read")
       return listOf(pathOf(command).join(" "), {
         items: status.items,
         limit: status.limit,
@@ -647,8 +653,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   const readableCopy = async (run: CrmRun, kind: DealKind, reference: string): Promise<Deal> => {
     const found = await ownCopy(run, kind, reference)
     const viewer = await viewerOf(run)
-    if (viewer && found.assignee !== viewer.assignee)
-      throw new CliError("not_found", `${reference} is not a copy from this profile's CRM account`)
+    if (!seenBy(viewer, { ...run.account, assignee: found.assignee }))
+      throw new CliError(
+        "not_found",
+        `${reference} is not a copy this profile may read${shortened.has(run) ? `: ${shortened.get(run)}` : ""}`,
+      )
     return found
   }
 
@@ -992,7 +1001,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   const search =
     program.commands.find((one) => one.name() === "search") ??
     annotate(program.command("search"), { effects: NO_EFFECTS }).description("search what the local store holds")
-  addCrmSearchAll(search, { within, app: options.app, example })
+  addCrmSearchAll(search, { within, app: options.app, example, viewerOf })
 }
 
 // honoursDryRun: a host program other than `run` would otherwise let a write through under --dry-run.

@@ -156,8 +156,8 @@ export interface SearchAllRequest {
   meetingsAsked?: boolean
   /** The CRM kinds `crm` reads; absent, deals and leads. */
   crmKinds?: readonly DealKind[]
-  /** A CRM CLI's profile that may read only part of its account's copy (SEC-197). */
-  crmViewer?: CopyViewer
+  /** The CRM accounts' copies a CRM CLI's profile may read only part of, each by its own rule (SEC-197). */
+  crmViewers?: CopyViewer[]
   /**
    * Search harder: a hosted model reorders the first 30 hits, only with the owner's consent and a key. Absent, nothing
    * is read of the consent or the key and nothing is sent.
@@ -513,7 +513,7 @@ export const searchAll = async (
             anyWord: anyWord || discover,
             ...(request.exact ? { exact: true } : {}),
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
-            ...(request.crmViewer === undefined ? {} : { viewer: request.crmViewer }),
+            ...(request.crmViewers === undefined ? {} : { viewers: request.crmViewers }),
             limit: Math.min(depth, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })

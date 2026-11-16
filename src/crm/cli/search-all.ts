@@ -13,7 +13,8 @@ import { DEAL_KINDS } from "../../domain/deals.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
-import { type SearchedResource, searchAll } from "../../services/search-all.js"
+import { crmAccounts, type SearchedResource, searchAll } from "../../services/search-all.js"
+import type { CopyViewer } from "../../store/store.js"
 import { crmViewerOf } from "../viewer.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 
@@ -31,7 +32,14 @@ export const addCrmSearchAll = (
     within,
     app,
     example,
-  }: { within: CrmWithin; app: AppIdentity; example: (command: Command, ...lines: string[]) => Command },
+    viewerOf,
+  }: {
+    within: CrmWithin
+    app: AppIdentity
+    example: (command: Command, ...lines: string[]) => Command
+    /** This profile's rule over its own account's copy, as the other reads of the copy take it. */
+    viewerOf: (run: CrmRun) => Promise<CopyViewer | undefined>
+  },
 ): void => {
   const all = annotate(new Command("all"), { effects: LOCAL_READ, partial: true, output: { entity: "hit" } })
     .summary("search stored deals and leads, messages, notes, calendar events and meetings")
@@ -80,7 +88,24 @@ export const addCrmSearchAll = (
       const limit = opts.limit ?? DEFAULT_LIMIT
       const offset = offsetOf(opts.page, limit)
       const env = run.env ?? process.env
-      const viewer = await crmViewerOf(run.store, run.account, run.user)
+      const own = await viewerOf(run)
+      // A profile limited on its own account reads no other copy; anyone else reads each as its owner's sign-in may.
+      const alone = run.locked === true || own !== undefined
+      const others = alone
+        ? []
+        : (await crmAccounts(run.store)).filter(
+            (one) => one.provider !== run.account.provider || one.account !== run.account.account,
+          )
+      const viewers = [
+        ...(own ? [own] : []),
+        ...(
+          await Promise.all(
+            others.map(
+              async (one) => (await crmViewerOf(run.store, one, (await run.store.crm.ownUser(one)) ?? null)).viewer,
+            ),
+          )
+        ).filter((one): one is CopyViewer => one !== undefined),
+      ]
       const found = await searchAll(
         run.store,
         run.account,
@@ -94,9 +119,9 @@ export const addCrmSearchAll = (
           only,
           ...(opts.only?.includes("meetings") ? { meetingsAsked: true } : {}),
           ...(crmKinds.length < DEAL_KINDS.length ? { crmKinds } : {}),
-          ...(viewer ? { crmViewer: viewer } : {}),
+          ...(viewers.length ? { crmViewers: viewers } : {}),
           ...(opts.source === undefined ? {} : { source: opts.source }),
-          ...(run.locked ? { scope: { crm: [run.account] } } : {}),
+          ...(alone ? { scope: { crm: [run.account] } } : {}),
         },
         { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },
         undefined,

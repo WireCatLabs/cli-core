@@ -20,6 +20,7 @@ const APP: AppIdentity = {
   version: "1.0.0",
 }
 const PORTAL = { provider: "example-crm", account: "portal" }
+const OTHER = { provider: "example-crm", account: "other" }
 const ADMIN = "1"
 const COLLEAGUE = "7"
 
@@ -28,7 +29,12 @@ afterEach(async () => {
   for (const store of opened.splice(0)) await store.close()
 })
 
-type Answer = Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
+type Answer = Record<string, unknown> & {
+  item: Record<string, unknown>
+  items: Record<string, unknown>[]
+  meta?: { complete?: boolean }
+  notes: string[]
+}
 
 /** An administrator's sync copies the whole account: one deal of the admin's, one of a colleague's, one of nobody's. */
 const setup = async () => {
@@ -37,6 +43,7 @@ const setup = async () => {
   opened.push(store)
   const database = await openCache(path)
   saveCrmSetting(database, crmSettingKey(PORTAL, "scope"), "all", 1)
+  saveCrmSetting(database, crmSettingKey(OTHER, "scope"), "all", 1)
   database.close()
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -73,22 +80,25 @@ const setup = async () => {
     source.put("deal", exampleDeal("dn", { title: "Nobody's", amount: "50", currency: "EUR" }))
     return source
   }
-  const as = (user: string | undefined, admin = false) => {
-    const key = `${user}:${admin}`
+  const as = (user: string | undefined, admin = false, account = PORTAL) => {
+    const key = `${user}:${admin}:${account.account}`
     const source = sources.get(key) ?? sourceOf(user, admin)
     sources.set(key, source)
-    const run: CrmRun = { profile: "p", account: PORTAL, store, source: () => source, ...(user ? { user } : {}) }
+    const run: CrmRun = { profile: "p", account, store, source: () => source, user: user ?? null }
     const cli = async (...args: string[]): Promise<Answer> => {
       let data = ""
+      const notes: string[] = []
       const root = new Command("crm")
         .exitOverride()
         .configureOutput({ writeErr: () => undefined, writeOut: () => undefined })
         .option("--json")
         .option("--offline")
       addCrmCommands(root, { app: APP, open: async () => run })
-      provide(root, { streams: { data: (text: string) => (data += text), diagnostic: () => undefined } } as never)
+      provide(root, {
+        streams: { data: (text: string) => (data += text), diagnostic: (text: string) => notes.push(text) },
+      } as never)
       await root.parseAsync([...args, "--json"], { from: "user" })
-      return JSON.parse(data) as Answer
+      return { ...(JSON.parse(data) as Answer), notes }
     }
     return cli
   }
@@ -155,9 +165,49 @@ describe("offline reads of a copy another profile synced (SEC-197)", () => {
     expect(admin.totals.items).toBe(3)
   })
 
-  it("a profile whose user is unknown reads none of a copy that limits its users", async () => {
+  it("a profile whose user is unknown reads none of a copy that limits its users, and says why", async () => {
     const { as } = await setup()
-    expect((await as(undefined)("deals", "list")).items).toEqual([])
+    const listed = await as(undefined)("deals", "list")
+    expect(listed.items).toEqual([])
+    expect(listed.meta?.complete).toBe(false)
+    expect(listed.notes.join("")).toContain("names no CRM user")
+    const all = await as(ADMIN, true)("deals", "list")
+    for (const title of ["Harbour", "Nobody's"]) {
+      const ref = all.items.find((one) => one.title === title)?.ref as string
+      await expect(as(undefined)("deals", "show", ref)).rejects.toMatchObject({ code: "not_found" })
+    }
+  })
+
+  it("a copy no sync of this version recorded shows a known user only its own deals, and says to sync", async () => {
+    const { as, store } = await setup()
+    await store.sync.setSyncState(PORTAL, "crm:viewers", "null")
+    const listed = await as(ADMIN, true)("deals", "list")
+    expect(titles(listed)).toEqual(["Harbour"])
+    expect(listed.meta?.complete).toBe(false)
+    expect(listed.notes.join("")).toContain("run sync once")
+    const nobody = (await store.deals.list({ kind: "deal", account: PORTAL })).items.find(
+      (one) => one.title === "Nobody's",
+    )
+    await expect(as(ADMIN, true)("deals", "show", nobody?.ref as string)).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("search all without a lock reads another account's copy only as that copy's own rule allows", async () => {
+    const { as, store } = await setup()
+    await as(ADMIN, true, OTHER)("sync")
+    const asked = ["search", "all", "admin-client@example.com", "--only", "crm"]
+    const accounts = (answer: Answer) => answer.items.map((one) => one.account).sort()
+    expect(accounts(await as(ADMIN, true)(...asked))).toEqual(["other", "portal"])
+    expect((await as(COLLEAGUE)(...asked)).items).toEqual([])
+    await store.sync.setSyncState(OTHER, "crm:viewers", "null")
+    expect(accounts(await as(ADMIN, true)(...asked))).toEqual(["other", "portal"])
+    await store.crm.saveOwnUser(OTHER, COLLEAGUE)
+    expect(accounts(await as(ADMIN, true)(...asked))).toEqual(["portal"])
+  })
+
+  it("store status tells a limited profile its counts are the whole copy's", async () => {
+    const { as } = await setup()
+    expect((await as(COLLEAGUE)("store", "status")).notes.join("")).toContain("whole copy")
+    expect((await as(ADMIN, true)("store", "status")).notes.join("")).not.toContain("whole copy")
   })
 
   it("an administrator on the same account reads it whole once a sync of its own learned it is one", async () => {
