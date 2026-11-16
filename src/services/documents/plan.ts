@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import { oneMoreFits } from "../../background/budget.js"
 import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
 import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
@@ -201,11 +202,15 @@ export const planDocuments = async <M extends SourceFile>(
         }
         // One listing at least per call, so a folder with more children than the bound still moves on.
         // The run's own signal too: a cooperative sync is not cut from outside, and a CLI may pass no budget.
-        stopped = options.signal?.aborted
+        // The time budget keeps a margin of 5 s or more, so a short run would never list a folder: its first listing
+        // goes ahead while one request still fits before the deadline itself.
+        const taken = options.signal?.aborted
           ? "cancelled"
           : listed > 0 && spent >= maxEntries
             ? "entries"
-            : (budget?.take() ?? null)
+            : budget?.take()
+        const first = taken === "deadline" && listed === 0 && oneMoreFits(options.deadline, now())
+        stopped = first ? null : (taken ?? null)
         if (stopped) break
         const folder = step.folder ?? (await source.metadata(step.id))
         if (!step.folder && (!isFolder(folder) || folder.trashed))

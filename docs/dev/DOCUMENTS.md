@@ -86,7 +86,9 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   with more children than the bound still moves on. The budget is the run's `RunBudget`
   ([WC-LIFE-16](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)); the shared `sync` command passes
   `runBudgetOf(command)` as `budget` in its arguments, and the CLI hands it to `syncDocuments`. The budget is also
-  asked before each file read, and a stop there leaves the rest of the batch pending.
+  asked before each file read, and a stop there leaves the rest of the batch pending. The budget keeps a margin of
+  5 s or more before the deadline, so a run shorter than that would never move: the first listing and the first
+  file read of a call go ahead past a `deadline` stop while one request (2 s) still fits before the deadline itself.
 - **The shared `sync` is cooperative and partial**, as the calendar and CRM syncs are. Without `--timeout` it gets a
   sync's deadline, 15 min in a terminal and 45 s over MCP, instead of a one-shot's 30 s, so its budget fits as many
   requests as that deadline allows (about 12 in 30 s with the 2 s default `requestMs`). A cancel is not cut from

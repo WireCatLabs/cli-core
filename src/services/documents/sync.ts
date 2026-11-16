@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
-import { deadlineMargin } from "../../background/budget.js"
+import { deadlineMargin, oneMoreFits } from "../../background/budget.js"
 import { catalogFiles } from "../../documents/catalog.js"
 import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSkip } from "../../documents/model.js"
 import { inScope } from "../../documents/scope.js"
@@ -177,6 +177,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       if (++unsaved >= SAVE_EVERY_ITEMS || now() - savedAt >= SAVE_EVERY_MS) flush?.()
     }
     const jobs = [...pending.jobs].slice(0, max)
+    let read = 0
     for (const job of jobs) {
       if (signal?.aborted) throw new CliError("cancelled", "sync was cancelled; pending operations are retained")
       lock.assertHeld()
@@ -191,11 +192,14 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           await savePictureOf(job.file)
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
-          const stop = options.budget?.take()
+          const taken = options.budget?.take()
+          // The first read of a call goes ahead as the walk's first listing does, or a short run never saves one.
+          const stop = taken === "deadline" && read === 0 && oneMoreFits(options.deadline, now()) ? null : taken
           if (stop) {
             result.stopped = stop
             break
           }
+          read++
           const content = await source.content(job.id, limit)
           const listed =
             query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))

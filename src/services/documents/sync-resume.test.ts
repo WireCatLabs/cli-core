@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
+import { runBudget } from "../../background/budget.js"
 import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
 import { openStore } from "../../store/index.js"
 import { searchNotesQuery } from "../notes-search.js"
@@ -376,6 +377,23 @@ describe("a sync of a tree larger than one call's bound", () => {
     const far = { endsAt: Date.now() + 120_000, ms: 120_000 }
     await syncDocuments({ ...tree.options, index, deadline: far, rescan: true })
     expect(settled).toEqual([false])
+  })
+
+  it("lists a folder and reads a page in every call of a run shorter than the deadline's margin, and ends", async () => {
+    const tree = treeSync(pageTree(1, 2, 2))
+    const short = () => {
+      const deadline = { endsAt: Date.now() + 3_000, ms: 3_000 }
+      return { deadline, budget: runBudget({ deadline }) }
+    }
+    const runs = await untilComplete(() => syncDocuments({ ...tree.options, ...short() }))
+    expect(runs.length).toBeGreaterThan(1)
+    for (const run of runs.slice(0, -1)) expect((run.walk?.listed ?? 0) + run.saved).toBeGreaterThan(0)
+    expect(Object.keys(tree.state().documents)).toHaveLength(8)
+    const late = { endsAt: Date.now() + 1_000, ms: 3_000 }
+    const fresh = treeSync(pageTree(1, 1, 1))
+    expect(
+      await syncDocuments({ ...fresh.options, deadline: late, budget: runBudget({ deadline: late }) }),
+    ).toMatchObject({ complete: false, stopped: "deadline", walk: { listed: 0 } })
   })
 
   it("stops a walk at the next folder once the run is cancelled, with no budget, and goes on in the next call", async () => {
