@@ -37,6 +37,8 @@ export const forgetActivitiesOn = (
 /** A CRM's text field holds what people typed or pasted, a whole e-mail thread too. */
 const MOST_BODY = 20_000
 const MOST_SUBJECT = 500
+/** The kinds that record something already done rather than ask for it. */
+const LOGGED: ReadonlySet<CrmActivityKind> = new Set(["comment", "call", "email", "meeting"])
 
 /** One activity as `deals show` lists it. */
 export interface StoredActivity {
@@ -143,13 +145,17 @@ export const crmActivitiesOver = (context: StoreContext) => {
             .get(accountId, externalId)) !== undefined
 
   /**
-   * When it was done, as near as the copy can tell: the CRM's change that closed it, kept once seen. One that arrives
-   * done with no due date, as a note or a logged call, was done when it was made, and `changes list` lists it once.
+   * When it was done, as near as the copy can tell: the CRM's change that closed it, kept once seen. A record of
+   * something already done — a comment, a logged call, mail or meeting — that arrives done with no due date was done
+   * when it was made, and `changes list` lists it once. A task or to-do may be closed long after it was made, often
+   * with no deadline in Bitrix24, so it keeps the CRM's change.
    */
   const doneAt = (activity: CrmActivity, held: Record<string, unknown> | undefined): number | null => {
     if (!activity.done) return null
     if (held?.done) return (held.done_at as number | null) ?? null
-    return held === undefined && activity.dueAt == null ? activity.createdAt : activity.updatedAt
+    return held === undefined && activity.dueAt == null && LOGGED.has(activity.kind)
+      ? activity.createdAt
+      : activity.updatedAt
   }
   const save = (key: AccountKey, activities: readonly CrmActivity[]): CrmActivitiesSaved =>
     write(database, () => {

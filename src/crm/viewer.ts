@@ -1,6 +1,7 @@
-import { normalCrmUserId } from "../domain/crm.js"
+import { CliError } from "@wirecat/cli-base"
+import { isCrmUserId, normalCrmUserId } from "../domain/crm.js"
 import { crmIdentityId } from "../store/sqlite/crm-rows.js"
-import type { CopyViewer, MessageStore } from "../store/store.js"
+import { type CopyViewer, type MessageStore, seenBy } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import type { CrmSource } from "./source.js"
 
@@ -88,4 +89,49 @@ export const viewerOf = async (run: { store: MessageStore; account: AccountKey; 
   const { viewer, note } = await crmViewerOf(run.store, run.account, run.user)
   if (note) shortened.set(run, note)
   return viewer
+}
+
+/**
+ * The row with `deal`, the deal a lead became, left out when a viewer may not read that deal (SEC-197): a lead the
+ * profile reads must not name a colleague's deal.
+ */
+export const withReadableDeal = async <T extends { deal: string | null }>(
+  store: MessageStore,
+  viewers: readonly (CopyViewer | undefined)[],
+  row: T,
+): Promise<T> => {
+  const limiting = viewers.filter((one): one is CopyViewer => one !== undefined)
+  if (row.deal === null || limiting.length === 0) return row
+  const target = await store.deals.get(row.deal).catch(() => undefined)
+  const seen =
+    target !== undefined &&
+    limiting.every((viewer) =>
+      seenBy(viewer, {
+        provider: target.account?.provider,
+        account: target.account?.account,
+        assignee: target.assignee,
+      }),
+    )
+  return seen ? row : { ...row, deal: null }
+}
+
+/** `owner:` as the identity a deal's assignee is stored as; `none` is no assignee. */
+export const ownerOf = async (
+  run: { store: MessageStore; account: AccountKey; user: string | null },
+  owner: string,
+): Promise<string | null> => {
+  if (owner === "none") return null
+  if (owner === "me") {
+    const self = run.user ?? (await run.store.crm.ownUser(run.account))
+    if (!self)
+      throw new CliError("validation_error", "this CRM names no user for the sign-in: use owner:<user id>", {
+        reason: "crm.owner-unknown",
+      })
+    return crmIdentityId(run.account, normalCrmUserId(self), "user")
+  }
+  if (!isCrmUserId(owner))
+    throw new CliError("validation_error", `owner takes me, none or the CRM's user id, not ${owner}`, {
+      reason: "crm.owner-unknown",
+    })
+  return crmIdentityId(run.account, normalCrmUserId(owner), "user")
 }

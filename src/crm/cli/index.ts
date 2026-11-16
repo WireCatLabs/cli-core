@@ -23,7 +23,7 @@ import {
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { addStoreMaintenanceCommands } from "../../cli/messenger/store-maintenance-command.js"
 import { lineOf } from "../../cli/steps.js"
-import { CRM_KINDS, type CrmKind, isCrmUserId, normalCrmUserId } from "../../domain/crm.js"
+import { CRM_KINDS, type CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
@@ -31,7 +31,6 @@ import type { AppIdentity } from "../../ports/app.js"
 import { dateWindow } from "../../services/moment.js"
 import { readableAccounts } from "../../services/person-context.js"
 import { personMeetings } from "../../services/person-meetings.js"
-import { crmIdentityId } from "../../store/sqlite/crm-rows.js"
 import { CRM_SCOPES, crmSettingKey } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import { type MessageStore, seenBy } from "../../store/store.js"
@@ -39,7 +38,7 @@ import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { openStageTasks } from "../stage-tasks.js"
 import { crmStatus, syncRecorded } from "../sync.js"
-import { shortened, viewerOf } from "../viewer.js"
+import { ownerOf, shortened, viewerOf, withReadableDeal } from "../viewer.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
   type CrmFieldsInput,
@@ -305,26 +304,6 @@ const collect = (value: string, previous: string[] = []) => {
   return [...previous, value]
 }
 
-/** `owner:` as the identity a deal's assignee is stored as; `none` is no assignee. */
-const ownerOf = async (run: Pick<CrmRun, "store" | "account" | "user">, owner: string): Promise<string | null> => {
-  if (owner === "none") return null
-  if (owner === "me") {
-    const self = run.user ?? (await run.store.crm.ownUser(run.account))
-    if (!self)
-      throw new CliError("validation_error", "this CRM names no user for the sign-in: use owner:<user id>", {
-        reason: "crm.owner-unknown",
-      })
-    return crmIdentityId(run.account, normalCrmUserId(self), "user")
-  }
-  if (!isCrmUserId(owner))
-    throw new CliError("validation_error", `owner takes me, none or the CRM's user id, not ${owner}`, {
-      reason: "crm.owner-unknown",
-    })
-  return crmIdentityId(run.account, normalCrmUserId(owner), "user")
-}
-
-/** Whose deals and leads of the copy this profile reads offline; undefined is every one. */
-
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */
 const pathOf = (command: Command): string[] =>
   command.parent?.parent ? [...pathOf(command.parent), command.name()] : [command.name()]
@@ -539,11 +518,12 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       const timezone = metas.find((one) => one.timezone)?.timezone
       // One window names one field's bounds; with two time terms it would name only the first.
       const window = metas.length === 1 ? metas[0] : timezone ? { timezone } : undefined
-      const read = async (run: CrmRun) =>
-        run.store.deals.list({
+      const read = async (run: CrmRun) => {
+        const viewer = await viewerOf(run)
+        const found = await run.store.deals.list({
           kind,
           account: run.account,
-          viewer: await viewerOf(run),
+          viewer,
           ...(terms.has("status") ? { status: terms.get("status") as DealFilter["status"] } : {}),
           ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
           ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
@@ -555,6 +535,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           limit: Math.min(opts.limit, MOST),
           offset: (opts.page - 1) * opts.limit,
         })
+        return {
+          ...found,
+          items: await Promise.all(found.items.map((one) => withReadableDeal(run.store, [viewer], one))),
+        }
+      }
       if (opts.format === "csv")
         return renderCsv(command, options.open, async (run) => {
           const found = await read(run)
@@ -661,7 +646,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         "not_found",
         `${reference} is not a copy this profile may read${shortened.has(run) ? `: ${shortened.get(run)}` : ""}`,
       )
-    return found
+    return withReadableDeal(run.store, [viewer], found)
   }
 
   const writes = options.writes

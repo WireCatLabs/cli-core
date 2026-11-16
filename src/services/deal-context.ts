@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { CrmViewing } from "../crm/index.js"
+import { type CrmViewing, withReadableDeal } from "../crm/index.js"
 import type { DealKind } from "../domain/deals.js"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, StageChange } from "../store/index.js"
@@ -80,7 +80,11 @@ export const dealContext = async (
       reason: "deal.denied",
     })
   const row = await store.deals.get(reference)
-  const deal = row.deal !== null && !scope.allows(row.deal) ? { ...row, deal: null } : row
+  const deal = await withReadableDeal(
+    store,
+    scope.viewers,
+    row.deal !== null && !scope.allows(row.deal) ? { ...row, deal: null } : row,
+  )
   if (!scope.has(deal.account))
     throw new CliError("not_found", `${deal.ref} is a copy from an account outside the accounts asked for`, {
       reason: "deal.out-of-scope",

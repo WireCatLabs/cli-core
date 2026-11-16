@@ -12,7 +12,7 @@ import { openCache } from "../../store/open.js"
 import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { crmViewerOf } from "../index.js"
-import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource } from "../testing/index.js"
+import { exampleDeal, exampleLead, exampleOrganization, examplePerson, fakeCrmSource } from "../testing/index.js"
 import { addCrmCommands, type CrmRun } from "./index.js"
 
 const APP: AppIdentity = {
@@ -392,6 +392,37 @@ describe("contexts and relationships over a copy another profile synced (SEC-200
       (await store.knowledge.listRelations({ about: colleaguesClient, viewers })).items.map(({ from }) => from)
     expect((await ends([])).filter((one) => one.startsWith("deal:"))).toHaveLength(2)
     expect((await ends()).filter((one) => one.startsWith("deal:"))).toHaveLength(1)
+  })
+
+  it("an organization's deals are read past a page of a colleague's, and the page says no more", async () => {
+    const { store, organization } = await shared()
+    const theirs = Array.from({ length: 501 }, (_, at) =>
+      exampleDeal(`x${at}`, {
+        title: `Admin ${at}`,
+        assignee: ADMIN,
+        organization: "c1",
+        createdAt: Date.UTC(2026, 1, 1),
+      }),
+    )
+    await store.crm.saveItems(PORTAL, "deal", theirs, { users: false })
+    const viewing = [await crmViewerOf(store, PORTAL, COLLEAGUE)]
+    const deals = (await organizationContext(store, organization, { viewing })).deals
+    expect(named(deals.items)).toEqual(["Lighthouse"])
+    expect(deals.hasMore).toBe(false)
+  })
+
+  it("a lead does not name the deal it became when the profile may not read that deal", async () => {
+    const { store, as, adminSource } = await setup()
+    adminSource().put("lead", exampleLead("l1", { title: "Harbour lead", assignee: COLLEAGUE, deal: "da" }))
+    await as(ADMIN, true)("sync")
+    const lead = (await as(ADMIN, true)("leads", "list")).items[0] as { ref: string; deal: string | null }
+    expect(lead.deal).toMatch(/^deal:/)
+    const colleague = as(COLLEAGUE)
+    expect((await colleague("leads", "list")).items[0]).toMatchObject({ ref: lead.ref, deal: null })
+    expect((await colleague("leads", "show", lead.ref)).item).toMatchObject({ deal: null })
+    const viewing = [await crmViewerOf(store, PORTAL, COLLEAGUE)]
+    expect((await dealContext(store, lead.ref, { viewing })).deal.deal).toBeNull()
+    expect((await dealContext(store, lead.ref)).deal.deal).toBe(lead.deal)
   })
 
   it("a profile whose user is unknown is told why the contexts name no deal of the copy", async () => {

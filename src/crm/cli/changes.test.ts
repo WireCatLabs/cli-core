@@ -270,6 +270,22 @@ describe("an activity that arrives done with no due date", () => {
   })
 })
 
+describe("a task with no due date, done before the first sync", () => {
+  it("is listed added and done: it was closed after it was made, as Bitrix24's tasks with no deadline are", async () => {
+    const on = [{ kind: "deal" as const, externalId: "d1" }]
+    const { cli } = await setup([activity("t1", on, { done: true, createdAt: NOW - 2 * HOUR, updatedAt: NOW - HOUR })])
+    await cli("sync")
+
+    const listed = (await cli("changes", "list", WINDOW)).items.filter(({ change }) =>
+      String(change).startsWith("activity_"),
+    )
+    expect(listed.map(({ change, at }) => [change, at])).toEqual([
+      ["activity_done", new Date(NOW - HOUR).toISOString()],
+      ["activity_added", new Date(NOW - 2 * HOUR).toISOString()],
+    ])
+  })
+})
+
 describe("a stage move with one entry in the copy", () => {
   it("is listed from the copy when the earlier entry is older than the history read (FIND-2674)", async () => {
     const entries: CrmStageEntry[] = []
