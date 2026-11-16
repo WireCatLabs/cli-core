@@ -5,6 +5,56 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.674.0 — 16.11.2026
+
+### Added
+
+- **`store.people.rekeyIdentities(provider, pairs, { lockMs, by })`** moves a provider's identities from old
+  external ids to new ones, such as a phone number written another way; each pair is `{ from, to, phone? }`. With the
+  new id not stored, the identity takes it and the phone (`renamed`). With it stored, the old identity merges into it
+  (`merged`): its person merges with the kept one's (the owner's person stays), and every row that points at it moves,
+  found from the foreign keys to `identities` and the `<x>_type = 'identity'` pointers, so a table added later is
+  covered too. A row the kept identity already has under a unique key folds into that twin, which keeps its values and
+  takes the ones it lacks; a pair that would drop a row is refused (`identity.merge-conflict`) and left as it was.
+  Proposals that name the identity follow it. A missing `from` or `from` equal to `to` is `unchanged`, an empty `to`
+  is `skipped`, so a second run is all `unchanged`. Each pair is its own savepoint; a pass stops after `lockMs` (250 by
+  default) and says how far it got in `taken`. Then the phone rule links the renamed and merged identities to the
+  people with their number, as a meetings sync does.
+- **A removed fact is logged, never its content** (store version 67, `fact_removals`). `store.facts.remove(ref, by,
+  reason?)` writes one row per removal: the fact's id, the reference of what it was about, who removed it (`owner` or
+  `agent`, with the agent's handle), when, and the reason. The fact's text and value are not copied: removing still
+  forgets them. `store.facts.removed({ limit, offset })` reads the log, newest first.
+- **`store.facts.reverse(ref, by, reason?)` keeps the reason** on the reversed decision, read back as `reversal`
+  (`by`, `bot`, `at`, `reason`).
+- **A phone call's fields on its meeting** (store version 67, `meetings.direction` and `client_phone`). A phone-line
+  source sets `SourceMeeting.call` (`direction`, `in` or `out`, and `clientPhone`) and marks the participant who took
+  or made the call with the role `manager`. `meetings list`, `meetings show` and the `meetings` arrays of the deal,
+  lead, person and organization contexts then carry `call`: `direction`, `manager` (`name`, `person`) and
+  `client_phone`. A meeting has no `call`; zoom and the other meeting sources change nothing.
+- **A note read gives back its first subject** (`Note.subject`). `addNote` keeps the first `about` on the note, not as
+  a link, so an export that writes a note's links could not see it; `null` for a note to self, a note about the
+  owner, and a document.
+- **"Name a profile" carries a reason**, `profile.missing`, so a caller matches the reason and not the text.
+- **A CLI describes its connection flow as data, and WireCat Desktop draws it.** `defineSetup({ app, configuration,
+  start, steps, texts, check })` builds a WireCat setup document (version 1) and checks it at once: every step
+  reachable, every setting declared, every text in English, the reserved roles and display classes, the limits.
+  `setupCommand(setup)` gives the CLI `setup show` (the document; with a profile its values, a secret only as
+  `{ set: true }`), `setup apply` (`--dry-run` checks the answers on stdin per input with each setting's own schema and
+  saves nothing), `setup run apply --json --answer-stdin` (Desktop's step: the CLI's check, then the settings and the
+  secrets saved, nothing when the check fails) and `<profile> setup`, the same questions in the terminal. Answers on
+  steps the path does not visit are dropped. The JSON Schema and three example documents are the fixture Desktop
+  copies, `test/fixtures/setup-v1/`; `setupFileProblems` checks the flow's images from the CLI's own test. See
+  `docs/setup.md`.
+- **`settingsFor(…).settingSchema(key)`** gives one profile setting's own valibot schema, to check a single value.
+
+### Changed — may break callers
+
+- **`projects evidence` and `projects status` take `--purposes`** for the comma list of purposes to read, as the
+  family's flags name a list. `--purpose` still works, hidden from help, the command
+  catalogue and MCP, and is deprecated: it goes in a later version. A refusal of an unknown purpose names
+  `details.param: "purposes"`.
+- **`Note` has a required `subject`.** Code that builds a `Note` itself adds it.
+
 ## 0.673.0 — 16.11.2026
 
 ### Added
