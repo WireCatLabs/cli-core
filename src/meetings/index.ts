@@ -191,13 +191,13 @@ export {
 } from "./meeting-management.js"
 export type {
   Attachment,
-  CallDirection,
   CallManager,
   ChatLine,
   Event,
   EventSeries,
   JsonValue,
   Meeting,
+  MeetingCallDirection,
   MeetingSeries,
   Metadata,
   Occurrence,
@@ -211,7 +211,7 @@ export type {
   TranscriptLine,
   TranscriptRow,
 } from "./model.js"
-export { CALL_DIRECTIONS } from "./model.js"
+export { MEETING_CALL_DIRECTIONS } from "./model.js"
 export {
   type MeetingParticipantCandidate,
   type MeetingParticipantPage,

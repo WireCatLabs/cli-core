@@ -32,10 +32,10 @@ import type {
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
 import {
-  CALL_DIRECTIONS,
-  type CallDirection,
   formatMeetingReference,
   joinKeyOf,
+  MEETING_CALL_DIRECTIONS,
+  type MeetingCallDirection,
   MeetingError,
 } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
@@ -332,8 +332,8 @@ const fillGap = (context: StoreContext, input: MeetingSave, meetingId: number): 
   return meetingId
 }
 
-const callDirection = (value: CallDirection | null): CallDirection | null => {
-  if (value === null || CALL_DIRECTIONS.includes(value)) return value
+const callDirection = (value: MeetingCallDirection | null): MeetingCallDirection | null => {
+  if (value === null || MEETING_CALL_DIRECTIONS.includes(value)) return value
   throw new CliError("validation_error", `a call's direction is in or out, not ${String(value)}`)
 }
 

@@ -1,7 +1,7 @@
 import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { CALL_DIRECTIONS, type CallDirection, type Meeting } from "./model.js"
+import { MEETING_CALL_DIRECTIONS, type Meeting, type MeetingCallDirection } from "./model.js"
 import { formatMeetingReference } from "./reference.js"
 
 const text = v.string()
@@ -21,7 +21,7 @@ export const meetingIssuesOf = (metadata: Meeting["metadata"]): MeetingIssue[] =
 }
 
 export interface MeetingCallItem {
-  direction: CallDirection | null
+  direction: MeetingCallDirection | null
   /** The participant who took or made the call for the owner, and their person once linked. */
   manager: { name: string | null; person: string | null } | null
   /** The other side's number, as the source wrote it. */
@@ -31,7 +31,7 @@ export interface MeetingCallItem {
 // Typed by name: inferred, every entity map that holds a meeting grows too long for the compiler.
 /** A phone call's fields, which a phone-line source sets; a meeting has none. */
 export const meetingCall: v.GenericSchema<MeetingCallItem> = v.strictObject({
-  direction: v.nullable(v.picklist(CALL_DIRECTIONS)),
+  direction: v.nullable(v.picklist(MEETING_CALL_DIRECTIONS)),
   manager: v.nullable(v.strictObject({ name: v.nullable(text), person: v.nullable(reference) })),
   client_phone: v.nullable(text),
 })

@@ -1,4 +1,4 @@
-import type { CallDirection, CallManager, Meeting, Transcript, TranscriptRow } from "../../meetings/index.js"
+import type { CallManager, Meeting, MeetingCallDirection, Transcript, TranscriptRow } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { fromJson, int, str } from "./events.js"
 
@@ -24,7 +24,7 @@ const callOf = (database: CacheDatabase, row: Row): Pick<Meeting, "direction" | 
   row.direction == null && row.client_phone == null
     ? {}
     : {
-        direction: str(row.direction) as CallDirection | null,
+        direction: str(row.direction) as MeetingCallDirection | null,
         clientPhone: str(row.client_phone),
         manager: managerOf(database, Number(row.id)),
       }

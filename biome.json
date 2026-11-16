@@ -778,7 +778,7 @@
       }
     },
     {
-      "includes": ["src/store/sqlite/emails.ts"],
+      "includes": ["src/store/sqlite/emails.ts", "src/store/sqlite/notes.ts"],
       "linter": {
         "rules": {
           "style": {
