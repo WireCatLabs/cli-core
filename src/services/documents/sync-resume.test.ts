@@ -379,12 +379,21 @@ describe("a sync of a tree larger than one call's bound", () => {
     expect(settled).toEqual([false])
   })
 
-  it("lists a folder or reads a page in every call of a run shorter than the deadline's margin, and ends", async () => {
+  it("makes one request in every call of a run shorter than the deadline's margin, and ends", async () => {
     const tree = treeSync(pageTree(1, 2, 2))
     const base = tree.options.source as DocumentSource
     let requests = 0
+    // The start token and the root's own metadata are requests too, each in a call of its own.
     const source: DocumentSource = {
       ...base,
+      startToken: () => {
+        requests++
+        return base.startToken()
+      },
+      metadata: (id) => {
+        requests++
+        return base.metadata(id)
+      },
       children: (id) => {
         requests++
         return base.children(id)
@@ -412,13 +421,18 @@ describe("a sync of a tree larger than one call's bound", () => {
     ).toMatchObject({ complete: false, stopped: "deadline", walk: { listed: 0 } })
   })
 
-  it("lets only a call's first request past the deadline's margin, never a read after a slow listing", async () => {
+  it("lets only a call's first request past the deadline's margin: the start token, and nothing after it", async () => {
     const tree = treeSync(pageTree(0, 0, 0))
     const base = tree.options.source as DocumentSource
     let clock = 0
     const calls: string[] = []
     const source: DocumentSource = {
       ...base,
+      startToken: async () => {
+        calls.push("start")
+        clock += 1_400
+        return base.startToken()
+      },
       children: async (id) => {
         calls.push("list")
         clock += 1_400
@@ -433,7 +447,7 @@ describe("a sync of a tree larger than one call's bound", () => {
     const deadline = { endsAt: 4_000, ms: 4_000 }
     const now = () => clock
     const result = await syncDocuments({ ...tree.options, source, now, deadline, budget: runBudget({ deadline, now }) })
-    expect(calls).toEqual(["list"])
+    expect(calls).toEqual(["start"])
     expect(result).toMatchObject({ stopped: "deadline", complete: false })
   })
 
@@ -469,7 +483,8 @@ describe("a sync of a tree larger than one call's bound", () => {
   it("lists a folder a page per step and goes on mid-folder in the next call, each page once and no file lost", async () => {
     const tree = treeSync(pageTree(1, 3, 30))
     const { source, pages } = paged(tree, 7)
-    const first = await syncDocuments({ ...tree.options, source, budget: requests(4) })
+    // Six: the start token and the root's metadata take one each beside the four listings.
+    const first = await syncDocuments({ ...tree.options, source, budget: requests(6) })
     expect(first).toMatchObject({ complete: false, stopped: "requests", walk: { listed: 4 } })
     expect(tree.walk()?.stack.at(-1)).toMatchObject({ id: "h0s0", listing: "14" })
     const runs = await untilComplete(() => syncDocuments({ ...tree.options, source, budget: requests(4) }))
@@ -501,9 +516,63 @@ describe("a sync of a tree larger than one call's bound", () => {
     ])
   })
 
+  it("skips a page the sign-in may not read, as a gone one, so the pass completes and the next sync reads changes", async () => {
+    const tree = treeSync(pageTree(1, 1, 2))
+    const base = tree.options.source as DocumentSource
+    const source: DocumentSource = {
+      ...base,
+      content: (id, limit) =>
+        id === "h0s0l1"
+          ? Promise.reject(new CliError("permission_error", "restricted_resource"))
+          : base.content(id, limit),
+    }
+    const first = await syncDocuments({ ...tree.options, source })
+    expect(first).toMatchObject({
+      complete: true,
+      pending: 0,
+      skipped: [{ id: "h0s0l1", reason: "restricted_resource" }],
+    })
+    expect(tree.state().cursor).toBe("start")
+    tree.change(page("h0s0l0", "h0s0", "2"))
+    expect(await syncDocuments({ ...tree.options, source })).toMatchObject({ complete: true, saved: 1 })
+  })
+
+  it("takes the start token and the root's metadata from the budget, so a 45 s run of slow reads ends with time left", async () => {
+    const tree = treeSync(pageTree(2, 2, 2))
+    const base = tree.options.source as DocumentSource
+    let clock = 0
+    const slow =
+      <A extends unknown[], R>(read: (...args: A) => Promise<R>) =>
+      (...args: A) => {
+        clock += 15_000
+        return read(...args)
+      }
+    const source: DocumentSource = {
+      ...base,
+      startToken: slow(base.startToken),
+      metadata: slow(base.metadata),
+      children: slow(base.children),
+      content: slow(base.content),
+    }
+    const now = () => clock
+    for (let run = 0; run < 100; run++) {
+      const deadline = { endsAt: clock + 45_000, ms: 45_000 }
+      const result = await syncDocuments({
+        ...tree.options,
+        source,
+        now,
+        deadline,
+        budget: runBudget({ deadline, now }),
+      })
+      expect(clock).toBeLessThan(deadline.endsAt)
+      if (result.complete) return
+    }
+    throw new Error("the sync never completed")
+  })
+
   it("stops when its request budget says so and goes on in the next call", async () => {
     const tree = treeSync(pageTree(2, 2, 2))
-    let left = 3
+    let left = 5
     const budget = { take: () => (left-- > 0 ? null : ("requests" as const)) }
     expect(await syncDocuments({ ...tree.options, budget })).toMatchObject({
       complete: false,

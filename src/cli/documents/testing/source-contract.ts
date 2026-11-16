@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
-import { type Deadline, type RunBudget, runBudget } from "../../../background/budget.js"
+import { ANSWER_RESERVE_MS, type Deadline, type RunBudget, runBudget } from "../../../background/budget.js"
 import type { DocumentSource, SourceFile, SyncResult } from "../../../documents.js"
 import type { ContractCase } from "../../../meetings/index.js"
 import { DEFAULT_AGENT_COOPERATIVE_MS } from "../../execution.js"
@@ -105,11 +105,12 @@ const watched = <M extends SourceFile>(source: DocumentSource<M>, before: () => 
   })
 
 /**
- * Syncs until the walk is done and nothing is left but reported errors, and gives the last call's answer and ids and
- * how many reads the calls made. A file the provider refuses stays pending with its error, sync after sync.
+ * Syncs until the pass is complete, and gives the last call's answer and ids, every file the calls skipped, and how
+ * many reads they made.
  */
 const finish = async <M extends SourceFile>(sync: NonNullable<DocumentSourceFaults<M>["sync"]>) => {
   let reads = 0
+  const skipped = new Set<string>()
   for (let call = 1; call <= MOST_SYNCS; call++) {
     const { result, saved } = await sync({
       wrap: (source) =>
@@ -117,7 +118,8 @@ const finish = async <M extends SourceFile>(sync: NonNullable<DocumentSourceFaul
           reads++
         }),
     })
-    if (!result.walk && result.pending === result.errors.length) return { result, saved: [...saved].sort(), reads }
+    for (const one of result.skipped) skipped.add(one.id)
+    if (result.complete && result.pending === 0) return { result, saved: [...saved].sort(), skipped, reads }
   }
   throw new assert.AssertionError({ message: `the sync is still unfinished after ${MOST_SYNCS} calls` })
 }
@@ -270,14 +272,15 @@ const faultCases = <M extends SourceFile>(
       )
       const sync = fixture.faults?.sync
       if (!sync) return
-      const { result, saved } = await finish(sync)
+      // A refused file is skipped as a gone one is, so the pass completes and its change cursor moves on.
+      const { saved, skipped } = await finish(sync)
       assert.ok(!saved.includes(id), `the sync does not hold ${id}, which answers ${status}`)
       assert.ok(saved.length > 0, `the sync imports the documents that still answer beside ${id}`)
-      if (status === 403)
-        assert.ok(
-          [...result.errors, ...result.skipped].some((one) => one.id === id),
-          `the sync names ${id} among its errors or skipped files, not silently left out`,
-        )
+      if (status === 403) assert.ok(skipped.has(id), `the sync names ${id} among its skipped files with the reason`)
+      if (!fixture.change) return
+      await fixture.change()
+      // Throws when the refused file holds the next pass too.
+      await finish(sync)
     },
   })),
   {
@@ -359,8 +362,11 @@ const faultCases = <M extends SourceFile>(
               clock += SLOW_CALL_MS
             }),
         })
-        assert.ok(clock <= deadline.endsAt, `sync ${call} ended by its deadline, ${clock - deadline.endsAt} ms late`)
-        if (!result.walk && result.pending === result.errors.length) {
+        assert.ok(
+          clock <= deadline.endsAt - ANSWER_RESERVE_MS,
+          `sync ${call} left time to answer before its deadline: ended ${clock - deadline.endsAt} ms from it`,
+        )
+        if (result.complete && result.pending === 0) {
           assert.ok(stopped, "a slow provider's tree takes more than one run under the deadline")
           assert.deepEqual([...saved].sort(), expected.saved, "the runs together hold what one whole sync does")
           return

@@ -238,7 +238,12 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       } catch (error) {
         const safe = errorOf(error)
         if (safe.code === "cancelled") throw safe
-        if (job.kind === "save" && (safe.code === "not_found" || safe.code === "validation_error")) {
+        // A file the sign-in may not read is skipped as a gone one is: retried on every sync, it would hold the pass,
+        // and the change cursor with it, for good.
+        if (
+          job.kind === "save" &&
+          (safe.code === "not_found" || safe.code === "permission_error" || safe.code === "validation_error")
+        ) {
           const skipped: SourceSkip<M> = {
             id: job.id,
             reason: safe.message,
