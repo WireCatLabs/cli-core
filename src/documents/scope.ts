@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import type { SourceFile } from "./model.js"
 
-export const within = (
-  file: SourceFile,
+export const within = <F extends SourceFile>(
+  file: F,
   roots: string[],
-  folders: Record<string, SourceFile>,
+  folders: Record<string, F>,
   seen = new Set<string>(),
+  cut?: (folder: F) => boolean,
 ): boolean => {
   if (file.trashed) return false
   if (roots.includes(file.id)) return true
@@ -13,13 +14,15 @@ export const within = (
   const next = new Set([...seen, file.id])
   return file.parents.some((id) => {
     const folder = folders[id]
-    return folder ? within(folder, roots, folders, next) : roots.includes(id)
+    if (!folder) return roots.includes(id)
+    // A selected folder is never cut: the owner chose it, so an exclude that matches it drops only its own row.
+    return (roots.includes(id) || !cut?.(folder)) && within(folder, roots, folders, next, cut)
   })
 }
 
 /**
  * A saved query beside the selected folders: `include` adds the files it finds wherever they sit, `exclude` keeps the
- * files it matches out even inside a selected folder.
+ * files it matches out even inside a selected folder, and everything below a folder or page it matches.
  */
 export interface SourceQuery<M extends SourceFile = SourceFile> {
   /** Part of the sync's scope: a changed query or mode plans the sync again from the start. */
@@ -33,11 +36,12 @@ export interface SourceQuery<M extends SourceFile = SourceFile> {
 export const inScope = <M extends SourceFile>(
   file: M,
   roots: string[],
-  folders: Record<string, SourceFile>,
+  folders: Record<string, M>,
   matched: ReadonlySet<string> = new Set(),
   query?: SourceQuery<M>,
 ): boolean => {
   if (file.trashed) return false
-  if (query?.mode === "exclude" && query.matches(file)) return false
-  return matched.has(file.id) || within(file, roots, folders)
+  const excluded = query?.mode === "exclude" ? query.matches : undefined
+  if (excluded?.(file)) return false
+  return matched.has(file.id) || within(file, roots, folders, new Set(), excluded)
 }

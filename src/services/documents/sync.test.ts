@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { catalogFiles } from "../../documents/catalog.js"
 import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
@@ -344,6 +345,62 @@ describe("provider-neutral document sync", () => {
       f.changes([{ id: "a", removed: false, file: f.files.get("a") }])
       expect(await syncDocuments({ ...f.options, query })).toMatchObject({ removed: 1 })
       expect(f.state().documents).toEqual({})
+    })
+    it("exclude that drops a page drops its sub-pages too, from the documents and the catalog, but not a file another parent keeps", async () => {
+      const f = await setup()
+      f.files.set("c", file("c", ["nested", "root"]))
+      const pages = new Set(["root", "nested"])
+      const options: SyncOptions<SourceFile> = {
+        ...f.options,
+        isDocument: (item) => pages.has(item.id),
+        skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+      }
+      await syncDocuments(options)
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "c", "nested", "root"])
+      const query = { key: "nested", mode: "exclude" as const, matches: (item: SourceFile) => item.id === "nested" }
+      expect(await syncDocuments({ ...options, query })).toMatchObject({ removed: 2 })
+      expect(Object.keys(f.state().documents).sort()).toEqual(["b", "c", "root"])
+      expect(
+        catalogFiles(f.state(), ["root"], query)
+          .map((item) => item.id)
+          .sort(),
+      ).toEqual(["b", "c", "root"])
+    })
+    it("exclude that matches a selected folder drops only its own row, never what is inside", async () => {
+      const f = await setup()
+      const pages = new Set(["root", "nested"])
+      const options: SyncOptions<SourceFile> = {
+        ...f.options,
+        isDocument: (item) => pages.has(item.id),
+        skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+      }
+      await syncDocuments(options)
+      const query = { key: "root", mode: "exclude" as const, matches: (item: SourceFile) => item.id === "root" }
+      expect(await syncDocuments({ ...options, query })).toMatchObject({ removed: 1 })
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested"])
+    })
+    it("brings a whole branch back once its folder no longer matches the exclude", async () => {
+      const f = await setup()
+      f.files.set("deep", file("deep", ["nested"], "inode/directory"))
+      f.files.set("d", file("d", ["deep"]))
+      const query = {
+        key: "renamed",
+        mode: "exclude" as const,
+        matches: (item: SourceFile) => item.name.startsWith("x-"),
+      }
+      const options = { ...f.options, query }
+      await syncDocuments(options)
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "d"])
+      const rename = (name: string, version: string) => {
+        f.files.set("nested", { ...file("nested", ["root"], "inode/directory"), name, version })
+        f.changes([{ id: "nested", removed: false, file: must(f.files.get("nested")) }])
+      }
+      rename("x-nested", "2")
+      expect(await syncDocuments(options)).toMatchObject({ removed: 2 })
+      expect(Object.keys(f.state().documents)).toEqual(["b"])
+      rename("nested", "3")
+      await syncDocuments(options)
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "d"])
     })
   })
 })
