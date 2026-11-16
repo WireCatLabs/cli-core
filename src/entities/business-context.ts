@@ -115,6 +115,18 @@ const taskLine = v.strictObject({
 })
 const counts = { messages: count, mail: count, meetings: count }
 
+/** A message, mail or meeting with the people it involves; a call adds its fields and length. */
+const touch = {
+  kind: v.picklist(["message", "mail", "meeting"]),
+  ref: reference,
+  title: nullableText,
+  at: v.nullable(time),
+  people: v.array(reference),
+  text: v.optional(nullableText),
+  call: v.optional(meetingCall),
+  duration_ms: v.optional(v.nullable(count)),
+}
+
 /** What a person is in the owner's business: organizations, reporting lines, deals and projects, with standing. */
 export const personBusiness = v.strictObject({
   organizations: section(v.strictObject({ ...related.entries, categories })),
@@ -161,6 +173,8 @@ export const organizationContext: v.GenericSchema = v.strictObject({
   money,
   /** Counts only, through its own people, in the accounts read. */
   communications: v.strictObject({ ...counts, has_more: v.boolean() }),
+  /** Its people's messages, mail and meetings, newest first. */
+  history: section(v.strictObject(touch)),
   tasks: section(taskLine),
   coverage,
 })
@@ -179,19 +193,7 @@ export const dealContext: v.GenericSchema = v.strictObject({
   window: v.strictObject({ since: time, until: time }),
   /** Shared people within its lifetime: `proposed`, an overlap of people, never a link. */
   communications: v.strictObject({
-    ...section(
-      v.strictObject({
-        kind: v.picklist(["message", "mail", "meeting"]),
-        ref: reference,
-        title: nullableText,
-        at: v.nullable(time),
-        people: v.array(reference),
-        text: v.optional(nullableText),
-        call: v.optional(meetingCall),
-        duration_ms: v.optional(v.nullable(count)),
-        standing: v.literal("proposed"),
-      }),
-    ).entries,
+    ...section(v.strictObject({ ...touch, standing: v.literal("proposed") })).entries,
     counts: v.strictObject(counts),
   }),
   tasks: section(taskLine),

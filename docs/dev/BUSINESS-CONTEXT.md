@@ -60,7 +60,8 @@ scope. Returns the sections of `personContext` (`shared`, `last`, `recent`, `men
 `organization` (with `own`), `categories`, `people` (`member-of` it), `customers` (`customer-of` it), `suppliers`
 (it is `customer-of` them: "supplier of"), `partners`, `projects` (its own by `projects.organization_id` and its
 deals' projects, `via` saying which), `deals` (open deals and leads it is the client of), `money`, `communications`
-(counts only, through its people whose membership is usable), `tasks` (open tasks of its projects), `coverage`.
+(counts, through its people whose membership is usable), `history` (those people's messages, mail and meetings,
+newest first, `limit` of them, a call with its fields), `tasks` (open tasks of its projects), `coverage`.
 
 ## Deal or lead — `dealContext(store, "deal:<id>" | "lead:<id>", options)`, `dealBrief(context)`
 
