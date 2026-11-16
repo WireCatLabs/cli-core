@@ -112,6 +112,34 @@ describe("calendar events by meaning", () => {
     expect(found.items[0]).toMatchObject({ title: "cat", occurrences: 52, found_by: ["meaning"] })
   })
 
+  it("stops before the deadline's margin or a cancel, between batches, and says how many pieces are left", async () => {
+    download()
+    const words = ["cat", "dog", "fish", "kitten", "zebra"]
+    const titles = words.flatMap((one, at) => words.slice(at + 1).map((two) => `${one} ${two}`))
+    const store = await calendarStore(titles.map((title, day) => entry(`e${day}`, title, NOW + day * DAY)))
+    const late = { endsAt: Date.now() + 1_000, ms: 45_000 }
+    expect(await embedEvents(store, { threads: 1, deadline: late })).toEqual({
+      model: "e5-small",
+      embedded: 0,
+      left: true,
+      stopped: "deadline",
+      remaining: 10,
+    })
+    const stop = new AbortController()
+    const save = store.vectors.saveVectors.bind(store.vectors)
+    store.vectors.saveVectors = async (...args) => {
+      await save(...args)
+      stop.abort()
+    }
+    expect(await embedEvents(store, { threads: 1, signal: stop.signal })).toMatchObject({
+      embedded: 8,
+      left: true,
+      stopped: "cancelled",
+      remaining: 2,
+    })
+    expect(await embedEvents(store, { threads: 1 })).toEqual({ model: "e5-small", embedded: 2, left: false })
+  })
+
   it("marks a hit found both ways once per series", async () => {
     download()
     const store = await calendarStore(weekly("s1", "cat", 3))

@@ -19,7 +19,12 @@ export interface SyncOptions<M extends SourceFile> {
   /** @deprecated No longer used: a walk past `maxEntries` stops and goes on in the next sync instead of failing. */
   limitError?(): CliError
   /** Asked before each folder listing and each file read: a stop ends the call with its work saved. */
-  budget?: { take(): "requests" | "deadline" | "cancelled" | null; readonly stopped?: string | null }
+  budget?: {
+    take(): "requests" | "deadline" | "cancelled" | null
+    /** The call's first request, when `take()` said "deadline" and nothing has gone yet (`RunBudget.first`). */
+    first?(): boolean
+    readonly stopped?: string | null
+  }
   /** The run's hard limit: the word index at the end of a sync stops before it, less its margin. */
   deadline?: Deadline
   isFolder(file: M): boolean

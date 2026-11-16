@@ -1,5 +1,6 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
+import { type Deadline, deadlineMargin } from "../background/budget.js"
 import { INTERNAL_NOTES, isImportedProvider } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import {
@@ -134,6 +135,9 @@ export interface NotesEmbedOptions {
   keyring?: KeyringStore
   /** Tests give a fake model here; nothing in the suite reaches a provider. */
   enrichWith?: Pick<EnrichOptions, "adapters" | "fetch" | "key">
+  /** The run's hard limit: the run stops between batches before it, less its margin, as a sync's last step does. */
+  deadline?: Deadline
+  signal?: AbortSignal
 }
 
 export interface NotesEmbedded {
@@ -141,6 +145,10 @@ export interface NotesEmbedded {
   embedded: number
   /** Chunks still without a vector, when `maxChunks` stopped the run, or records still to enrich. */
   left: boolean
+  /** The run stopped early to end in time, or was cancelled; the next run goes on. */
+  stopped?: "deadline" | "cancelled"
+  /** After a stop: the chunks still without a vector, when the store can count them. */
+  remaining?: number
   /** What the owner's enrichment did first; absent when it is off. */
   /** The run, or `failed` with no counts when enrichment threw before it could count. */
   enrichment?:
@@ -198,25 +206,47 @@ export const withLocal = async <T>(
  * as conversations, so a chunk whose text a conversation shares is embedded once. A missing model is
  * an error naming the download command; nothing is downloaded.
  */
+/** When a run with this deadline stops: its margin before the end, as the word index after a sync does. */
+const stopsAt = (deadline: Deadline | undefined) =>
+  deadline ? deadline.endsAt - deadlineMargin(deadline) : Number.POSITIVE_INFINITY
+
 const embedChunks = async (
   store: MessageStore,
-  source: Pick<MessageStore["notes"] | MessageStore["calendar"], "chunksToEmbed">,
+  source: Pick<MessageStore["notes"] | MessageStore["calendar"], "chunksToEmbed"> & {
+    chunksLeft?(model: string): Promise<number>
+  },
   {
     model: choice,
     maxChunks = Number.POSITIVE_INFINITY,
     env,
     threads,
     command,
+    deadline,
+    signal,
   }: NotesEmbedOptions & {
     command?: string
   } = {},
 ): Promise<NotesEmbedded> => {
   const { model, directory, key } = localModel(choice, env, command)
   if ((await source.chunksToEmbed(key, { limit: 1 })).length === 0) return { model: model.id, embedded: 0, left: false }
+  const until = stopsAt(deadline)
+  const stopped = (slowest: number) =>
+    signal?.aborted ? ("cancelled" as const) : Date.now() + slowest >= until ? ("deadline" as const) : undefined
+  const stop = async (embedded: number, why: "deadline" | "cancelled"): Promise<NotesEmbedded> => {
+    const remaining = await source.chunksLeft?.(key)
+    return { model: model.id, embedded, left: true, stopped: why, ...(remaining === undefined ? {} : { remaining }) }
+  }
+  // Loading the model alone takes seconds.
+  const early = stopped(0)
+  if (early) return stop(0, early)
   return withLocal(model, directory, threads, async (embedder) => {
     let embedded = 0
     let after: string | undefined
+    let slowest = 0
     while (embedded < maxChunks) {
+      const why = stopped(slowest)
+      if (why) return stop(embedded, why)
+      const started = Date.now()
       const batch = await source.chunksToEmbed(key, {
         limit: Math.min(NOTE_BATCH, maxChunks - embedded),
         ...(after === undefined ? {} : { after }),
@@ -233,6 +263,7 @@ const embedChunks = async (
         batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
       )
       embedded += batch.length
+      slowest = Math.max(slowest, Date.now() - started)
     }
     const left = (await source.chunksToEmbed(key, { limit: 1, ...(after === undefined ? {} : { after }) })).length > 0
     return { model: model.id, embedded, left }
@@ -250,6 +281,13 @@ const enrichedFirst = async (
   embed: () => Promise<NotesEmbedded>,
 ): Promise<NotesEmbedded> => {
   let enrichment: NotesEmbedded["enrichment"]
+  const time = stopsAt(options.deadline) - Date.now()
+  // Out of time, the embed answers that it stopped; enrichment that runs into the deadline fails and is retried.
+  if (time <= 0 || options.signal?.aborted) return embed()
+  const signals = [
+    ...(options.signal ? [options.signal] : []),
+    ...(Number.isFinite(time) ? [AbortSignal.timeout(time)] : []),
+  ]
   try {
     const run = await enrichRecords(store, {
       env: options.env ?? process.env,
@@ -257,6 +295,7 @@ const enrichedFirst = async (
       ...(options.app ? { app: options.app } : {}),
       ...(options.keyring ? { keyring: options.keyring } : {}),
       ...options.enrichWith,
+      ...(signals.length ? { signal: AbortSignal.any(signals) } : {}),
     })
     if (run.status !== "off") enrichment = run
   } catch (error) {

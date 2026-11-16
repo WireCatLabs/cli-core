@@ -15,7 +15,7 @@ export interface DocumentSyncArgs {
   embed?: boolean
   /** Sized to the run's deadline; pass it to `syncDocuments` so a sync stops in time and says how to go on. */
   budget?: RunBudget
-  /** The run's hard limit; pass it to `syncDocuments` so its last step, the word index, ends before it. */
+  /** The run's hard limit; pass it to `syncDocuments`, and to `embedNotes` for `--embed`, so both end before it. */
   deadline?: Deadline
 }
 

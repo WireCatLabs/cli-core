@@ -16,6 +16,11 @@ export interface Deadline {
 export interface RunBudget {
   /** One more request: `null` when it may go, otherwise why not. Once it says no it keeps saying no. */
   take(): BudgetStop | null
+  /**
+   * After `take()` said "deadline": whether the call's first request goes anyway. Only while nothing has gone yet,
+   * once, and when one request still ends before the deadline itself with time left to answer.
+   */
+  first?(): boolean
   readonly used: number
   /** `null`: no request limit, only the deadline. */
   readonly limit: number | null
@@ -27,9 +32,12 @@ export const DEADLINE_MARGIN_SHARE = 0.15
 /** How long one request to a provider is expected to take when the CLI does not say (`AppIdentity.requestMs`). */
 export const DEFAULT_REQUEST_MS = 2_000
 
-/** Whether one more request still ends before the deadline itself, inside its margin. */
+/** Kept after a request for the answer, the catalog import and the state save. */
+export const ANSWER_RESERVE_MS = 500
+
+/** Whether one more request still ends before the deadline itself, with time left to answer. */
 export const oneMoreFits = (deadline: Deadline | undefined, at: number, requestMs = DEFAULT_REQUEST_MS): boolean =>
-  deadline !== undefined && at + requestMs < deadline.endsAt
+  deadline !== undefined && at + requestMs + ANSWER_RESERVE_MS < deadline.endsAt
 
 export const deadlineMargin = (deadline: Deadline): number =>
   Math.max(DEADLINE_MARGIN_MS, deadline.ms * DEADLINE_MARGIN_SHARE)
@@ -59,6 +67,7 @@ export const runBudget = ({
   const limit = fits === null ? (requests ?? null) : Math.min(fits, requests ?? fits)
   const margin = deadline ? deadlineMargin(deadline) : 0
   let used = 0
+  let granted = false
   let stopped: BudgetStop | null = null
   let last: number | undefined
   // A request may page inside the source, so the gap between two asks is the honest measure of one.
@@ -75,6 +84,15 @@ export const runBudget = ({
       used += 1
       last = at
       return null
+    },
+    first() {
+      if (granted || used > 0 || stopped !== "deadline") return false
+      const at = now()
+      if (!oneMoreFits(deadline, at, Math.max(requestMs ?? DEFAULT_REQUEST_MS, slowest))) return false
+      granted = true
+      used += 1
+      last = at
+      return true
     },
     get used() {
       return used
