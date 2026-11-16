@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { catalogFiles } from "../../documents/catalog.js"
 import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
@@ -344,6 +345,25 @@ describe("provider-neutral document sync", () => {
       f.changes([{ id: "a", removed: false, file: f.files.get("a") }])
       expect(await syncDocuments({ ...f.options, query })).toMatchObject({ removed: 1 })
       expect(f.state().documents).toEqual({})
+    })
+    it("exclude that drops a page drops its sub-pages too, from the documents and the catalog", async () => {
+      const f = await setup()
+      const pages = new Set(["root", "nested"])
+      const options: SyncOptions<SourceFile> = {
+        ...f.options,
+        isDocument: (item) => pages.has(item.id),
+        skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+      }
+      await syncDocuments(options)
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested", "root"])
+      const query = { key: "nested", mode: "exclude" as const, matches: (item: SourceFile) => item.id === "nested" }
+      expect(await syncDocuments({ ...options, query })).toMatchObject({ removed: 2 })
+      expect(Object.keys(f.state().documents).sort()).toEqual(["b", "root"])
+      expect(
+        catalogFiles(f.state(), ["root"], query)
+          .map((item) => item.id)
+          .sort(),
+      ).toEqual(["b", "root"])
     })
   })
 })
