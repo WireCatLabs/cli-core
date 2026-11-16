@@ -54,10 +54,12 @@ export const fetchCrmFile = async (link: string, options: CrmFileFetchOptions): 
       at = new URL(next, url).href
       continue
     }
-    if (!answer.ok || !answer.body)
+    if (!answer.ok || !answer.body) {
+      await answer.body?.cancel().catch(() => {})
       throw new CliError("provider_error", `the CRM's file server answered ${answer.status}`, {
         reason: "crm.file-unavailable",
       })
+    }
     if ((answer.headers.get("content-type") ?? "").toLowerCase().startsWith("text/html")) {
       await answer.body.cancel().catch(() => {})
       throw refused("the CRM answered a web page, not the file")

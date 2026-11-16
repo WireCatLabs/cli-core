@@ -1,5 +1,15 @@
 import { createHash } from "node:crypto"
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs"
+import {
+  chmodSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from "node:fs"
 import { open } from "node:fs/promises"
 import { join, resolve, sep } from "node:path"
 import { CliError, isCliError, resolvePaths } from "@wirecat/cli-base"
@@ -107,9 +117,35 @@ const ownFolder = (top: string, folder: string) => {
 }
 
 class TooLarge extends Error {}
+class Taken extends Error {}
 
-/** Streams into a part file beside the target and renames it once whole; any stop leaves no part behind. */
-const saveStream = async (stream: ReadableStream<Uint8Array>, target: string, cap: number, signal?: AbortSignal) => {
+const errnoOf = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code
+
+/** The whole part file becomes `target` only if no file is there: a hard link, or a copy where links are refused. */
+const placeNew = (part: string, target: string) => {
+  try {
+    linkSync(part, target)
+  } catch (error) {
+    if (errnoOf(error) === "EEXIST") throw new Taken()
+    try {
+      copyFileSync(part, target, constants.COPYFILE_EXCL)
+    } catch (copying) {
+      if (errnoOf(copying) === "EEXIST") throw new Taken()
+      throw copying
+    }
+  }
+  rmSync(part, { force: true })
+}
+
+/**
+ * Streams into a part file beside the target and moves it there once whole; any stop leaves no part behind. With
+ * `exclusive`, a file that appeared at the target meanwhile is never replaced.
+ */
+const saveStream = async (
+  stream: ReadableStream<Uint8Array>,
+  target: string,
+  { cap, signal, exclusive }: { cap: number; signal?: AbortSignal; exclusive: boolean },
+) => {
   const part = `${target}.part-${process.pid}`
   const handle = await open(part, "wx", 0o600)
   const hash = createHash("sha256")
@@ -126,7 +162,8 @@ const saveStream = async (stream: ReadableStream<Uint8Array>, target: string, ca
       await handle.write(value)
     }
     await handle.close()
-    renameSync(part, target)
+    if (exclusive) placeNew(part, target)
+    else renameSync(part, target)
     chmodSync(target, 0o600)
     return { bytes, sha256: hash.digest("hex") }
   } catch (error) {
@@ -186,7 +223,13 @@ const quotaOf = (context: CrmFileContext) => {
 const roomFor = async (
   { run }: CrmFileContext,
   folder: string,
-  { need, capBytes, own, drop }: { need: number; capBytes: number; own: string; drop: boolean },
+  {
+    need,
+    capBytes,
+    own,
+    target,
+    drop,
+  }: { need: number; capBytes: number; own: string; target: string | null; drop: boolean },
 ) => {
   const files = run.store.crmFiles
   const prefix = `${folder}${sep}`
@@ -194,8 +237,13 @@ const roomFor = async (
   let total =
     (await files.storedBytes(run.account, prefix)) - (earlier?.localPath?.startsWith(prefix) ? (earlier.size ?? 0) : 0)
   if (total + need <= capBytes) return true
-  const droppable = (await files.droppable(run.account, prefix)).filter((one) => one.externalId !== own)
-  if (!drop) return total - droppable.reduce((sum, one) => sum + (one.size ?? 0), 0) + need <= capBytes
+  // Never the file itself, by its id or its path: a stale row may name the path this download just wrote.
+  const droppable = (await files.droppable(run.account, prefix)).filter(
+    (one) => one.externalId !== own && one.localPath !== target,
+  )
+  // Nothing is dropped for a file that would not fit even then.
+  if (total - droppable.reduce((sum, one) => sum + (one.size ?? 0), 0) + need > capBytes) return false
+  if (!drop) return true
   for (const one of droppable) {
     if (one.localPath) rmSync(one.localPath, { force: true })
     await files.forgetFile(run.account, one.externalId)
@@ -218,13 +266,24 @@ const diskFull = (limits: CrmFileLimits, folder: string, setting: string) =>
  * activity's and a field's contract.pdf of one record do. Under `--dir` the folder is the owner's: a file there that
  * is not this one's earlier copy is never overwritten.
  */
-const targetOf = (folder: string, file: CrmOpenableFile, earlier: string | null, capped: boolean) => {
+const targetOf = (
+  folder: string,
+  file: CrmOpenableFile,
+  earlier: string | null,
+  held: ReadonlySet<string>,
+  capped: boolean,
+) => {
   const providerId = segment(parseCrmFileId(file.id).providerId)
   const name = safeName(file.name) ?? `file-${providerId}`
-  const free = (path: string) => path === earlier || !existsSync(path)
+  // A path another row names is taken even when its file is gone: that row would drop or report this file.
+  const free = (path: string) => path === earlier || (!held.has(path) && !existsSync(path))
   for (const candidate of [join(folder, name), join(folder, `${providerId}-${name}`)])
     if (free(candidate)) return candidate
-  if (capped) return join(folder, `${providerId}-${name}`)
+  if (capped)
+    for (let at = 2; ; at += 1) {
+      const candidate = join(folder, `${providerId}-${at}-${name}`)
+      if (free(candidate)) return candidate
+    }
   throw new CliError("conflict", `${folder} already holds ${name} and ${providerId}-${name}: choose another --dir`, {
     reason: "crm.file-exists",
     path: folder,
@@ -258,18 +317,34 @@ export const downloadCrmFile = async (
   const folder = dir ? resolve(dir) : join(top, segment(`${file.owner.kind}-${file.owner.id}`))
   const setting = `crm.${run.account.provider}:${run.account.account}.files.max_total_mb`
   const capped = dir === undefined
-  const room = (need: number, drop: boolean) =>
-    roomFor(context, top, { need, capBytes: limits.max_total_mb * MB, own: file.id, drop })
-  if (capped && !(await room(file.size ?? 0, false))) throw diskFull(limits, top, setting)
+  const room = (need: number, target: string | null, drop: boolean) =>
+    roomFor(context, top, { need, capBytes: limits.max_total_mb * MB, own: file.id, target, drop })
+  if (capped && !(await room(file.size ?? 0, null, false))) throw diskFull(limits, top, setting)
   if (capped) ownFolder(join(top, ".."), folder)
   else mkdirSync(folder, { recursive: true, mode: 0o700 })
   const earlier = await run.store.crmFiles.get(run.account, file.id)
-  const target = targetOf(folder, file, earlier?.localPath ?? null, capped)
+  const held = new Set(await run.store.crmFiles.savedPaths(run.account))
+  if (earlier?.localPath) held.delete(earlier.localPath)
+  const target = targetOf(folder, file, earlier?.localPath ?? null, held, capped)
+  // Cut off before the row is saved: nothing of this download stays, and an earlier row naming the path forgets it.
+  const discard = async () => {
+    rmSync(target, { force: true })
+    if (earlier?.localPath === target) await run.store.crmFiles.forgetFile(run.account, file.id)
+  }
   let saved: { bytes: number; sha256: string }
   try {
-    saved = await saveStream(await file.open(signal), target, capBytes, signal)
+    saved = await saveStream(await file.open(signal), target, {
+      cap: capBytes,
+      ...(signal ? { signal } : {}),
+      exclusive: !capped && target !== earlier?.localPath,
+    })
   } catch (error) {
     if (error instanceof TooLarge) throw tooLarge(file.id, file.size, capMb, flag)
+    if (error instanceof Taken)
+      throw new CliError("conflict", `a file appeared at the name ${file.id} was to take in ${folder}; run it again`, {
+        reason: "crm.file-exists",
+        path: folder,
+      })
     if (signal?.aborted)
       throw new CliError(
         "timeout",
@@ -284,24 +359,48 @@ export const downloadCrmFile = async (
       { reason: "crm.file-unavailable" },
     )
   }
-  if (capped && !(await room(saved.bytes, true))) {
-    rmSync(target, { force: true })
-    if (earlier?.localPath === target) await run.store.crmFiles.forgetFile(run.account, file.id)
+  if (capped && !(await room(saved.bytes, target, true))) {
+    await discard()
     throw diskFull(limits, top, setting)
   }
-  // The copy an earlier download left in the account's folder is the CLI's own; this one replaces it.
-  if (earlier?.localPath && earlier.localPath !== target && earlier.localPath.startsWith(`${top}${sep}`))
-    rmSync(earlier.localPath, { force: true })
-  const extraction =
-    saved.bytes > attachmentMaxBytes(run.env ?? process.env)
-      ? ({ status: "too-large" } as const)
-      : await extractText(
-          readFileSync(target),
-          { kind: "file", name: file.name, mime: file.mime, path: target },
-          importEngine,
-          signal,
-          run.env ?? process.env,
-        )
+  let bytes: Buffer
+  try {
+    bytes = readFileSync(target)
+  } catch {
+    await discard()
+    // The error would name the local path; the file was removed under the download.
+    throw new CliError("not_found", `the saved copy of ${file.id} was removed before its text was read; run it again`, {
+      reason: "crm.file-unavailable",
+    })
+  }
+  const cutOff = async () => {
+    await discard()
+    return new CliError(
+      "cancelled",
+      `the time limit stopped reading the text of ${file.id}, and nothing was kept: run it again with a longer ` +
+        "--timeout, such as --timeout 10m",
+      { reason: "crm.file-unavailable" },
+    )
+  }
+  let extraction: Awaited<ReturnType<typeof extractText>> | { status: "too-large" }
+  try {
+    extraction =
+      saved.bytes > attachmentMaxBytes(run.env ?? process.env)
+        ? { status: "too-large" }
+        : await extractText(
+            bytes,
+            { kind: "file", name: file.name, mime: file.mime, path: target },
+            importEngine,
+            signal,
+            run.env ?? process.env,
+          )
+  } catch (error) {
+    if (signal?.aborted) throw await cutOff()
+    await discard()
+    throw error
+  }
+  // A reading stopped by the time limit says nothing of the file: it is not kept as unreadable.
+  if (signal?.aborted) throw await cutOff()
   const self = run.source().self ? String(await run.source().self?.()) : null
   const row: CrmFileRow = {
     externalId: file.id,
@@ -322,6 +421,9 @@ export const downloadCrmFile = async (
     downloadedAt: now(),
   }
   await run.store.crmFiles.save(run.account, row)
+  // The copy an earlier download left in the account's folder is the CLI's own; this one replaces it.
+  if (earlier?.localPath && earlier.localPath !== target && earlier.localPath.startsWith(`${top}${sep}`))
+    rmSync(earlier.localPath, { force: true })
   return { row, textStatus: extraction.status }
 }
 
@@ -511,7 +613,12 @@ interface Round {
   /** The round in progress: when it started, and the records it finished. */
   started: number | null
   done: string[]
+  /** Runs each file was unavailable in, until it is given up. */
+  tries?: Record<string, number>
 }
+
+/** Runs a file may be unavailable in before the round closes without it. */
+const MOST_TRIES = 3
 
 const roundOf = async (run: CrmRun): Promise<Round> => {
   try {
@@ -574,6 +681,7 @@ export const syncFiles = async (
   const done = [...round.done]
   // A record whose file could not be had is not done: the next run asks again, so the round stays open.
   let retry = false
+  const tries: Record<string, number> = { ...(round.tries ?? {}) }
   let runBytes = 0
   const stop = (reason: SkipReason, file: CrmOpenableFile) => {
     report.skipped.push({ id: file.id, name: file.name, size: file.size, reason })
@@ -614,15 +722,16 @@ export const syncFiles = async (
         stop("deadline", file)
         break outer
       }
+      const remaining = deadline(Math.max(1, ends - now()))
+      const signal = context.signal ? AbortSignal.any([context.signal, remaining]) : remaining
       try {
-        const remaining = deadline(Math.max(1, ends - now()))
-        const signal = context.signal ? AbortSignal.any([context.signal, remaining]) : remaining
         const saved = await downloadCrmFile({ ...context, signal }, file, found.assignee, {
           capBytes: Math.min(fileCap, left),
           capMb: limits.max_file_mb,
           flag: false,
           limits,
         })
+        delete tries[file.id]
         runBytes += saved.row.size ?? 0
         report.downloaded.push({
           id: file.id,
@@ -646,12 +755,14 @@ export const syncFiles = async (
           report.skipped.push({ id: file.id, name: file.name, size: file.size, reason: "too-large" })
           continue
         }
-        if (isCliError(error) && error.code === "timeout") {
+        if (signal.aborted || (isCliError(error) && error.code === "timeout")) {
           stop("deadline", file)
           break outer
         }
         report.skipped.push({ id: file.id, name: file.name, size: file.size, reason: "unavailable" })
-        available = false
+        tries[file.id] = (tries[file.id] ?? 0) + 1
+        // A file the CRM keeps refusing is given up, so the round can close.
+        if ((tries[file.id] ?? 0) < MOST_TRIES) available = false
       }
     }
     if (available) done.push(`${owner.kind}:${owner.id}`)
@@ -660,7 +771,7 @@ export const syncFiles = async (
   const next: Round =
     report.complete && !retry
       ? { after: roundStart, started: null, done: [] }
-      : { after: round.after, started: roundStart, done }
+      : { after: round.after, started: roundStart, done, tries }
   await run.store.sync.setSyncState(run.account, FILES_ROUND, JSON.stringify(next))
   return report
 }

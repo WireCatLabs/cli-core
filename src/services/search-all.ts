@@ -290,7 +290,6 @@ const sourceScope = async (
   return { only, scope, skipped: [...skipped, ...unnamed] }
 }
 
-/** The accounts of every CRM the store holds copies of. */
 /** Each CRM copy's viewer for the user its own sync signed in as (SEC-197): what a run outside its CLI may read. */
 const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
   const viewers: CopyViewer[] = []
@@ -301,6 +300,7 @@ const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
   return viewers
 }
 
+/** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
 

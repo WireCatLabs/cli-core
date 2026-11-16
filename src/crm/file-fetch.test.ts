@@ -52,6 +52,25 @@ describe("fetchCrmFile", () => {
     expect(cancelled).toBe(1)
   })
 
+  it("closes the body of a refused answer", async () => {
+    let cancelled = 0
+    const { send } = server({
+      "https://portal.example/gone": () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              cancelled += 1
+            },
+          }),
+          { status: 404 },
+        ),
+    })
+    await expect(fetchCrmFile("https://portal.example/gone", { hosts: HOSTS, fetch: send })).rejects.toMatchObject({
+      details: { reason: "crm.file-unavailable" },
+    })
+    expect(cancelled).toBe(1)
+  })
+
   it.each([
     ["http", `http://portal.example/a?token=${TOKEN}`, {}],
     ["another host", `https://evil.example/a?token=${TOKEN}`, {}],

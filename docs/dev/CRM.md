@@ -175,15 +175,18 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
 - `files list --deal|--lead|--person|--organization <id>` reads one record's files live (`--lead` only when the CRM
   has leads) and marks the downloaded ones with their `path`. A missing scope is a note and `complete: false`.
 - `files download <id>` saves one file under `<state>/crm/files/<provider>-<account>/<kind>-<id>/` (folders 700, file
-  600, the name through `safeName`, with the provider's id in front when another file holds the name), or under
+  600, the name through `safeName`, at most 200 bytes with its extension kept, and the provider's id in front when
+  another file or another row holds the name), or under
   `--dir`, which is the owner's own copy: a file there that is not this file's earlier copy is never overwritten (then
-  `<provider id>-<name>`, and `crm.file-exists` when both are taken). A repeat download removes the earlier copy the
+  `<provider id>-<name>`, and `crm.file-exists` when both are taken or a file appears there during the download: the
+  file is linked into place, never renamed over one). A repeat download removes the earlier copy the
   CLI kept in its folder. It takes 100 MB unless
   `--max-size <MB>`, up to 2048; a bigger file, or one of unknown size that passes the cap while it streams, is
   `crm.file-too-large` and leaves no part. The text goes through `extractText` into the row; the answer gives the first
   4,000 characters with `untrusted: ["name", "mime", "path", "text"]` (`files list` marks `name`, `mime` and `path`),
   never the bytes. A failed download never names the link
-  (`crm.file-unavailable`); a cut-off one names `--timeout 10m`.
+  (`crm.file-unavailable`); a cut-off one names `--timeout 10m`. A time limit that stops the download or the text
+  reading keeps no file and no row (`cancelled` while reading), never a row that says `unreadable`.
 - Both read `files(owner)` first, then spend the day's slot of a colleague's record, then look the id up: a made-up id
   on a colleague's record still costs its slot and is `not_found`. Listing and downloading the same record that day
   cost one slot. Admins and sources without `isAdmin` have no limit.
@@ -191,7 +194,9 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
   last complete round and at most `files.days` back, newest first, paging through all of them. A record the CRM now
   assigns to someone else is skipped whatever the copy says, so it never downloads a colleague's file and never spends
   the limit; it never reads a contact's or company's files. A file the CRM did not give (`unavailable`) leaves its
-  record for the next run. `run_minutes` also bounds each download: one cut off at the deadline keeps no part. It keeps its place in the sync state `crm:files-round` and answers `complete: false`
+  record for the next run, up to three runs, after which the round closes without it (`tries` in the round).
+  `run_minutes` also bounds each download and its text reading: one cut off at the deadline keeps no part and stops
+  the run as `deadline`. It keeps its place in the sync state `crm:files-round` and answers `complete: false`
   at a limit; the next run goes on. Run it with `schedule command crm-files --every 1h -- files sync`. `sync` never
   downloads a file. `files sync` checks `files.download` too, so denying downloads stops it.
 - `files.download` is allowed by default (NEED-2708 B); `files.list` denied leaves file text out of `search all`.
@@ -208,8 +213,9 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
 
   A skipped file is in the answer with its reason, `too-large`, `run-files`, `run-mb`, `deadline`, `disk-full` or
   `unavailable`, and the `files download <id>` step. A download that would pass `max_total_mb` even after dropping is
-  refused before it starts. Once it is saved, the oldest other saved files whose text is kept lose their file until
-  it fits; a scan is never dropped, and the file's own earlier copy is not counted. Still full, the new file is
+  refused before it starts. Once it is saved, files are dropped only if it then fits: the oldest other saved files
+  whose text is kept lose their file until it does; a scan is never dropped, nor a row naming the new file's path,
+  and the file's own earlier copy is not counted. Still full, the new file is
   deleted, `files sync` stops with `disk-full` and `files download` is `crm.files-disk-full`.
 - `search all` finds the stored text (`--only crm` too) as `crm_file` hits under the copy's viewer rule. memo's, tg's
   and the MCP's `search all` read them through the same `searchAll`, which then takes each copy's viewer for the

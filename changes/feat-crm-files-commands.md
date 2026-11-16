@@ -16,5 +16,9 @@
 
 ### Changed — may break callers
 
-- **memo's, tg's and the MCP's `search all` apply each CRM copy's viewer rule to deals and leads too**: a non-admin
-  copy's colleagues' deals no longer show there, as they never did in the CRM CLI.
+- **memo's, tg's and the MCP's `search all` apply each CRM copy's viewer rule to deals and leads too**, taking the
+  user that copy's own sync signed in as: a non-admin copy's colleagues' deals no longer show there, as they never
+  did in the CRM CLI. A copy with no recorded own user shows none of its deals and leads there; a copy whose sync
+  recorded no list of who may read it shows only its own user's.
+- **`search all` has a new hit kind, `crm_file`**, in every CLI: a caller that switches over `kind` gets it.
+- **`safeName` cuts a name to 200 bytes**, its extension kept, for every download that uses it.
