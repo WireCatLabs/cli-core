@@ -1,6 +1,7 @@
 import { linkEvent } from "./events.js"
 import { speakerPosition, timestamp, transcriptInput } from "./ingest.js"
 import type { Meeting, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
+import { refreshMeetingIndex } from "./search-store.js"
 import type { MeetingSource, SourceParticipant } from "./source.js"
 import type {
   MeetingDetails,
@@ -207,6 +208,21 @@ const startOf = (m: SourceMeeting): number => {
   return Number.isFinite(at) ? at : Number.POSITIVE_INFINITY
 }
 
+/** Search reads only the index, so what a sync or an import saved is indexed before it answers. */
+export const indexSaved = async (store: MeetingStore, accountIds: Iterable<number>, report: RunReport) => {
+  const indexSearch = store.indexSearch?.bind(store)
+  if (!indexSearch || report.meetings === 0) return
+  for (const accountId of new Set(accountIds))
+    try {
+      await refreshMeetingIndex({ indexSearch }, accountId)
+    } catch (error) {
+      report.warnings.push({
+        externalId: String(accountId),
+        message: `search index not updated: ${error instanceof Error ? error.message : "failed"}`,
+      })
+    }
+}
+
 export const pull = async (source: MeetingSource, store: MeetingStore, options: PullOptions): Promise<RunReport> => {
   const now = options.now ?? Date.now()
   for (const [name, ms] of [
@@ -302,6 +318,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
     }
   }
   await linkCallers()
+  await indexSaved(store, [options.accountId], report)
   // A failed occurrence must remain inside the next pull's retry window.
   if (!failed) await store.setCursor(options.accountId, new Date(now).toISOString(), now)
   return report

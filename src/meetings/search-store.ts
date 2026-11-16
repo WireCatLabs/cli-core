@@ -66,3 +66,23 @@ export interface MeetingHitSearchRequest extends MeetingSearchOptions {
   tag?: string
   topic?: string
 }
+
+/** Each batch commits on its own, so a search or sync cut short by its deadline keeps the progress it made. */
+export const refreshMeetingIndex = async (
+  meetings: MeetingSearchIndexStore,
+  accountId: number,
+  signal?: AbortSignal,
+): Promise<void> => {
+  let before = Number.POSITIVE_INFINITY
+  for (;;) {
+    signal?.throwIfAborted()
+    const { indexed, remaining } = await meetings.indexSearch({
+      accountId,
+      limit: 1000,
+      maxReadBytes: 64 * 1024 ** 2,
+      signal,
+    })
+    if (remaining === 0 || indexed === 0 || remaining >= before) return
+    before = remaining
+  }
+}

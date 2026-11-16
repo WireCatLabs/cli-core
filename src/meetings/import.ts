@@ -1,6 +1,6 @@
 import { linkEvent } from "./events.js"
 import { transcriptInput } from "./ingest.js"
-import type { RunReport } from "./pull.js"
+import { indexSaved, type RunReport } from "./pull.js"
 import type { MeetingInput, MeetingStore, ParticipantInput } from "./store.js"
 import { parseTranscriptText } from "./transcript-text.js"
 import { parseVtt } from "./vtt.js"
@@ -39,6 +39,11 @@ export const importFiles = async (files: ImportFile[], store: MeetingStore, now 
       })
     }
   }
+  await indexSaved(
+    store,
+    files.map((file) => file.meeting.accountId),
+    report,
+  )
   const zones = new Set(
     files.map((file) => file.meeting.timezone).filter((zone) => zone !== null && zone !== undefined),
   )

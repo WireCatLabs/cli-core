@@ -1,30 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
-import { liftMeetingFields, MEETING_FIELD_NAMES, type MeetingHitSearchRequest } from "../meetings/index.js"
+import {
+  liftMeetingFields,
+  MEETING_FIELD_NAMES,
+  type MeetingHitSearchRequest,
+  refreshMeetingIndex,
+} from "../meetings/index.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import type { VocabularyKind } from "../store/index.js"
 import type { MessageStore } from "../store/store.js"
 
 export type { MeetingHitSearchRequest } from "../meetings/index.js"
-
-/** Each batch commits on its own, so a search cut short by its deadline keeps the progress it made. */
-export const refreshMeetingIndex = async (
-  meetings: Pick<MessageStore["meetings"], "indexSearch">,
-  accountId: number,
-  signal?: AbortSignal,
-): Promise<void> => {
-  let before = Number.POSITIVE_INFINITY
-  for (;;) {
-    signal?.throwIfAborted()
-    const { indexed, remaining } = await meetings.indexSearch({
-      accountId,
-      limit: 1000,
-      maxReadBytes: 64 * 1024 ** 2,
-      signal,
-    })
-    if (remaining === 0 || indexed === 0 || remaining >= before) return
-    before = remaining
-  }
-}
+export { refreshMeetingIndex }
 
 /** Name resolution changes selection only; it never assigns projects or labels from transcript words. */
 export const resolveMeetingSelection = async (
