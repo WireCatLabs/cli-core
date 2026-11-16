@@ -84,7 +84,8 @@ export type LinkHold = LinkWeakness | "nothing-shared" | "owner" | "rejected" | 
 
 /**
  * What the store finds between two people, never what an agent says. Strong is one value that is a mobile number or a
- * personal address, that only these two people hold, from two different sources, and for a phone at least one that
+ * personal address, that no one else holds, or that each of its holders has from a different source (one person's
+ * CRM card, WhatsApp and call, whatever their names); from two different sources; and for a phone at least one that
  * keeps its user's own number: a messenger account or a call's number.
  */
 export interface LinkEvidence {
@@ -191,7 +192,7 @@ export interface IdentityLinkFilter {
 export interface MatchScan {
   /** Every identity was read, not only those changed since the last pass. */
   full: boolean
-  /** People joined without asking: the same personal address, or a phone exactly two people have. */
+  /** People joined without asking: the same personal address, or a phone two people have or each source has once. */
   merged: { into: string; from: string; signal: "same-email" | "same-phone" }[]
   /** Proposals opened, or open ones met again. */
   proposed: { id: string; persons: [string, string]; signal: IdentityLinkSignal; opened: boolean }[]
