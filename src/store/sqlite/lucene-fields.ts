@@ -9,7 +9,7 @@ import type { QueryExecution, ResolvedPredicate } from "../../search/lucene/reso
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import { inSource } from "../../search/query.js"
-import { STEM_SEPARATOR, type Stemmer } from "../../search/stem.js"
+import { START_LETTERS, STEM_SEPARATOR, type Stemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
@@ -22,6 +22,8 @@ export interface Fragment {
   params: SqlValue[]
   exact: boolean
   fts?: string
+  /** What a stemmed leaf finds in the word index when that is more than `fts`, the form that ranks first. */
+  begins?: string
   /** The leaf as a phrase of stems, for ranking a stemmed search by `message_stems`. */
   stems?: string
   /** A bare word's other places — transcripts, file text, file names — as a set of item ids. */
@@ -227,6 +229,10 @@ const stemmedText: FieldCompiler = (node, scope) => {
     throw new Error("a stemmed leaf reached the compiler without the store's stemmer")
   const text = normalize(node.value)
   const match = ftsMatch(node)
+  // Snowball stems a word's forms apart («ярослав» → «яросла», «ярослава» → «ярослав»), so a word of 4 letters or more
+  // also finds every word it begins, as grep finds them; a shorter one would find most of the store.
+  const start =
+    node.operator === "term" && /^[\p{L}\p{N}]+$/u.test(text) && [...text].length >= START_LETTERS ? text : undefined
   const stems = stemsOf(scope, node)
   const byStems =
     stems && node.slop !== undefined
@@ -239,9 +245,10 @@ const stemmedText: FieldCompiler = (node, scope) => {
     /[\p{L}\p{N}]/u.test(text)
       ? scope.everywhere(node, {
           sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)${byStems ? ` OR ${byStems.sql}` : ""}`,
-          params: [`normalized_text : (${match})`, ...(byStems?.params ?? [])],
+          params: [`normalized_text : (${start ? `${match} *` : match})`, ...(byStems?.params ?? [])],
           exact: true,
           fts: match,
+          ...(start ? { begins: `${match} *` } : {}),
           ...(stems ? { stems } : {}),
         })
       : bound("0"),

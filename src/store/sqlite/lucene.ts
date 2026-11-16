@@ -314,14 +314,14 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   // message of the account and tests each against the index sets.
   const driverOf = (node: ResolvedNode): { sql: string; params: SqlValue[] } | undefined => {
     if (node.kind === "predicate") {
-      const { fts, stems, elsewhere: other } = fragments.get(node)?.fragment ?? {}
+      const { fts, stems, elsewhere: other, begins } = fragments.get(node)?.fragment ?? {}
       if (fts === undefined) return undefined
       const words = `SELECT rowid AS id FROM ${corpus.words} WHERE ${corpus.words} MATCH ?`
       const own =
         isStemmed(node) && stems
           ? {
               sql: `${words} UNION SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?`,
-              params: [`normalized_text : (${fts})`, `stems : (${stems})`] as SqlValue[],
+              params: [`normalized_text : (${begins ?? fts})`, `stems : (${stems})`] as SqlValue[],
             }
           : { sql: words, params: [`normalized_text : (${fts})`] as SqlValue[] }
       return other ? { sql: `${own.sql} UNION ${other.sql}`, params: [...own.params, ...other.params] } : own

@@ -27,6 +27,8 @@ export interface SearchIndexStore {
   fillSearchIndex(options?: { until?: () => boolean }): Promise<SearchIndexFill>
   /** How far the stems are built, and by which stemmer choices; `undefined` on a file before they existed. */
   stemsState(): Promise<StemsState | undefined>
+  /** Of these stems, those some message's words were stemmed to. */
+  heldStems(stems: string[]): Promise<Set<string>>
   /**
    * Builds the stems towards "ready" in short batches until done or `until` says stop; never rebuilds. Then the
    * voice-note transcripts written since, which are few, so they keep up with any stemmer choice.
@@ -53,6 +55,7 @@ export const searchIndexStoreOver = (context: StoreContext): SearchIndexStore =>
         ? { normalized: 0, indexed: 0, terms: 0 }
         : searchIndex.fillSearchIndex(database, { now: context.now, ...(until ? { until } : {}) }),
     stemsState: async () => stems.stemsState(database),
+    heldStems: async (held) => stems.heldStems(database, held),
     fillStems: async ({ until } = {}) => {
       if (isQueryOnly(database)) return { stemmed: 0, drained: 0 }
       const filled = fillStems(database, { now: context.now, ...(until ? { until } : {}) })

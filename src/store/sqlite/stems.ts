@@ -98,6 +98,12 @@ export const stemmersOrigin = (
   }
 }
 
+/** Of these stems, those some message's words were stemmed to. */
+export const heldStems = (database: CacheDatabase, stems: string[]): Set<string> => {
+  const lookup = database.prepare(`SELECT 1 FROM ${INDEX} WHERE ${INDEX} MATCH ? LIMIT 1`)
+  return new Set(stems.filter((stem) => lookup.get(`stems : "${stem.replaceAll('"', '""')}"`) !== undefined))
+}
+
 /** `undefined` on a file before version 15. */
 export const stemsState = (database: CacheDatabase): StemsState | undefined => {
   const row = indexRow(database, INDEX)

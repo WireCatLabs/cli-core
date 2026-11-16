@@ -22,7 +22,7 @@ messages search "gestor valencia"
 
 conversations search "кто искал квартиру"
   the model turns the query into a vector ─▶ scan the chunks' vectors ─▶ conversations by meaning ─┐
-  the query's words, joined by OR ─▶ messages search (whole words only) ─▶ their conversations ───┤
+  the query's words, joined by OR ─▶ messages search (whole words; unknown ones respelled) ─▶ their conversations ───┤
                                                                      reciprocal rank fusion ◀──────┘
                                                                      ▼
                                                             conversations, best first
@@ -55,7 +55,7 @@ ptsarev   → message 5      (calendly.com/ptsarev splits into calendly, com, pt
 ab45217   → message 2      (no separator: one word)
 ```
 
-A search for «gestor valencia» looks both lists up and keeps the messages in both. Legacy discovery also tries word beginnings. Strict Lucene needs an explicit wildcard such as `квартир*` for that behavior; a bare term is not silently expanded.
+A search for «gestor valencia» looks both lists up and keeps the messages in both. Legacy discovery also tries word beginnings. Strict Lucene reads a bare word of 4 letters or more as the word, the longer words it begins and its stem's forms, so it finds what grep finds at a word's start; a shorter word or a quoted one matches the word and its stem's forms only, and `квартир*` is an explicit pattern.
 
 **BM25** orders what was found. For each message it adds up, per search word:
 
@@ -140,6 +140,12 @@ by a separator token (`STEM_SEPARATOR`, `src/search/stem.ts`), and a query match
 phrase. A text with Latin words keeps about twice the stems (1.94× on a synthetic fixture). Notes have
 the same indexes since store version 1, the initial migration: `note_words`, `note_stems`, and chunks in `chunks` — see
 [ARCHITECTURE.md](../dev/ARCHITECTURE.md).
+
+Snowball sometimes cuts a word to another word's stem: «домен» (domain) becomes «дом», the stem of «дом» (house) and
+«дома». A message search keeps a query word whole when its stem is under 4 letters, drops 2 or more letters, and some
+message's word was stemmed to the whole query word («доменов» → «домен»). It then finds the word and the forms stemmed
+to it, not the shorter word's. An inflected query word that no message stems to («котами») keeps its stem and still
+finds «кот». The stems stored for messages do not change.
 
 ## Search by meaning
 
@@ -286,8 +292,20 @@ paraphrase. So the same command also runs `messages search` over the query's pla
 so a large group cannot fill both lists with near matches. The meaning half reads the 500 nearest conversations, keeps
 each chat's best 20 (or the requested limit when larger) and ranks them by how far each leads its chat's 20th best: a
 large group always holds some text near a question, and a small chat's clear best must not lose to that. The word
-half reads at most 20 messages per chat, 200 in all. In one chat the meaning half reads at least 50 candidates and
-ranks them by cosine.
+half reads at most 20 messages per chat, 200 in all; in one chat it reads all 200. In one chat the meaning half reads
+at least 50 candidates and ranks them by cosine.
+
+The word half matches whole words and their beginnings. A query word that no message holds, not even as a beginning,
+is searched as the words it may stand for: its Latin spelling («ноксвел» → `noksvel`, `noxvel`) or the nearest known
+spellings of that, and only when there are none, the nearest known spellings of the word itself, up to two edits.
+`meta.respelled` and a note list them. A word some message holds is never respelled, so «kitten» does not find
+«kitchen» once any message says «kittens».
+
+A query that names someone by the name their private chat uses for them («счёт Петьке», where that chat says «Петька,
+привет») is searched inside that chat as well, without the name, and those hits come first; `meta.named_chat` says
+which word named which chat. A word names a private chat when that chat holds most of its uses, at least twice as many
+as any other private chat and at least three, and writes it with a capital letter at least 8 times in 10. An ordinary
+word is spread over many chats and written in lower case, so it names none.
 
 Each result says how it was found:
 
