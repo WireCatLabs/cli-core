@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { AgentMerge } from "../identity-links.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
 import { currentPerson, mergeSql, SEPARATIONS } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -14,6 +15,8 @@ export interface PersonMerge {
   method: string
   by: string
   at: string
+  /** An agent's merge: which agent, in which run, why, and the evidence the store found. */
+  agent?: AgentMerge
 }
 
 export const mergeId = (to: number | string, from: number | string): string => `merge:${to}-${from}`

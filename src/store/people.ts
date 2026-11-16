@@ -4,10 +4,14 @@ import type { PersonKind } from "../domain/person-kinds.js"
 import type { PeopleLookup } from "../resolve.js"
 import type { Decider } from "./decisions.js"
 import type {
+  AgentLink,
+  AgentLinkInput,
+  AgentMerge,
   IdentityLinkDecision,
   IdentityLinkFilter,
   IdentityLinkInput,
   IdentityLinkRow,
+  LinkEvidence,
   MatchScan,
 } from "./identity-links.js"
 import type {
@@ -18,6 +22,7 @@ import type {
 } from "./identity-splits.js"
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
+import { agentLink, agentMergeOf, agentMerges, linkEvidenceOver } from "./sqlite/agent-links.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as identityProposals from "./sqlite/identity-proposals.js"
@@ -143,6 +148,23 @@ export interface PeopleStore extends AccountPeople {
    * owner's separation or rejection; an open proposal for the same two people is given back instead of a second.
    */
   proposeLink(input: IdentityLinkInput): Promise<ProposedAction>
+  /**
+   * An agent's link. It merges at once only on strong evidence the store finds itself, never on the agent's word:
+   * one value only these two people hold, a mobile number or a personal address, from two different sources, and for a
+   * phone at least one that keeps its user's own number (a messenger account or a call's number; NEED-2445, NEED-2600).
+   * A landline, a value more people share, a company's line, a role address, a name or a CRM's word alone is weak. The
+   * merge is recorded as an `identity_link` the agent decided, with the evidence, the reason and the run, and the owner
+   * undoes it with `undoMerge`. Weak evidence, the owner's person, a pair the owner rejected, or `apply: false` (the
+   * owner's setting) open a proposal instead, which says why. Refused over the owner's separation.
+   */
+  agentLink(input: AgentLinkInput): Promise<AgentLink>
+  /** What two people share and whether it is strong, for each pair of `person:<uid>` or uids; reads the store once. */
+  linkEvidence(pairs: readonly (readonly [string, string])[]): Promise<LinkEvidence[]>
+  /** The merges agents made that are still in place, newest first. */
+  agentMerges(page: {
+    limit: number
+    offset: number
+  }): Promise<{ items: (PersonMerge & { agent: AgentMerge })[]; hasMore: boolean }>
   /**
    * The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed.
    * `company` turns down a shared-mailbox proposal and gives its address to an organization (NEED-2528);
@@ -332,10 +354,21 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
       if (done.touched.length > 0) linkPhones(context, new Set(done.touched))
       return done
     },
-    merges: async (uid) => personMerges.merges(context, uid),
+    merges: async (uid) =>
+      personMerges.merges(context, uid).map((merge) => {
+        const agent = merge.method === "agent" ? agentMergeOf(context, merge.id) : undefined
+        return agent === undefined ? merge : { ...merge, agent }
+      }),
     undoMerge: async (to, from, by) => write(database, () => personMerges.undoMerge(context, to, from, by)),
     split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
     proposeLink: async (input) => identityProposals.proposeIdentityLink(context, input),
+    agentLink: async (input) => agentLink(context, input),
+    linkEvidence: async (pairs) => {
+      const evidence = linkEvidenceOver(context)
+      const uid = (person: string) => Number(person.replace(/^person:/, ""))
+      return pairs.map(([a, b]) => evidence(uid(a), uid(b)))
+    },
+    agentMerges: async (page) => agentMerges(context, page),
     decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
     scanMatches: async (options) => scanMatches(context, options),
     linkProposals: async (filter) => identityProposals.identityLinkRows(context, filter),

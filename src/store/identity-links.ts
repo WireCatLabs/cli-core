@@ -37,6 +37,87 @@ export interface IdentityLinkPayload {
   shared?: SharedMailbox
   /** The shared mailbox's address, with `shared`. */
   mailbox?: string
+  /** What the store found between the two people when an agent linked them, and whether it was strong. */
+  strength?: LinkEvidence
+  /** The agent's run (`meta.run_id`) that linked them. */
+  run?: string
+  /** `agent`: an agent's link the store applied at once on strong evidence; the row records it, decided. */
+  applied?: "agent"
+}
+
+/**
+ * Why a shared phone or address is not strong enough for an agent to merge on: an office's number, more people have
+ * it, a company's line or mailbox, a role or no-reply address, only one source gives it, or for a phone no source that
+ * keeps its user's own number (a CRM's or a card's is someone's word, NEED-2445).
+ */
+export const LINK_WEAKNESSES = [
+  "landline",
+  "shared",
+  "company",
+  "role-address",
+  "no-reply",
+  "one-source",
+  "not-own-number",
+] as const
+
+export type LinkWeakness = (typeof LINK_WEAKNESSES)[number]
+
+/** A phone or address both people hold. */
+export interface LinkFact {
+  kind: "phone" | "email"
+  /** E.164 for a phone, lower case for an address. */
+  value: string
+  /** `provider:id` of the identities that hold it, on each of the two people. */
+  holders: [string[], string[]]
+  /** How many other people hold it. */
+  others: number
+  strong: boolean
+  weak: LinkWeakness | null
+}
+
+/**
+ * Why an agent's link did not merge at once: the evidence is weak (`LinkWeakness`), they share no phone or address
+ * (`nothing-shared`), one is the owner's person, the owner rejected the pair before, or the owner's setting says
+ * agents only propose.
+ */
+export type LinkHold = LinkWeakness | "nothing-shared" | "owner" | "rejected" | "propose-only"
+
+/**
+ * What the store finds between two people, never what an agent says. Strong is one value that is a mobile number or a
+ * personal address, that only these two people hold, from two different sources, and for a phone at least one that
+ * keeps its user's own number: a messenger account or a call's number.
+ */
+export interface LinkEvidence {
+  /** `person:<uid>` of each. */
+  persons: [string, string]
+  strong: boolean
+  facts: LinkFact[]
+  /** `null` when strong. */
+  weak: LinkHold | null
+}
+
+export interface AgentLinkInput {
+  identity: IdentityRef
+  with: IdentityRef
+  /** The agent's name, as `whoRuns` gives it. */
+  bot: string
+  run?: string
+  reason: string
+  /** False when the owner's setting says agents only propose. */
+  apply: boolean
+}
+
+export type AgentLink =
+  | { outcome: "merged"; person: string; merge: string; proposal: string; evidence: LinkEvidence }
+  | { outcome: "proposed"; proposal: string; evidence: LinkEvidence }
+
+/** An agent's merge still in place, newest first: what the owner sees to undo. */
+export interface AgentMerge {
+  proposal: string
+  bot: string
+  run: string | null
+  reason: string | null
+  evidence: LinkEvidence | null
 }
 
 export interface IdentityLinkInput {

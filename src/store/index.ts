@@ -102,6 +102,9 @@ export {
   storeHealth,
 } from "./health.js"
 export {
+  type AgentLink,
+  type AgentLinkInput,
+  type AgentMerge,
   IDENTITY_LINK_KIND,
   IDENTITY_LINK_SIGNALS,
   type IdentityLinkDecision,
@@ -110,6 +113,11 @@ export {
   type IdentityLinkPayload,
   type IdentityLinkRow,
   type IdentityLinkSignal,
+  LINK_WEAKNESSES,
+  type LinkEvidence,
+  type LinkFact,
+  type LinkHold,
+  type LinkWeakness,
   type MatchScan,
   type SharedMailbox,
 } from "./identity-links.js"
