@@ -599,6 +599,7 @@ const OTHERS: Entry[] = [
     "the owner rejected linking these people on this evidence; only a new signal or identity proposes them again",
   ],
   validation("identity.same", "the two identities are one person already"),
+  validation("identity.agent-unnamed", "an agent's link names the agent, and never as the owner"),
   validation("identity.not-shared", "only a match on a shared mailbox can say the mailbox is a company's"),
   ["organization.not-found", "not_found", "no stored organization has that id"],
   validation("organization.unnamed", "a free mailbox names no company; name the organization or the company"),

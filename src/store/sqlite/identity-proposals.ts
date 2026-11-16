@@ -60,6 +60,8 @@ export interface Opening {
   candidates?: number[] | undefined
   shared?: SharedMailbox | undefined
   mailbox?: string | undefined
+  strength?: IdentityLinkPayload["strength"]
+  run?: string | undefined
 }
 
 export type Opened =
@@ -127,6 +129,8 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
       evidence: opening.evidence ?? [],
       ...(opening.shared === undefined ? {} : { shared: opening.shared }),
       ...(opening.mailbox === undefined ? {} : { mailbox: opening.mailbox }),
+      ...(opening.strength === undefined ? {} : { strength: opening.strength }),
+      ...(opening.run === undefined ? {} : { run: opening.run }),
     }
     const action = operations.propose({
       kind: IDENTITY_LINK_KIND,

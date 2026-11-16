@@ -58,14 +58,14 @@ export const PROPOSAL_SCORE = {
  * NEED-2600: a call's other side, kept as `phone:<number>`, is that number as the phone network gave it, as strong
  * as a messenger's; it joins only on a mobile number, since an office's landline is everyone's who works there.
  */
-const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
+export const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
   holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider)) ||
   (holders.some(({ externalId }) => externalId === `phone:${phone}`) && isMobilePhone(phone))
 
 /** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
 const addressGroupJoins = (people: number): boolean => people <= 2
 
-interface Holder {
+export interface Holder {
   identity: number
   provider: string
   externalId: string
@@ -85,7 +85,7 @@ const COMPANY = "EXISTS (SELECT 1 FROM organization_identities o WHERE o.identit
  * CRM's contact and its user may be one person, so they are two lists. A messenger keeps one account per number, so
  * two of its accounts on one number are a number that changed hands, not a company's line.
  */
-const sharedLine = (context: StoreContext, holders: Holder[]): boolean => {
+export const sharedLine = (context: StoreContext, holders: Holder[]): boolean => {
   if (holders.some(({ company }) => company)) return true
   const seen = new Map<string, number>()
   for (const { identity, provider, list } of holders) {
@@ -99,7 +99,7 @@ const sharedLine = (context: StoreContext, holders: Holder[]): boolean => {
 }
 
 /** Identities by the value they share. */
-type Holders = Map<string, Holder[]>
+export type Holders = Map<string, Holder[]>
 
 /** Where the last pass stopped: every identity, move, revision and meeting guest after it is new to the next one. */
 interface Cursor {
@@ -181,7 +181,7 @@ const phonesOf = (row: Record<string, unknown>): string[] => {
   return raws.filter((raw): raw is string => typeof raw === "string" && raw.trim() !== "")
 }
 
-const phoneHolders = (database: CacheDatabase): Holders => {
+export const phoneHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
   const countries = storePhoneCountries(database)
   for (const row of database
@@ -201,7 +201,7 @@ const addressOf = (value: unknown): string | undefined => {
 }
 
 /** A company's address is an `org-email` identity, never a person's, so it never joins people. */
-const emailHolders = (database: CacheDatabase): Holders => {
+export const emailHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
   for (const row of database
     .prepare(

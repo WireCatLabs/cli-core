@@ -310,6 +310,7 @@ export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-cont
 export {
   type CommandRunOptions,
   type CommandRuns,
+  commandRunId,
   commandRuns,
   type ProviderAnswer,
   type ProviderCall,

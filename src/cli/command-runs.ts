@@ -198,6 +198,9 @@ interface Parse {
 
 const parses = new AsyncLocalStorage<Parse>()
 
+/** The id `runs show` takes for the command under way, so a write can name the run that made it. */
+export const commandRunId = (): string | undefined => parses.getStore()?.runs.runId()
+
 /**
  * For a provider client far from the program: the event lands in the current command's run — a `startCli` command's,
  * or the run `run()` opened — or nowhere.
