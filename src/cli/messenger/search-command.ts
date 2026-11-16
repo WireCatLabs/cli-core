@@ -6,7 +6,7 @@ import { searchNotesOf } from "../../services/notes-search.js"
 import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
-import { withOptionHints } from "../option-hints.js"
+import { AROUND_HINT, END_FLAGS, hintsFor, START_FLAGS, withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
 import { runsSearchCommand } from "../runs/search-command.js"
 import { commandAt } from "../steps.js"
@@ -25,6 +25,8 @@ import {
 } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
+
+const ONLY_HINT = "this search reads one kind already; --only belongs to search all: search all 'words' --only messages"
 
 export const searchAllOnlyOf = (value: string, allowed: readonly string[] = SOURCE_SEARCHED): SourceSearched[] => {
   const chosen = value.split(",").map((one) => one.trim())
@@ -262,12 +264,31 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
     const command = commandAt(search, path)
     if (command) annotate(command, { examples: [`${messenger.app.command} personal search ${path} ${args}`] })
   }
-  for (const path of ["all", "messages"]) {
+  for (const path of ["all", "messages", "notes"]) {
     const command = commandAt(search, path)
+    const dates = hintsFor(
+      [...START_FLAGS, ...END_FLAGS],
+      `put the dates in the query: search ${path} 'words date>=2026-10-01 date<2026-10-20', or 'words date:7d'`,
+    )
     if (command)
       withOptionHints(command, {
-        "--chat": `search in one chat with chat:<chat> in the query: search ${path} 'chat:<chat> words'`,
+        ...dates,
+        ...(path === "notes"
+          ? {}
+          : {
+              "--chat": `search in one chat with chat:<chat> in the query: search ${path} 'chat:<chat> words'`,
+              "--around": AROUND_HINT,
+            }),
+        ...(path === "all" ? {} : { "--only": ONLY_HINT }),
       })
   }
+  const conversations = commandAt(search, "conversations")
+  if (conversations)
+    withOptionHints(conversations, {
+      ...hintsFor(START_FLAGS, "--since-time 7d, or --since-time 2026-10-01"),
+      ...hintsFor(END_FLAGS, "put the end in the filter: --filter 'date<2026-10-20'"),
+      "--around": AROUND_HINT,
+      "--only": ONLY_HINT,
+    })
   return search
 }
