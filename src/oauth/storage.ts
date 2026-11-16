@@ -268,8 +268,9 @@ export interface CredentialStorageOptions {
   codec: TokenCodec
 }
 
-// The keyring's own words go to `--debug` and the run record as the cause, never into the answer; a store that
-// echoes what it was handed loses the secret from them first.
+// On a write or a removal the keyring's own words go to `--debug` and the run record as the cause, never into the
+// answer; a store that echoes what it was handed loses the secret from them first. A read's failure is cli-base's own
+// keyring.unreachable, which names the platform's reason.
 const keyringFailure = (thrown: unknown, secret?: string) => {
   const failure = new CliError(
     "configuration_error",
@@ -305,12 +306,14 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       throw keyringFailure(error)
     }
   }
-  // A sign-in on a machine with no keyring writes to the file, so an old entry it cannot read is no old entry.
+  // A sign-in on a machine with no keyring writes to the file, so an old entry it cannot read is no old entry. With
+  // `storage: "keyring"` there is no file to fall back on: the save would fail too, after the browser.
+  const fallsBack = options.credentials.storage !== "keyring"
   const replaced = (name: string) => {
     try {
       return raw(name)
     } catch (error) {
-      if (error instanceof CliError && error.details.reason === "keyring.unreachable") return undefined
+      if (fallsBack && error instanceof CliError && error.details.reason === "keyring.unreachable") return undefined
       throw error
     }
   }

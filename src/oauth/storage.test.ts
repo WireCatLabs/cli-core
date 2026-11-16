@@ -1,7 +1,7 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError, errorObjectOf, errorRecordOf, type KeyringStore } from "@wirecat/cli-base"
+import { errorObjectOf, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
@@ -291,9 +291,9 @@ describe("a keyring that cannot be reached", () => {
       throw new Error("No storage access: collection is locked")
     },
   }
-  const storage = (keyring = refusing) =>
+  const storage = (keyring = refusing, mode: "keyring" | "auto" = "keyring") =>
     credentialStorage({
-      credentials: { service: "cal-cli", configDir: folder(), storage: "keyring", keyring },
+      credentials: { service: "cal-cli", configDir: folder(), storage: mode, keyring },
       account: oauthAccount("google", "personal"),
       codec: standardCodec("google"),
     })
@@ -306,14 +306,13 @@ describe("a keyring that cannot be reached", () => {
     throw new Error("expected a failure")
   }
 
-  it("keeps the keyring's reason for --debug and the run record, not for the answer", () => {
-    const failure = failureOf(() => storage().read())
-    const object = errorObjectOf(failure)
-    expect(object.error.code).toBe("configuration_error")
-    expect(JSON.stringify(object)).not.toContain("DBus")
-    expect(
-      errorRecordOf(failure, object, { command: "session status", service: "cal-cli", version: "0" }),
-    ).toMatchObject({ attributes: { cause: expect.stringContaining("Failed to connect to socket") } })
+  // Since cli-base 0.108 `Credentials#read` answers a keyring that throws with its own error, which names the
+  // platform's reason beside the fix; a raw keyring error is wrapped without its words only on a write.
+  it("answers a read with cli-base's keyring.unreachable, the platform's reason and the fix in it", () => {
+    const object = errorObjectOf(failureOf(() => storage().read()))
+    expect(object.error).toMatchObject({ code: "configuration_error", reason: "keyring.unreachable" })
+    expect(object.error.message).toContain("Failed to connect to socket")
+    expect(object.error.message).toContain("DBUS_SESSION_BUS_ADDRESS")
   })
 
   it("never carries the secret it failed to save", () => {
@@ -328,31 +327,42 @@ describe("a keyring that cannot be reached", () => {
     expect(cause.message).not.toContain(SECRET)
   })
 
-  // cli-base's `Credentials#read` throws this when the keyring fails and the file holds no entry (cli-base #605).
-  const unreachable = new CliError("configuration_error", "the keyring cannot be reached; use file storage", {
-    reason: "keyring.unreachable",
-  })
-  const saved = memoryKeyring()
+  // Since cli-base 0.108 `Credentials#read` wraps whatever the keyring throws in its own keyring.unreachable error.
   const unreadable: KeyringStore = {
     get: () => {
-      throw unreachable
+      throw new Error("no secret service")
     },
-    set: (service, account, secret) => saved.set(service, account, secret),
+    set: () => {
+      throw new Error("no secret service")
+    },
     delete: () => false,
   }
 
   it("shows cli-base's own keyring error on a read", () => {
-    expect(failureOf(() => storage(unreadable).read())).toBe(unreachable)
+    expect(failureOf(() => storage(unreadable).read())).toMatchObject({
+      code: "configuration_error",
+      details: { reason: "keyring.unreachable" },
+    })
   })
 
-  it("signs in when the old entry cannot be read for an unreachable keyring", () => {
-    const signingIn = storage(unreadable)
+  it("refuses a sign-in up front with keyring-only storage, which has no file to save to", () => {
+    expect(failureOf(() => storage(unreadable).probe())).toMatchObject({ details: { reason: "keyring.unreachable" } })
+  })
+
+  it("signs in to the file when the keyring answers neither a read nor a write", () => {
+    const configDir = folder()
+    const signingIn = credentialStorage({
+      credentials: { service: "cal-cli", configDir, keyring: unreadable },
+      account: oauthAccount("google", "personal"),
+      codec: standardCodec("google"),
+    })
     signingIn.probe()
     signingIn.write(
       { client: { clientId: "client" }, tokens: { refreshToken: "synthetic-refresh", scopes: [] } },
       { signIn: true },
     )
-    expect(JSON.parse(saved.get("cal-cli", "oauth:google:personal") ?? "{}").refreshToken).toBe("synthetic-refresh")
+    const file = JSON.parse(readFileSync(join(configDir, "credentials.json"), "utf8"))
+    expect(JSON.parse(file["oauth:google:personal"].secret).refreshToken).toBe("synthetic-refresh")
   })
 })
 
