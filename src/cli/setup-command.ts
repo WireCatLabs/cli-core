@@ -169,7 +169,7 @@ export const setupCommand = (setup: Setup): Command => {
     if (environmentOf(command).agent || agentOf(env))
       for (const [setting, value] of Object.entries(path.settings)) refuseGuardedKey(setting, String(value), ownerOnly)
     steps.progress("check", `checking ${profile}'s settings`)
-    const checked =
+    const { keep = {}, ...checked } =
       (await check?.({
         command,
         profile,
@@ -178,13 +178,18 @@ export const setupCommand = (setup: Setup): Command => {
         answers: path.kept,
         steps,
       })) ?? {}
+    const secrets = { ...path.secrets }
+    for (const [name, secret] of Object.entries(keep.secrets ?? {})) {
+      if (!(name in secrets)) throw new Error(`the flow's check keeps secret ${name}, which the answers did not give`)
+      secrets[name] = secret
+    }
     for (const [setting, value] of Object.entries(path.settings))
       configuration.changeSetting(settings.configPath, { profile, setting, value: JSON.stringify(value) })
     const store = storeFor(command, context.renderer.warn)
-    const kept = Object.entries(path.secrets).map(([name, secret]) =>
+    const kept = Object.entries(secrets).map(([name, secret]) =>
       name === "token" ? store.write(profile, secret) : store.writeSecret(profile, name, secret),
     )
-    rememberAccount(app, profile, profile, env)
+    rememberAccount(app, profile, keep.account ?? profile, env)
     return {
       outcome: "ok" as const,
       ...told,

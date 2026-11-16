@@ -36,8 +36,24 @@ export interface SetupCheckInput {
   steps: SignInSteps
 }
 
-/** The CLI's own proof that the answers work, as its `session start` checks. A throw saves nothing. */
-export type SetupCheck = (input: SetupCheckInput) => Promise<Record<string, unknown> | undefined>
+/**
+ * What `apply` keeps in place of its defaults, for a CLI whose `session start` keeps more than the typed secret (an
+ * account address beside a token) or knows the account the profile signs in to.
+ */
+export interface SetupKeep {
+  /** By secret name, the value to keep instead of the one typed; a name the path gave no secret for is refused. */
+  secrets?: Readonly<Record<string, string>>
+  /** The account the profile is, as `session start` remembers it; the profile's name when left out. */
+  account?: string
+}
+
+/**
+ * The CLI's own proof that the answers work, as its `session start` checks. A throw saves nothing. `keep` is taken
+ * out of the result, never printed.
+ */
+export type SetupCheck = (
+  input: SetupCheckInput,
+) => Promise<(Record<string, unknown> & { keep?: SetupKeep }) | undefined>
 
 export interface SetupDefinition {
   app: AppIdentity

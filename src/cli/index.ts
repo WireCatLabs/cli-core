@@ -201,6 +201,7 @@ export {
   type SetupCheck,
   type SetupCheckInput,
   type SetupDefinition,
+  type SetupKeep,
   setupProblems,
 } from "../setup/define.js"
 export {
