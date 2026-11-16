@@ -5,15 +5,6 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
-
-### Added
-
-- **A setup flow's check can say what `apply` keeps.** The check's result may carry `keep: { secrets, account }`:
-  the value kept for a secret the answers gave (amo keeps its account address beside the token, as its
-  `session start` does) and the account the profile is. Left out, `apply` keeps the secrets as typed and the
-  profile's name, as before. `keep` is never printed.
-
 ## 0.675.0 — 16.11.2026
 
 ### Fixed
