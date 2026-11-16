@@ -83,7 +83,15 @@ const harness = ({
     PBX_STATE_DIR: join(root, "state"),
     ...(agent ? { AI_AGENT: "claude-code" } : {}),
   }
-  const keyring = memoryKeyring()
+  const memory = memoryKeyring()
+  const reads: string[] = []
+  const keyring = {
+    ...memory,
+    get: (service: string, account: string) => {
+      reads.push(account)
+      return memory.get(service, account)
+    },
+  }
   const call = async (argv: string[], { stdin, answer }: { stdin?: string; answer?: string[] } = {}) => {
     const streams = captureStreams()
     const queue = [...(answer ?? [])]
@@ -106,7 +114,7 @@ const harness = ({
   const configPath = join(env.PBX_CONFIG_DIR, "config.json")
   const config = () => (existsSync(configPath) ? readFileSync(configPath, "utf8") : "")
   const kept = () => new ProfileTokenStore({ app, env, keyring }).readSecret("office", "db")?.secret
-  return { call, checks, kept, config, env }
+  return { call, checks, kept, config, env, reads }
 }
 
 const MYSQL = {
@@ -150,9 +158,11 @@ describe("setup", () => {
   })
 
   it("**a dry run with nothing on stdin checks no answers**: it names the first step, as a program asks", async () => {
-    const { call, config } = harness()
+    const { call, config, reads } = harness()
     const { code, item } = await call(["office", "setup", "apply", "--dry-run", "--json"], { stdin: "" })
     expect(code).toBe(0)
+    // Nothing on the path is a secret, so the keyring stays shut, as a denied command's dry run needs.
+    expect(reads).toEqual([])
     expect(item).toMatchObject({ valid: false, complete: false, at: "source", path: ["source"] })
     expect(config()).toBe("")
     const saving = await call(["office", "setup", "apply", "--json"], { stdin: "" })
