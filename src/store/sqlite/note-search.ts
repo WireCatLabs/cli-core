@@ -124,11 +124,12 @@ const CORPORA: Corpus[] = [
     noun: "note",
     fields: NOTE_FIELDS,
     get view() {
-      return `(SELECT n.id, n.account_id AS folder_id, n.external_id AS path, n.title, coalesce(n.body, '') AS text, n.metadata, ${contextDocumentTime()} AS at, n.deleted_at FROM documents n)`
+      return `(SELECT n.id, n.account_id AS folder_id, n.external_id AS path, n.title, coalesce(n.body, '') AS text, n.metadata, ${contextDocumentTime()} AS at, n.deleted_at, n.kind FROM documents n)`
     },
     words: "document_words",
     stems: "document_stems",
-    live: "coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1",
+    // A folder (a Drive folder, a Notion workspace or database) is a catalog entry, not a document to open.
+    live: "n.kind <> 'folder' AND coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1",
     inAccounts: (ids) => bound("n.folder_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))", ids),
     tagged: (tag) =>
       bound(
@@ -541,7 +542,7 @@ interface Best {
 
 /** The live documents and notes of a chunk scan, narrowed by folder and source. */
 const LIVE =
-  "((k.chunkable_type = 'document' AND EXISTS (SELECT 1 FROM documents d WHERE d.id = k.chunkable_id AND d.deleted_at IS NULL AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
+  "((k.chunkable_type = 'document' AND EXISTS (SELECT 1 FROM documents d WHERE d.id = k.chunkable_id AND d.deleted_at IS NULL AND d.kind <> 'folder' AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
   "AND (? IS NULL OR d.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))))) " +
   "OR (k.chunkable_type = 'note' AND ? IS NULL AND EXISTS (SELECT 1 FROM notes n WHERE n.id = k.chunkable_id AND n.deleted_at IS NULL)))"
 

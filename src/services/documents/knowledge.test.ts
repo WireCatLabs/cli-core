@@ -145,6 +145,30 @@ describe("shared document knowledge", () => {
       await f.index.close()
     }
   })
+  it("writes an agent's relationship unconfirmed for the owner to decide, and the owner's confirmed", async () => {
+    const f = await setup()
+    try {
+      const note = await f.k.addNote(f.principal, f.ref, "Budget review")
+      const by = { bot: "claude-code", reason: "asked by claude-code through notion" }
+      const proposed = await f.k.addLink(f.principal, f.ref, { by, to: note.ref, kind: "about" })
+      expect(proposed).toMatchObject({
+        origin: "suggested",
+        confirmed: false,
+        provenance: expect.stringContaining("claude-code"),
+      })
+      expect(await f.k.links(f.principal, f.ref, { confirmed: false })).toEqual([proposed])
+      const owned = await f.k.addLink(f.principal, f.ref, { by: "owner", to: note.ref, kind: "about" })
+      expect(owned).toMatchObject({ id: proposed.id, origin: "owner", confirmed: true })
+      const pending = await f.k.addLink(f.principal, f.ref, { by, to: note.ref, kind: "evidence" })
+      expect(await f.k.removeLink(f.principal, f.ref, pending.id, "owner")).toEqual({ id: pending.id, removed: true })
+      expect(await f.k.links(f.principal, f.ref)).toEqual([owned])
+      await expect(f.k.addLink(f.principal, f.ref, { to: note.ref, kind: "about" })).rejects.toMatchObject({
+        details: { reason: "proposal.decider-required" },
+      })
+    } finally {
+      await f.index.close()
+    }
+  })
   it("stales source-backed memories on scope removal and refuses removed documents", async () => {
     const f = await setup()
     const store = f.store

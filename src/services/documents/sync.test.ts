@@ -7,6 +7,8 @@ import { catalogFiles } from "../../documents/catalog.js"
 import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
+import { documentSource } from "../document-source.js"
+import { searchNotesQuery } from "../notes-search.js"
 import { documentIngestion } from "./ingestion.js"
 import { documentKnowledge } from "./knowledge.js"
 import type { SyncOptions } from "./ports.js"
@@ -150,6 +152,26 @@ describe("provider-neutral document sync", () => {
       expect(f.state().lastSync).toBe("2026-10-16T00:00:00.000Z")
     },
   )
+  it("names the synced profile's account, so a hit says the CLI and profile, not a notes folder", async () => {
+    const f = await setup()
+    const ingest = documentIngestion(f.store, {
+      provider: "google-drive",
+      command: "drive",
+      externalId: (id) => `${id}.md`,
+      catalogInput: (item: SourceFile) => ({ externalId: `${item.id}.md`, name: item.name, parents: [], kind: "file" }),
+      frontMatter: (content) => ({ source: "google-drive", sourceUrl: content.metadata.url }),
+    })
+    const index = { ...ingest, openPictures: f.options.index.openPictures }
+    await expect(
+      syncDocuments({ ...f.options, index, profile: "work", source: { ...f.source, identity: async () => "beta" } }),
+    ).rejects.toThrow("does not match")
+    expect(await f.store.accounts.profiles()).toEqual({})
+    await syncDocuments({ ...f.options, index, profile: "work" })
+    const hit = must((await searchNotesQuery(f.store, { text: "budget", limit: 1, timezone: "UTC" })).items[0])
+    expect(
+      documentSource(hit.note, await f.store.accounts.storedAccounts(), await f.store.accounts.profiles()),
+    ).toMatchObject({ kind: "document", provider: "drive", account: "work" })
+  })
   it("retains failed work, resumes an interrupted discovery and refuses invalid source identity", async () => {
     const f = await setup()
     vi.mocked(f.source.children).mockRejectedValueOnce(new Error("interrupted discovery"))

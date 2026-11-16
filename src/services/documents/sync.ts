@@ -86,6 +86,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     const state = statePort.read()
     if (state.principal !== principal)
       throw new CliError("configuration_error", "sync state belongs to another source account")
+    if (options.profile !== undefined) await index.registerProfile?.(options.profile, principal)
     const currentScope = scopeHash(profile.roots, query, options.isDocument !== undefined)
     if (state.pending && (state.pending.scope !== currentScope || rescan)) {
       // Work the new plan cannot see: a file saved to the index before its state was.

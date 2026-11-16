@@ -8,6 +8,8 @@ export interface IngestionOptions<M extends SourceFile> {
    * `{ provider, account: principal }`. Without it they live in a notes folder named `collectionName(principal)`.
    */
   provider?: string
+  /** The CLI's command (`notion`), which names its profiles: with `provider`, a sync records which account each is. */
+  command?: string
   collectionName?(principal: string): string
   externalId(id: string): string
   catalogInput(file: M): CatalogInput
@@ -15,7 +17,7 @@ export interface IngestionOptions<M extends SourceFile> {
   observed?(principal: string, file: M, documentId: string): Promise<void>
 }
 export const documentIngestion = <M extends SourceFile>(
-  store: Pick<MessageStore, "notes" | "catalog" | "memories">,
+  store: Pick<MessageStore, "notes" | "catalog" | "memories" | "accounts">,
   options: IngestionOptions<M>,
 ) => {
   const folder = async (principal: string, create: boolean) => {
@@ -39,7 +41,18 @@ export const documentIngestion = <M extends SourceFile>(
       }
     }
   }
+  const { provider, command } = options
   return {
+    // Only where both are known: a sync calls it whenever it is there and a profile is given.
+    ...(provider && command
+      ? {
+          /** Names the profile's account in the store, so a search hit says `notion`/`work`, not `notes`/`1`. */
+          registerProfile: async (name: string, principal: string) => {
+            await folder(principal, true)
+            await store.accounts.saveProfile(command, name, { provider, account: principal })
+          },
+        }
+      : {}),
     catalog: {
       import: async (principal: string, files: M[]) => {
         const selected = await folder(principal, true)

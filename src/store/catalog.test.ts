@@ -223,6 +223,29 @@ it("compiles shared metadata queries in SQL with boolean logic, literal values a
   await expect(get("kind:invalid")).rejects.toThrow()
 })
 
+it("keeps a folder entry out of word search, the newest-first digest read and embedding", async () => {
+  const { store, account } = await setup()
+  await store.catalog.upsert(account, [
+    { ...file("space.md"), kind: "folder", name: "Roadmap workspace", parents: [] },
+    { ...file("plan.md"), name: "Roadmap plan" },
+  ])
+  const refs = async (text: string, newest = false) =>
+    (
+      await searchNotesQuery(store, {
+        text,
+        limit: 10,
+        timezone: "UTC",
+        folderIds: [account],
+        ...(newest ? { newest } : {}),
+      })
+    ).items.map((hit) => hit.note.path)
+  expect(await refs("roadmap")).toEqual(["plan.md"])
+  expect(await refs("date>2000-01-01", true)).toEqual(["plan.md"])
+  const texts = (await store.notes.chunksToEmbed("synthetic-model", { limit: 10 })).map((chunk) => chunk.text)
+  expect(texts.some((text) => text.includes("Roadmap plan"))).toBe(true)
+  expect(texts.some((text) => text.includes("Roadmap workspace"))).toBe(false)
+})
+
 it("keeps retired catalog records out of note listings, word search and embedding preparation without deleting annotations", async () => {
   const { store, account } = await setup()
   const { note } = await store.notes.saveFileNote({
