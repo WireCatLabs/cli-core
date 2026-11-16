@@ -367,6 +367,11 @@ const samples: Record<EntityName, unknown> = {
     deals: emptySection,
     money: moneySample,
     communications: { messages: 1, mail: 0, meetings: 0, has_more: false },
+    history: {
+      ...emptySection,
+      items: [{ kind: "message", ref: "msg:telegram/1/2/3", title: null, at, people: ["person:4"], text: "Hello" }],
+      total: 1,
+    },
     tasks: emptySection,
     coverage: coverageSample,
   },

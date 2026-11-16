@@ -20,7 +20,7 @@ import {
   scopeOf,
   sectionOf,
 } from "./business-context.js"
-import { type Communications, communicationsOf } from "./communications.js"
+import { type Communications, communicationsOf, type Touch } from "./communications.js"
 import { type LinkedBy, type MoneySection, moneyOf, type OrderLine } from "./money-context.js"
 
 export interface DealLine {
@@ -68,6 +68,8 @@ export interface OrganizationContext {
   money: MoneySection
   /** Counts only, through its own people other than the owner, in the accounts read. */
   communications: Communications["counts"] & { hasMore: boolean }
+  /** Its people's messages, mail and meetings, newest first, `limit` of them. */
+  history: Section<Touch>
   /** Open tasks of its projects. */
   tasks: Section<TaskLine>
   coverage: Coverage
@@ -222,7 +224,7 @@ export const organizationContext = async (
       const record = await store.people.personByUid(person.ref.slice("person:".length))
       if (record) members.push(record)
     }
-  const talks = await communicationsOf(store, members, scope)
+  const talks = await communicationsOf(store, members, scope, { limit })
   const categories = (await organizationCategories(store, scope)).get(ref) ?? []
   const tasks = await openTasksOf(
     store,
@@ -261,6 +263,10 @@ export const organizationContext = async (
       financeComplete,
     ),
     communications: { ...talks.counts, hasMore: talks.hasMore },
+    history: sectionOf(talks.items, limit, null, {
+      more: talks.hasMore,
+      total: Math.max(talks.counts.messages + talks.counts.mail + talks.counts.meetings, talks.items.length),
+    }),
     tasks: sectionOf(tasks.tasks, limit, tasks.next, { more: tasks.full }),
     coverage: await coverageFor(store, talks.coverage, scope),
   }

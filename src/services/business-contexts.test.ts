@@ -65,6 +65,9 @@ describe("organization context", () => {
     expect(acme.projects.items).toEqual([{ ref: refs.project, name: "Atlas", via: ["organization", "deal"] }])
     expect(acme.tasks.items.map((one) => one.ref)).toEqual([refs.task])
     expect(acme.communications).toEqual({ messages: 1, mail: 1, meetings: 1, hasMore: false })
+    expect(acme.history.items.map((one) => one.kind).toSorted()).toEqual(["mail", "meeting", "message"])
+    const times = acme.history.items.map((one) => one.at ?? "")
+    expect(times).toEqual(times.toSorted().toReversed())
     valid("organization_context", acme)
   })
 
