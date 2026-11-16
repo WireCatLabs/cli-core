@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { basename, dirname, resolve } from "node:path"
 import type { Command } from "commander"
 import { parseDocument } from "yaml"
 
@@ -8,6 +8,8 @@ export interface SkillValidation {
   file?: string
   version?: string
   program?: Command
+  /** The most SKILL.md may weigh, in bytes: an agent carries it in every later turn, the linked files only when read. */
+  maxBytes?: number
 }
 
 // The Agent Skills specification asks for string values; OpenClaw and ClawHub read their install and requirement
@@ -54,12 +56,37 @@ export const validateSkill = (content: string, options: SkillValidation = {}): s
   if (options.version && (fields.metadata as Record<string, unknown> | undefined)?.version !== options.version)
     problems.push("emitted skill version must match the binary")
 
-  const body = content.slice(match[0].length)
+  if (options.maxBytes !== undefined) {
+    const bytes = Buffer.byteLength(content)
+    if (bytes > options.maxBytes)
+      problems.push(
+        `SKILL.md is ${bytes} bytes, over ${options.maxBytes}: move what only some tasks need into linked files`,
+      )
+  }
+  const seen = new Set(options.file ? [options.file] : [])
+  for (const problem of bodyProblems(content.slice(match[0].length), options, seen)) problems.push(problem)
+  return [...new Set(problems)]
+}
+
+/**
+ * Relative links that lead nowhere and command paths the program does not have, in a skill's body and, through its
+ * relative Markdown links, in every file beside it that it links: those are loaded in its place.
+ */
+const bodyProblems = (body: string, options: SkillValidation, seen: Set<string>): string[] => {
+  const problems: string[] = []
   if (options.file) {
     for (const link of body.matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)) {
       const target = (link[1] ?? "").split("#")[0] ?? ""
       if (!target || /^(?:[a-z]+:|\/)/i.test(target)) continue
-      if (!existsSync(resolve(dirname(options.file), target))) problems.push(`missing skill reference: ${target}`)
+      const path = resolve(dirname(options.file), target)
+      if (!existsSync(path)) {
+        problems.push(`missing skill reference: ${target}`)
+        continue
+      }
+      if (!path.endsWith(".md") || seen.has(path)) continue
+      seen.add(path)
+      for (const problem of bodyProblems(readFileSync(path, "utf8"), { ...options, file: path }, seen))
+        problems.push(`${basename(path)}: ${problem}`)
     }
   }
   if (options.program) {
@@ -93,5 +120,5 @@ export const validateSkill = (content: string, options: SkillValidation = {}): s
       }
     }
   }
-  return [...new Set(problems)]
+  return problems
 }

@@ -137,7 +137,8 @@ CLI.
 ## Agent guidance and task evaluations
 
 The `skill-validation` export reads YAML frontmatter, checks portable names/description/metadata,
-local references and literal command paths against a supplied program. Consumers validate the
+local references and literal command paths against a supplied program, in SKILL.md and in every Markdown file it
+links (problems name that file), and with `maxBytes` the size of SKILL.md itself. Consumers validate the
 source skill and the version prepared for installation against their own command discovery. It
 never executes a skill example or opens a messenger session.
 

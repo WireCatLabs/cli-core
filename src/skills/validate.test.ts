@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { validateSkill } from "./validate.js"
@@ -68,5 +70,25 @@ describe("portable skill validation", () => {
   it("validates the task skill shipped by the shared package", () => {
     const file = new URL("../../skills/link-conversations/SKILL.md", import.meta.url)
     expect(validateSkill(readFileSync(file, "utf8"), { folder: "link-conversations", file: file.pathname })).toEqual([])
+  })
+
+  it("checks the files a skill links as it checks SKILL.md, since an agent reads them in its place", () => {
+    const folder = mkdtempSync(join(tmpdir(), "skill-"))
+    mkdirSync(join(folder, "references"))
+    writeFileSync(join(folder, "references", "tasks.md"), "`fixture absent`, [back](../SKILL.md), [gone](none.md)\n")
+    const file = join(folder, "SKILL.md")
+    const root = new Command("fixture").addCommand(new Command("stats"))
+    writeFileSync(file, source(undefined, "[tasks](references/tasks.md)"))
+    expect(validateSkill(readFileSync(file, "utf8"), { file, program: root })).toEqual([
+      "tasks.md: missing skill reference: none.md",
+      "tasks.md: unknown skill command path: fixture absent",
+    ])
+  })
+  it("fails a SKILL.md over the byte limit it is given, and only then", () => {
+    const content = source(undefined, "x".repeat(100))
+    expect(validateSkill(content, { maxBytes: 1000 })).toEqual([])
+    expect(validateSkill(content, { maxBytes: 50 })).toEqual([
+      `SKILL.md is ${content.length} bytes, over 50: move what only some tasks need into linked files`,
+    ])
   })
 })

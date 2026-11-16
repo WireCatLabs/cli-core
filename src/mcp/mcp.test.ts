@@ -4659,6 +4659,19 @@ describe("the skill resource", () => {
     expect(telegram.opened()).toBe(0)
   })
 
+  it("serves each file the skill links at the address its link resolves to", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "skill-"))
+    mkdirSync(join(folder, "references"))
+    writeFileSync(join(folder, "SKILL.md"), "---\nname: chat-cli\n---\n\n[search](references/search.md)\n")
+    writeFileSync(join(folder, "references", "search.md"), "# search\n")
+    const { raw } = await connect(scripted(), { skill: pathToFileURL(join(folder, "SKILL.md")) })
+
+    const uri = new URL("references/search.md", "chat://skill").href
+    expect((await raw.listResources()).resources.map((one) => one.uri)).toEqual(["chat://skill", uri])
+    const { contents } = await raw.readResource({ uri })
+    expect(contents[0] && "text" in contents[0] ? contents[0].text : "").toBe("# search\n")
+  })
+
   it("is not offered when the CLI names no SKILL.md", async () => {
     const { raw } = await connect()
 

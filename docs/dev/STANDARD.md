@@ -233,6 +233,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `transcript` | the text of speech: a voice message or a meeting recording |
 | `evidence` | the stored messages or lines a result or a reference rests on |
 | `passage` | a cited transcript line with bounded surrounding lines from the same revision |
+| `invitation` | the text that invites people to a meeting: how to join it and when |
 | `agenda` | what needs a look today |
 | `busy` | when calendars or people are taken, without what takes them |
 | `categories` | the categories a thing takes, with what each means |
