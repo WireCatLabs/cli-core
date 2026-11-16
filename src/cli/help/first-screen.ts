@@ -85,6 +85,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     package: "@wirecat/asterisk-cli",
     does: "Asterisk PBX calls and recordings, searchable with your other WireCat data",
   },
+  {
+    command: "notion",
+    package: "@wirecat/notion-cli",
+    does: "Notion pages and databases as local text, searchable with your other WireCat data",
+  },
 ]
 
 const WIDTH = 100
