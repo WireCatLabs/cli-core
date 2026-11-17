@@ -225,3 +225,19 @@ it("a password for a user name: --login keeps <name>:<password>, sent as Basic, 
     },
   ])
 })
+
+it("Basic needs a user name: a token without one is refused, and a bearer alternative is preferred", async () => {
+  const bare = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test" }, true)
+  const refused = await bare.cli(["one", "api", "list-posts", "--json"])
+  expect(refused.error.message).toContain("session start --login <name>")
+  expect(bare.sent).toEqual([])
+  const { signRequest } = await import("./service-api-manifest.js")
+  const both = {
+    ...manifest,
+    securitySchemes: { basic: { type: "http", scheme: "basic" }, bearer: { type: "http", scheme: "bearer" } },
+    security: [{ basic: [] }, { bearer: [] }],
+  } as ServiceApiManifest
+  const request = { url: new URL("https://a.blog.test/wp-json/posts"), headers: new Headers() }
+  await signRequest(both, both.operations[0] as never, request, () => "token-a")
+  expect(request.headers.get("authorization")).toBe("Bearer token-a")
+})
