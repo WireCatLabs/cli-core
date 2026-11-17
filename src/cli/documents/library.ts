@@ -100,6 +100,8 @@ export interface DocumentLibraryOptions<M extends SourceFile> {
   coverage: string
   /** The accounts a document names, for `identities list`; none when the provider shows none. */
   people?: DocumentKnowledgePort["people"]
+  /** Where a chosen folder is at the provider, for `folders list`: a Disk path. Unset: the answer has no path. */
+  folderPath?(folder: M): string | undefined
   /** The CLI's own `folders browse`. */
   browse?(folders: Command, tools: DocumentLibraryTools<M>): void
 }
@@ -425,7 +427,11 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
       list: (filter) =>
         roots()
           .filter((id) => filter.id === undefined || filter.id === id)
-          .map((id) => ({ id })),
+          .map((id) => {
+            const file = files().folders().files?.[id]
+            const path = file ? options.folderPath?.(file) : undefined
+            return { id, ...(file ? { name: file.name } : {}), ...(path ? { path } : {}) }
+          }),
       remove: (input) => {
         const id = options.idOf(input)
         const chosen = files().folders()

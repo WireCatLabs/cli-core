@@ -12,7 +12,7 @@ export interface DocumentFolderCommands {
   /** Checks the folder with the provider and keeps it in the selected profile; refuses one that is not a folder. */
   add(input: string): Promise<{ id: string; name: string }>
   /** The selected profile's chosen folders, narrowed by `id:`. */
-  list(filter: Record<string, string>): { id: string }[]
+  list(filter: Record<string, string>): { id: string; name?: string; path?: string }[]
   /** Forgets the folder; answers its id. */
   remove(input: string): string
   /** Adds the CLI's own `folders browse`, which help then lists between `list` and `remove`. */

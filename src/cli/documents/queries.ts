@@ -35,7 +35,13 @@ const registry = (
   ),
 })
 
-export const folderRow = v.strictObject({ id: v.string() })
+export const folderRow = v.strictObject({
+  id: v.string(),
+  /** The folder as `folders add` named it; left out for a folder chosen before its name was kept. */
+  name: v.optional(v.string()),
+  /** Where the provider says it is, when the CLI gives a `folderPath`: a Disk path. */
+  path: v.optional(v.string()),
+})
 export const mirrorRow = v.strictObject({ id: v.string(), path: v.string(), folder: v.string() })
 export const tagRow = v.strictObject({ tag: v.string() })
 export const linkRow = v.looseObject({
