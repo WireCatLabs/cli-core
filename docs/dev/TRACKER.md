@@ -57,15 +57,16 @@ identity linked to a person has, joined when read. Nothing is written to the peo
 
 ## An issue as the owner's task
 
-`trackerIssueTask(store, account, issue)` and `issues task <issue>` make an issue the owner's task: `source` is
+`trackerIssueTask(store, account, issue)` and `issues assign <issue>` make an issue the owner's task: `source` is
 `tracker:issue/<externalId>`, `sourceKind` is `tracker_issue`, and the title is the issue's key only. The task links
 to the issue and copies none of its text. The same issue again answers the task it already has.
 
 ## Commands
 
-`addTrackerCommands(program, { app, open })` mounts `sync`, `issues list|show|search|task`, and `list` for
+`addTrackerCommands(program, { app, open })` mounts `sync`, `issues list|show|search|assign`, and `list` for
 `projects`, `teams`, `users` (each with its person), `states` and `labels`. Every text field from the tracker is named
-in the row's `untrusted`.
+in the row's `untrusted`. Each list narrows by its query, as `deals list` does:
+`issues list team:<id> assignee:none type:started`, and `archived:include` for archived rows too.
 
 ## A tracker described as data
 
