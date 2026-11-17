@@ -4,6 +4,7 @@ import type { Id } from "../domain/models.js"
 import { meaningFloor } from "../embeddings/models.js"
 import { type FusedFacts, fuseRanked } from "../search/fusion.js"
 import { isQueryLimit, QUERY_LIMITS, searchError } from "../search/lucene/types.js"
+import { respelled } from "../search/respell.js"
 import { STOP_WORDS } from "../search/task-similarity.js"
 import { normalize } from "../store/normalize.js"
 import { type AccountKey, type ConversationHit, type ConversationSummary, threadConversation } from "../store/store.js"
@@ -20,6 +21,7 @@ import {
 } from "./embeddings-maintenance.js"
 import { storedChatId } from "./message-resolution.js"
 import { type Prepared, prepareLucene } from "./messages-search.js"
+import { namedChat } from "./named-chat.js"
 import { MAIL } from "./search-kind.js"
 import { refreshSearch } from "./search-refresh.js"
 
@@ -44,8 +46,8 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
   /**
    * The conversations holding messages that share a word with the query, best message first. Every word
    * is one side of an OR, so a sentence ranks what shares any of it, and nothing in it is read as a filter.
-   * Only whole words and their beginnings count: a corrected spelling or a piece of a word would pass a
-   * near-miss off as a match, which is what the meaning half is for.
+   * Only whole words and their beginnings count, except for a word no message holds at all: that one is read as
+   * the words it may stand for (`respelled`), its Latin spelling and the nearest spellings the store holds.
    */
   const byWords = async (
     query: string,
@@ -54,19 +56,20 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     since: string | undefined,
     timeLimitMs: number | undefined,
   ) => {
-    const all = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
-    // `что*` OR `какие*` reads most of a large store and runs out of time before the words that matter count.
-    const content = all.filter((word) => !STOP_WORDS.has(normalize(word)))
-    const words = content.length ? content : all
+    const words = queryWords(query)
     const outside = new Map<string, { account: AccountKey; chats: Set<Id> }>()
     if (!words.length || !prepared.scopeAccounts.length)
-      return { hits: [], outside, sources: new Map<string, AccountKey>() }
+      return { hits: [], outside, sources: new Map<string, AccountKey>(), respellings: new Map<string, string[]>() }
     const store = await deps.store()
+    const respellings = await respelled(store.searchIndex, words)
     const lexical = await prepareLucene(
       store,
       await deps.account(),
       {
-        text: words.map((word) => (word.length >= 3 ? `${word}*` : `"${word}"`)).join(" OR "),
+        text: words
+          .flatMap((word) => [word, ...(respellings.get(word) ?? [])])
+          .map((word) => (word.length >= 3 ? `${word}*` : `"${word}"`))
+          .join(" OR "),
         accounts: prepared.scopeAccounts,
         limit: WORD_HITS,
         ...(timeLimitMs === undefined ? {} : { timeLimitMs }),
@@ -75,7 +78,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     )
     const { items } = await store.queries.matchQuery({
       ...lexical.execution,
-      perChat: PER_CHAT,
+      ...(prepared.selectedChat ? {} : { perChat: PER_CHAT }),
       ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
       ...(conversations === undefined ? {} : { conversationIds: conversations }),
       ...(since === undefined ? {} : { conversationSince: Date.parse(since) }),
@@ -166,171 +169,197 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       seen.add(summary.id)
       return [{ summary, chunk }]
     })
-    return { hits, outside, sources }
+    return { hits, outside, sources, respellings }
+  }
+
+  const search: EmbeddingsService["search"] = async (
+    query,
+    { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs },
+  ) => {
+    if (!query.trim()) searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
+    if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
+      searchError("query.too-large", { start: 0, end: query.length }, "query is longer than 8 KiB")
+    const refreshed = await refreshSearch(deps, {
+      chat,
+      limit,
+      syncFirst,
+      signal,
+      text: filter,
+      source,
+      timezone,
+    })
+    const locallyRefreshed = refresh
+      ? await embeddingsMaintenance(deps).refresh({ ...refresh, messages: false })
+      : undefined
+    const store = await deps.store()
+    const account = await deps.account()
+    const target = embeddingTarget(deps, choice)
+    const stop = Date.now() + 200
+    await store.searchIndex.fillSearchIndex({ until: () => Date.now() >= stop })
+    await store.searchIndex.fillStems({ until: () => Date.now() >= stop })
+    const prepared = await prepareLucene(
+      store,
+      account,
+      {
+        ...(filter === undefined ? {} : { text: filter }),
+        ...(source === undefined ? {} : { source }),
+        ...(chat === undefined ? {} : { chat }),
+        ...(timezone === undefined ? {} : { timezone }),
+        limit,
+      },
+      deps.messenger,
+    )
+    const eligibility =
+      filter === undefined ? undefined : await store.queries.conversationEligibility(prepared.execution)
+    const selected = prepared.selectedChat
+    const scopeOf = (one: AccountKey) =>
+      selected
+        ? selected.account.provider === one.provider && selected.account.account === one.account
+          ? { chatId: selected.chatId }
+          : null
+        : {}
+    // Out of time in words still leaves the meaning half, the one a sentence needs most.
+    let wordsOutOfTime = false
+    const words = await byWords(query, prepared, eligibility?.conversations, since, timeLimitMs).catch(
+      (error: unknown) => {
+        if (!isQueryLimit(error)) throw error
+        wordsOutOfTime = true
+        return {
+          hits: [],
+          outside: new Map<string, { account: AccountKey; chats: Set<Id> }>(),
+          sources: new Map(),
+          respellings: new Map<string, string[]>(),
+        }
+      },
+    )
+    const meaning: { hit: ConversationHit; lead: number }[] = []
+    const sources = words.sources
+    if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
+      await withEmbedder(deps, target, choice, {}, async (embedder) => {
+        const [vector] = await embedder.embed([query], "query")
+        for (const one of prepared.scopeAccounts) {
+          const scope = scopeOf(one)
+          if (scope === null) continue
+          // One chat needs no share, and mail's threads are too many to share among.
+          const whole = "chatId" in scope || one.provider === MAIL
+          const hits = await store.vectors.nearestConversations(one, {
+            ...scope,
+            ...(since === undefined ? {} : { since }),
+            model: target.key,
+            limit: whole ? Math.max(limit, CANDIDATES) : Math.max(limit, ACROSS_CHATS),
+            query: vector as Float32Array,
+            ...(eligibility ? { conversations: eligibility.conversations } : {}),
+          })
+          const images = await store.vectors.nearestImages(one, {
+            ...scope,
+            ...(since === undefined ? {} : { since }),
+            model: target.key,
+            limit: Math.max(limit, CANDIDATES),
+            query: vector as Float32Array,
+          })
+          const found = [
+            ...hits,
+            ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
+          ].sort((a, b) => b.score - a.score)
+          for (const hit of found) sources.set(hit.summary.id, one)
+          meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
+        }
+      })
+    }
+    meaning.sort((a, b) => b.lead - a.lead)
+    const scoped: { source: AccountKey; readiness: SearchReadiness }[] = []
+    const elsewhere: string[] = []
+    for (const one of prepared.scopeAccounts) {
+      const scope = scopeOf(one)
+      if (scope === null) continue
+      const eligibleChats = eligibility?.chats
+        .filter(({ account }) => account.provider === one.provider && account.account === one.account)
+        .map(({ chat }) => chat)
+      const rows =
+        eligibleChats === undefined
+          ? await store.vectors.readiness(one, { ...scope, model: target.key, searchableOnly: true })
+          : (
+              await Promise.all(
+                eligibleChats.map((chatId) => store.vectors.readiness(one, { chatId, model: target.key })),
+              )
+            ).flat()
+      const readiness = searchReadiness(
+        rows.map(shaped),
+        target.installed,
+        words.outside.get(JSON.stringify(one))?.chats ?? new Set(),
+      )
+      scoped.push({ source: one, readiness })
+      const other = await store.vectors.embeddedOnlyElsewhere(one, { ...scope, model: target.key })
+      elsewhere.push(
+        ...other
+          .filter((id) => eligibleChats === undefined || eligibleChats.includes(id))
+          .map((id) =>
+            prepared.scopeAccounts.length > 1 ? [one.provider, one.account, id].map(encodeURIComponent).join("/") : id,
+          ),
+      )
+    }
+    const readiness: SearchReadiness = { searchedByMeaning: [], wordsOnly: [], partial: [], stale: [], notBuilt: [] }
+    for (const key of ["searchedByMeaning", "wordsOnly", "partial", "stale", "notBuilt"] as const)
+      readiness[key] = [
+        ...new Set(
+          scoped.flatMap(({ source, readiness }) =>
+            readiness[key].map((id) =>
+              scoped.length > 1 ? [source.provider, source.account, id].map(encodeURIComponent).join("/") : id,
+            ),
+          ),
+        ),
+      ].sort()
+    if (scoped.length > 1) readiness.scopes = scoped
+    return {
+      accounts: prepared.scopeAccounts,
+      model: target.id,
+      meaning: target.installed ? "searched" : "unavailable",
+      ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
+      ...(words.respellings.size ? { respelled: Object.fromEntries(words.respellings) } : {}),
+      hits: fused(
+        meaning.map(({ hit }) => hit),
+        words.hits,
+        meaningFloor(target.key),
+      )
+        .slice(0, limit)
+        .map((hit) => {
+          const source = sources.get(hit.summary.id) as AccountKey
+          return {
+            ...hit,
+            source,
+            locator: formatLocator({ ...source, chat: hit.summary.chatId, message: hit.chunk.firstMessageId }),
+          }
+        }),
+      readiness,
+      ...(locallyRefreshed ? { prepared: locallyRefreshed } : {}),
+      ...(refreshed
+        ? { refreshed, coverage: { state: refreshed.complete ? ("partial" as const) : ("stale" as const) } }
+        : {}),
+      embeddedOnlyElsewhere: elsewhere,
+    }
   }
 
   return {
-    search: async (
-      query,
-      { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs },
-    ) => {
-      if (!query.trim())
-        searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
-      if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
-        searchError("query.too-large", { start: 0, end: query.length }, "query is longer than 8 KiB")
-      const refreshed = await refreshSearch(deps, {
-        chat,
-        limit,
-        syncFirst,
-        signal,
-        text: filter,
-        source,
-        timezone,
-      })
-      const locallyRefreshed = refresh
-        ? await embeddingsMaintenance(deps).refresh({ ...refresh, messages: false })
-        : undefined
-      const store = await deps.store()
-      const account = await deps.account()
-      const target = embeddingTarget(deps, choice)
-      const stop = Date.now() + 200
-      await store.searchIndex.fillSearchIndex({ until: () => Date.now() >= stop })
-      await store.searchIndex.fillStems({ until: () => Date.now() >= stop })
-      const prepared = await prepareLucene(
-        store,
-        account,
-        {
-          ...(filter === undefined ? {} : { text: filter }),
-          ...(source === undefined ? {} : { source }),
-          ...(chat === undefined ? {} : { chat }),
-          ...(timezone === undefined ? {} : { timezone }),
-          limit,
-        },
-        deps.messenger,
-      )
-      const eligibility =
-        filter === undefined ? undefined : await store.queries.conversationEligibility(prepared.execution)
-      const selected = prepared.selectedChat
-      const scopeOf = (one: AccountKey) =>
-        selected
-          ? selected.account.provider === one.provider && selected.account.account === one.account
-            ? { chatId: selected.chatId }
-            : null
-          : {}
-      // Out of time in words still leaves the meaning half, the one a sentence needs most.
-      let wordsOutOfTime = false
-      const words = await byWords(query, prepared, eligibility?.conversations, since, timeLimitMs).catch(
+    /** Over every chat, a query that names someone by a name their private chat uses has that chat's hits first. */
+    search: async (query, options) => {
+      const found = await search(query, options)
+      if (options.chat !== undefined || options.filter !== undefined || found.accounts?.length !== 1) return found
+      const named = await namedChat(deps, await deps.store(), found.accounts, queryWords(query)).catch(
         (error: unknown) => {
-          if (!isQueryLimit(error)) throw error
-          wordsOutOfTime = true
-          return { hits: [], outside: new Map<string, { account: AccountKey; chats: Set<Id> }>(), sources: new Map() }
+          if (isQueryLimit(error)) return undefined
+          throw error
         },
       )
-      const meaning: { hit: ConversationHit; lead: number }[] = []
-      const sources = words.sources
-      if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
-        await withEmbedder(deps, target, choice, {}, async (embedder) => {
-          const [vector] = await embedder.embed([query], "query")
-          for (const one of prepared.scopeAccounts) {
-            const scope = scopeOf(one)
-            if (scope === null) continue
-            // One chat needs no share, and mail's threads are too many to share among.
-            const whole = "chatId" in scope || one.provider === MAIL
-            const hits = await store.vectors.nearestConversations(one, {
-              ...scope,
-              ...(since === undefined ? {} : { since }),
-              model: target.key,
-              limit: whole ? Math.max(limit, CANDIDATES) : Math.max(limit, ACROSS_CHATS),
-              query: vector as Float32Array,
-              ...(eligibility ? { conversations: eligibility.conversations } : {}),
-            })
-            const images = await store.vectors.nearestImages(one, {
-              ...scope,
-              ...(since === undefined ? {} : { since }),
-              model: target.key,
-              limit: Math.max(limit, CANDIDATES),
-              query: vector as Float32Array,
-            })
-            const found = [
-              ...hits,
-              ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
-            ].sort((a, b) => b.score - a.score)
-            for (const hit of found) sources.set(hit.summary.id, one)
-            meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
-          }
-        })
-      }
-      meaning.sort((a, b) => b.lead - a.lead)
-      const scoped: { source: AccountKey; readiness: SearchReadiness }[] = []
-      const elsewhere: string[] = []
-      for (const one of prepared.scopeAccounts) {
-        const scope = scopeOf(one)
-        if (scope === null) continue
-        const eligibleChats = eligibility?.chats
-          .filter(({ account }) => account.provider === one.provider && account.account === one.account)
-          .map(({ chat }) => chat)
-        const rows =
-          eligibleChats === undefined
-            ? await store.vectors.readiness(one, { ...scope, model: target.key, searchableOnly: true })
-            : (
-                await Promise.all(
-                  eligibleChats.map((chatId) => store.vectors.readiness(one, { chatId, model: target.key })),
-                )
-              ).flat()
-        const readiness = searchReadiness(
-          rows.map(shaped),
-          target.installed,
-          words.outside.get(JSON.stringify(one))?.chats ?? new Set(),
-        )
-        scoped.push({ source: one, readiness })
-        const other = await store.vectors.embeddedOnlyElsewhere(one, { ...scope, model: target.key })
-        elsewhere.push(
-          ...other
-            .filter((id) => eligibleChats === undefined || eligibleChats.includes(id))
-            .map((id) =>
-              prepared.scopeAccounts.length > 1
-                ? [one.provider, one.account, id].map(encodeURIComponent).join("/")
-                : id,
-            ),
-        )
-      }
-      const readiness: SearchReadiness = { searchedByMeaning: [], wordsOnly: [], partial: [], stale: [], notBuilt: [] }
-      for (const key of ["searchedByMeaning", "wordsOnly", "partial", "stale", "notBuilt"] as const)
-        readiness[key] = [
-          ...new Set(
-            scoped.flatMap(({ source, readiness }) =>
-              readiness[key].map((id) =>
-                scoped.length > 1 ? [source.provider, source.account, id].map(encodeURIComponent).join("/") : id,
-              ),
-            ),
-          ),
-        ].sort()
-      if (scoped.length > 1) readiness.scopes = scoped
+      if (!named) return found
+      // Inside the chat the name is in every other message, so it would only add noise there.
+      const rest = query.replace(new RegExp(`(?<![\\p{L}\\p{N}])${named.word}(?![\\p{L}\\p{N}])`, "giu"), " ").trim()
+      const { syncFirst: _, refresh: __, ...plain } = options
+      const inside = await search(rest || query, { ...plain, chat: named.chatId })
+      const shown = new Set(inside.hits.map(({ summary }) => summary.id))
       return {
-        accounts: prepared.scopeAccounts,
-        model: target.id,
-        meaning: target.installed ? "searched" : "unavailable",
-        ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
-        hits: fused(
-          meaning.map(({ hit }) => hit),
-          words.hits,
-          meaningFloor(target.key),
-        )
-          .slice(0, limit)
-          .map((hit) => {
-            const source = sources.get(hit.summary.id) as AccountKey
-            return {
-              ...hit,
-              source,
-              locator: formatLocator({ ...source, chat: hit.summary.chatId, message: hit.chunk.firstMessageId }),
-            }
-          }),
-        readiness,
-        ...(locallyRefreshed ? { prepared: locallyRefreshed } : {}),
-        ...(refreshed
-          ? { refreshed, coverage: { state: refreshed.complete ? ("partial" as const) : ("stale" as const) } }
-          : {}),
-        embeddedOnlyElsewhere: elsewhere,
+        ...found,
+        named: { word: named.word, chatId: named.chatId, title: named.title },
+        hits: [...inside.hits, ...found.hits.filter(({ summary }) => !shown.has(summary.id))].slice(0, options.limit),
       }
     },
 
@@ -383,6 +412,14 @@ const shared = (hits: ConversationHit[], limit: number) => {
     const level = own[Math.min(PER_CHAT, own.length) - 1]?.score ?? 0
     return own.slice(0, Math.max(limit, PER_CHAT)).map((hit) => ({ hit, lead: hit.score - level }))
   })
+}
+
+/** The query's words, lower case, without the ones nearly every message holds (unless it holds nothing else). */
+const queryWords = (query: string) => {
+  const all = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
+  // `что*` OR `какие*` reads most of a large store and runs out of time before the words that matter count.
+  const content = all.filter((word) => !STOP_WORDS.has(normalize(word)))
+  return content.length ? content : all
 }
 
 /** Reciprocal rank fusion of the two lists: each conversation scores 1 / (k + rank) in every list it is in. */

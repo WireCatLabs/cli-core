@@ -26,6 +26,8 @@ export const DEFAULT_STEMMERS_VERSION = 2
  * Between the stem sequences of one text when several Latin stemmers give different ones, so a phrase
  * never matches across two sequences. Letters and digits, so `unicode61` keeps it as one token.
  */
+/** The fewest letters a searched word has for the longer words it begins to count too: `рост` finds `ростислав`. */
+export const START_LETTERS = 4
 export const STEM_SEPARATOR = "0stemsep0"
 
 /** Clear-all rather than LRU: the 1M benchmark corpus holds 523k distinct words, and a Map stays cheap below this. */
@@ -96,8 +98,14 @@ export type Stemmer = {
   indexText(text: string): string
   /** An FTS5 expression for a text as phrases of stems, one per sequence; `undefined` when no word stems. */
   phrases(text: string): string | undefined
-  /** Each word of a text with its stem and the stemmer its script chose — what a search answer shows. */
-  explain(text: string): { word: string; stem: string; stemmer: CyrillicStemmer | LatinStemmer }[]
+  /**
+   * Each word of a text with its stem and the stemmer its script chose — what a search answer shows. With `query`, the
+   * stem `phrases` searches, which keeps a word whole where its stem would be another word.
+   */
+  explain(
+    text: string,
+    options?: { query?: boolean },
+  ): { word: string; stem: string; stemmer: CyrillicStemmer | LatinStemmer }[]
 }
 
 /**
@@ -106,9 +114,19 @@ export type Stemmer = {
  * (`Москвa` with a Latin `a`) are usually homoglyph spoofing or code, and `covid19` is a name, not a word form.
  * Ukrainian and other Cyrillic languages go through the Russian stemmer — there is no language detection.
  */
+/**
+ * Whether Snowball cuts a word to a stem so short that it may be another word's: «домен» → «дом», the stem of «дом»
+ * and «дома». The search keeps such a word whole when the stems show it is a stem itself («доменов» → «домен»).
+ */
+export const cutsDeep = (stemmer: Stemmer, token: string): boolean => {
+  const word = [...normalize(token.normalize("NFC").toLowerCase().replace(MARKS, ""))]
+  const stem = [...stemmer.stemToken(token)]
+  return stem.length < 4 && word.length - stem.length >= 2
+}
+
 export const createStemmer = (
   stemmers: Stemmers = DEFAULT_STEMMERS,
-  { cacheLimit = STEM_CACHE_LIMIT }: { cacheLimit?: number } = {},
+  { cacheLimit = STEM_CACHE_LIMIT, whole = new Set() }: { cacheLimit?: number; whole?: ReadonlySet<string> } = {},
 ): Stemmer => {
   const valid = parseStemmers(stemmers)
   const cyrillic = snowball[valid.cyrillic]()
@@ -134,6 +152,22 @@ export const createStemmer = (
     return stem
   }
   const stemToken = (token: string): string => stemOf(token, 0)
+  const queryStemOf = (token: string, variant: number): string => {
+    const word = normalize(token.normalize("NFC").toLowerCase().replace(MARKS, ""))
+    return whole.has(word) ? word : stemOf(token, variant)
+  }
+  const querySequences = (text: string): string[][] => {
+    const seen = new Set<string>()
+    return latins.flatMap((_, variant) => {
+      const sequence = tokensOf(text)
+        .map((token) => queryStemOf(token, variant))
+        .filter(Boolean)
+      const key = sequence.join(" ")
+      if (seen.has(key)) return []
+      seen.add(key)
+      return [sequence]
+    })
+  }
   const tokensOf = (text: string) => text.normalize("NFC").toLowerCase().match(TOKEN) ?? []
 
   const stemSequences = (text: string): string[][] => {
@@ -160,12 +194,12 @@ export const createStemmer = (
         .filter(Boolean)
         .join(` ${STEM_SEPARATOR} `),
     phrases: (text) => {
-      const phrases = stemSequences(text)
+      const phrases = querySequences(text)
         .filter((sequence) => sequence.length > 0)
         .map((sequence) => `"${sequence.join(" ").replaceAll('"', '""')}"`)
       return phrases.length ? phrases.join(" OR ") : undefined
     },
-    explain: (text) =>
+    explain: (text, { query = false } = {}) =>
       tokensOf(text).flatMap((word) => {
         const bare = word.replace(MARKS, "")
         const script = CYRILLIC.test(bare) ? "cyrillic" : LATIN.test(bare) ? "latin" : "none"
@@ -175,7 +209,7 @@ export const createStemmer = (
             : [{ name: script === "cyrillic" ? valid.cyrillic : "none", variant: 0 }]
         const seen = new Set<string>()
         return variants.flatMap(({ name, variant }) => {
-          const stem = stemOf(word, variant)
+          const stem = query ? queryStemOf(word, variant) : stemOf(word, variant)
           if (!stem || seen.has(stem)) return []
           seen.add(stem)
           return [{ word, stem, stemmer: name as CyrillicStemmer | LatinStemmer }]

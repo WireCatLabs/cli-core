@@ -130,6 +130,10 @@ export interface FoundConversations {
   meaning: "searched" | "unavailable"
   /** `out-of-time`: the word half hit its time limit, so the hits are by meaning alone. */
   words?: "out-of-time"
+  /** Words no message holds, each with the words searched in its place: its Latin spelling and near spellings. */
+  respelled?: Record<string, string[]>
+  /** The private chat a word of the query names, whose hits come first. */
+  named?: { word: string; chatId: Id; title: string | null }
   hits: FoundConversation[]
   readiness: SearchReadiness
   /** Kept for callers of 0.141.0 and before; `readiness.wordsOnly` says more. */

@@ -90,7 +90,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   it("does not soften Boolean conditions, typos or incomplete indexes", async () => {
     const store = await open()
     await seed(store, account)
-    expect(ids(await run(store, account, "alph gamma"))).toEqual([])
+    expect(ids(await run(store, account, "alpah gamma"))).toEqual([])
     expect(ids(await run(store, account, "alpha nonexisting"))).toEqual([])
     expect(ids(await run(store, account, "alpha OR beta gamma"))).toEqual([5, 6, 7, 13, 14, 15])
     const partial: MessageStore = {

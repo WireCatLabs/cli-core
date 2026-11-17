@@ -15,7 +15,8 @@ import {
   type ResolvedPredicate,
 } from "../search/lucene/resolved.js"
 import { inSource, sourceOf } from "../search/query.js"
-import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
+import { createStemmer, cutsDeep, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
+import { normalize } from "../store/normalize.js"
 import type { ScoredHit, StemsState } from "../store/store.js"
 import {
   type AccountKey,
@@ -265,7 +266,7 @@ export const prepareLucene = async (
   if (hasText(ast.root) && !wordsReady) await indexNotReady(store, messenger.app?.command)
   const stems = await store.searchIndex.stemsState()
   const stemsReady = stems?.ready === true
-  const { stemmer, unstemmed } = hasStems(ast.root) ? await searchStemming(store, messenger.app?.command) : {}
+  const { stemmer, unstemmed } = hasStems(ast.root) ? await searchStemming(store, messenger.app?.command, root) : {}
   const execution: QueryExecution = {
     root,
     accounts: scopeAccounts,
@@ -298,10 +299,22 @@ export const prepareLucene = async (
 export const searchStemming = async (
   store: MessageStore,
   command?: string,
+  root?: QueryNode,
 ): Promise<{ stemmer?: Stemmer; unstemmed?: QueryStemming }> => {
   const stems = await store.searchIndex.stemsState()
   // Ready means the setting is one this build knows, so `null` cannot reach here.
-  if (stems?.ready) return { stemmer: createStemmer((await store.searchIndex.stemmers()) ?? DEFAULT_STEMMERS) }
+  if (stems?.ready) {
+    const choices = (await store.searchIndex.stemmers()) ?? DEFAULT_STEMMERS
+    const stemmer = createStemmer(choices)
+    const deep = root
+      ? walkQuery(root)
+          .filter(isStemmed)
+          .flatMap(({ value }) => normalize(value).match(/[\p{L}\p{N}]+/gu) ?? [])
+          .filter((word) => cutsDeep(stemmer, word))
+      : []
+    if (!deep.length) return { stemmer }
+    return { stemmer: createStemmer(choices, { whole: await store.searchIndex.heldStems(deep) }) }
+  }
   if (stems?.cause !== "building" && stems?.cause !== "stemmer_unknown") return stemsNotReady(stems, command)
   return {
     unstemmed: {
@@ -316,7 +329,7 @@ export const searchStemming = async (
 /** Sets the stemming `searchStemming` chose on an execution built without `prepareLucene`. */
 export const stemExecution = async (execution: QueryExecution, store: MessageStore): Promise<void> => {
   if (!hasStems(execution.root)) return
-  const { stemmer, unstemmed } = await searchStemming(store)
+  const { stemmer, unstemmed } = await searchStemming(store, undefined, execution.root)
   if (stemmer) execution.stemmer = stemmer
   if (unstemmed) execution.unstemmed = true
 }
@@ -325,7 +338,7 @@ const stemmingOf = (root: QueryNode, stemmer: Stemmer): QueryStemming => ({
   analyzer: stemmer.identity,
   terms: walkQuery(root)
     .filter(isStemmed)
-    .flatMap(({ value }) => stemmer.explain(value)),
+    .flatMap(({ value }) => stemmer.explain(value, { query: true })),
 })
 const stemsNotReady = (state: StemsState | undefined, command: string | undefined): never => {
   const cli = command ? `${command} ` : ""

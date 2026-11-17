@@ -945,6 +945,14 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         return { found, refreshed: found.prepared }
       })
       if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
+      for (const [word, forms] of Object.entries(found.respelled ?? {}))
+        context.renderer.note(
+          `no message holds «${word}»: searched ${forms.map((form) => `«${form}»`).join(", ")} instead`,
+        )
+      if (found.named)
+        context.renderer.note(
+          `«${found.named.word}» is a name in chat ${found.named.title ?? found.named.chatId} (${found.named.chatId}): its hits come first`,
+        )
       if (found.words === "out-of-time")
         context.renderer.note("the word half ran out of time, so these are by meaning alone; --timeout gives it longer")
       renderAnswer(

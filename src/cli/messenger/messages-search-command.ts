@@ -7,6 +7,7 @@ import { syncsOneChat } from "../../ports/traits.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import { searchTimeLimit } from "../../search/lucene/types.js"
+import { START_LETTERS } from "../../search/stem.js"
 import type { SearchFound } from "../../services/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
@@ -186,7 +187,7 @@ const searchAction = (messenger: Messenger) =>
     const forms = (stemming?.applied ? stemming.terms : []).filter(({ stemmer }) => stemmer !== "none")
     if (forms.length > 0)
       context.renderer.note(
-        `also found other forms: ${forms.map(({ word, stem, stemmer }) => `${word} → ${stem}* (${stemmer})`).join(", ")} — --exact for the exact words only`,
+        `also found other forms: ${forms.map(({ word, stem, stemmer }) => `${word} → ${[...word].length >= START_LETTERS ? `${word}… and ` : ""}words stemmed to ${stem} (${stemmer})`).join(", ")} — --exact for the exact words only`,
       )
     if (stemming?.applied === false)
       context.renderer.note(

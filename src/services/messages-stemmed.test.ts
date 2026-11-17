@@ -70,7 +70,7 @@ const TEXTS = [
 describe("stemmed strict search", () => {
   it("**finds other forms for a word and for quotes**; exact: and --exact do not", async () => {
     const { store } = await open(TEXTS)
-    expect((await ids(store, "квартира")).sort()).toEqual([1, 2])
+    expect((await ids(store, "квартира")).sort()).toEqual([1, 2, 3])
     expect((await ids(store, '"квартира"')).sort()).toEqual([1, 2])
     expect((await ids(store, "canción")).sort()).toEqual([6, 7])
     expect(await ids(store, "exact:квартира")).toEqual([2])
@@ -83,7 +83,7 @@ describe("stemmed strict search", () => {
     expect((await ids(store, '"оплатил счёт"')).sort()).toEqual([4, 5])
     expect(await ids(store, '"счёт оплатил"')).toEqual([])
     expect(await ids(store, 'exact:"оплатил счёт"')).toEqual([4])
-    expect((await ids(store, "text:квартира", { exact: true })).sort()).toEqual([1, 2])
+    expect((await ids(store, "text:квартира", { exact: true })).sort()).toEqual([1, 2, 3])
   })
 
   it("**never stems a pattern**: text: and exact: wildcards read the words", async () => {
@@ -94,8 +94,32 @@ describe("stemmed strict search", () => {
 
   it("**excludes every form** with -word, and only the exact form with -exact:word", async () => {
     const { store } = await open(TEXTS)
-    expect((await ids(store, "кварти* -квартира")).sort()).toEqual([3])
+    expect((await ids(store, "кварти* -квартиру")).sort()).toEqual([3])
+    expect(await ids(store, "кварти* -квартира")).toEqual([])
     expect((await ids(store, "кварти* -exact:квартира")).sort()).toEqual([1, 3])
+  })
+
+  it("**finds every word a word of 4 letters or more begins**, which Snowball stems apart", async () => {
+    const { store } = await open(["звонил Ростислав", "передай Ростиславу", "с Ростиславом", "рост вырос", "тот рост"])
+    expect((await ids(store, "Ростислав")).sort()).toEqual([1, 2, 3])
+    expect((await ids(store, "рост")).sort()).toEqual([1, 2, 3, 4, 5])
+    expect((await ids(store, "тот")).sort()).toEqual([5])
+  })
+
+  it("**keeps a word whole where its stem is another word**: «домен» is not «дом»", async () => {
+    const { store } = await open([
+      "купил домен",
+      "продлил доменов пять",
+      "пришёл дом",
+      "иду до дома",
+      "кот спит",
+      "с котами",
+    ])
+    expect((await ids(store, "домен")).sort()).toEqual([1, 2])
+    expect((await ids(store, "котами")).sort()).toEqual([5, 6])
+    expect((await search(store, "домен")).query?.stemming).toMatchObject({
+      terms: [{ word: "домен", stem: "домен", stemmer: "russian" }],
+    })
   })
 
   it("**ranks exact forms first** and marks the others, and says how it stemmed", async () => {
@@ -126,7 +150,7 @@ describe("stemmed strict search", () => {
   it("**counts what it finds**: stats total equals the search's hits", async () => {
     const { store } = await open(TEXTS)
     const stats = await statsStore(store, account, { text: "квартира", limit: 10, by: "chat" })
-    expect(stats.total).toBe(2)
+    expect(stats.total).toBe(3)
     const exact = await statsStore(store, account, {
       text: "квартира",
       limit: 10,

@@ -50,7 +50,7 @@ const ids = (found: { items: { id: string }[] }) => found.items.map((h) => h.id)
 describe("internal combined search", () => {
   it("merges whole and prefix matches even when whole words already match, with positive scores and labels", async () => {
     const store = await opened()
-    const found = await searchCombined(store, account, request("aurora roll"))
+    const found = await searchCombined(store, account, request("aurora rol"))
     expect(ids(found).sort()).toEqual(["1", "2"])
     expect(found.items).toEqual(
       expect.arrayContaining([expect.objectContaining({ match: "beginnings", matches: ["beginnings"] })]),

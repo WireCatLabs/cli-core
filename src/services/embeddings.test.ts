@@ -189,6 +189,45 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**in one chat reads more than a chat's share of word hits**", async () => {
+    const { store, embeddings } = await setUp({
+      messages: Array.from({ length: 30 }, (_, at) => message(`${100 * (at + 1)}`, "the invoice is paid")),
+    })
+    const found = await embeddings.search("invoice", { model: "e5-small", limit: 30, chat: "9" })
+    expect(found.hits.length).toBeGreaterThan(20)
+    await store.close()
+  })
+
+  it("**searches first the private chat a name in the query points to**, learned from how the chat writes it", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: Array.from({ length: 30 }, (_, at) => message(`${100 * (at + 1)}`, "the invoice is paid")),
+    })
+    await store.chats.saveChats(account, [
+      { id: "7", title: "Robert Stone", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+      { id: "6", title: "Anna", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    const dialog = (chatId: string, texts: string[]) =>
+      store.messages.saveMessages(
+        account,
+        chatId,
+        texts.map((text, at) => ({ ...message(`${100 * (at + 1)}`, text), chatId })),
+        { via: "history" },
+      )
+    await dialog("7", ["Bobby, hi", "Bobby, how are you", "Bobby, any news", "my invoice for the website"])
+    await dialog("6", ["the invoice came", "invoice paid", "an invoice again", "bobby pin"])
+    for (const chat of ["6", "7"]) await conversations.build(chat)
+
+    const found = await embeddings.search("invoice for Bobby", { model: "e5-small", limit: 5 })
+    expect(found.named).toEqual({ word: "bobby", chatId: "7", title: "Robert Stone" })
+    expect(found.hits[0]).toMatchObject({ summary: { chatId: "7", firstMessageId: "400" } })
+
+    expect((await embeddings.search("invoice paid", { model: "e5-small", limit: 5 })).named).toBeUndefined()
+    expect((await embeddings.search("invoice for Bobby", { model: "e5-small", limit: 5, chat: "9" })).named).toBe(
+      undefined,
+    )
+    await store.close()
+  })
+
   it("**answers by meaning when the word half runs out of time**, and says the words were not searched", async () => {
     const { store, embeddings } = await setUp({ messages: [message("1", "cat cat"), message("40", "dog zebra")] })
     await embeddings.embed("9", { model: "tiny", threads: 1 })
@@ -219,17 +258,25 @@ describe("embeddings", () => {
     await store.close()
   })
 
-  it("leaves out what the word search finds only by correcting the query, keeps a word's longer forms", async () => {
-    const { store, embeddings } = await setUp({ messages: [message("1", "kitchen")] })
-    expect((await embeddings.search("kitten", { model: "tiny", limit: 4 })).hits).toEqual([])
+  it("**searches near spellings of a word no message holds**, never of a word some message holds", async () => {
+    const { store, embeddings } = await setUp({ messages: [message("1", "kitchen"), message("20", "noxvel domain")] })
+    const misspelt = await embeddings.search("kitten", { model: "tiny", limit: 4 })
+    expect(misspelt.respelled).toEqual({ kitten: ["kitchen"] })
+    expect(misspelt.hits).toMatchObject([{ summary: { firstMessageId: "1" }, by: ["words"] }])
+    expect((await embeddings.search("ноксвел", { model: "e5-small", limit: 4 })).respelled).toEqual({
+      ноксвел: ["noxvel"],
+    })
+    const nonsense = await embeddings.search("qzxvwpl", { model: "e5-small", limit: 4 })
+    expect(nonsense.respelled).toBeUndefined()
+    expect(nonsense.hits).toEqual([])
 
     await store.messages.saveMessages(account, "9", [message("40", "kittens")], { via: "history" })
     await conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
     ).build("9")
-    expect((await embeddings.search("kitten", { model: "tiny", limit: 4 })).hits).toMatchObject([
-      { summary: { firstMessageId: "40" }, by: ["words"] },
-    ])
+    const held = await embeddings.search("kitten", { model: "tiny", limit: 4 })
+    expect(held.respelled).toBeUndefined()
+    expect(held.hits).toMatchObject([{ summary: { firstMessageId: "40" }, by: ["words"] }])
     await store.close()
   })
 
