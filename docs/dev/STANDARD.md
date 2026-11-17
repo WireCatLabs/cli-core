@@ -147,6 +147,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `export` | write from the store to a file |  |
 | `import` | bring a file or list the user gives into the store or the messenger, once |  |
 | `download` | save a file from the source to this machine |  |
+| `upload` | put a file from this machine on the source |  |
+| `publish` | open a thing to anyone who has its public link |  |
+| `unpublish` | close a thing's public link |  |
+| `stale` | mark a saved memory as out of date, keeping it |  |
 | `transcribe` | turn speech into text |  |
 | `extract` | read the text inside files already on this machine into the store |  |
 | `migrate` | bring a file up to this build's schema |  |
@@ -818,6 +822,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--suggest` | `<text>` | string | wording offered for the owner to take or leave; it decides nothing |  |
 | `--keep-copy` |  | switch | keep a copy of the original file as well as its text |  |
 | `--max-chars` | `<n>` | count | at most this many characters read | characters |
+| `--tab` | `<id>` | id | one tab of a document, by its id: only its text is read |  |
 | `--tag` | `<name>` | string | a tag, by its name or an alias: only what carries it is read |  |
 | `--matching` | `<query>` | string | every stored thing a search with this query finds, in its query language; the command acts on each |  |
 | `--email` | `<address>` | string | an e-mail address to give it; repeat it for more |  |
