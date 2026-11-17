@@ -177,6 +177,30 @@ describe("appMcpCommand", () => {
     expect(stderr.join("")).toContain("personal, work")
   })
 
+  it("**--profiles all with no profile still lists a profile's tools**, and refuses each call with how to set one up", async () => {
+    const own = await serve(["work", "mcp", "serve"], [{ id: 2, method: "tools/list" }])
+    const empty = home()
+    writeFileSync(join(empty.CAL_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: {} }))
+    const { code, result } = await serve(
+      ["mcp", "serve", "--profiles", "all"],
+      [{ id: 2, method: "tools/list" }, call(3, "cal_read", "events list")],
+      empty,
+    )
+    expect(code).toBe(0)
+    type Listed = { name: string; inputSchema: { properties: Record<string, unknown> } }
+    const tools = (result(2)?.tools ?? []) as Listed[]
+    const withoutProfile = tools.map(({ inputSchema: { properties, ...schema }, ...one }) => {
+      const { profile, ...rest } = properties
+      return {
+        ...one,
+        inputSchema: { ...schema, properties: rest, required: (schema as { required: string[] }).required.slice(1) },
+      }
+    })
+    expect(withoutProfile).toEqual(own.result(2)?.tools)
+    expect(JSON.stringify(result(3))).toContain("no cal profile on this computer yet")
+    expect(result(3)).toMatchObject({ isError: true })
+  })
+
   it("**ends at once when it is stopped before it listens**, with stdin still open", async () => {
     const stdin = new PassThrough()
     const stdout = new PassThrough()

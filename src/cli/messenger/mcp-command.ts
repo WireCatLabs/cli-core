@@ -2,8 +2,9 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 import { realpathSync } from "node:fs"
 import { join } from "node:path"
 import type { Readable, Writable } from "node:stream"
+import type { Tool } from "@modelcontextprotocol/server"
 import { CliError, resolvePaths, visibleControls } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { installerOf } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
@@ -13,7 +14,7 @@ import type { HttpOptions } from "../../mcp/http/serve.js"
 import { httpLockFile } from "../../mcp/http/state.js"
 import { type AppIdentity, envName } from "../../ports/app.js"
 import { type BaseContext, type BaseEnvironment, environmentOf } from "../context.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE, readsOverMcpAt } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { MCP_HTTP_DEFAULT_PORT, mcpServerCommand } from "../mcp-server-command.js"
 import { rootOf } from "../profile.js"
@@ -510,11 +511,12 @@ const serveProfiles = async (self: Command, context: BaseContext, host: McpHost,
     )
   // `all` reads the profiles again for each session, so one set up while the server runs appears.
   const profiles = () => set.profiles().filter((profile) => state(profile) !== "bot")
-  if (profiles().length === 0)
-    throw new CliError(
-      "configuration_error",
-      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp serve --profiles all\` again`,
-    )
+  // A directory starts the server in an empty container only to list its tools: it starts, and each call says how
+  // to set up a profile. Nothing here picks or makes one.
+  const setup =
+    `no ${app.command} profile on this computer yet — set one up with \`${firstProfileCommand(self, app)}\` ` +
+    "(any name in place of personal), then connect again"
+  let catalogue: Promise<Tool[]> | undefined
   const given = environmentOf<McpEnvironment>(self).mcp ?? {}
   const execPath = given.execPath ?? process.execPath
   const scriptPath = given.scriptPath ?? realpathSync(process.argv[1] ?? "")
@@ -529,6 +531,14 @@ const serveProfiles = async (self: Command, context: BaseContext, host: McpHost,
       `profile ${profile} is not signed in — run \`${app.command} ${profile} setup\`, or sign in from WireCat Desktop, ` +
       "then try again. If the owner did not choose this profile, ask which one.",
     child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", "serve", ...tightened], env }),
+    catalogue: () => {
+      catalogue ??= catalogueOf(self, app)
+      catalogue.catch(() => {
+        catalogue = undefined
+      })
+      return catalogue
+    },
+    setup,
     instructions: await host.instructions(profiles()),
     note: (line: string) => context.renderer.note(line),
   }
@@ -577,6 +587,46 @@ const serveProfiles = async (self: Command, context: BaseContext, host: McpHost,
     ...(stdout ? { stdout: stdout as Writable } : {}),
     ...(signal ? { signal } : {}),
   })
+}
+
+/** `tg personal setup`, or `notion personal session start` for a CLI that signs in with a session. */
+const firstProfileCommand = (self: Command, app: AppIdentity): string => {
+  const root = rootOf(self)
+  if (root.commands.some((one) => one.name() === "setup")) return `${app.command} personal setup`
+  const session = root.commands.find((one) => one.name() === "session")
+  if (session?.commands.some((one) => one.name() === "start")) return `${app.command} personal session start`
+  return `${app.command} personal …`
+}
+
+/**
+ * The tools a profile's server lists, built in this process from the program: which tools a server lists never
+ * follows a profile's permissions (they decide each command's availability inside the search), so no profile is
+ * needed, read or made.
+ */
+const catalogueOf = async (self: Command, app: AppIdentity): Promise<Tool[]> => {
+  const [{ McpServer }, { registerCommands }, { toolsFromCommands }, { listedTools }] = await Promise.all([
+    import("@modelcontextprotocol/server"),
+    import("../../mcp/surface.js"),
+    import("../../mcp/agent.js"),
+    import("../../mcp/all-profiles.js"),
+  ])
+  const root = rootOf(self)
+  const refuse = async (): Promise<never> => {
+    throw new CliError("configuration_error", `no ${app.command} profile on this computer yet`)
+  }
+  const commands = Object.fromEntries(
+    toolsFromCommands(describeProgram(root), {
+      includeUnavailable: true,
+      exclude: [["bot"], ["mcp"]],
+      fetchOnly: readsOverMcpAt(root),
+    }).map((one) => [
+      one.command,
+      { title: one.title, description: one.description, writes: one.writes, input: one.input, run: refuse },
+    ]),
+  )
+  const server = new McpServer({ name: app.command, version: app.version }, { capabilities: { tools: {} } })
+  registerCommands(server, app.command, commands, app.errors, undefined, app.messenger)
+  return listedTools(server)
 }
 
 const TAIL_LINES = 20
