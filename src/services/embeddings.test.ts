@@ -415,6 +415,23 @@ describe("derived index freshness", () => {
     editedAt: "2026-10-05T00:00:00.000Z",
   })
 
+  it("**keeps the counted readiness until a message changes it**: a new message makes the chat stale", async () => {
+    const { store, embeddings, path } = await setUp()
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+    await embeddings.search("fish", { model: "tiny", limit: 3 })
+    expect(await savedReadiness(path)).toBe(1)
+    const ready = (await embeddings.readiness({ chat: "9", model: "tiny" })).chats
+    expect(ready).toMatchObject([{ state: "ready", pending: { new: 0 }, vectors: { missing: 0 } }])
+    expect((await embeddings.readiness({ chat: "9", model: "tiny" })).chats).toEqual(ready)
+
+    await store.messages.saveMessages(account, "9", [message("50", "a new one")], { via: "live" })
+    expect(await savedReadiness(path)).toBe(0)
+    expect((await embeddings.readiness({ chat: "9", model: "tiny" })).chats).toMatchObject([
+      { state: "stale", pending: { new: 1 } },
+    ])
+    await store.close()
+  })
+
   it("purges edited-away meaning hits and still counts the edit as pending", async () => {
     const { store, embeddings, conversations, path } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
@@ -811,6 +828,9 @@ const withDatabase = async <T>(path: string, body: (run: (sql: string) => Record
 
 const vectorRows = (path: string, hash: string) =>
   withDatabase(path, (run) => Number(run(`SELECT count(*) AS n FROM embeddings WHERE content_hash = '${hash}'`)[0]?.n))
+
+const savedReadiness = (path: string) =>
+  withDatabase(path, (run) => Number(run("SELECT count(*) AS n FROM conversation_readiness")[0]?.n))
 
 const vectorOf = (path: string, hash: string) =>
   withDatabase(path, (run) => {

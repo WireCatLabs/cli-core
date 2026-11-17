@@ -1,6 +1,8 @@
 import { chunkHash, chunkTextOf, type TextRange } from "../../conversations/chunks.js"
+import { isQueryOnly } from "../driver.js"
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
+import { isBusy, rollBack } from "./transaction.js"
 import { ensureVectorIndex, searchIndex, unitVector } from "./vector-index.js"
 
 /** A chunk of the chat's current build: its hash, and the messages its text is cut from. */
@@ -442,13 +444,97 @@ export const unbuiltGroups = ({ orm }: StoreContext, accountPk: number): string[
  * deleted messages; an edit is known only by its revision's time, so one in the build's first millisecond
  * counts as pending. A changed sender name leaves no trace and is not counted.
  */
-export const readiness = ({ orm }: StoreContext, chatKey: number, model: string) => {
+type Counts = {
+  new: number
+  edited: number
+  deleted: number
+  chunks: number
+  embedded: number
+  current: number
+  stale: number
+}
+
+/**
+ * A built chat's readiness for one model. The counts read every message and chunk of the chat, a second or more in a
+ * large group, so they are kept in `conversation_readiness` once counted; triggers drop the row when they change.
+ */
+export const readiness = (context: StoreContext, chatKey: number, model: string, counted: Counted[]) => {
+  const { orm } = context
   const state = orm.get<{ builtAt: number | null; algorithmVersion: number | null; build: number | null }>(
     sql`SELECT built_at AS builtAt, algorithm_version AS algorithmVersion, current_build AS build
       FROM conversation_state WHERE chat_id = ${chatKey}`,
   )
   if (!state || state.builtAt === null || state.build === null) return undefined
   const { builtAt, build } = state
+  const saved = orm.get<Counts>(
+    sql`SELECT new_count AS new, edited_count AS edited, deleted_count AS deleted, chunks,
+        embedded_count AS embedded, current, stale FROM conversation_readiness
+      WHERE chat_id = ${chatKey} AND model = ${model}`,
+  )
+  const counts = saved ?? countReadiness(context, chatKey, model, builtAt, build)
+  if (!saved) counted.push({ chatKey, counts })
+  return {
+    builtAt,
+    algorithmVersion: state.algorithmVersion,
+    pending: { new: counts.new, edited: counts.edited, deleted: counts.deleted },
+    vectors: {
+      chunks: counts.chunks,
+      embedded: counts.embedded,
+      current: counts.current,
+      stale: counts.stale,
+      missing: counts.chunks - counts.current - counts.stale,
+    },
+  }
+}
+
+type Counted = { chatKey: number; counts: Counts }
+
+/** The commits other connections made to the file so far; equal twice means nothing changed in between. */
+export const dataVersion = ({ database }: StoreContext): number =>
+  Number(Object.values(database.prepare("PRAGMA data_version").get() ?? {})[0])
+
+/**
+ * Keeps what `readiness` counted, in one write. Skipped, never waited for, when another process holds the write lock
+ * or committed anything since `since`: the counts may then be out of date, and the next search counts them again.
+ */
+export const saveReadiness = (context: StoreContext, model: string, counted: Counted[], since: number) => {
+  const { database } = context
+  if (counted.length === 0 || isQueryOnly(database)) return
+  const timeout = Number(database.prepare("PRAGMA busy_timeout").get()?.timeout ?? 0)
+  database.exec("PRAGMA busy_timeout = 0")
+  try {
+    database.exec("BEGIN IMMEDIATE")
+  } catch (error) {
+    if (isBusy(error)) return
+    throw error
+  } finally {
+    database.exec(`PRAGMA busy_timeout = ${timeout}`)
+  }
+  try {
+    if (dataVersion(context) === since) {
+      const insert = database.prepare(
+        `INSERT OR REPLACE INTO conversation_readiness
+          (chat_id, model, new_count, edited_count, deleted_count, chunks, embedded_count, current, stale, counted_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      const at = Date.now()
+      for (const { chatKey, counts: c } of counted)
+        insert.run(chatKey, model, c.new, c.edited, c.deleted, c.chunks, c.embedded, c.current, c.stale, at)
+    }
+    database.exec("COMMIT")
+  } catch (error) {
+    rollBack(database)
+    throw error
+  }
+}
+
+const countReadiness = (
+  { orm }: StoreContext,
+  chatKey: number,
+  model: string,
+  builtAt: number,
+  build: number,
+): Counts => {
   const member = (pk: SQL) => sql`EXISTS (SELECT 1 FROM conversation_messages cm
     JOIN conversations c ON c.id = cm.conversation_id WHERE cm.message_id = ${pk} AND c.build = ${build})`
   const editedSince = (pk: SQL) =>
@@ -477,18 +563,14 @@ export const readiness = ({ orm }: StoreContext, chatKey: number, model: string)
       SELECT count(*) AS chunks, sum(vector) AS embedded, sum(vector AND NOT stale) AS current, sum(stale) AS stale
       FROM hashes`,
   )
-  const chunks = Number(vectors?.chunks ?? 0)
-  const current = Number(vectors?.current ?? 0)
-  const stale = Number(vectors?.stale ?? 0)
   return {
-    builtAt,
-    algorithmVersion: state.algorithmVersion,
-    pending: {
-      new: Number(pending?.new ?? 0),
-      edited: Number(pending?.edited ?? 0),
-      deleted: Number(pending?.deleted ?? 0),
-    },
-    vectors: { chunks, embedded: Number(vectors?.embedded ?? 0), current, stale, missing: chunks - current - stale },
+    new: Number(pending?.new ?? 0),
+    edited: Number(pending?.edited ?? 0),
+    deleted: Number(pending?.deleted ?? 0),
+    chunks: Number(vectors?.chunks ?? 0),
+    embedded: Number(vectors?.embedded ?? 0),
+    current: Number(vectors?.current ?? 0),
+    stale: Number(vectors?.stale ?? 0),
   }
 }
 

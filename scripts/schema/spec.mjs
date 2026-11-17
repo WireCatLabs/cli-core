@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { businessTables } from "./business.mjs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
+import { conversationReadinessTables } from "./conversation-readiness.mjs"
 import { crmTables } from "./crm.mjs"
 import { decisionRequestTables } from "./decision-requests.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
@@ -1801,7 +1802,7 @@ const GROUPS = [
       "search_terms",
       "search_term_trigrams",
     ],
-    NEW.embeddings,
+    [...NEW.embeddings, ...conversationReadinessTables],
   ],
   ["store", "Store", "Bookkeeping for the file itself.", ["schema_migrations", "store_settings"], []],
 ]
