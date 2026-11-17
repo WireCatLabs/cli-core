@@ -4,10 +4,11 @@ import { describe, expect, it } from "vitest"
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmItem, CrmOrganization, CrmPerson } from "../../domain/crm.js"
-import type { CrmPage, CrmSource } from "../source.js"
+import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "../source.js"
 import { crmSourceContract } from "../testing/source-contract.js"
 import { amountOf, type CrmRaw } from "../values.js"
 import { type CrmManifest, parseCrmManifest } from "./manifest.js"
+import { crmManifestProblems } from "./paths.js"
 import { crmSourceFromManifest } from "./source.js"
 
 // A trimmed copy of HubSpot's CRM API (objects v2026-03, pipelines, properties, owners): enough operations, in the
@@ -375,6 +376,7 @@ const fakeHubspot = () => {
     ],
   }
   const denied = new Map<string, number>()
+  const refusedTypes = new Set<string>()
   const page = <T>(all: T[], after: unknown, limit: number) => {
     const from = Number(after ?? 0)
     const next = from + limit
@@ -402,6 +404,7 @@ const fakeHubspot = () => {
   })
   const listOf = (call: FakeCall) => {
     const type = typeOf(call)
+    if (refusedTypes.has(type)) return { status: 403, body: { message: "missing scope" } }
     const wanted = call.query.properties
     const associations = call.query.associations
     return {
@@ -420,6 +423,7 @@ const fakeHubspot = () => {
   }
   const searchOf = (call: FakeCall) => {
     const type = typeOf(call)
+    if (refusedTypes.has(type)) return { status: 403, body: { message: "missing scope" } }
     const body = call.body as {
       filterGroups: { filters: { value: string }[] }[]
       properties?: string[]
@@ -535,6 +539,8 @@ const fakeHubspot = () => {
   return {
     ...api_,
     deny: (type: string, id: string, status: number) => denied.set(`${type}/${id}`, status),
+    refuse: (type: string) => refusedTypes.add(type),
+    rows,
     touch: (type: string, id: string, properties: Record<string, string>) => {
       const row = rows[type]?.find((one) => one.id === id) as Row
       row.properties = { ...row.properties, ...properties, [modifiedOf(type)]: at(Date.now()) }
@@ -777,5 +783,172 @@ describe("parseCrmManifest", () => {
     expect(refused({ ...MANIFEST, pipelines: {} })).toBe(
       "source manifest: pipelines.deal: deal is in kinds, and every deal or lead stands in a pipeline",
     )
+  })
+})
+
+describe("path checks, enrich, optional kinds and select.max", () => {
+  const deal = MANIFEST.entities.deal as NonNullable<CrmManifest["entities"]["deal"]>
+  const withDeal = (changes: Partial<typeof deal>) => ({
+    ...MANIFEST,
+    entities: { ...MANIFEST.entities, deal: { ...deal, ...changes } },
+  })
+  const over = (manifest: unknown, hub: FakeHubspot, hooks_ = {}) =>
+    crmSourceFromManifest(manifest, {
+      api,
+      call: serviceApiCall({ manifest: api, service: "HubSpot", fetch: hub.fetch, token: () => TOKEN }),
+      hooks: hooks_,
+    })
+  const recording = () => {
+    const gaps: Omit<CrmGap, "reason">[] = []
+    const context: CrmCallContext = { spend: () => {}, gap: (gap) => gaps.push(gap) }
+    return { gaps, context }
+  }
+
+  it("checks every mapped path against what each operation answers", () => {
+    expect(crmManifestProblems(MANIFEST, api, definitions)).toEqual([])
+    const broken = withDeal({
+      map: { ...deal.map, externalId: "idd", people: { each: "associations.contacts.reslts", id: "id" } },
+    })
+    expect(crmManifestProblems(broken, api, definitions)).toEqual([
+      "source manifest: entities.deal.map.externalId: idd is not in what deals_getPage answers; did you mean id?",
+      "source manifest: entities.deal.map.people: associations.contacts.reslts is not in what deals_getPage answers; " +
+        "did you mean associations.contacts.results?",
+      "source manifest: entities.deal.map.externalId: idd is not in what deals_search answers; did you mean id?",
+      "source manifest: entities.deal.map.people: associations.contacts.reslts is not in what deals_search answers; " +
+        "did you mean associations.contacts.results?",
+    ])
+  })
+
+  it("enriches a page in one batch before the map: a change read gets the links a search does not answer", async () => {
+    const hub = fakeHubspot()
+    let batches = 0
+    const source = over(MANIFEST, hub, {
+      enrich: {
+        deal: async (rows: CrmRaw[]) => {
+          batches += 1
+          return rows.map((raw) => {
+            const row = hub.rows["0-3"]?.find((one) => one.id === raw.id)
+            const contacts = (row?.associations?.contacts ?? []).map((id) => ({ id, type: "deal_to_contact" }))
+            return { ...raw, associations: { contacts: { results: contacts } } }
+          })
+        },
+      },
+    })
+    const changed = (await all(source, "deal", at(SEEDED))) as CrmItem[]
+    expect(changed.find(({ externalId }) => externalId === "301")?.people).toEqual([
+      { externalId: "201", role: "contact" },
+    ])
+    expect(batches).toBe(2)
+  })
+
+  it("names an optional kind the service refuses as a gap, and reads it as empty", async () => {
+    const hub = fakeHubspot()
+    hub.refuse("0-3")
+    const source = over(
+      withDeal({ optional: { message: "deals need the deals scope", scope: "crm.objects.deals.read" } }),
+      hub,
+    )
+    const { gaps, context } = recording()
+    expect(await source.changes("deal", null, undefined, context)).toEqual({ items: [], hasMore: false, cursor: null })
+    expect(await source.ids?.("deal", undefined, context)).toEqual({ items: [], hasMore: false })
+    // Once per call context, however many reads were refused.
+    expect(gaps).toEqual([{ kind: "deal", message: "deals need the deals scope", scope: "crm.objects.deals.read" }])
+    await expect(source.ids?.("deal", "2")).rejects.toMatchObject({ code: "permission_error" })
+    await expect(over(MANIFEST, hub).changes("deal", null)).rejects.toMatchObject({ code: "permission_error" })
+  })
+
+  it("always asks for the mapped fields, then the account's own that fit select.max, and names the rest once", async () => {
+    const hub = fakeHubspot()
+    const select = deal.select as NonNullable<typeof deal.select>
+    const source = over(withDeal({ select: { ...select, max: 40 } }), hub)
+    const { gaps, context } = recording()
+    await source.changes("deal", null, undefined, context)
+    await source.changes("deal", null, "2@1", context)
+    const asked = hub.calls.find((call) => call.operation === "deals_getPage")?.query.properties as string[]
+    expect(asked).toContain("hs_lastmodifieddate")
+    expect(asked).not.toContain("kitchen_size")
+    expect(gaps).toEqual([
+      { kind: "deal", message: "1 of the account's own deal fields do not fit one request and were not read" },
+    ])
+  })
+})
+
+describe("crmManifestProblems over schema shapes", () => {
+  const shapes: Record<string, SchemaNode> = {
+    Answer: obj({ results: list(ref("Row")) }),
+    Row: {
+      type: "allOf",
+      of: [
+        obj({ id: str, open: { type: "object", properties: {}, required: [] } }),
+        obj({
+          either: { type: "union", of: [obj({ x: str }), obj({ x: obj({ y: str }) })] },
+          stages: list(obj({ id: str, label: str })),
+          links: list(obj({ target: str })),
+        }),
+      ],
+    },
+  }
+  const shaped: ServiceApiManifest = {
+    operations: [
+      op("rows", "GET", "/rows", {
+        response: { confidence: "contract", schema: "Answer" },
+        pagination: { style: "offset", offset: { in: "query", name: "offset" }, items: "results" },
+      }),
+    ],
+  }
+  const manifestOf = (person: Record<string, unknown>, stages: Record<string, unknown> = {}): CrmManifest =>
+    ({
+      provider: "shapes",
+      kinds: ["person", "deal"],
+      entities: {
+        person: { list: { operation: "rows" }, map: { externalId: "id", ...person } },
+        deal: { list: { operation: "rows" }, map: { externalId: "id" } },
+      },
+      pipelines: {
+        deal: {
+          call: { operation: "rows" },
+          map: { externalId: "id", name: "id" },
+          stages: { each: "stages", map: { externalId: "id", name: "label", ...stages }, outcome: { value: "open" } },
+        },
+      },
+    }) as CrmManifest
+
+  it("passes a ref, allOf, an open object, every branch of a union, and an each's inner field", () => {
+    expect(
+      crmManifestProblems(
+        manifestOf({
+          name: "open.anything.deep",
+          firstName: "either.x.y",
+          organizations: { each: "links", id: "target" },
+        }),
+        shaped,
+        shapes,
+      ),
+    ).toEqual([])
+  })
+
+  it("names a wrong inner field, a wrong stage field in any rule, and a wrong items path", () => {
+    expect(
+      crmManifestProblems(
+        manifestOf({ organizations: { each: "links", id: "targte" } }, { name: { first: ["lable"] } }),
+        shaped,
+        shapes,
+      ),
+    ).toEqual([
+      "source manifest: entities.person.map.organizations: targte is not in what rows answers; did you mean target?",
+      "source manifest: pipelines.deal.stages.map.name: lable is not in what rows answers; did you mean label?",
+    ])
+    const misplaced = manifestOf({})
+    const person = misplaced.entities.person as NonNullable<CrmManifest["entities"]["person"]>
+    expect(
+      crmManifestProblems(
+        {
+          ...misplaced,
+          entities: { ...misplaced.entities, person: { ...person, list: { operation: "rows", items: "rsults" } } },
+        },
+        shaped,
+        shapes,
+      ),
+    ).toEqual(["source manifest: entities.person.map.items: rsults is not in what rows answers; did you mean results?"])
   })
 })

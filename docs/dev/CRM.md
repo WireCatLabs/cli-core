@@ -240,10 +240,14 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   changes mid-round moves nothing under the next page (a service's own page token is an offset into a moving list).
   Past `cap` rows at one time the round answers `reset`.
 - What a manifest cannot say is a hook: `after` per kind for one record (async, with the metered `call`),
-  `extend(base)` for whole methods (`self`,
-  `activities`, a live `list`). Bitrix24's `mine` scope is that kind of policy, and stays code.
-- Not yet: a cap on the `{select}` list, a batch `enrich` hook, deletions named in the answer, a live `list`.
-  `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
+  `extend(base)` for whole methods (`self`, `activities`, a live `list`). Bitrix24's `mine` scope is that kind of
+  policy, and stays code.
+- `crmManifestProblems(manifest, api, definitions)` checks every mapped path against the schema each operation
+  answers; a CLI runs it in a test, so a wrong path fails before any sync.
+- `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind a gap;
+  `select.max` caps the account's own fields in `{select}`; mapped fields are always asked for.
+- Not yet: deletions named in the answer, a live `list`.
+- `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
   `crmSourceContract`, faults included, against a strict fake of HubSpot's API.
 
 ## Adapter helpers

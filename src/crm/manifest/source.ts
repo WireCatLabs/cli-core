@@ -167,7 +167,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
         .then((rows) => rows.flatMap((raw) => toField(spec, raw) ?? []))
         .catch((error: unknown) => {
           if (isCliError(error) && error.code === "permission_error") {
-            context?.gap({
+            gap(context, {
               kind,
               message: `the service refused the ${kind} field definitions: no custom values are read`,
             })
@@ -181,11 +181,51 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     return found
   }
 
-  const selectOf = (kind: CrmKind, defined: readonly CrmField[]) => {
+  /** Each gap once per call: a round of a hundred pages would otherwise store the same gap a hundred times. */
+  const said = new WeakMap<CrmCallContext, Set<string>>()
+  const gap = (context: CrmCallContext | undefined, one: Parameters<CrmCallContext["gap"]>[0]) => {
+    if (!context) return
+    const seen = said.get(context) ?? new Set<string>()
+    said.set(context, seen)
+    const key = `${one.kind} ${one.message}`
+    if (seen.has(key)) return
+    seen.add(key)
+    context.gap(one)
+  }
+
+  /**
+   * The names `{select}` asks for: every mapped one, then the account's own while they fit `max` (a request line past
+   * about 8 KB is refused); the call says how many it left out.
+   */
+  const selectOf = (kind: CrmKind, defined: readonly CrmField[], context?: CrmCallContext) => {
     const entity = entityOf(kind)
     if (!entity.select) return []
+    const own = [...new Set([...selectedOf(entity.map, entity.select.from), ...(entity.select.also ?? [])])]
     const custom = entity.custom?.from === entity.select.from ? defined.map(({ code }) => code) : []
-    return [...new Set([...selectedOf(entity.map, entity.select.from), ...custom, ...(entity.select.also ?? [])])]
+    const { max } = entity.select
+    if (max === undefined) return [...new Set([...own, ...custom])]
+    const kept = [...own]
+    let length = own.join(",").length
+    for (const name of custom)
+      if (!kept.includes(name) && length + name.length + 1 <= max) {
+        kept.push(name)
+        length += name.length + 1
+      }
+    const left = custom.filter((name) => !kept.includes(name)).length
+    if (left)
+      gap(context, {
+        kind,
+        message: `${left} of the account's own ${kind} fields do not fit one request and were not read`,
+      })
+    return kept
+  }
+
+  /** A refusal of a kind the manifest marks optional is a gap; the other kinds still sync. */
+  const optionalRefused = (kind: CrmKind, error: unknown, context?: CrmCallContext) => {
+    const optional = manifest.entities[kind]?.optional
+    if (!optional || !isCliError(error) || error.code !== "permission_error") return false
+    gap(context, { kind, message: optional.message, ...(optional.scope ? { scope: optional.scope } : {}) })
+    return true
   }
 
   const mapped = async <K extends CrmKind>(
@@ -196,8 +236,9 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
   ): Promise<CrmRecords[K][]> => {
     const entity = entityOf(kind)
     const after = hooks.after?.[kind] as CrmAfterHook<K> | undefined
+    const enrich = hooks.enrich?.[kind]
     const records: CrmRecords[K][] = []
-    for (const raw of rows) {
+    for (const raw of enrich && rows.length ? await enrich([...rows], { call: send }) : rows) {
       const record = mapRecord(kind, entity, raw, defined)
       if (record !== null) records.push(after ? await after(record, raw, { call: send }) : record)
     }
@@ -235,6 +276,48 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     return { rows, next: `${spot.from}.${spot.offset}` }
   }
 
+  const readChanges = async <K extends CrmKind>(
+    kind: K,
+    cursor: string | null,
+    page: string | undefined,
+    context?: CrmCallContext,
+  ): Promise<CrmChanges<CrmRecords[K]>> => {
+    const entity = entityOf(kind)
+    const since = cursor === null ? null : Date.parse(cursor)
+    if (since !== null && Number.isNaN(since)) return { reset: true }
+    const { token, started } = pageOf(page, now())
+    const send = metered(context)
+    const defined = entity.custom ? await fieldsOf(kind, send, context) : []
+    const changes = since !== null ? entity.changes : undefined
+    const slots: Slots = { select: selectOf(kind, defined, context) }
+    const read =
+      changes?.keyset && since !== null
+        ? await keysetPage({ ...changes, keyset: changes.keyset }, slots, since - overlap, token, send)
+        : await readPage(
+            changes ?? entity.list,
+            changes && since !== null ? { ...slots, since: SINCE[changes.since](since - overlap) } : slots,
+            token,
+            send,
+          )
+    if ("reset" in read) return { reset: true }
+    const { rows, next } = read
+    const items = await mapped(kind, rows, defined, send)
+    return next === undefined
+      ? { items, hasMore: false, cursor: new Date(started).toISOString() }
+      : { items, hasMore: true, nextCursor: `${next}@${started}` }
+  }
+
+  const readIds = async (kind: CrmKind, page: string | undefined, context?: CrmCallContext): Promise<CrmIdPage> => {
+    const entity = entityOf(kind)
+    const { rows, next } = await readPage(entity.ids ?? entity.list, {}, page, metered(context))
+    const items = rows.flatMap((raw) => {
+      const found = evaluate(entity.map.externalId as NonNullable<typeof entity.map.externalId>, raw)
+      const externalId = found === MISSING ? null : id(found)
+      return externalId === null ? [] : [externalId]
+    })
+    return next === undefined ? { items, hasMore: false } : { items, hasMore: true, nextCursor: next }
+  }
+
   const base: CrmSource = {
     provider: manifest.provider,
     traits: { kinds: manifest.kinds, removedInChanges: false },
@@ -242,8 +325,13 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     async pipelines(kind, context) {
       const spec = manifest.pipelines?.[kind]
       if (!spec) return []
-      const rows = await readAll(spec.call, metered(context))
-      return rows.flatMap((raw) => toPipeline(spec, raw) ?? [])
+      try {
+        const rows = await readAll(spec.call, metered(context))
+        return rows.flatMap((raw) => toPipeline(spec, raw) ?? [])
+      } catch (error) {
+        if (optionalRefused(kind, error, context)) return []
+        throw error
+      }
     },
 
     async changes<K extends CrmKind>(
@@ -252,42 +340,23 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
       page?: string,
       context?: CrmCallContext,
     ): Promise<CrmChanges<CrmRecords[K]>> {
-      const entity = entityOf(kind)
-      const since = cursor === null ? null : Date.parse(cursor)
-      if (since !== null && Number.isNaN(since)) return { reset: true }
-      const { token, started } = pageOf(page, now())
-      const send = metered(context)
-      const defined = entity.custom ? await fieldsOf(kind, send, context) : []
-      const changes = since !== null ? entity.changes : undefined
-      const slots: Slots = { select: selectOf(kind, defined) }
-      const read =
-        changes?.keyset && since !== null
-          ? await keysetPage({ ...changes, keyset: changes.keyset }, slots, since - overlap, token, send)
-          : await readPage(
-              changes ?? entity.list,
-              changes && since !== null ? { ...slots, since: SINCE[changes.since](since - overlap) } : slots,
-              token,
-              send,
-            )
-      if ("reset" in read) return { reset: true }
-      const { rows, next } = read
-      const items = await mapped(kind, rows, defined, send)
-      return next === undefined
-        ? { items, hasMore: false, cursor: new Date(started).toISOString() }
-        : { items, hasMore: true, nextCursor: `${next}@${started}` }
+      try {
+        return await readChanges(kind, cursor, page, context)
+      } catch (error) {
+        if (optionalRefused(kind, error, context)) return { items: [], hasMore: false, cursor: null }
+        throw error
+      }
     },
 
     async ids(kind, page, context): Promise<CrmIdPage> {
-      const entity = entityOf(kind)
-      const { rows, next } = await readPage(entity.ids ?? entity.list, {}, page, metered(context))
-      const items = rows.flatMap((raw) => {
-        const found = evaluate(entity.map.externalId as NonNullable<typeof entity.map.externalId>, raw)
-        const externalId = found === MISSING ? null : id(found)
-        return externalId === null ? [] : [externalId]
-      })
-      return next === undefined ? { items, hasMore: false } : { items, hasMore: true, nextCursor: next }
+      try {
+        return await readIds(kind, page, context)
+      } catch (error) {
+        // Refused part way through a pass, the ids read so far would mark every unread row deleted.
+        if (page === undefined && optionalRefused(kind, error, context)) return { items: [], hasMore: false }
+        throw error
+      }
     },
-
     async get<K extends CrmLiveKind>(kind: K, externalId: string, context?: CrmCallContext) {
       const entity = entityOf(kind)
       if (!entity.get) return null
@@ -297,7 +366,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
       try {
         answer = await send(
           entity.get.operation,
-          inputOf(entity.get, { id: externalId, select: selectOf(kind, defined) }),
+          inputOf(entity.get, { id: externalId, select: selectOf(kind, defined, context) }),
         )
       } catch (error) {
         if (unseen(error)) return null

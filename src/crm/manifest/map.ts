@@ -246,18 +246,28 @@ export const mapRecord = <K extends CrmKind>(
   return out as unknown as CrmRecords[K]
 }
 
+/** Each path a rule reads; `inside` is the list an `each` reads its `id` or `value` from, item by item. */
+export const rulePaths = (rule: CrmRule | undefined): { path: string; inside?: string }[] => {
+  if (rule === undefined || typeof rule === "function") return []
+  if (typeof rule === "string") return [{ path: rule }]
+  if ("first" in rule) return rule.first.map((path) => ({ path }))
+  if ("join" in rule) return rule.join.map((path) => ({ path }))
+  if ("all" in rule) return rule.all.map((path) => ({ path }))
+  if ("each" in rule)
+    return [
+      { path: rule.each },
+      { path: "id" in rule ? rule.id : rule.value, inside: rule.each },
+      ...("primary" in rule && rule.primary ? [{ path: rule.primary }] : []),
+    ]
+  return "path" in rule ? [{ path: rule.path }] : []
+}
+
 /** The names under `from` that the rules read: what a service that names its returned fields is asked for. */
 export const selectedOf = (rules: Readonly<Record<string, CrmRule | undefined>>, from: string): string[] => {
   const prefix = `${from}.`
-  const paths = Object.values(rules).flatMap((rule): string[] => {
-    if (rule === undefined || typeof rule === "function") return []
-    if (typeof rule === "string") return [rule]
-    if ("first" in rule) return [...rule.first]
-    if ("join" in rule) return [...rule.join]
-    if ("all" in rule) return [...rule.all]
-    if ("each" in rule) return [rule.each, ...("primary" in rule && rule.primary ? [rule.primary] : [])]
-    return "path" in rule ? [rule.path] : []
-  })
+  const paths = Object.values(rules).flatMap((rule) =>
+    rulePaths(rule).flatMap(({ path, inside }) => (inside === undefined ? [path] : [])),
+  )
   return [
     ...new Set(
       paths.filter((one) => one.startsWith(prefix)).map((one) => one.slice(prefix.length).split(".")[0] ?? ""),
