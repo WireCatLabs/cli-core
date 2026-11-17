@@ -311,6 +311,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `transactions` | collection | money that moved in or out of a wallet, as the bank or the owner recorded it |  |
 | `splits` | collection | parts of one transaction, each with its own amount and category |  |
 | `users` | collection | people who work in the owner's account at a service, such as a CRM's employees |  |
+| `issues` | collection | work items in an issue tracker, each in a team, a workflow state and maybe a project |  |
+| `teams` | collection | groups in a tracker that own issues, states and labels |  |
+| `states` | collection | the workflow steps a tracker team moves its issues through, each of a type such as started |  |
+| `labels` | collection | a tracker's shared labels on issues, kept by the tracker and not by the owner |  |
 | `fields` | collection | a record type's field definitions: code, label, type and options, such as a CRM's custom fields |  |
 | `activities` | collection | a CRM's calls, e-mails, meetings, to-dos and comments on its records |  |
 | `changes` | collection | what changed in a copied source over a time: records added, moved, closed or reassigned |  |
