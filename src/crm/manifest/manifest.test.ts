@@ -5,6 +5,7 @@ import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmItem, CrmOrganization, CrmPerson } from "../../domain/crm.js"
 import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "../source.js"
+import { crmManifestContract } from "../testing/manifest-fake.js"
 import { crmSourceContract } from "../testing/source-contract.js"
 import { amountOf, type CrmRaw } from "../values.js"
 import { type CrmManifest, parseCrmManifest } from "./manifest.js"
@@ -599,6 +600,10 @@ describe("crmSourceContract over HubSpot's mapping as a manifest", () => {
       await run()
       for (const hub of fakes.splice(0)) expect(hub.refusals).toEqual([])
     })
+})
+
+describe("crmManifestContract over HubSpot's manifest", () => {
+  for (const { name, run } of crmManifestContract(MANIFEST, { api, definitions, hooks })) it(name, run)
 })
 
 describe("crmSourceFromManifest", () => {

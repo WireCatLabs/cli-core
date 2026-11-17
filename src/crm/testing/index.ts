@@ -10,6 +10,15 @@ export {
 } from "./acme-scenario.js"
 export { type CrmFilesFixture, crmFilesContract } from "./files-contract.js"
 export {
+  type CrmManifestFake,
+  type CrmManifestFakeOptions,
+  type CrmManifestFixtureOptions,
+  crmManifestContract,
+  crmManifestFake,
+  crmManifestFixture,
+  FAKE_MANIFEST_TOKEN,
+} from "./manifest-fake.js"
+export {
   exampleDeal,
   exampleLead,
   exampleOrganization,

@@ -28,6 +28,11 @@ export interface CrmSourceFixture {
    * back each of them.
    */
   live?: Partial<Record<"person" | "organization", readonly string[]>>
+  /**
+   * The ids of every row of each kind the fixture holds, each changed before the change feed's overlap: a full list
+   * must give back each of them, and a read of changes after `change()` must leave the untouched ones out.
+   */
+  held?: Partial<Record<CrmKind, readonly string[]>>
   /** A cursor the CRM refuses; absent skips that case. */
   deadCursor?: { kind: CrmKind; cursor: string }
   /** Faults for the opt-in fault cases; given, the cases that need no hook run too. */
@@ -179,6 +184,22 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
       },
     },
     {
+      name: "changes: a full list gives every row the fixture holds, none lost between the CRM's pages",
+      async run() {
+        const { source, held } = await make()
+        if (!held) return
+        for (const kind of source.traits.kinds) {
+          const ids: readonly string[] | undefined = held[kind]
+          if (!ids) continue
+          assert.deepEqual(
+            idsOf((await listAll(source, kind, null)).items).sort(),
+            [...ids].sort(),
+            `${kind}: every row the fixture holds is listed`,
+          )
+        }
+      },
+    },
+    {
       name: "changes: the cursor a full list gave reads again without failing",
       async run() {
         const { source } = await make()
@@ -288,7 +309,7 @@ const faultCases = (make: () => CrmSourceFixture | Promise<CrmSourceFixture>): C
       const first = await make()
       if (!first.faults?.skewed || !first.faults.change) return
       for (const ms of [SKEW_MS, -SKEW_MS]) {
-        const { faults } = ms === SKEW_MS ? first : await make()
+        const { faults, held } = ms === SKEW_MS ? first : await make()
         const source = (await faults?.skewed?.(ms)) as CrmSource
         const read = await Promise.all(
           source.traits.kinds.map(async (kind) => [kind, await listAll(source, kind, null)] as const),
@@ -301,6 +322,9 @@ const faultCases = (make: () => CrmSourceFixture | Promise<CrmSourceFixture>): C
           idsOf(items).includes(id),
           `${kind} ${id} is in the changes with this computer's clock ${ms / 60_000} min off`,
         )
+        const untouched = held?.[kind]?.filter((one) => one !== id) ?? []
+        for (const one of untouched)
+          assert.ok(!idsOf(items).includes(one), `${kind} ${one} did not change, yet a read of changes lists it`)
       }
     },
   },
