@@ -1,6 +1,6 @@
 import type { CrmField, CrmKind, CrmRecords } from "../../domain/crm.js"
 import { DEAL_STATUSES } from "../../domain/deals.js"
-import { amountOf, type CrmRaw, crmValuesOf, epoch, fullName, id, isRaw, text } from "../values.js"
+import { amountOf, type CrmRaw, crmValuesOf, epoch, fullName, id, isRaw, number, text } from "../values.js"
 import type { CrmRule } from "./manifest.js"
 
 /** The service sent nothing at this path: the field is left out, so the stored copy keeps what it held. */
@@ -105,6 +105,7 @@ const CONVERT = {
   epoch: epochOf,
   day: dayOf,
   bool: yes,
+  number,
   texts: (value: unknown) => unique(listOf(value).map(text)),
   ids: (value: unknown) => linksOf(value).map(({ externalId }) => externalId),
   status: (value: unknown) => {

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { CrmManifest } from "../crm/manifest/manifest.js"
 import type { OAuthProvider } from "../oauth/provider.js"
+import type { TrackerManifest } from "../tracker/manifest/manifest.js"
 
 /**
  * The operation that answers whose the token is, and where its answer holds the account's id (and a name to show):
@@ -30,7 +31,17 @@ export type CliAuth =
       rotating?: boolean
     }
 
-export const CLI_CATEGORIES = ["messenger", "mail", "notes", "files", "meetings", "calendar", "crm", "other"] as const
+export const CLI_CATEGORIES = [
+  "messenger",
+  "mail",
+  "notes",
+  "files",
+  "meetings",
+  "calendar",
+  "crm",
+  "tracker",
+  "other",
+] as const
 export type CliCategory = (typeof CLI_CATEGORIES)[number]
 
 /** One file, `wirecat.config.ts`, that `new --from-config` builds a CLI from. */
@@ -48,12 +59,15 @@ export interface CliConfig {
     owner: string
   }
   /** `from`: the https URL the description is published at. */
-  spec: { kind: "openapi" | "swagger"; from: string }
+  spec: { kind: "openapi" | "swagger" | "graphql"; from: string }
   auth: CliAuth
   /** cli-template's `--category`; `other` is any API outside them. */
   category: CliCategory
-  /** The CRM source; checked against the generated API by `parseCrmManifest` once the api group exists. */
-  source?: CrmManifest
+  /**
+   * A crm or tracker CLI's source; checked against the generated API by `parseCrmManifest` or `parseTrackerManifest`
+   * once the api group exists.
+   */
+  source?: CrmManifest | TrackerManifest
   /** The module of named hooks, relative to the config: `./src/hooks.ts`. */
   hooks?: string
 }
@@ -126,7 +140,7 @@ const schema = v.strictObject({
     owner: v.pipe(v.string(), v.regex(/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/, "a GitHub owner")),
   }),
   spec: v.strictObject({
-    kind: v.picklist(["openapi", "swagger"]),
+    kind: v.picklist(["openapi", "swagger", "graphql"]),
     from: httpsUrl,
   }),
   auth: v.variant("preset", [
@@ -161,7 +175,7 @@ const schema = v.strictObject({
 })
 
 /**
- * The config checked against its shape; every error names where it is. A CRM CLI needs its source. `source` comes back
+ * The config checked against its shape; every error names where it is. A crm or tracker CLI needs its source. `source` comes back
  * unchecked: `parseCrmManifest` checks it against the generated API.
  */
 export const parseCliConfig = (input: unknown): CliConfig => {
@@ -184,12 +198,13 @@ export const parseCliConfig = (input: unknown): CliConfig => {
   // Typed, not cast: a field CliConfig needs that the schema lacks or types otherwise fails to compile (not the reverse).
   const output: Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> } = parsed.output
   const config = output as CliConfig
-  if (config.category !== "crm" && config.source)
-    throw new CliError("configuration_error", "wirecat.config: source: only a crm CLI reads a source yet", {
+  const sourced = config.category === "crm" || config.category === "tracker"
+  if (!sourced && config.source)
+    throw new CliError("configuration_error", "wirecat.config: source: only a crm or tracker CLI reads a source yet", {
       reason: "manifest.invalid",
     })
-  if (config.category === "crm" && !config.source)
-    throw new CliError("configuration_error", "wirecat.config: source: a crm CLI needs its source", {
+  if (sourced && !config.source)
+    throw new CliError("configuration_error", `wirecat.config: source: a ${config.category} CLI needs its source`, {
       reason: "manifest.invalid",
     })
   return config

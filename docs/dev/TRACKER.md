@@ -66,6 +66,24 @@ to the issue and copies none of its text. The same issue again answers the task 
 `projects`, `teams`, `users` (each with its person), `states` and `labels`. Every text field from the tracker is named
 in the row's `untrusted`.
 
+## A tracker described as data
+
+`trackerSourceFromManifest(manifest, { api, call, hooks? })` builds a `TrackerSource` from the generated API manifest
+and a `TrackerManifest`, as `crmSourceFromManifest` does for a CRM. Each kind names a `list` call, a `changes` call
+whose `variables` hold `"{since}"` (the cursor less `overlapMs`, ten minutes by default), an `ids` call that selects
+only the id, and a `map` from our fields to paths in a row, in the CRM manifest's rule language. A selected object
+the tracker answers `null` (`project: null`) is none, so the stored link is cleared.
+
+Over GraphQL a call's `selection` replaces the operation's default one, so a tracker reads `state { id }` or
+`labels { nodes { id } }`. `parseTrackerManifest` refuses a map path the selection leaves out, before any request:
+a field missing from the request would read as "the tracker cleared it". The variables travel as the request body;
+the selection rides on the request as `selection`, which the `api` group's GraphQL executor sends.
+
+`self: { call, path }` names the signed-in user. `hooks.after` corrects a record; `hooks.extend` adds methods.
+
+A `wirecat.config.ts` with `category: "tracker"` needs its `source`; `spec.kind: "graphql"` names an introspection
+result.
+
 ## The contract kit
 
 `trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor
