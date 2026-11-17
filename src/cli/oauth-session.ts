@@ -15,21 +15,23 @@ import { LOCAL_READ, LOCAL_WRITE, logsInOrOut, REMOTE_READ, REMOTE_WRITE } from 
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
 import { profilesHere, rememberAccount } from "./messenger/accounts.js"
 import { commandWords, profileFree, refuseCommandName, rootOf } from "./profile.js"
+import type { TokenStorage } from "./profile-token.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
+import { storageOf } from "./token-session.js"
 
 /** The authorization code flow an OpenAPI spec declares; a GraphQL service (Linear) writes the same object by hand. */
 export const oauthFlowOf = (manifest: ServiceApiManifest, scheme?: string): OAuthFlow => {
   const schemes = Object.entries(manifest.securitySchemes ?? {}).filter(
-    ([name, one]) => (scheme === undefined || name === scheme) && one.type === "oauth2",
+    ([name, one]) => (scheme === undefined || name === scheme) && one.flows?.authorizationCode !== undefined,
   )
   const flow = schemes.length === 1 ? schemes[0]?.[1].flows?.authorizationCode : undefined
   if (!flow?.authorizationUrl || !flow.tokenUrl)
     throw new CliError(
       "configuration_error",
       schemes.length > 1
-        ? `the api has ${schemes.length} OAuth schemes; name one`
-        : "the api declares no OAuth authorization code flow with its URLs",
+        ? `the api has ${schemes.length} OAuth sign-ins in the browser; name one`
+        : `the api declares no OAuth authorization code flow with its URLs${scheme ? ` under ${scheme}` : ""}`,
     )
   return flow
 }
@@ -46,10 +48,18 @@ export interface OAuthPresetOptions {
   redirect: OAuthProvider["redirect"]
   revokeUrl?: string
   authorizeParams?: Record<string, string>
+  /** The provider sends a new refresh token on each refresh; a run with moved folders then never refreshes. */
+  rotating?: boolean
+}
+
+export interface OAuthPreset {
+  provider: OAuthProvider
+  scopes: readonly string[]
+  rotating: boolean
 }
 
 /** An installed app's sign-in (authorization code with PKCE) from the flow a spec declares, and the scopes it asks. */
-export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions) => {
+export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions): OAuthPreset => {
   const known = Object.keys(flow.scopes)
   const unknown = options.scopes.filter((scope) => !known.includes(scope))
   if (unknown.length)
@@ -64,6 +74,11 @@ export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions) => {
     )
   if (flow.refreshUrl && flow.refreshUrl !== flow.tokenUrl)
     throw new CliError("configuration_error", `${options.name} refreshes at another URL, which the sign-in cannot use`)
+  const plain = [flow.authorizationUrl, flow.tokenUrl, options.revokeUrl].find(
+    (url) => url !== undefined && !url.startsWith("https://"),
+  )
+  // The code, the client secret and the tokens would cross the network in the clear.
+  if (plain) throw new CliError("configuration_error", `${options.name} signs in at ${plain}, which is not https`)
   const provider: OAuthProvider = {
     id: options.id,
     name: options.name,
@@ -74,7 +89,7 @@ export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions) => {
     ...(options.revokeUrl ? { revokeUrl: options.revokeUrl } : {}),
     ...(options.authorizeParams ? { authorizeParams: options.authorizeParams } : {}),
   }
-  return { provider, scopes: [...options.scopes] }
+  return { provider, scopes: [...options.scopes], rotating: options.rotating === true }
 }
 
 /** What the CLI's entry hands `run()` beside cli-core's own; a test hands a fake service and browser. */
@@ -87,8 +102,11 @@ export interface OAuthEnvironment extends BaseEnvironment {
 export interface OAuthSessionOptions {
   app: AppIdentity
   resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
+  /** The preset's `id` and `name`: `session list` and `status` read the sign-in without choosing a client. */
+  providerId: string
+  service: string
   /** From `oauthPreset`; the client is the CLI's own choice (a flag, a variable, the config, WireCat's app). */
-  preset: (command: Command) => { provider: OAuthProvider; scopes: readonly string[] }
+  preset: (command: Command) => OAuthPreset
   /** Asks the service whose the access token is; `id` names the account, `account` is what start and status show. */
   verify: (
     command: Command,
@@ -105,40 +123,47 @@ export interface OAuthSessionOptions {
  * removes the owner's sign-in.
  */
 export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
-  const { app } = options
+  const { app, providerId, service } = options
   const pathsOf = (env: NodeJS.ProcessEnv) => ({ appName: app.appName, prefix: app.envPrefix, env })
   const storageFor = (
-    env: NodeJS.ProcessEnv,
-    keyring: KeyringStore | undefined,
-    providerId: string,
+    where: { env: NodeJS.ProcessEnv; keyring?: KeyringStore | undefined; warn?: (message: string) => void },
     profile: string,
-    storage: "auto" | "file" = "auto",
+    storage: "auto" | "file" | "keyring" = "auto",
+    rotating = false,
   ) =>
     credentialStorage({
       credentials: {
         service: app.appName,
-        configDir: resolvePaths(pathsOf(env)).config,
+        configDir: resolvePaths(pathsOf(where.env)).config,
         storage,
-        env,
-        isolated: isMovedRun(pathsOf(env)),
-        keyring: keyring ?? systemKeyring,
+        env: where.env,
+        isolated: isMovedRun(pathsOf(where.env)),
+        keyring: where.keyring ?? systemKeyring,
+        ...(where.warn ? { warn: where.warn } : {}),
       },
       account: oauthAccount(providerId, profile),
-      codec: standardCodec(providerId),
+      codec: rotating ? { ...standardCodec(providerId), rotating: true } : standardCodec(providerId),
     })
-  const contextOf = (command: Command, storage?: "file") => {
+  const contextOf = (command: Command) => {
     const base = baseContext(command, options.resolveSettings)
-    const { provider, scopes } = options.preset(command)
+    const environment = environmentOf<OAuthEnvironment>(command)
+    const where = { env: base.env, keyring: base.keyring, warn: base.renderer.warn }
     const { profile } = base.settings
-    const keeper: TokenKeeper = tokenKeeper({
-      provider,
-      storage: storageFor(base.env, base.keyring, provider.id, profile, storage),
-      lockDir: resolvePaths(pathsOf(base.env)).config,
-      fetch: environmentOf<OAuthEnvironment>(command).fetch ?? fetch,
-      signInCommand: `${app.command} ${profile} session start`,
-    })
-    const saved = () => storageFor(base.env, base.keyring, provider.id, profile).read()
-    return { ...base, profile: base.settings.profile, provider, scopes, keeper, saved }
+    /** The preset is asked only here, after the refusals: a CLI's client choice may fail on its own. */
+    const keeperOf = (storage?: "file") => {
+      const { provider, scopes, rotating } = options.preset(command)
+      const keeper: TokenKeeper = tokenKeeper({
+        provider,
+        storage: storageFor(where, profile, storage ?? "auto", rotating),
+        lockDir: resolvePaths(pathsOf(base.env)).config,
+        fetch: environment.fetch ?? fetch,
+        signInCommand: `${app.command} ${profile} session start`,
+        ...(environment.signal ? { signal: environment.signal } : {}),
+      })
+      return { keeper, scopes }
+    }
+    const saved = () => storageFor(where, profile).read()
+    return { ...base, environment, where, profile, keeperOf, saved }
   }
   const answer = (command: Command, item: unknown) => renderAnswer(command, outputFor(command), itemOf(item))
 
@@ -150,44 +175,43 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
       examples: [`${app.command} personal session start`, `${app.command} personal session start --no-browser`],
     }),
   )
-    .summary("sign in in the browser")
+    .summary(`sign in to ${service} in the browser`)
     .description(
-      "sign this profile in in the browser; the account is checked before anything is kept, in the keyring or, with " +
-        "--credential-storage file, a private file",
+      `sign this profile in to ${service} in the browser; the account is checked before anything is kept, in the ` +
+        "keyring or, with --credential-storage file, a private file",
     )
     .option("--no-browser", "print the sign-in URL instead of opening a browser")
-    .option("--credential-storage <storage>", "where the sign-in is kept: keyring, which falls back to a file, or file")
-    .action(async function (this: Command, args: { browser: boolean; credentialStorage?: string }) {
-      if (args.credentialStorage !== undefined && !["keyring", "file"].includes(args.credentialStorage))
-        throw new CliError(
-          "validation_error",
-          `--credential-storage takes keyring or file; got ${args.credentialStorage}`,
-        )
-      const context = contextOf(this, args.credentialStorage === "file" ? "file" : undefined)
+    .option(
+      "--credential-storage <storage>",
+      "where the sign-in is kept: keyring, which falls back to a private file by itself, or file",
+      storageOf,
+      "keyring" as TokenStorage,
+    )
+    .action(async function (this: Command, args: { browser: boolean; credentialStorage: TokenStorage }) {
+      const context = contextOf(this)
       refuseCommandName(context.profile, commandWords(rootOf(this)), app.command)
-      refuseOffline(this, context.provider.name)
-      const environment = environmentOf<OAuthEnvironment>(this)
+      refuseOffline(this, service)
+      const { keeper, scopes: asked } = context.keeperOf(args.credentialStorage === "file" ? "file" : undefined)
       const { streams } = outputFor(this)
       const steps = signInSteps({
         diagnostic: (line) => streams.diagnostic(`${line}\n`),
-        json: context.format !== "pretty" || environment.tty === false,
+        json: context.format !== "pretty" || context.environment.tty === false,
         answers: false,
       })
       let shown: Readonly<Record<string, unknown>> = {}
       const { scopes } = await context.run((events) =>
-        context.keeper.signIn({
-          scopes: context.scopes,
+        keeper.signIn({
+          scopes: asked,
           openBrowser: async (url) => {
-            if (args.browser) await environment.openBrowser?.(url, this)
+            if (args.browser) await context.environment.openBrowser?.(url, this)
           },
           showUrl: (url) => {
-            steps.openUrl(url, `Sign in to ${context.provider.name} and allow access`)
-            streams.diagnostic(`Open ${context.provider.name} sign-in: ${url}\n`)
+            steps.openUrl(url, `Sign in to ${service} and allow access`)
+            streams.diagnostic(`Open ${service} sign-in: ${url}\n`)
           },
           // Before anything is saved, so a refused account leaves the profile's sign-in as it was.
           accept: async (tokens) => {
-            if (!tokens.accessToken)
-              throw new CliError("authentication_error", `${context.provider.name} returned no access token`)
+            if (!tokens.accessToken) throw new CliError("authentication_error", `${service} returned no access token`)
             const { id, account } = await options.verify(this, tokens.accessToken, events)
             ;(options.claim ?? ((env, profile, key) => rememberAccount(app, profile, key, env)))(
               context.env,
@@ -199,7 +223,14 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
           },
         }),
       )
-      answer(this, { profile: context.profile, signed_in: true, scopes, ...shown })
+      // The owner chose the file: an older keyring copy must not outlive it with a live refresh token.
+      if (args.credentialStorage === "file")
+        try {
+          storageFor(context.where, context.profile, "keyring").remove()
+        } catch {
+          // No keyring on this computer: there is no copy to forget.
+        }
+      answer(this, { ...shown, profile: context.profile, signed_in: true, scopes })
     })
 
   const status = annotate(new Command("status"), {
@@ -207,19 +238,18 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
     examples: [`${app.command} personal session status`, `${app.command} personal session status --check --json`],
   })
     .summary("show this profile's sign-in; tokens are never printed")
-    .description("show this profile's sign-in and its scopes, never a token; --check asks the service whose it is")
-    .option("--check", "ask the service whether the sign-in still works, and whose it is")
+    .description(`show this profile's sign-in and its scopes, never a token; --check asks ${service} whose it is`)
+    .option("--check", `ask ${service} whether the sign-in still works, and whose it is`)
     .action(async function (this: Command, args: { check?: boolean }) {
       const context = contextOf(this)
       const saved = context.saved()
       if (!saved) return answer(this, { profile: context.profile, state: "missing", verified: false })
       const state = { profile: context.profile, state: "saved", scopes: saved.tokens.scopes }
       if (!args.check) return answer(this, { ...state, verified: false })
-      refuseOffline(this, context.provider.name)
-      const { account } = await context.run(async (events) =>
-        options.verify(this, await context.keeper.accessToken(), events),
-      )
-      answer(this, { ...state, verified: true, ...account })
+      refuseOffline(this, service)
+      const { keeper } = context.keeperOf()
+      const { account } = await context.run(async (events) => options.verify(this, await keeper.accessToken(), events))
+      answer(this, { ...account, ...state, verified: true })
     })
 
   const end = logsInOrOut(
@@ -230,20 +260,23 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
     }),
   )
     .summary("sign this profile out on this computer")
-    .description("forget this profile's sign-in on this computer; a run with moved folders never removes the owner's")
+    .description(
+      `forget this profile's sign-in on this computer; the grant stays in ${service}, and a run with moved folders ` +
+        "never removes the owner's sign-in",
+    )
     .action(async function (this: Command) {
       const context = contextOf(this)
       if (!context.saved()) return answer(this, { profile: context.profile, ended: false })
-      const { removed } = await context.keeper.signOut()
-      // A run with moved folders removes only its own entry, and still reads the owner's, which it never removes.
-      if (context.saved())
-        return answer(this, {
-          profile: context.profile,
-          ended: false,
-          removed,
-          why: "this run has moved folders: the owner's sign-in in the system keyring stays, and this run still reads it",
-        })
-      answer(this, { profile: context.profile, ended: true, removed })
+      const { removed } = await context.keeperOf().keeper.signOut()
+      if (!context.saved()) return answer(this, { profile: context.profile, ended: true, removed })
+      answer(this, {
+        profile: context.profile,
+        ended: false,
+        removed,
+        why: isMovedRun(pathsOf(context.env))
+          ? "this run has moved folders: the owner's sign-in in the system keyring stays, and this run still reads it"
+          : "the sign-in could not be removed from the keyring",
+      })
     })
 
   const list = profileFree(
@@ -255,13 +288,13 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
     .summary("list the profiles here and whether each is signed in")
     .description("list the profiles on this computer and whether each is signed in; picks none")
     .action(function (this: Command) {
-      const environment = environmentOf(this)
+      const environment = environmentOf<OAuthEnvironment>(this)
       const env = environment.env ?? process.env
       const { configuredProfiles } = options.resolveSettings({}, { env, needsProfile: false })
-      const { provider } = options.preset(this)
+      const where = { env, keyring: environment.keyring, warn: outputFor(this).renderer.warn }
       const items = profilesHere(app, configuredProfiles, env).map((profile) => ({
         profile,
-        signed_in: storageFor(env, environment.keyring, provider.id, profile).read() !== undefined,
+        signed_in: storageFor(where, profile).read() !== undefined,
       }))
       renderAnswer(
         this,
@@ -271,7 +304,7 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
     })
 
   return annotate(new Command("session"), { effects: LOCAL_READ })
-    .description("sign in in the browser and manage this profile's sign-in")
+    .description(`sign in to ${service} in the browser and manage this profile's sign-in`)
     .addCommand(start)
     .addCommand(status)
     .addCommand(end)

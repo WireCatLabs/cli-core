@@ -76,6 +76,8 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
           oauthSessionCommand({
             app,
             resolveSettings: settingsFor(app).resolveSettings,
+            providerId: "crm",
+            service: "Crm",
             preset: () =>
               oauthPreset(oauthFlowOf(manifest), {
                 id: "crm",
@@ -129,6 +131,26 @@ describe("oauthFlowOf and oauthPreset", () => {
       "did you mean record_permission:read?",
     )
     expect(() => oauthFlowOf({ operations: [] })).toThrow("no OAuth authorization code flow")
+    const authorizationCode = manifest.securitySchemes?.oauth2?.flows?.authorizationCode as NonNullable<
+      NonNullable<NonNullable<ServiceApiManifest["securitySchemes"]>[string]["flows"]>["authorizationCode"]
+    >
+    const twice: ServiceApiManifest = {
+      operations: [],
+      securitySchemes: {
+        one: { type: "oauth2", flows: { authorizationCode } },
+        two: { type: "oauth2", flows: { authorizationCode } },
+        machine: { type: "oauth2", flows: { clientCredentials: { tokenUrl: "https://app.crm.test/t", scopes: {} } } },
+      },
+    }
+    expect(() => oauthFlowOf(twice)).toThrow("2 OAuth sign-ins in the browser; name one")
+    expect(oauthFlowOf(twice, "two").authorizationUrl).toBe("https://app.crm.test/authorize")
+    const scopes = ["record_permission:read"]
+    expect(() => oauthPreset({ ...flow, tokenUrl: "http://app.crm.test/token" }, { ...options, scopes })).toThrow(
+      "not https",
+    )
+    expect(() => oauthPreset({ ...flow, refreshUrl: "https://app.crm.test/refresh" }, { ...options, scopes })).toThrow(
+      "refreshes at another URL",
+    )
   })
 })
 
@@ -140,7 +162,7 @@ describe("oauthSessionCommand", () => {
     expect(started.json.item).toMatchObject({ profile: "personal", signed_in: true, workspace: "Synthetic" })
     expect(tokenCalls[0]?.get("code_verifier")).toMatch(/^[\w-]{43,}$/)
     expect(tokenCalls[0]?.get("client_secret")).toBe("synthetic-client-secret")
-    expect(`${started.err}${JSON.stringify(started.json)}`).not.toMatch(/synthetic-(access|refresh)/)
+    expect(`${started.err}${JSON.stringify(started.json)}`).not.toMatch(/synthetic-(access|refresh|client-secret|code)/)
 
     expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({
       state: "saved",
@@ -157,6 +179,25 @@ describe("oauthSessionCommand", () => {
 
     expect((await cli(["personal", "session", "end", "--json"])).json.item).toMatchObject({ ended: true })
     expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
+  })
+
+  it("keeps the sign-in as it was when another account is refused", async () => {
+    const { cli } = setup()
+    expect((await cli(["personal", "session", "start", "--json"])).code).toBe(0)
+    const refused = await cli(["personal", "session", "start", "--json"], () => {
+      throw new CliError("conflict", "this account is another profile's")
+    })
+    expect(refused.error).toMatchObject({ code: "conflict" })
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "saved" })
+  })
+
+  it("--credential-storage file forgets an older keyring copy", async () => {
+    const { cli, keyring } = setup()
+    expect((await cli(["personal", "session", "start", "--json"])).code).toBe(0)
+    expect(keyring.get("crm-cli", "oauth:crm:personal")).not.toBeNull()
+    expect((await cli(["personal", "session", "start", "--credential-storage", "file", "--json"])).code).toBe(0)
+    expect(keyring.get("crm-cli", "oauth:crm:personal")).toBeNull()
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "saved" })
   })
 
   it("keeps nothing when the account is refused", async () => {

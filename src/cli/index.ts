@@ -592,6 +592,7 @@ export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catal
 export { writeNewFile } from "./new-file.js"
 export {
   type OAuthEnvironment,
+  type OAuthPreset,
   type OAuthPresetOptions,
   type OAuthSessionOptions,
   oauthFlowOf,

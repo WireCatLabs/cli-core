@@ -37,7 +37,7 @@ export interface TokenSessionOptions {
   endNote?: string
 }
 
-const storageOf = (raw: string): TokenStorage => {
+export const storageOf = (raw: string): TokenStorage => {
   if (raw === "keyring" || raw === "file") return raw
   throw new CliError("validation_error", `--credential-storage takes keyring or file; got ${raw}`)
 }
