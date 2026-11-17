@@ -1,6 +1,7 @@
 import { CliError, isMovedRun, type KeyringStore, resolvePaths, systemKeyring } from "@wirecat/cli-base"
 import type { OAuthFlow } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
+import { hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"
 import { type TokenKeeper, tokenKeeper } from "../oauth/keeper.js"
 import type { OAuthClient, OAuthProvider } from "../oauth/provider.js"
@@ -156,7 +157,14 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
         provider,
         storage: storageFor(where, profile, storage ?? "auto", rotating),
         lockDir: resolvePaths(pathsOf(base.env)).config,
-        fetch: environment.fetch ?? fetch,
+        // Only the provider's own sign-in hosts: a token request never reaches anything else.
+        fetch:
+          environment.fetch ??
+          (hostFetch({
+            hosts: [provider.authorizeUrl, provider.tokenUrl, provider.revokeUrl]
+              .filter((url): url is string => url !== undefined)
+              .map((url) => new URL(url).hostname),
+          }) as typeof fetch),
         signInCommand: `${app.command} ${profile} session start`,
         ...(environment.signal ? { signal: environment.signal } : {}),
       })
