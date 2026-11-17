@@ -66,6 +66,21 @@ export const checkApiParameter = (
   }
 }
 
+const JSON_BODY = /[/+]json\s*(;|$)/i
+const FORM_BODY = /^(multipart\/form-data|application\/x-www-form-urlencoded)\s*(;|$)/i
+
+/** An upload sent as the bytes themselves, as the spec types a binary body: `application/octet-stream`, `image/png`. */
+export const sendsBytes = (operation: ManifestOperation): boolean => {
+  const type = operation.request?.contentType
+  return type !== undefined && !JSON_BODY.test(type) && !FORM_BODY.test(type)
+}
+
+/** The file `--body-file` names, `-` for stdin, as the bytes an upload sends. */
+export const readApiBytes = (
+  path: string,
+  read: (path: string | number) => Uint8Array<ArrayBuffer> = (from) => new Uint8Array(readFileSync(from)),
+): Uint8Array<ArrayBuffer> => read(path === "-" ? 0 : path)
+
 export const readApiBody = (
   options: { body?: string; bodyFile?: string },
   read: (path: string | number) => string = (path) => readFileSync(path, "utf8"),

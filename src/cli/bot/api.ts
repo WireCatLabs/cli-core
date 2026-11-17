@@ -4,7 +4,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
-import { apiFlagOf, apiOptionKey, readApiBody } from "./api-input.js"
+import { apiFlagOf, apiOptionKey, readApiBody, readApiBytes, sendsBytes } from "./api-input.js"
 
 export interface ApiCommandInput {
   path: Record<string, string>
@@ -12,6 +12,8 @@ export interface ApiCommandInput {
   headers: Record<string, string>
   fields: Record<string, string>
   body?: string
+  /** An upload's bytes, from `--body-file`. */
+  bytes?: Uint8Array<ArrayBuffer>
   bodySource?: "argument" | "stdin" | "file"
   tokenProfile?: string
 }
@@ -23,6 +25,8 @@ export interface ApiCommands {
   checkBody?: (operation: ManifestOperation, text: string | undefined) => string | undefined
   before?: (command: Command, operation: ManifestOperation) => void | Promise<void>
   readBody?: (command: Command, options: { body?: string; bodyFile?: string }) => string | undefined
+  /** An upload's file, `-` for stdin. */
+  readBytes?: (command: Command, path: string) => Uint8Array<ArrayBuffer>
   execute: (command: Command, operation: ManifestOperation, input: ApiCommandInput) => Promise<void>
 }
 
@@ -50,7 +54,9 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       )
       command.addOption(parameter.required && parameter.in !== "body" ? option.makeOptionMandatory() : option)
     }
-    if (operation.request) {
+    if (operation.request && sendsBytes(operation)) {
+      command.option("--body-file <path>", `the file to upload, sent as ${operation.request.contentType}; - is stdin`)
+    } else if (operation.request) {
       // A field the schema marks secret may ride in an inline body, and the flags never see it.
       command.addOption(secretInput(new Option("--body <json>", "the request body as JSON; - reads it from stdin")))
       command.option("--body-file <path>", "the request body from a JSON file; - is stdin")
@@ -91,6 +97,20 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
         target[parameter.name] = raw
       }
       await api.before?.(this, operation)
+      if (sendsBytes(operation)) {
+        const path = options.bodyFile
+        if (path === undefined && operation.request?.required)
+          throw new CliError(
+            "validation_error",
+            `${operation.command} uploads a file: give --body-file <path>, or - for stdin`,
+          )
+        if (path !== undefined) {
+          input.bytes = (api.readBytes ?? ((_command, from) => readApiBytes(from)))(this, path)
+          input.bodySource = path === "-" ? "stdin" : "file"
+        }
+        await api.execute(this, operation, input)
+        return
+      }
       const text = (api.readBody ?? ((_command, body) => readApiBody(body)))(this, options)
       if (options.body !== undefined) input.bodySource = options.body === "-" ? "stdin" : "argument"
       else if (options.bodyFile !== undefined) input.bodySource = options.bodyFile === "-" ? "stdin" : "file"

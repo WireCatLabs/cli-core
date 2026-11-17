@@ -6,13 +6,14 @@ import { providerRequest } from "../command-runs.js"
 import { outputFor } from "../context.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import type { ApiCommandInput } from "./api.js"
-import { parseApiJson } from "./api-input.js"
+import { parseApiJson, sendsBytes } from "./api-input.js"
 
 export interface HttpApiRequest {
   method: string
   url: URL
   headers: Headers
-  body?: string
+  /** JSON text, or an upload's bytes. */
+  body?: string | Uint8Array<ArrayBuffer>
   /** `manual` for a request whose sign-in header a redirect to another host would carry along. */
   redirect?: "follow" | "manual" | "error"
 }
@@ -50,6 +51,14 @@ const segment = (name: string, value: string | undefined): string => {
   return encodeURIComponent(value)
 }
 
+/** Why the generated command cannot send the operation's body, or `undefined` when it can: JSON, or an upload's bytes. */
+export const unsendableBody = (operation: ManifestOperation): string | undefined => {
+  const type = operation.request?.contentType
+  return type === undefined || sendsBytes(operation)
+    ? undefined
+    : `it sends ${type}, which the generated command cannot send`
+}
+
 /** One generated HTTP operation and its flags as the request they stand for; nothing is sent. */
 export const httpApiRequest = (
   operation: ManifestOperation,
@@ -59,10 +68,10 @@ export const httpApiRequest = (
   const { binding } = operation
   if (binding.kind !== "http")
     throw new CliError("configuration_error", `${operation.command} is not an HTTP operation`)
-  if (operation.request?.contentType)
+  if (unsendableBody(operation))
     throw new CliError(
       "validation_error",
-      `${operation.command} sends ${operation.request.contentType}, which the generated command cannot send; nothing was sent`,
+      `${operation.command} sends ${operation.request?.contentType}, which the generated command cannot send; nothing was sent`,
       { sent: false },
     )
   if (operation.response?.sensitive)
@@ -85,11 +94,16 @@ export const httpApiRequest = (
     else url.searchParams.set(name, raw)
   }
   const headers = new Headers(input.headers)
+  headers.set("accept", "application/json")
+  if (sendsBytes(operation)) {
+    if (input.bytes === undefined) return { method: binding.method, url, headers }
+    headers.set("content-type", operation.request?.contentType as string)
+    return { method: binding.method, url, headers, body: input.bytes }
+  }
   const body = input.body?.trim() ? input.body : undefined
   // The command's checkBody may not parse the body; text that is not JSON never reaches the service.
   if (body !== undefined) parseApiJson(body)
   if (body !== undefined) headers.set("content-type", "application/json")
-  headers.set("accept", "application/json")
   return { method: binding.method, url, headers, ...(body === undefined ? {} : { body }) }
 }
 

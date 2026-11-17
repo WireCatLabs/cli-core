@@ -13,8 +13,8 @@ import { levelFor } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { refusedPlace } from "../sends/upload.js"
 import { type ApiCommandInput, generatedApiCommand } from "./bot/api.js"
-import { type HttpApiRequest, httpApiRequest, httpApiSend } from "./bot/api-http.js"
-import { checkApiBody, checkApiParameter, parseApiJson, readApiBody } from "./bot/api-input.js"
+import { type HttpApiRequest, httpApiRequest, httpApiSend, unsendableBody } from "./bot/api-http.js"
+import { checkApiBody, checkApiParameter, parseApiJson, readApiBody, readApiBytes } from "./bot/api-input.js"
 import { baseContext, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
@@ -55,8 +55,11 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   baseUrl?: string
   /** The host-checked fetch with the CLI's pace and its retry of reads (cli-base `retrying` over `hostFetch`). */
   fetch: (command: Command) => FetchLike
-  /** The profile's token, sent in the header the operation's security scheme names. Read before any guard asks. */
-  token: (command: Command) => string | Promise<string>
+  /**
+   * The profile's token, sent where the operation's security scheme names. Read before any guard asks. Left out, for a
+   * CLI without sign-in, no call carries one.
+   */
+  token?: (command: Command) => string | Promise<string>
   /** Headers beside the sign-in, such as the API version. */
   headers?: (command: Command, operation: ManifestOperation) => Record<string, string>
   /** Loaded only once an operation is about to check its input: a large spec is megabytes of code. */
@@ -68,6 +71,25 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   /** Fields `api show` adds to every answer, such as the API version the commands send. */
   shown?: Readonly<Record<string, unknown>>
   failure?: (status: number, answer: unknown, operation: ManifestOperation) => CliError | undefined
+}
+
+/**
+ * The operations the `api` group offers, and why it leaves out the rest: one that answers with a credential needs a
+ * bot's `--store-token`, as a service CLI signs in through `session`; a body other than JSON or an upload's bytes (a
+ * multipart form) the generated command cannot send.
+ */
+export const serviceApiOperations = (
+  manifest: ServiceApiManifest,
+): { offered: readonly ManifestOperation[]; left: readonly { id: string; reason: string }[] } => {
+  const reasonOf = (operation: ManifestOperation) =>
+    operation.response?.sensitive ? "it returns a credential, which is never printed" : unsendableBody(operation)
+  return {
+    offered: manifest.operations.filter((operation) => reasonOf(operation) === undefined),
+    left: manifest.operations.flatMap((operation) => {
+      const reason = reasonOf(operation)
+      return reason ? [{ id: operation.id, reason }] : []
+    }),
+  }
 }
 
 /** How far `--all` reads: a service that never stops paging must not run a command forever. */
@@ -174,8 +196,7 @@ const API_QUERY = {
  */
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const { app, configuration, manifest } = options
-  // A credential-returning operation needs a bot's `--store-token`; a service CLI signs in through `session` instead.
-  const operations = manifest.operations.filter((operation) => !operation.response?.sensitive)
+  const { offered: operations, left } = serviceApiOperations(manifest)
   const baseUrl = manifestBaseUrl(manifest, options.baseUrl)
   const base = new URL(baseUrl)
   const own = serviceApiPermissions(options)
@@ -212,21 +233,19 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const operationOf = (name: string): ManifestOperation => {
     const found = operations.find((operation) => operation.command === name || operation.id === name)
     if (found) return found
-    const left =
-      options.excluded?.find((one) => one.id === name) ??
-      (manifest.operations.some((one) => one.command === name || one.id === name)
-        ? { reason: "it returns a credential, which is never printed" }
-        : undefined)
+    const id = manifest.operations.find((one) => one.command === name || one.id === name)?.id ?? name
+    const why = options.excluded?.find((one) => one.id === name) ?? left.find((one) => one.id === id)
     throw new CliError(
       "not_found",
-      left
-        ? `${name} is not offered: ${left.reason}`
+      why
+        ? `${name} is not offered: ${why.reason}`
         : `no ${options.service} API operation ${name}; see ${app.command} api list`,
     )
   }
 
   const signed = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) => {
-    await signRequest(manifest, operation, request, () => options.token(command))
+    const { token } = options
+    await signRequest(manifest, operation, request, token && (() => token(command)))
     for (const [name, value] of Object.entries(options.headers?.(command, operation) ?? {}))
       request.headers.set(name, value)
     return request
@@ -310,20 +329,24 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     )
   }
 
+  const refuseOwnFiles = (command: Command, path: string) => {
+    if (path === "-") return
+    const { env } = baseContext(command, configuration.resolveSettings)
+    if (refusedPlace(path, app, env))
+      throw new CliError("validation_error", `--body-file may not read ${path}: it holds sign-ins or state`)
+  }
+
   const generated = generatedApiCommand({
     operations,
     checkParameter: (name, schema, raw) => checkApiParameter(name, schema, raw, loaded()),
     checkBody: (operation, text) => checkApiBody(operation, text, loaded()),
     readBody: (command, body) => {
-      if (body.bodyFile !== undefined && body.bodyFile !== "-") {
-        const { env } = baseContext(command, configuration.resolveSettings)
-        if (refusedPlace(body.bodyFile, app, env))
-          throw new CliError(
-            "validation_error",
-            `--body-file may not read ${body.bodyFile}: it holds sign-ins or state`,
-          )
-      }
+      if (body.bodyFile !== undefined) refuseOwnFiles(command, body.bodyFile)
       return readApiBody(body)
+    },
+    readBytes: (command, path) => {
+      refuseOwnFiles(command, path)
+      return readApiBytes(path)
     },
     execute: async (command, operation, input) => {
       const extra = serviceApiKeys(options, operation, input)

@@ -221,12 +221,21 @@ const api = {
   },
 }
 
-type Sent = { method: string; url: string; body?: string; authorization?: string; key?: string; redirect?: string }
+type Sent = {
+  method: string
+  url: string
+  body?: string
+  bytes?: number[]
+  type?: string
+  authorization?: string
+  key?: string
+  redirect?: string
+}
 
 const fixture = (
   saved: Record<string, string> = {},
   answer: (sent: Sent) => Response = () => Response.json({ object: "page", id: "p1" }),
-  over: Partial<typeof api> = {},
+  over: Partial<typeof api> & { signsIn?: false } = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "service-api-"))
   const env = {
@@ -264,6 +273,9 @@ const fixture = (
                 method: init?.method ?? "GET",
                 url: String(input),
                 ...(typeof init?.body === "string" ? { body: init.body } : {}),
+                ...(init?.body instanceof Uint8Array
+                  ? { bytes: [...init.body], type: headers.get("content-type") ?? "" }
+                  : {}),
                 ...(authorization ? { authorization } : {}),
                 ...(key ? { key, redirect: String(init?.redirect) } : {}),
               }
@@ -271,7 +283,7 @@ const fixture = (
               return answer(one)
             },
           }),
-        token: () => "page-token",
+        ...(over.signsIn === false ? {} : { token: () => "page-token" }),
         headers: () => ({ "pages-version": "2026-03-11" }),
         schemas: async () => {
           loads.schemas++
@@ -332,6 +344,64 @@ describe("the shared service api group", () => {
     const { cli, sent } = fixture()
     expect((await cli("work", "api", "status", "--json")).code).toBe(0)
     expect(sent).toEqual([{ method: "GET", url: "https://api.pages.test/v1/status" }])
+  })
+
+  it("**sends no sign-in where the spec names none, or for a CLI without one**, the token never read", async () => {
+    const silent = fixture({}, undefined, {
+      manifest: { operations, ...(manifest.servers ? { servers: manifest.servers } : {}) },
+    })
+    expect((await silent.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).code).toBe(0)
+    expect(silent.sent).toEqual([{ method: "GET", url: "https://api.pages.test/v1/pages/p1" }])
+    const unsigned = fixture({}, undefined, { signsIn: false })
+    expect((await unsigned.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).code).toBe(0)
+    expect(unsigned.sent).toEqual([{ method: "GET", url: "https://api.pages.test/v1/pages/p1" }])
+  })
+
+  it("**uploads a file's bytes with --body-file**, as Petstore's octet-stream body, and leaves out a multipart form", async () => {
+    const http = (path: string) => ({ kind: "http" as const, method: "POST" as const, path })
+    const upload: Operation = {
+      id: "uploadFile",
+      command: "upload-file",
+      binding: http("/pages/{page_id}/image"),
+      effect: "write",
+      tags: [],
+      parameters: [page("page_id")],
+      request: { required: false, confidence: "contract", contentType: "application/octet-stream" },
+    }
+    const form: Operation = {
+      id: "importContacts",
+      command: "import-contacts",
+      binding: http("/imports"),
+      effect: "write",
+      tags: [],
+      parameters: [],
+      request: { required: true, confidence: "contract", contentType: "multipart/form-data" },
+    }
+    const { cli, sent, root, env } = fixture({ api: "allow" }, undefined, {
+      manifest: { ...manifest, operations: [...operations, upload, form] },
+    })
+    const image = join(root, "pet.png")
+    writeFileSync(image, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]))
+    expect((await cli("work", "api", "upload-file", "--page-id", "p1", "--body-file", image, "--json")).code).toBe(0)
+    expect(sent).toEqual([
+      {
+        method: "POST",
+        url: "https://api.pages.test/v1/pages/p1/image",
+        bytes: [0x89, 0x50, 0x4e, 0x47, 0x00, 0xff],
+        type: "application/octet-stream",
+        authorization: "OAuth page-token",
+      },
+    ])
+    expect((await cli("work", "api", "upload-file", "--page-id", "p1", "--body", "{}", "--json")).code).not.toBe(0)
+    const inside = join(env.PAGES_CONFIG_DIR, "config.json")
+    const refused = await cli("work", "api", "upload-file", "--page-id", "p1", "--body-file", inside, "--json")
+    expect(refused.error).toMatchObject({ code: "validation_error" })
+    expect((await cli("api", "show", "import-contacts", "--json")).error?.message).toBe(
+      "import-contacts is not offered: it sends multipart/form-data, which the generated command cannot send",
+    )
+    const listed = await cli("api", "list", "--json")
+    expect(listed.json.items.map((one: { command: string }) => one.command)).not.toContain("import-contacts")
+    expect(sent).toHaveLength(1)
   })
 
   it("**offers no free-form call, no --store-token and no credential-returning operation**", async () => {
