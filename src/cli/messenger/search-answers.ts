@@ -324,11 +324,7 @@ export const messagesAnswer = (
     ...(again ? { args: again } : {}),
     next: [...gaps.next, ...limited.next],
     missing: [...gaps.missing, ...limited.missing],
-    meta: {
-      ...metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0 || skips.length > 0),
-      ...(found.named ? { named_chat: { word: found.named.word, chat_id: found.named.chatId } } : {}),
-      ...(found.respelled ? { respelled: found.respelled } : {}),
-    },
+    meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0 || skips.length > 0),
   })
 }
 
