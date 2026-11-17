@@ -13,7 +13,7 @@ it("clears the kinds of nameless people once, and works one out again when an ac
   const first = await openStore({ path })
   await first.people.savePeople(TG, [{ id: "1", name: "Me" }])
   await first.people.linkToOwner({ provider: "telegram", id: "1" })
-  await first.people.savePeople(TG, [{ id: "7", name: null, username: "xorlov" }])
+  await first.people.savePeople(TG, [{ id: "7", name: null, username: "xsokolov" }])
   await first.close()
   const old = await openCache(path)
   // Version 62's trigger, which reads every column of an identity but its name.
@@ -46,7 +46,7 @@ it("clears the kinds of nameless people once, and works one out again when an ac
           )
           .get()?.kind
       expect(kindOf()).not.toBeNull()
-      database.prepare("UPDATE identities SET name = 'Ярослав Орлов' WHERE external_id = '7'").run()
+      database.prepare("UPDATE identities SET name = 'Станислав Соколов' WHERE external_id = '7'").run()
       expect(kindOf()).toBeNull()
     } finally {
       database.close()

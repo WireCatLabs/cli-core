@@ -290,7 +290,7 @@ const patternRefused = (
   )
 }
 
-/** Every sender a name pattern (`from:Ярослав*`) fits, through the names each messenger's accounts have seen. */
+/** Every sender a name pattern (`from:Станислав*`) fits, through the names each messenger's accounts have seen. */
 export const sendersMatching = async (
   store: MessageStore,
   accounts: AccountKey[],

@@ -95,7 +95,7 @@ const namePattern = (pattern: string) => {
   return (names: string[]) => names.some((one) => automaton.test(one))
 }
 
-/** Everyone a name pattern such as `Ярослав*` or `*Орлов*` fits by their alias, name or @username. */
+/** Everyone a name pattern such as `Станислав*` or `*Соколов*` fits by their alias, name or @username. */
 export const peopleMatching = (pattern: string, people: Contact[], { byAddress = false } = {}): Contact[] => {
   const fits = namePattern(pattern)
   return people.filter((person) => fits(namesOf(person, byAddress)))

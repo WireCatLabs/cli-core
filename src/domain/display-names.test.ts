@@ -17,9 +17,9 @@ describe("displayName", () => {
   })
 
   it("prefers an account's real name to a handle when the person has none of their own", () => {
-    expect(displayName(null, { name: "Ярослав Орлов", username: "Xorlov" })).toBe("Ярослав Орлов")
-    expect(displayName("!", { name: "  «Ярослав Орлов» ", username: "Xorlov" })).toBe("Ярослав Орлов")
-    expect(displayName(null, { name: "null", username: "Xorlov" })).toBe("@Xorlov")
+    expect(displayName(null, { name: "Станислав Соколов", username: "Xsokolov" })).toBe("Станислав Соколов")
+    expect(displayName("!", { name: "  «Станислав Соколов» ", username: "Xsokolov" })).toBe("Станислав Соколов")
+    expect(displayName(null, { name: "null", username: "Xsokolov" })).toBe("@Xsokolov")
     expect(displayName("Ola", { name: "Someone Else", username: "ola_k" })).toBe("Ola")
   })
 
