@@ -6,7 +6,6 @@ const config: CliConfig = {
     command: "acme",
     package: "@wirecat/acme-cli",
     prefix: "WCACME",
-    provider: "acme",
     service: "Acme",
     owner: "WireCatLabs",
   },
@@ -41,11 +40,15 @@ describe("parseCliConfig", () => {
       "spec.from",
     )
     expect(() => parseCliConfig({ ...config, category: "crm" })).toThrow("a crm CLI needs its source")
-    for (const from of ["/etc/spec.json", "//evil.test/x", "../../spec.json", "https://", "file:spec.json"])
-      expect(() => parseCliConfig({ ...config, spec: { kind: "openapi", from } })).toThrow("spec.from")
-    expect(parseCliConfig({ ...config, spec: { kind: "openapi", from: "spec/openapi.json" } }).spec.from).toBe(
+    for (const from of [
+      "/etc/spec.json",
+      "//evil.test/x",
+      "../../spec.json",
+      "https://",
+      "file:spec.json",
       "spec/openapi.json",
-    )
+    ])
+      expect(() => parseCliConfig({ ...config, spec: { kind: "openapi", from } })).toThrow("spec.from")
     expect(() => parseCliConfig({ ...config, identity: { ...config.identity, command: "acme-" } })).toThrow(
       "identity.command",
     )

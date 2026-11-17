@@ -32,13 +32,12 @@ export interface CliConfig {
     package: string
     /** The environment variables' prefix: `WCATTIO`. */
     prefix: string
-    /** The registry name: `attio`. */
-    provider: string
     /** The name people know: `Attio`. */
     service: string
     /** The GitHub owner of the repository. */
     owner: string
   }
+  /** `from`: the https URL the description is published at. */
   spec: { kind: "openapi" | "swagger"; from: string }
   auth: CliAuth
   /** cli-template's `--category`; `other` is any API outside them. */
@@ -66,7 +65,6 @@ const schema = v.strictObject({
     command: word,
     package: v.pipe(v.string(), v.regex(/^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/, "an npm package name")),
     prefix: v.pipe(v.string(), v.regex(/^[A-Z][A-Z0-9_]*$/, "upper-case letters, digits and underscores")),
-    provider: word,
     service: v.pipe(v.string(), v.minLength(1)),
     owner: v.pipe(v.string(), v.regex(/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/, "a GitHub owner")),
   }),
@@ -74,10 +72,7 @@ const schema = v.strictObject({
     kind: v.picklist(["openapi", "swagger"]),
     from: v.pipe(
       v.string(),
-      v.check(
-        (text) => /^https:\/\/[^/\s]+/.test(text) || (text.length > 0 && projectPath(text)),
-        "an https URL or a path in the project",
-      ),
+      v.check((text) => /^https:\/\/[^/\s]+/.test(text), "the https URL the description is published at"),
     ),
   }),
   auth: v.variant("preset", [
