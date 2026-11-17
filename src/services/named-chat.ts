@@ -1,7 +1,9 @@
 import type { Id } from "../domain/models.js"
 import { createStemmer } from "../search/stem.js"
+import { STOP_WORDS } from "../search/task-similarity.js"
+import { normalize } from "../store/normalize.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import type { ServiceDeps } from "./deps.js"
+import type { Saved } from "./message-resolution.js"
 import { prepareLucene } from "./messages-search.js"
 
 /** Fewer uses than this in one private chat is no evidence of a name. */
@@ -25,26 +27,27 @@ export interface NamedChat {
  * lower case, so it names none.
  */
 export const namedChat = async (
-  deps: ServiceDeps,
   store: MessageStore,
-  accounts: AccountKey[],
+  account: AccountKey,
+  messenger: Saved,
+  accounts: AccountKey[] | undefined,
   words: string[],
 ): Promise<NamedChat | undefined> => {
   for (const word of words) {
     if (word.length < 3 || /^\p{N}+$/u.test(word)) continue
     const { execution } = await prepareLucene(
       store,
-      await deps.account(),
+      account,
       // Quoted, a word is its forms without the longer words it begins: a name, not every word starting like it.
-      { text: `"${word}"`, accounts, limit: SAMPLE },
-      deps.messenger,
+      { text: `"${word}"`, ...(accounts ? { accounts } : {}), limit: SAMPLE },
+      messenger,
     )
     const groups = (await store.queries.countQuery(execution, "chat")).sort((a, b) => b.count - a.count)
     const dialogs: (NamedChat & { count: number })[] = []
     for (const group of groups) {
       if (dialogs.length === 2) break
-      const source = accounts.find((one) => one.provider === group.provider && one.account === group.account)
-      if (!source || group.id === null || (await store.chats.chatKind(source, group.id)) !== "dialog") continue
+      const source = { provider: group.provider, account: group.account } as AccountKey
+      if (group.id === null || (await store.chats.chatKind(source, group.id)) !== "dialog") continue
       dialogs.push({ word, source, chatId: group.id, title: group.name, count: group.count })
     }
     const [best, next] = dialogs
@@ -66,3 +69,18 @@ export const namedChat = async (
   }
   return undefined
 }
+
+/** The query's words, lower case, without the ones nearly every message holds (unless it holds nothing else). */
+export const queryWords = (query: string) => {
+  const all = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
+  // `что*` OR `какие*` reads most of a large store and runs out of time before the words that matter count.
+  const content = all.filter((word) => !STOP_WORDS.has(normalize(word)))
+  return content.length ? content : all
+}
+
+/** The query without one of its words, matched whole in any case. */
+export const without = (query: string, word: string) =>
+  query
+    .replace(new RegExp(`(?<![\\p{L}\\p{N}])${word}(?![\\p{L}\\p{N}])`, "giu"), " ")
+    .replace(/\s+/gu, " ")
+    .trim()

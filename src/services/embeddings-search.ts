@@ -5,8 +5,6 @@ import { meaningFloor } from "../embeddings/models.js"
 import { type FusedFacts, fuseRanked } from "../search/fusion.js"
 import { isQueryLimit, QUERY_LIMITS, searchError } from "../search/lucene/types.js"
 import { respelled } from "../search/respell.js"
-import { STOP_WORDS } from "../search/task-similarity.js"
-import { normalize } from "../store/normalize.js"
 import { type AccountKey, type ConversationHit, type ConversationSummary, threadConversation } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { ChatReadiness, EmbeddingsService, FoundConversation, SearchReadiness } from "./embeddings.js"
@@ -21,7 +19,7 @@ import {
 } from "./embeddings-maintenance.js"
 import { storedChatId } from "./message-resolution.js"
 import { type Prepared, prepareLucene } from "./messages-search.js"
-import { namedChat } from "./named-chat.js"
+import { namedChat, queryWords, without } from "./named-chat.js"
 import { MAIL } from "./search-kind.js"
 import { refreshSearch } from "./search-refresh.js"
 
@@ -344,15 +342,19 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     search: async (query, options) => {
       const found = await search(query, options)
       if (options.chat !== undefined || options.filter !== undefined || found.accounts?.length !== 1) return found
-      const named = await namedChat(deps, await deps.store(), found.accounts, queryWords(query)).catch(
-        (error: unknown) => {
-          if (isQueryLimit(error)) return undefined
-          throw error
-        },
-      )
+      const named = await namedChat(
+        await deps.store(),
+        await deps.account(),
+        deps.messenger,
+        found.accounts,
+        queryWords(query),
+      ).catch((error: unknown) => {
+        if (isQueryLimit(error)) return undefined
+        throw error
+      })
       if (!named) return found
       // Inside the chat the name is in every other message, so it would only add noise there.
-      const rest = query.replace(new RegExp(`(?<![\\p{L}\\p{N}])${named.word}(?![\\p{L}\\p{N}])`, "giu"), " ").trim()
+      const rest = without(query, named.word)
       const { syncFirst: _, refresh: __, ...plain } = options
       const inside = await search(rest || query, { ...plain, chat: named.chatId })
       const shown = new Set(inside.hits.map(({ summary }) => summary.id))
@@ -412,14 +414,6 @@ const shared = (hits: ConversationHit[], limit: number) => {
     const level = own[Math.min(PER_CHAT, own.length) - 1]?.score ?? 0
     return own.slice(0, Math.max(limit, PER_CHAT)).map((hit) => ({ hit, lead: hit.score - level }))
   })
-}
-
-/** The query's words, lower case, without the ones nearly every message holds (unless it holds nothing else). */
-const queryWords = (query: string) => {
-  const all = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
-  // `что*` OR `какие*` reads most of a large store and runs out of time before the words that matter count.
-  const content = all.filter((word) => !STOP_WORDS.has(normalize(word)))
-  return content.length ? content : all
 }
 
 /** Reciprocal rank fusion of the two lists: each conversation scores 1 / (k + rank) in every list it is in. */

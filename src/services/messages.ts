@@ -134,6 +134,10 @@ export type FoundMessage = StoredHit & {
 export interface SearchFound extends Page<FoundMessage> {
   /** Where the next page starts, as `offset`; absent on the last page. */
   nextOffset?: number
+  /** The private chat a word of the query names, whose hits come first. */
+  named?: { word: string; chatId: Id; title: string | null }
+  /** Words no message holds, each with the words searched beside it: its Latin spelling and near spellings. */
+  respelled?: Record<string, string[]>
   /** How many messages match, every page together, as Elasticsearch's `hits.total`; set by the archive search. */
   total?: SearchTotal
   refreshed?: SearchRefreshed

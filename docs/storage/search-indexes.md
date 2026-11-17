@@ -307,6 +307,11 @@ which word named which chat. A word names a private chat when that chat holds mo
 as any other private chat and at least three, and writes it with a capital letter at least 8 times in 10. An ordinary
 word is spread over many chats and written in lower case, so it names none.
 
+`search messages` gives the same two kinds of help to a query of plain words (no fields other than `chat:`, no
+quotes, groups or operators): a word no message holds is searched beside its Latin spelling or nearest known spellings
+(`meta.respelled`), and without `chat:` a word that names a private chat has that chat's hits first, searched without
+the name (`meta.named_chat`). Any other query is searched exactly as written.
+
 Each result says how it was found:
 
 ```json

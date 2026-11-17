@@ -100,9 +100,9 @@ describe("stemmed strict search", () => {
   })
 
   it("**finds every word a word of 4 letters or more begins**, which Snowball stems apart", async () => {
-    const { store } = await open(["звонил Ростислав", "передай Ростиславу", "с Ростиславом", "рост вырос", "тот рост"])
-    expect((await ids(store, "Ростислав")).sort()).toEqual([1, 2, 3])
-    expect((await ids(store, "рост")).sort()).toEqual([1, 2, 3, 4, 5])
+    const { store } = await open(["купил журнал", "с журналом", "журналы лежат", "рост вырос", "тот рост", "ростовщик"])
+    expect((await ids(store, "журнал")).sort()).toEqual([1, 2, 3])
+    expect((await ids(store, "рост")).sort()).toEqual([4, 5, 6])
     expect((await ids(store, "тот")).sort()).toEqual([5])
   })
 
@@ -205,5 +205,36 @@ describe("stemmed strict search", () => {
     await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "english" })
     const refused = await failure(searchLucene(store, account, { text: "квартира", limit: 10 }))
     expect(refused.details).toMatchObject({ reason: "index.not-ready", cause: "stemmer_changed" })
+  })
+})
+
+describe("help for plain words", () => {
+  it("**searches first the private chat a name points to**, and respells a word no message holds", async () => {
+    const { store } = await open(["the invoice is paid", "invoice paid", "an invoice again", "noxvel launch"])
+    await store.chats.saveChats(account, [
+      { id: "8", title: "Robert Stone", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+      { id: "9", title: "Anna", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    const dialog = (chatId: string, texts: string[]) =>
+      store.messages.saveMessages(
+        account,
+        chatId,
+        texts.map((text, at) => ({ ...message(at + 1, text), chatId })),
+        { via: "history" },
+      )
+    await dialog("8", ["Bobby, hi", "Bobby, how are you", "Bobby, any news", "my invoice for the website"])
+    await dialog("9", ["the invoice came", "bobby pin"])
+
+    const named = await search(store, "invoice Bobby")
+    expect(named.named).toEqual({ word: "bobby", chatId: "8", title: "Robert Stone" })
+    expect(named.items[0]).toMatchObject({ chatId: "8", id: "4" })
+    expect((await search(store, "invoice")).named).toBeUndefined()
+
+    const misspelt = await search(store, "ноксвел")
+    expect(misspelt.respelled).toEqual({ ноксвел: ["noxvel"] })
+    expect(misspelt.items.map(({ id }) => id)).toEqual(["4"])
+    const nonsense = await search(store, "qzxvwpl")
+    expect(nonsense.respelled).toBeUndefined()
+    expect(nonsense.items).toEqual([])
   })
 })
