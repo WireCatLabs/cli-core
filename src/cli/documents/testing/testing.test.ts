@@ -315,7 +315,7 @@ describe("documents source contract over the fake provider", () => {
   for (const c of documentSourceContract(() => {
     const source = fakeDocumentSource()
     for (const id of ["c1", "c2", "c3"]) source.put(fakeFile(id, ["nested"]), `text of ${id}`)
-    void source.changes("cursor-0")
+    void source.changes?.("cursor-0")
     return {
       source,
       root: "root",
@@ -332,6 +332,33 @@ describe("documents source contract over the fake provider", () => {
           return "b"
         },
         skewed: () => source,
+        sameToken: () => source,
+        sync: memorySync(source),
+      },
+    }
+  }))
+    it(c.name, c.run)
+})
+
+describe("documents source contract over a provider without a change feed", () => {
+  for (const c of documentSourceContract(() => {
+    const source = fakeDocumentSource("alpha", { feed: false })
+    for (const id of ["c1", "c2", "c3"]) source.put(fakeFile(id, ["nested"]), `text of ${id}`)
+    return {
+      source,
+      root: "root",
+      isFolder,
+      missing: "gone",
+      change: async () => source.put({ ...fakeFile("a", ["nested"]), version: "2" }, "edited budget"),
+      remove: async () => {
+        source.remove("c1")
+        return "c1"
+      },
+      faults: {
+        deny: (status) => {
+          source.deny("b", status)
+          return "b"
+        },
         sameToken: () => source,
         sync: memorySync(source),
       },

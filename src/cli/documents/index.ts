@@ -78,3 +78,12 @@ export const addDocumentCommands = <S>(program: Command, options: DocumentComman
   if (options.mirrors) addDocumentMirrorCommands(program, { ...shared, ...options.mirrors })
   return documents
 }
+export {
+  claimDocumentAccount,
+  type DocumentLibraryOptions,
+  type DocumentLibraryTools,
+  type DocumentSourceRun,
+  type DocumentWarning,
+  documentLibraryCommands,
+  documentProfile,
+} from "./library.js"

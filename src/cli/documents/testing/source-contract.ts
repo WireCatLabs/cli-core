@@ -1,14 +1,20 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
 import { ANSWER_RESERVE_MS, type Deadline, type RunBudget, runBudget } from "../../../background/budget.js"
-import type { DocumentSource, SourceFile, SyncResult } from "../../../documents.js"
+import {
+  type DocumentSource,
+  type FeedlessDocumentSource,
+  feedOf,
+  type SourceFile,
+  type SyncResult,
+} from "../../../documents.js"
 import type { ContractCase } from "../../../meetings/index.js"
 import { DEFAULT_AGENT_COOPERATIVE_MS } from "../../execution.js"
 
 /** What one sync of a fault case may be given: the CLI passes each on to `syncDocuments`. */
 export interface DocumentFaultRun<M extends SourceFile = SourceFile> {
   /** Wraps the source the CLI builds for this run: the case counts its calls, slows them or cuts them off. */
-  wrap(source: DocumentSource<M>): DocumentSource<M>
+  wrap(source: FeedlessDocumentSource<M>): FeedlessDocumentSource<M>
   budget?: RunBudget
   deadline?: Deadline
   signal?: AbortSignal
@@ -23,9 +29,9 @@ export interface DocumentSourceFaults<M extends SourceFile = SourceFile> {
    */
   deny?(status: 403 | 404): string | Promise<string>
   /** A source over the same provider whose own clock runs `ms` ahead of the provider's, behind when negative. */
-  skewed?(ms: number): DocumentSource<M> | Promise<DocumentSource<M>>
+  skewed?(ms: number): FeedlessDocumentSource<M> | Promise<FeedlessDocumentSource<M>>
   /** A source for a second profile signed in with the same token. */
-  sameToken?(): DocumentSource<M> | Promise<DocumentSource<M>>
+  sameToken?(): FeedlessDocumentSource<M> | Promise<FeedlessDocumentSource<M>>
   /**
    * The CLI's own sync of the root over this fixture's provider, its state and index kept between calls, and the ids
    * it holds after the call, all calls together. Given, the cases also check a sync: a fault skipped, an interrupted run resumed, the
@@ -36,15 +42,20 @@ export interface DocumentSourceFaults<M extends SourceFile = SourceFile> {
 
 /** One adapter over recorded or faked responses, fresh for each case. */
 export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
-  source: DocumentSource<M>
+  source: FeedlessDocumentSource<M>
   /** A folder the account can read, with at least one file somewhere below it. */
   root: string
   /** The provider's folder test, as the CLI passes it to `syncDocuments`. */
   isFolder(file: M): boolean
   /** A folder that is also a document (a page with sub-pages), as the CLI passes it to `syncDocuments`. */
   isDocument?(file: M): boolean
-  /** Makes a change on the provider's side (a new or edited file) for the change feed to list; absent skips that check. */
+  /**
+   * Makes a change on the provider's side (a new or edited file) for the change feed to list, or, for a source without
+   * a feed, for the next sync to find; absent skips that check.
+   */
   change?(): Promise<void>
+  /** Takes one document out on the provider's side and names it; a source without a feed must drop it on the next sync. */
+  remove?(): Promise<string>
   /**
    * Adds a file inside a folder two levels below the root on the provider's side, and names both. A round of changes
    * lists only the direct children of a folder the feed names, so the feed must name the new file or its own folder;
@@ -59,17 +70,21 @@ export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
 
 const MAX_ENTRIES = 500
 
+// Each listing is given the folder as listed, as the sync gives it: a source that addresses by path reads it there.
 const walk = async <M extends SourceFile>({ source, root, isFolder }: DocumentSourceFixture<M>) => {
   const seen = new Map<string, M>()
-  const stack = [root]
+  const stack = [await source.metadata(root)]
   while (stack.length) {
-    const parent = stack.pop() as string
-    for (const child of await source.children(parent)) {
-      assert.ok(child.parents.includes(parent), `${child.id} is a child of ${parent} and names it among its parents`)
+    const parent = stack.pop() as M
+    for (const child of await source.children(parent.id, parent)) {
+      assert.ok(
+        child.parents.includes(parent.id),
+        `${child.id} is a child of ${parent.id} and names it among its parents`,
+      )
       if (seen.has(child.id)) continue
       seen.set(child.id, child)
       assert.ok(seen.size <= MAX_ENTRIES, `more than ${MAX_ENTRIES} entries under the fixture's root`)
-      if (isFolder(child)) stack.push(child.id)
+      if (isFolder(child)) stack.push(child)
     }
   }
   return [...seen.values()]
@@ -90,7 +105,10 @@ const MOST_SYNCS = 50
 const READS = new Set(["metadata", "children", "childrenPage", "content", "bytes", "startToken", "changes"])
 
 /** The source with `before` run ahead of each provider read: the case counts, slows or cuts off the calls. */
-const watched = <M extends SourceFile>(source: DocumentSource<M>, before: () => void): DocumentSource<M> =>
+const watched = <M extends SourceFile>(
+  source: FeedlessDocumentSource<M>,
+  before: () => void,
+): FeedlessDocumentSource<M> =>
   new Proxy(source, {
     get(target, name) {
       const value = Reflect.get(target, name)
@@ -163,7 +181,11 @@ export const documentSourceContract = <M extends SourceFile>(
           assert.equal(typeof entry.url, "string", `${entry.id} has a URL`)
           assert.equal(typeof entry.canDownload, "boolean", `${entry.id} says whether it can be downloaded`)
           assert.ok(isTime(entry.modifiedAt) && isTime(entry.createdAt), `${entry.id}'s times parse`)
-          assert.equal((await fixture.source.metadata(entry.id)).id, entry.id, `metadata(${entry.id}) is the same file`)
+          assert.equal(
+            (await fixture.source.metadata(entry.id, entry)).id,
+            entry.id,
+            `metadata(${entry.id}) is the same file`,
+          )
         }
       },
     },
@@ -174,14 +196,14 @@ export const documentSourceContract = <M extends SourceFile>(
         const files = (await walk(fixture)).filter((entry) => isImported(fixture, entry) && entry.canDownload)
         assert.ok(files.length > 0, "the root has a file that can be downloaded")
         for (const file of files.slice(0, 5)) {
-          const content = await fixture.source.content(file.id)
+          const content = await fixture.source.content(file.id, undefined, file)
           assert.equal(content.metadata.id, file.id)
           assert.equal(typeof content.text, "string")
           assert.equal(typeof content.markdown, "string")
           assert.ok(Array.isArray(content.tabs), "tabs is a list, empty for a document without tabs")
           for (const tab of content.tabs)
             assert.ok(typeof tab.id === "string" && typeof tab.title === "string" && typeof tab.text === "string")
-          const bytes = await fixture.source.bytes(file.id)
+          const bytes = await fixture.source.bytes(file.id, file)
           assert.ok(bytes instanceof Uint8Array, `bytes(${file.id}) is a Uint8Array`)
         }
       },
@@ -191,10 +213,15 @@ export const documentSourceContract = <M extends SourceFile>(
       async run() {
         const fixture = await make()
         const { source } = fixture
-        const token = await source.startToken()
+        const feed = feedOf(source)
+        if (!feed) {
+          assert.ok(!("startToken" in source), "a source has both startToken() and changes(), or neither")
+          return
+        }
+        const token = await feed.startToken()
         assert.ok(typeof token === "string" && token, "startToken() gives a cursor")
         await fixture.change?.()
-        const page = await source.changes(token)
+        const page = await feed.changes(token)
         assert.ok(Array.isArray(page.items), "a change page has items")
         if (fixture.change) assert.ok(page.items.length > 0, "the change made after startToken() is in the feed")
         assert.ok(typeof page.cursor === "string" && page.cursor, "a change page gives the next cursor")
@@ -209,10 +236,11 @@ export const documentSourceContract = <M extends SourceFile>(
     name: "changes: a file added deep in the tree is named in the feed, itself or by its own folder",
     async run() {
       const { source, addNested } = await make()
-      if (!addNested) return
-      const token = await source.startToken()
+      const feed = feedOf(source)
+      if (!addNested || !feed) return
+      const token = await feed.startToken()
       const { file, folder } = await addNested()
-      const named = new Set((await source.changes(token)).items.map((item) => item.id))
+      const named = new Set((await feed.changes(token)).items.map((item) => item.id))
       assert.ok(named.has(file) || named.has(folder), `the feed names ${file} or its folder ${folder}`)
     },
   })
@@ -222,25 +250,44 @@ export const documentSourceContract = <M extends SourceFile>(
       const fixture = await make()
       const { source } = fixture
       if (!source.childrenPage) return
-      const stack = [fixture.root]
+      const stack = [await source.metadata(fixture.root)]
       while (stack.length) {
-        const parent = stack.pop() as string
+        const parent = stack.pop() as M
         const paged: string[] = []
         let cursor: string | undefined
         for (let pages = 1; ; pages++) {
-          assert.ok(pages <= MAX_ENTRIES, `childrenPage(${parent}) ends`)
-          const page = await source.childrenPage(parent, cursor)
+          assert.ok(pages <= MAX_ENTRIES, `childrenPage(${parent.id}) ends`)
+          const page = await source.childrenPage(parent.id, cursor, parent)
           assert.ok(Array.isArray(page.files), "a page has files")
           paged.push(...page.files.map((file) => file.id))
-          for (const file of page.files) if (fixture.isFolder(file)) stack.push(file.id)
+          for (const file of page.files) if (fixture.isFolder(file)) stack.push(file)
           if (page.cursor === undefined) break
           assert.ok(typeof page.cursor === "string" && page.cursor !== cursor, "a page gives a new cursor or none")
           cursor = page.cursor
         }
-        assert.equal(new Set(paged).size, paged.length, `childrenPage(${parent}) lists each entry once`)
-        const listed = (await source.children(parent)).map((file) => file.id)
-        assert.deepEqual([...paged].sort(), [...listed].sort(), `childrenPage(${parent}) lists what children() does`)
+        assert.equal(new Set(paged).size, paged.length, `childrenPage(${parent.id}) lists each entry once`)
+        const listed = (await source.children(parent.id, parent)).map((file) => file.id)
+        assert.deepEqual([...paged].sort(), [...listed].sort(), `childrenPage(${parent.id}) lists what children() does`)
       }
+    },
+  })
+  cases.push({
+    name: "without a change feed: the next sync finds a new or edited file and drops a removed one",
+    async run() {
+      const fixture = await make()
+      const sync = fixture.faults?.sync
+      if (feedOf(fixture.source) || !sync || (!fixture.change && !fixture.remove)) return
+      const before = await finish(sync)
+      const idle = await finish(sync)
+      assert.equal(idle.result.saved, 0, "a sync with nothing changed on the provider saves nothing again")
+      const removed = await fixture.remove?.()
+      if (removed !== undefined)
+        assert.ok(before.saved.includes(removed), `the first sync holds ${removed} before it is removed`)
+      await fixture.change?.()
+      const after = await finish(sync)
+      if (removed !== undefined) assert.ok(!after.saved.includes(removed), `the next sync drops the removed ${removed}`)
+      if (fixture.change)
+        assert.ok(after.result.saved > 0, "the next sync saves the new or edited file, though no feed named it")
     },
   })
   cases.push({
@@ -263,10 +310,11 @@ const faultCases = <M extends SourceFile>(
       const fixture = await make()
       const deny = fixture.faults?.deny
       if (!deny) return
+      const listed = new Map((await walk(fixture)).map((entry) => [entry.id, entry]))
       const id = await deny(status)
       const code = status === 403 ? "permission_error" : "not_found"
       await assert.rejects(
-        fixture.source.content(id),
+        fixture.source.content(id, undefined, listed.get(id)),
         (error) => isCliError(error) && error.code === code,
         `content(${id}) after a ${status} is ${code}`,
       )
@@ -287,13 +335,14 @@ const faultCases = <M extends SourceFile>(
     name: "faults: a clock off by ten minutes either way loses no change",
     async run() {
       const first = await make()
-      if (!first.faults?.skewed || !first.change) return
+      if (!first.faults?.skewed || !first.change || !feedOf(first.source)) return
       for (const ms of [SKEW_MS, -SKEW_MS]) {
         const fixture = ms === SKEW_MS ? first : await make()
-        const source = (await fixture.faults?.skewed?.(ms)) as DocumentSource<M>
-        const token = await source.startToken()
+        const source = (await fixture.faults?.skewed?.(ms)) as FeedlessDocumentSource<M>
+        const { startToken, changes } = source as DocumentSource<M>
+        const token = await startToken.call(source)
         await fixture.change?.()
-        const page = await source.changes(token)
+        const page = await changes.call(source, token)
         assert.ok(page.items.length > 0, `a change is in the feed with this computer's clock ${ms / 60_000} min off`)
       }
     },
@@ -305,7 +354,7 @@ const faultCases = <M extends SourceFile>(
       const other = await fixture.faults?.sameToken?.()
       if (!other) return
       assert.equal(await other.identity(), await fixture.source.identity(), "both profiles name one account")
-      const ids = async (source: DocumentSource<M>) =>
+      const ids = async (source: FeedlessDocumentSource<M>) =>
         (await walk({ ...fixture, source })).map((entry) => entry.id).sort()
       assert.deepEqual(await ids(other), await ids(fixture.source), "both profiles list the same tree")
     },

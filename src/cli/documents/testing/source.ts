@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { DocumentSource, SourceChange, SourceContent, SourceFile } from "../../../documents.js"
+import type { FeedlessDocumentSource, SourceChange, SourceContent, SourceFile } from "../../../documents.js"
 
 /** The folder type of the fake source: no provider's own. */
 export const FAKE_FOLDER = "inode/directory"
@@ -16,7 +16,10 @@ export const fakeFile = (id: string, parents: string[] = ["root"], mime = "text/
   modifiedAt: "2026-10-16T00:00:00.000Z",
 })
 
-export interface FakeDocumentSource extends DocumentSource {
+export interface FakeDocumentSource extends FeedlessDocumentSource {
+  /** Absent with `feed: false`. */
+  startToken?(): Promise<string>
+  changes?(token: string): Promise<{ items: SourceChange[]; cursor: string }>
   files: Map<string, SourceFile>
   /** Puts a file or folder in, or changes it, and lists it in the next change feed. */
   put(file: SourceFile, text?: string): void
@@ -28,9 +31,13 @@ export interface FakeDocumentSource extends DocumentSource {
 
 /**
  * A provider in memory: a root folder, a nested folder and two text files, with a change feed and a cursor. With
- * `pageSize` it also lists a folder's children a page at a time through `childrenPage`.
+ * `pageSize` it also lists a folder's children a page at a time through `childrenPage`; with `feed: false` it has no
+ * change feed, as Yandex Disk.
  */
-export const fakeDocumentSource = (account = "alpha", options: { pageSize?: number } = {}): FakeDocumentSource => {
+export const fakeDocumentSource = (
+  account = "alpha",
+  options: { pageSize?: number; feed?: boolean } = {},
+): FakeDocumentSource => {
   const files = new Map<string, SourceFile>()
   const texts = new Map<string, string>()
   let feed: SourceChange[] = []
@@ -76,14 +83,18 @@ export const fakeDocumentSource = (account = "alpha", options: { pageSize?: numb
           },
         }
       : {}),
-    startToken: async () => `cursor-${cursor}`,
-    changes: async (token) => {
-      if (!/^cursor-\d+$/.test(token)) throw new CliError("validation_error", "unknown synthetic cursor")
-      const items = feed
-      feed = []
-      cursor += 1
-      return { items, cursor: `cursor-${cursor}` }
-    },
+    ...(options.feed === false
+      ? {}
+      : {
+          startToken: async () => `cursor-${cursor}`,
+          changes: async (token: string) => {
+            if (!/^cursor-\d+$/.test(token)) throw new CliError("validation_error", "unknown synthetic cursor")
+            const items = feed
+            feed = []
+            cursor += 1
+            return { items, cursor: `cursor-${cursor}` }
+          },
+        }),
     content: async (id, maxChars): Promise<SourceContent> => {
       const file = await metadata(id)
       if (file.mime === FAKE_FOLDER) throw new CliError("validation_error", "a folder has no content")

@@ -207,6 +207,15 @@ const OTHERS: Entry[] = [
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["document.not-found", "not_found", "no listed document has that reference"],
+  ["state.unreadable", "configuration_error", "a sync state file cannot be read; move it away and sync again"],
+  ["profile.busy", "provider_unavailable", "another sync or write holds this profile's local copy"],
+  ["profile.account-taken", "conflict", "another profile here already uses this provider account"],
+  ["profile.other-account", "conflict", "this profile's copy was synced from another provider account"],
+  ["profile.not-synced", "not_found", "the profile has no local copy yet; sync it first"],
+  ["provider.failed", "provider_error", "a read from the provider failed"],
+  ["identity.none", "not_found", "the provider shows no accounts on a document"],
+  validation("folder.not-a-folder", "what was named is not a folder the account can read"),
+  ["folder.not-chosen", "not_found", "the folder is not among the chosen folders"],
   ["meeting.not-found", "not_found", "no meeting row has that event or meeting reference"],
   ["listing.too-large", "provider_error", "the listing is over its bound; the checkpoint was kept"],
   ["listing.source-not-found", "not_found", "a source: term names no account holding what is listed"],
@@ -763,6 +772,8 @@ export const REASONS: ErrorReason[] = defineReasons([
  * that can hold a provider's or SQLite's raw text.
  */
 export const DETAILS = [
+  "holders",
+  "profile",
   "contracts",
   "calendars",
   "allowed",

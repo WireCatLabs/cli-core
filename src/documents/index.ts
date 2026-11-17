@@ -6,6 +6,7 @@ export {
   mergeBlocks,
 } from "../services/documents/block-diff.js"
 export { type Complete, extractMemories } from "../services/documents/extraction.js"
+export { fileText, readableFile } from "../services/documents/file-text.js"
 export { documentIngestion, type IngestionOptions } from "../services/documents/ingestion.js"
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
 export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
@@ -40,6 +41,7 @@ export { catalogFiles } from "./catalog.js"
 export { markdownBlocks, type PlacedBlock, placedMarkdownBlocks } from "./markdown-blocks.js"
 export type {
   DocumentSource,
+  FeedlessDocumentSource,
   IndexedSource,
   PictureWriter,
   SourceChange,
@@ -53,6 +55,7 @@ export type {
   SourceWork,
   TabText,
 } from "./model.js"
+export { feedOf } from "./model.js"
 export type {
   ConflictPart,
   DocumentTarget,

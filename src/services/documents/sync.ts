@@ -165,7 +165,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       }
       const stop = ask()
       if (stop) return stop
-      const bytes = await source.bytes(file.id)
+      const bytes = await source.bytes(file.id, file)
       if (bytes.length > MAX_PICTURE_BYTES) {
         entry.picture = "too-large"
         result.pictures_too_large = (result.pictures_too_large ?? 0) + 1
@@ -210,7 +210,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
             result.stopped = stop
             break
           }
-          const content = await source.content(job.id, limit)
+          const content = await source.content(job.id, limit, job.file)
           const listed =
             query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))
           if (!listed && !inScope(content.metadata, profile.roots, pending.folders, new Set(), query)) {

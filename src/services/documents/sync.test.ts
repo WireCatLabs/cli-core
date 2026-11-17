@@ -4,7 +4,14 @@ import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { catalogFiles } from "../../documents/catalog.js"
-import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
+import type {
+  DocumentSource,
+  FeedlessDocumentSource,
+  SourceChange,
+  SourceFile,
+  SourceState,
+  SourceWalk,
+} from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
 import { documentSource } from "../document-source.js"
@@ -152,6 +159,70 @@ describe("provider-neutral document sync", () => {
       expect(f.state().lastSync).toBe("2026-10-16T00:00:00.000Z")
     },
   )
+  it("without a change feed walks every pass, saves only what changed and removes what a finished pass lost", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const source: FeedlessDocumentSource = rest
+    const options = { ...f.options, source }
+    expect(await syncDocuments(options)).toMatchObject({ saved: 2, removed: 0, pending: 0 })
+    expect(f.state().cursor).toBe("walked")
+    vi.mocked(f.source.content).mockClear()
+    expect(await syncDocuments(options)).toMatchObject({ saved: 0, removed: 0, pending: 0 })
+    expect(f.source.content).not.toHaveBeenCalled()
+    f.files.set("a", { ...must(f.files.get("a")), version: "2" })
+    f.files.delete("b")
+    f.files.set("c", file("c", ["nested"]))
+    const cut = await syncDocuments({ ...options, maxEntries: 1 })
+    expect(cut).toMatchObject({ complete: false, removed: 0 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b"])
+    let last = cut
+    for (let call = 0; call < 10 && !(last.complete && last.pending === 0); call++)
+      last = await syncDocuments({ ...options, maxEntries: 1 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "c"])
+    expect(f.source.content).toHaveBeenCalledTimes(2)
+    expect(f.source.content).toHaveBeenCalledWith("a", 200000, expect.objectContaining({ id: "a", version: "2" }))
+    expect(f.source.children).toHaveBeenCalledWith("nested", expect.objectContaining({ id: "nested" }))
+  })
+  it("without a change feed reads a skipped file again only once it changes, and a moved path saves again", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const options = { ...f.options, source: rest as FeedlessDocumentSource, retryable: () => false }
+    f.files.set("scan", file("scan", ["nested"]))
+    f.files.set("denied", file("denied", ["nested"]))
+    const content = vi.mocked(f.source.content)
+    const real = content.getMockImplementation()
+    content.mockImplementation(async (id, max, known) => {
+      if (id === "scan") throw new CliError("validation_error", "no text layer")
+      if (id === "denied") throw new CliError("not_found", "gone for this account")
+      return (real as NonNullable<typeof real>)(id, max, known)
+    })
+    await syncDocuments(options)
+    content.mockClear()
+    expect(await syncDocuments(options)).toMatchObject({ saved: 0, pending: 0 })
+    expect(content).not.toHaveBeenCalled()
+    f.files.set("scan", { ...must(f.files.get("scan")), version: "2" })
+    f.files.set("b", { ...must(f.files.get("b")), providerMetadata: { path: "/renamed/b" } })
+    await syncDocuments(options)
+    expect(content.mock.calls.map(([id]) => id).sort()).toEqual(["b", "scan"])
+  })
+  it("without a change feed skips a selected folder that is gone and drops its documents, instead of failing", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const options = { ...f.options, source: rest as FeedlessDocumentSource, roots: ["root", "nested"] }
+    expect(await syncDocuments(options)).toMatchObject({ saved: 2, pending: 0 })
+    f.files.delete("nested")
+    f.files.delete("a")
+    expect(await syncDocuments(options)).toMatchObject({ removed: 1, pending: 0, complete: true })
+    expect(Object.keys(f.state().documents)).toEqual(["b"])
+    expect(f.state().skipped).toEqual([{ id: "nested", reason: "selected folder is unavailable" }])
+  })
+  it("with a change feed, a rescan whose root answers 404 fails and keeps what the profile holds", async () => {
+    const f = await setup()
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 2 })
+    f.files.delete("root")
+    await expect(syncDocuments({ ...f.options, rescan: true })).rejects.toThrow("gone")
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b"])
+  })
   it("names the synced profile's account, so a hit says the CLI and profile, not a notes folder", async () => {
     const f = await setup()
     const ingest = documentIngestion(f.store, {

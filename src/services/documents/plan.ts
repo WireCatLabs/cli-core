@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
+import {
+  type FeedlessDocumentSource,
+  feedOf,
+  type SourceFile,
+  type SourceState,
+  type SourceWalk,
+  type SourceWork,
+} from "../../documents/model.js"
 import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
 // Without a query or pages the hash stays what it was, so a profile that never set them keeps its checkpoint. Turning
@@ -37,13 +44,16 @@ export interface WalkProgress {
 }
 export type Plan<M extends SourceFile> = { pending: NonNullable<SourceState<M>["pending"]> } | { walk: WalkProgress }
 
+// What a pass of a source without a change feed records as its cursor: the next pass is not a first one, so it saves
+// only what changed.
+export const WALKED = "walked"
 // A round of changes is saved under its own scope: a CLI that validates the walk file keeps only the fields it knows,
 // and these say both what the walk is and which cursor it started from.
 const changesScope = (scope: string, cursor: string) => `${scope}:changes:${cursor}`
 
 export const planDocuments = async <M extends SourceFile>(
   options: SyncOptions<M>,
-  source: DocumentSource<M> | undefined,
+  source: FeedlessDocumentSource<M> | undefined,
   state: SourceState<M>,
   roots: string[],
   limit: number,
@@ -81,17 +91,26 @@ export const planDocuments = async <M extends SourceFile>(
   if (query?.mode === "include" && !query.list)
     throw new CliError("configuration_error", "a query that includes files must list them")
   const initial = !state.cursor || scope !== state.scope
-  const resumed = walks?.read(initial ? scope : changesScope(scope, state.cursor as string))
-  const folders: Record<string, M> = initial ? {} : structuredClone(state.folders)
+  // Without a feed every pass walks the whole tree again; only a first one saves every file.
+  const feed = feedOf(source)
+  const full = initial || !feed
+  const resumed = walks?.read(full ? scope : changesScope(scope, state.cursor as string))
+  const folders: Record<string, M> = full ? {} : structuredClone(state.folders)
   const files = new Map<string, M>(Object.values(state.documents).map((doc) => [doc.metadata.id, doc.metadata]))
   const changed = new Set<string>()
   // What the walk saves: every file of a full walk, or what a round of changes touched, a removed file as trashed.
   const delta = new Map<string, M>()
   for (const skipped of state.skipped) if (skipped.file) files.set(skipped.id, skipped.file)
-  if (initial) files.clear()
+  if (full) files.clear()
+  // A pass without a feed lists every file again; only one new or changed since the last pass is work, so a file kept
+  // by name only is not read again each sync. A changed path (a folder renamed above it) counts as a change.
+  const prior = (id: string) => state.documents[id]?.metadata ?? state.skipped.find((item) => item.id === id)?.file
+  const moved = (before: M, file: M) =>
+    JSON.stringify(before.providerMetadata ?? null) !== JSON.stringify(file.providerMetadata ?? null)
   const keep = (file: M) => {
     files.set(file.id, file)
-    changed.add(file.id)
+    const before = feed || initial ? undefined : prior(file.id)
+    if (!before || changedSince(before, file) || moved(before, file)) changed.add(file.id)
     delta.set(file.id, file)
   }
   const drop = (id: string) => {
@@ -104,7 +123,7 @@ export const planDocuments = async <M extends SourceFile>(
   }
   // A folder the last finished pass walked keeps its subtree: a round lists only its direct children, and the
   // source's changes name what changed below them. A new, restored or moved-in folder is walked in full.
-  const walked = (id: string) => !initial && state.folders[id] !== undefined && !state.folders[id]?.trashed
+  const walked = (id: string) => !full && state.folders[id] !== undefined && !state.folders[id]?.trashed
   let walk = resumed
   let cursor = state.cursor ?? ""
   // Each read takes a request from the budget, the start token and a root's own metadata as much as a listing: a run
@@ -113,10 +132,10 @@ export const planDocuments = async <M extends SourceFile>(
     const taken = options.signal?.aborted ? "cancelled" : budget?.take()
     return taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
   }
-  if (!walk && initial) {
+  if (!walk && full) {
     const before = charge()
     if (before) return { walk: { folders_left: roots.length, entries: 0, listed: 0, stopped: before } }
-    const start = await source.startToken()
+    const start = feed ? await feed.startToken() : WALKED
     walk = {
       scope,
       cursor: start,
@@ -131,7 +150,7 @@ export const planDocuments = async <M extends SourceFile>(
     // in every call.
     const before = charge()
     if (before) return { walk: { folders_left: 0, entries: 0, listed: 0, stopped: before } }
-    const page = await source.changes(cursor)
+    const page = await (feed as NonNullable<typeof feed>).changes(cursor)
     const latest = new Map(page.items.map((change) => [change.id, change]))
     const entering: M[] = []
     // Apply all ancestry changes before classifying document scope.
@@ -151,7 +170,7 @@ export const planDocuments = async <M extends SourceFile>(
     for (const root of roots) {
       const previous = folders[root]
       try {
-        const current = await source.metadata(root)
+        const current = await source.metadata(root, folders[root])
         if (current.id !== root || !isFolder(current))
           throw new CliError("invalid_response", "selected folder metadata is inconsistent")
         folders[root] = current
@@ -178,9 +197,9 @@ export const planDocuments = async <M extends SourceFile>(
       }
     else cursor = page.cursor
   }
-  const vanished = async (id: string) => {
+  const vanished = async (id: string, known: M) => {
     try {
-      return (await source.metadata(id)).trashed
+      return (await source.metadata(id, known)).trashed
     } catch (error) {
       return errorOf(error).code === "not_found"
     }
@@ -223,7 +242,22 @@ export const planDocuments = async <M extends SourceFile>(
         stopped = taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
         if (stopped) break
         if (!step.folder) {
-          const root = await source.metadata(step.id)
+          const known = state.folders[step.id]
+          let root: M
+          try {
+            root = await source.metadata(step.id, known)
+          } catch (error) {
+            // Without a feed, a folder the last pass held and the provider no longer finds is skipped as unavailable,
+            // as a round of changes does, so a moved or deleted root does not fail every sync. A source with a feed
+            // walks in full only on a rescan, where a root it cannot read still fails and keeps what it holds.
+            if (feed || !known || errorOf(error).code !== "not_found") throw error
+            walk.stack.pop()
+            visited.add(step.id)
+            folders[step.id] = { ...known, trashed: true }
+            spent++
+            listed++
+            continue
+          }
           if (!isFolder(root) || root.trashed)
             throw new CliError("validation_error", "configured root is not an accessible folder")
           container(root)
@@ -237,8 +271,8 @@ export const planDocuments = async <M extends SourceFile>(
         let more: string | undefined
         try {
           if (source.childrenPage)
-            ({ files: children, cursor: more } = await source.childrenPage(folder.id, step.listing))
-          else children = await source.children(folder.id)
+            ({ files: children, cursor: more } = await source.childrenPage(folder.id, step.listing, folder))
+          else children = await source.children(folder.id, folder)
         } catch (error) {
           if (errorOf(error).code !== "not_found") throw error
           // A later page's 404 can be a cursor the provider no longer knows: the folder is listed again from its first
@@ -252,7 +286,7 @@ export const planDocuments = async <M extends SourceFile>(
           // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
           // A listing's 404 alone can be passing, so the folder is read again and is gone only when that read is a
           // 404 too or finds it trashed; on any doubt the call fails and the next sync lists it again.
-          if (!(await vanished(folder.id))) throw error
+          if (!(await vanished(folder.id, folder))) throw error
           walk.stack.pop()
           visited.add(folder.id)
           folders[folder.id] = { ...folder, trashed: true }
@@ -331,7 +365,13 @@ export const planDocuments = async <M extends SourceFile>(
       continue
     }
     if (changed.has(id) || retry || known?.notRead) {
-      if (!known || known.notRead || changedSince(known.metadata, file) || initial)
+      if (
+        !known ||
+        known.notRead ||
+        changedSince(known.metadata, file) ||
+        initial ||
+        (!feed && moved(known.metadata, file))
+      )
         jobs.push({ id, kind: "save", file })
     }
   }
