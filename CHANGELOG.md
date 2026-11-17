@@ -5,6 +5,36 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.697.0 — 17.11.2026
+
+### Added
+
+- **The `api` group and `serviceApiCall` send a GraphQL operation** of a manifest that cli-base 0.115.0 generates
+  from a schema. Each call is one POST of the document `graphqlDocument` builds, never sent again on a redirect.
+  The variables are `--body` as one object with each flag over it, read by its schema: digits as written, `true` or
+  `false`, JSON for an input object. A variable the operation does not declare, or a required one left out, is
+  refused before anything is sent. The flags of a GraphQL operation are its body and stay out of the run's files.
+- **`errors[]` is a failure even at HTTP 200.** A CLI's own `failure` names it first; else its `extensions.code`
+  does, repeated only when it is a plain constant, never the service's message. A write is `outcome_unknown` unless
+  the code says nothing ran and no data came back. The answer is `data.<field>`; `--all` pages by `pageInfo`.
+- **`ApiCommandInput.selection`** gives a source a deeper selection than the generated one. `api list` and the run
+  record name a GraphQL operation as `POST` `query/issues`.
+- **A tracker CLI can be described as data: `trackerSourceFromManifest`.** A `TrackerManifest` names, for each kind,
+  the list, changes and ids operations of the generated API and maps our fields to paths in a row, in the CRM
+  manifest's rule language. Over GraphQL each call may send its own selection, and `parseTrackerManifest` refuses a
+  map path the selection leaves out. `wirecat.config` takes `category: "tracker"` with its `source`, and
+  `spec.kind: "graphql"`. See [Trackers](docs/dev/TRACKER.md#a-tracker-described-as-data).
+- **Issue trackers get their own category: `@wirecat/cli-core/tracker`.** A tracker CLI writes one `TrackerSource`
+  and gets the copy in the shared store (store version 70: `tracker_items` and the word index `tracker_item_words`),
+  `syncTracker` (changes by cursor, deletions by a daily id pass, a run budget that resumes where it stopped),
+  `addTrackerCommands` (`sync`, `issues list|show|search|task`, and `projects`, `teams`, `users`, `states`, `labels`
+  lists), and `/tracker/testing` with `trackerSourceContract` and `fakeTrackerSource`. `issues task` makes an issue
+  the owner's task by a link, copying only its key. See [Trackers](docs/dev/TRACKER.md).
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.115.0 or later**, whose manifest has the `graphql` binding.
+
 ## 0.696.0 — 17.11.2026
 
 ### Added
