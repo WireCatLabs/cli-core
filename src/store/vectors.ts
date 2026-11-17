@@ -389,8 +389,10 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
           : [{ chatKey: chatKeyOf(key, chatId), id: chatId }].flatMap(({ chatKey, id }) =>
               chatKey === undefined ? [] : [{ chatKey, id }],
             )
-      return chats.map(({ chatKey, id }) => {
-        const found = vectors.readiness(context, chatKey, model)
+      const since = vectors.dataVersion(context)
+      const counted: Parameters<typeof vectors.saveReadiness>[2] = []
+      const found = chats.map(({ chatKey, id }) => {
+        const found = vectors.readiness(context, chatKey, model, counted)
         return found
           ? { chatId: id, ...found, builtAt: new Date(found.builtAt).toISOString() }
           : {
@@ -401,6 +403,8 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
               vectors: { chunks: 0, embedded: 0, current: 0, stale: 0, missing: 0 },
             }
       })
+      vectors.saveReadiness(context, model, counted, since)
+      return found
     },
 
     unbuiltGroups: async (key) => {

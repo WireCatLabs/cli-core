@@ -1361,5 +1361,25 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER crm_file_words_au AFTER UPDATE OF normalized_text ON crm_files\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM crm_file_words WHERE rowid = old.id;\n  INSERT INTO crm_file_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
       "CREATE TRIGGER crm_file_words_ad AFTER DELETE ON crm_files BEGIN\n  DELETE FROM crm_file_words WHERE rowid = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261117015456_version-69-conversation-readiness",
+    "statements": [
+      "CREATE TABLE `conversation_readiness` (\n\t`chat_id` integer NOT NULL,\n\t`model` text NOT NULL,\n\t`new_count` integer NOT NULL,\n\t`edited_count` integer NOT NULL,\n\t`deleted_count` integer NOT NULL,\n\t`chunks` integer NOT NULL,\n\t`embedded_count` integer NOT NULL,\n\t`current` integer NOT NULL,\n\t`stale` integer NOT NULL,\n\t`counted_at` integer NOT NULL,\n\tCONSTRAINT `conversation_readiness_pk` PRIMARY KEY(`chat_id`, `model`),\n\tCONSTRAINT `fk_conversation_readiness_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`) ON DELETE CASCADE\n);",
+      "CREATE INDEX `conversation_readiness_by_model` ON `conversation_readiness` (`model`);"
+    ]
+  },
+  {
+    "name": "20261117015457_version-69-conversation-readiness-triggers",
+    "statements": [
+      "-- A stored readiness row stays only while nothing it counts has changed; any such write drops it, and the next\n-- search counts that chat again.\nCREATE TRIGGER conversation_readiness_message_ai AFTER INSERT ON messages BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id = NEW.chat_id;\nEND;",
+      "CREATE TRIGGER conversation_readiness_message_au AFTER UPDATE OF chat_id, deleted_at ON messages\nWHEN OLD.chat_id IS NOT NEW.chat_id OR OLD.deleted_at IS NOT NEW.deleted_at BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id IN (OLD.chat_id, NEW.chat_id);\nEND;",
+      "CREATE TRIGGER conversation_readiness_message_ad AFTER DELETE ON messages BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id = OLD.chat_id;\nEND;",
+      "CREATE TRIGGER conversation_readiness_revision_ai AFTER INSERT ON message_revisions BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id = (SELECT chat_id FROM messages WHERE id = NEW.message_id);\nEND;",
+      "CREATE TRIGGER conversation_readiness_state_ai AFTER INSERT ON conversation_state BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id = NEW.chat_id;\nEND;",
+      "CREATE TRIGGER conversation_readiness_state_au AFTER UPDATE ON conversation_state BEGIN\n  DELETE FROM conversation_readiness WHERE chat_id IN (OLD.chat_id, NEW.chat_id);\nEND;",
+      "-- A chat whose every chunk text already has a vector cannot gain from a new one: (model, content_hash) is unique.\nCREATE TRIGGER conversation_readiness_embedding_ai AFTER INSERT ON embeddings BEGIN\n  DELETE FROM conversation_readiness WHERE model = NEW.model AND embedded_count < chunks;\nEND;",
+      "CREATE TRIGGER conversation_readiness_embedding_ad AFTER DELETE ON embeddings BEGIN\n  DELETE FROM conversation_readiness WHERE model = OLD.model AND embedded_count > 0;\nEND;"
+    ]
   }
 ]

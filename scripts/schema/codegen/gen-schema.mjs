@@ -40,6 +40,7 @@ const CASCADE = new Set([
   "conversation_messages.conversation_id",
   "conversation_messages.message_id",
   "conversation_state.chat_id",
+  "conversation_readiness.chat_id",
   "chunk_messages.chunk_id",
   "chunk_messages.first_message_id",
   "chunk_messages.last_message_id",

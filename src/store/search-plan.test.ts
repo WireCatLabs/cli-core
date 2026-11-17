@@ -131,9 +131,9 @@ describe("the readiness a conversation search reports", () => {
       },
     }
 
-    readiness(recording as never, 1, "e5-small")
+    readiness(recording as never, 1, "e5-small", [])
 
-    expect(statements).toHaveLength(3)
+    expect(statements).toHaveLength(4)
     for (const { sql, params } of statements) {
       const plan = planOf(context, sql, params)
       expect(plan, plan.join("\n")).not.toContain("SEARCH k USING INDEX sqlite_autoindex_chunks_1 (chunkable_type=?)")

@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-136 tables, 26 full-text indexes.
+137 tables, 26 full-text indexes.
 
 ## Conventions
 
@@ -2986,6 +2986,25 @@ Always empty: a trigger inserts each changed chunk's id here, every model's inde
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `chunk_id` | integer | not null |  |  |
+
+### `conversation_readiness`
+
+How up to date one built chat's conversations and one model's vectors are, as `search conversations` reports it: counted once and kept until triggers drop the row, when a message of the chat is written, revised or deleted, the chat is built again or a vector of the model is added or removed. Derived: a missing row is counted again.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
+| `model` | text | not null |  | `<provider>:<model>:<dims>`, as in `embeddings` |
+| `new_count` | integer | not null |  | messages not in the current build |
+| `edited_count` | integer | not null |  | messages in it revised since the build |
+| `deleted_count` | integer | not null |  | messages in it deleted since the build |
+| `chunks` | integer | not null |  | distinct chunk texts of the current build |
+| `embedded_count` | integer | not null |  | of those, with a vector of the model |
+| `current` | integer | not null |  | with a vector and no changed message inside |
+| `stale` | integer | not null |  | holding a message edited or deleted since the build |
+| `counted_at` | integer | not null |  |  |
+
+*Keys and indexes:* `PRIMARY KEY (chat_id, model)`, `INDEX (model)`
 
 ## Store
 

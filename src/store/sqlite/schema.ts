@@ -2955,6 +2955,29 @@ export const vectorIndexRedo = sqliteTable("vector_index_redo", {
   chunkId: integer("chunk_id").notNull(),
 })
 
+/** One built chat's readiness for one model, counted once; triggers drop the row when what it counts changes. */
+export const conversationReadiness = sqliteTable(
+  "conversation_readiness",
+  {
+    chatId: integer("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    newCount: integer("new_count").notNull(),
+    editedCount: integer("edited_count").notNull(),
+    deletedCount: integer("deleted_count").notNull(),
+    chunks: integer("chunks").notNull(),
+    embeddedCount: integer("embedded_count").notNull(),
+    current: integer("current").notNull(),
+    stale: integer("stale").notNull(),
+    countedAt: integer("counted_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.chatId, table.model] }),
+    index("conversation_readiness_by_model").on(table.model),
+  ],
+)
+
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */
 export const storeSettings = sqliteTable("store_settings", {
   key: text("key").primaryKey(),
