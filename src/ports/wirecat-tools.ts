@@ -89,4 +89,11 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     package: "@wirecat/notion-cli",
     does: "Notion pages and databases as local text, searchable with your other WireCat data",
   },
+  {
+    command: "ydisk",
+    appName: "yandex-disk-cli",
+    envPrefix: "YDISK",
+    package: "@wirecat/yandex-disk-cli",
+    does: "Yandex Disk folders as local text, searchable with your other WireCat data",
+  },
 ]
