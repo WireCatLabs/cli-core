@@ -24,7 +24,6 @@ export {
 } from "./manifest/manifest.js"
 export { TRACKER_FIELDS } from "./manifest/map.js"
 export {
-  type TrackerCallInput,
   type TrackerManifestSourceOptions,
   trackerSourceFromManifest,
 } from "./manifest/source.js"

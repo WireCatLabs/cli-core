@@ -1,20 +1,18 @@
-import { CliError } from "@wirecat/cli-base"
 import {
   type GraphqlFakeCall,
-  graphqlDocument,
   graphqlFake,
   type ManifestOperation,
   type SchemaNode,
   type Selection,
 } from "@wirecat/cli-base/codegen"
 import { describe, expect, it } from "vitest"
-import type { ServiceApiCall } from "../../cli/service-api-call.js"
+import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { TrackerKind } from "../../domain/tracker.js"
 import { trackerSourceContract } from "../testing/index.js"
 import type { TrackerManifest } from "./manifest.js"
 import { parseTrackerManifest } from "./manifest.js"
-import { type TrackerCallInput, trackerSourceFromManifest } from "./source.js"
+import { trackerSourceFromManifest } from "./source.js"
 
 const URL = "https://api.example-tracker.test/graphql"
 const KEY = "lin_api_fake"
@@ -126,6 +124,8 @@ const listOperation = (field: string, type: string): ManifestOperation => ({
 
 const api: ServiceApiManifest = {
   servers: [{ url: URL }],
+  securitySchemes: { key: { type: "apiKey", in: "header", name: "Authorization" } },
+  security: [{ key: [] }],
   operations: [
     ...Object.values(FIELDS).map(([field, type]) => listOperation(field, type)),
     {
@@ -218,29 +218,6 @@ const MANIFEST = {
 
 type Row = Record<string, unknown>
 
-/**
- * Sends one operation as GraphQL does: the document `graphqlDocument` builds, the variables from the body. The `api`
- * group's GraphQL executor does this once it exists; until then, the test does it here.
- */
-const graphqlCall =
-  (fetch: typeof globalThis.fetch): ServiceApiCall =>
-  async (id, input) => {
-    const operation = api.operations.find((one) => one.id === id)
-    if (operation?.binding.kind !== "graphql") throw new Error(`${id} is not a GraphQL operation`)
-    const { selection, body } = input as TrackerCallInput
-    const response = await fetch(URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: KEY },
-      body: JSON.stringify({
-        query: graphqlDocument(operation.binding, selection),
-        variables: body === undefined ? {} : JSON.parse(body),
-      }),
-    })
-    const answer = (await response.json()) as { data?: Row | null; errors?: { message: string }[] }
-    if (answer.errors?.length) throw new CliError("provider_error", answer.errors.map((one) => one.message).join("; "))
-    return answer.data?.[operation.binding.field]
-  }
-
 const project = (value: unknown, selection: Selection | true): unknown => {
   if (selection === true || value === null || value === undefined) return value ?? null
   if (Array.isArray(value)) return value.map((one) => project(one, selection))
@@ -318,7 +295,7 @@ const seed = (): Record<TrackerKind, Row[]> => {
 }
 
 /** A tracker that pages by two, filters by `updatedAt.gte`, leaves archived rows out unless asked, and stamps changes. */
-const tracker = () => {
+const tracker = (answers: Readonly<Record<string, (call: GraphqlFakeCall) => unknown>> = {}) => {
   const rows = seed()
   let tick = 0
   const clock = () => Date.now() + tick++ * 1000
@@ -357,6 +334,7 @@ const tracker = () => {
     answers: {
       ...Object.fromEntries((Object.keys(FIELDS) as TrackerKind[]).map((kind) => [FIELDS[kind][0], list(kind)])),
       viewer: () => ({ data: { id: "u1" } }),
+      ...answers,
     },
   })
   const find = (kind: TrackerKind, id: string) => {
@@ -364,7 +342,7 @@ const tracker = () => {
     if (!row) throw new Error(`no ${kind} ${id}`)
     return row
   }
-  const call = graphqlCall(fake.fetch as typeof globalThis.fetch)
+  const call = serviceApiCall({ manifest: api, service: "Tracker", fetch: fake.fetch, token: () => KEY })
   const sourceAt = (skew = 0) => trackerSourceFromManifest(MANIFEST, { api, call, now: () => clock() + skew })
   return {
     rows,
@@ -443,6 +421,39 @@ describe("trackerSourceFromManifest over a Linear-shaped GraphQL fake", () => {
     expect(page.items[1]).toMatchObject({ externalId: "i2", assignee: null, labels: [] })
     expect(await source.self?.()).toBe("u1")
     expect(one.fake.refusals).toEqual([])
+  })
+})
+
+describe("an optional kind", () => {
+  const refused = () => ({ errors: [{ message: "Forbidden", extensions: { code: "FORBIDDEN" } }] })
+  const optional = {
+    ...MANIFEST,
+    entities: { ...MANIFEST.entities, comment: { ...MANIFEST.entities.comment, optional: { message: "no comments" } } },
+  } as TrackerManifest
+
+  it("is a gap when the tracker refuses it in errors[], for its changes and its ids, and the others still read", async () => {
+    const one = tracker({ [FIELDS.comment[0]]: refused })
+    const call = serviceApiCall({ manifest: api, service: "Tracker", fetch: one.fake.fetch, token: () => KEY })
+    const source = trackerSourceFromManifest(optional, { api, call })
+    const gaps: unknown[] = []
+    const context = { spend: () => undefined, gap: (gap: unknown) => gaps.push(gap) }
+    expect(await source.changes("comment", null, undefined, context)).toEqual({
+      items: [],
+      hasMore: false,
+      cursor: null,
+    })
+    expect(await source.ids("comment", undefined, context)).toEqual({ items: [], hasMore: false })
+    expect(gaps).toEqual([
+      { kind: "comment", message: "no comments" },
+      { kind: "comment", message: "no comments" },
+    ])
+    const issues = await source.changes("issue", null, undefined, context)
+    expect("items" in issues && issues.items.length).toBe(2)
+  })
+
+  it("is an error when the kind is not optional", async () => {
+    const one = tracker({ [FIELDS.comment[0]]: refused })
+    await expect(one.sourceAt().changes("comment", null)).rejects.toMatchObject({ code: "permission_error" })
   })
 })
 

@@ -26,9 +26,6 @@ export interface TrackerManifestSourceOptions {
   hooks?: TrackerManifestHooks
 }
 
-/** A request with the selection a GraphQL operation sends instead of its default one. */
-export type TrackerCallInput = ApiCommandInput & { selection?: string }
-
 const OVERLAP_MS = 10 * 60_000
 
 const DROP = Symbol("drop")
@@ -47,7 +44,7 @@ const fill = (value: unknown, since: string | undefined): unknown => {
 }
 
 /** The variables travel as the body: each GraphQL argument is a body parameter of the operation. */
-const inputOf = (call: TrackerOperationCall, since?: string): TrackerCallInput => ({
+const inputOf = (call: TrackerOperationCall, since?: string): ApiCommandInput => ({
   path: {},
   query: {},
   headers: {},
@@ -109,7 +106,7 @@ export const trackerSourceFromManifest = (input: unknown, options: TrackerManife
   ) => {
     const pagination = operations.get(call.operation)?.pagination
     const parameter = pagination && cursorParameter(pagination)
-    let request: TrackerCallInput = inputOf(call, since)
+    let request: ApiCommandInput = inputOf(call, since)
     if (token !== undefined && parameter)
       request = { ...withValue(request, parameter, pagination.style === "cursor" ? token : Number(token)) }
     const answer = await send(call.operation, request)
