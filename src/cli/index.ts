@@ -668,6 +668,7 @@ export {
   serviceApiKeys,
   serviceApiPermissions,
 } from "./service-api.js"
+export { type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
 export { manifestBaseUrl, type ServiceApiManifest } from "./service-api-manifest.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {

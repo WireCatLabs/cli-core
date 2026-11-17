@@ -227,6 +227,25 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
 - `crmFilesContract` in `@wirecat/cli-core/crm/testing` checks an adapter's `files`: the listing's shape and ids, a
   download saved 600 with its text found and its token nowhere, refused links, and the day's limit.
 
+## A source from a manifest
+
+A CRM with an OpenAPI spec can be a manifest instead of an adapter: `crmSourceFromManifest(manifest, { api, call,
+hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-11-16-cli-factory/source-manifest.md`).
+
+- `api` is the CLI's generated manifest; each entity names its operations by id. `call` sends one of them: in a CLI,
+  `serviceApiCall` over the same fetch and token as the `api` group; in a test, the same over cli-base `fakeApi`.
+- Paging comes from each operation's `pagination`; an operation without it names its rows with `items`.
+- A path the answer does not have gives no key, never `null`: a read that did not select a field must not erase it.
+- A change read sorted by modified time names `keyset`: the next page starts at the last row's time, so a row that
+  changes mid-round moves nothing under the next page (a service's own page token is an offset into a moving list).
+  Past `cap` rows at one time the round answers `reset`.
+- What a manifest cannot say is a hook: `after` per kind for one record (async, with the metered `call`),
+  `extend(base)` for whole methods (`self`,
+  `activities`, a live `list`). Bitrix24's `mine` scope is that kind of policy, and stays code.
+- Not yet: a cap on the `{select}` list, a batch `enrich` hook, deletions named in the answer, a live `list`.
+  `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
+  `crmSourceContract`, faults included, against a strict fake of HubSpot's API.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on
