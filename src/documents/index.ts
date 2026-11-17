@@ -41,6 +41,7 @@ export { catalogFiles } from "./catalog.js"
 export { markdownBlocks, type PlacedBlock, placedMarkdownBlocks } from "./markdown-blocks.js"
 export type {
   DocumentSource,
+  FeedlessDocumentSource,
   IndexedSource,
   PictureWriter,
   SourceChange,
@@ -54,6 +55,7 @@ export type {
   SourceWork,
   TabText,
 } from "./model.js"
+export { feedOf } from "./model.js"
 export type {
   ConflictPart,
   DocumentTarget,

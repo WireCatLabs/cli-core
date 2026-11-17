@@ -1,14 +1,20 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
 import { ANSWER_RESERVE_MS, type Deadline, type RunBudget, runBudget } from "../../../background/budget.js"
-import type { DocumentSource, SourceFile, SyncResult } from "../../../documents.js"
+import {
+  type DocumentSource,
+  type FeedlessDocumentSource,
+  feedOf,
+  type SourceFile,
+  type SyncResult,
+} from "../../../documents.js"
 import type { ContractCase } from "../../../meetings/index.js"
 import { DEFAULT_AGENT_COOPERATIVE_MS } from "../../execution.js"
 
 /** What one sync of a fault case may be given: the CLI passes each on to `syncDocuments`. */
 export interface DocumentFaultRun<M extends SourceFile = SourceFile> {
   /** Wraps the source the CLI builds for this run: the case counts its calls, slows them or cuts them off. */
-  wrap(source: DocumentSource<M>): DocumentSource<M>
+  wrap(source: FeedlessDocumentSource<M>): FeedlessDocumentSource<M>
   budget?: RunBudget
   deadline?: Deadline
   signal?: AbortSignal
@@ -23,9 +29,9 @@ export interface DocumentSourceFaults<M extends SourceFile = SourceFile> {
    */
   deny?(status: 403 | 404): string | Promise<string>
   /** A source over the same provider whose own clock runs `ms` ahead of the provider's, behind when negative. */
-  skewed?(ms: number): DocumentSource<M> | Promise<DocumentSource<M>>
+  skewed?(ms: number): FeedlessDocumentSource<M> | Promise<FeedlessDocumentSource<M>>
   /** A source for a second profile signed in with the same token. */
-  sameToken?(): DocumentSource<M> | Promise<DocumentSource<M>>
+  sameToken?(): FeedlessDocumentSource<M> | Promise<FeedlessDocumentSource<M>>
   /**
    * The CLI's own sync of the root over this fixture's provider, its state and index kept between calls, and the ids
    * it holds after the call, all calls together. Given, the cases also check a sync: a fault skipped, an interrupted run resumed, the
@@ -36,7 +42,7 @@ export interface DocumentSourceFaults<M extends SourceFile = SourceFile> {
 
 /** One adapter over recorded or faked responses, fresh for each case. */
 export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
-  source: DocumentSource<M>
+  source: FeedlessDocumentSource<M>
   /** A folder the account can read, with at least one file somewhere below it. */
   root: string
   /** The provider's folder test, as the CLI passes it to `syncDocuments`. */
@@ -99,7 +105,10 @@ const MOST_SYNCS = 50
 const READS = new Set(["metadata", "children", "childrenPage", "content", "bytes", "startToken", "changes"])
 
 /** The source with `before` run ahead of each provider read: the case counts, slows or cuts off the calls. */
-const watched = <M extends SourceFile>(source: DocumentSource<M>, before: () => void): DocumentSource<M> =>
+const watched = <M extends SourceFile>(
+  source: FeedlessDocumentSource<M>,
+  before: () => void,
+): FeedlessDocumentSource<M> =>
   new Proxy(source, {
     get(target, name) {
       const value = Reflect.get(target, name)
@@ -204,14 +213,15 @@ export const documentSourceContract = <M extends SourceFile>(
       async run() {
         const fixture = await make()
         const { source } = fixture
-        if (!source.startToken || !source.changes) {
-          assert.ok(!source.startToken && !source.changes, "a source has both startToken() and changes(), or neither")
+        const feed = feedOf(source)
+        if (!feed) {
+          assert.ok(!("startToken" in source), "a source has both startToken() and changes(), or neither")
           return
         }
-        const token = await source.startToken()
+        const token = await feed.startToken()
         assert.ok(typeof token === "string" && token, "startToken() gives a cursor")
         await fixture.change?.()
-        const page = await source.changes(token)
+        const page = await feed.changes(token)
         assert.ok(Array.isArray(page.items), "a change page has items")
         if (fixture.change) assert.ok(page.items.length > 0, "the change made after startToken() is in the feed")
         assert.ok(typeof page.cursor === "string" && page.cursor, "a change page gives the next cursor")
@@ -226,10 +236,11 @@ export const documentSourceContract = <M extends SourceFile>(
     name: "changes: a file added deep in the tree is named in the feed, itself or by its own folder",
     async run() {
       const { source, addNested } = await make()
-      if (!addNested || !source.startToken || !source.changes) return
-      const token = await source.startToken()
+      const feed = feedOf(source)
+      if (!addNested || !feed) return
+      const token = await feed.startToken()
       const { file, folder } = await addNested()
-      const named = new Set((await source.changes(token)).items.map((item) => item.id))
+      const named = new Set((await feed.changes(token)).items.map((item) => item.id))
       assert.ok(named.has(file) || named.has(folder), `the feed names ${file} or its folder ${folder}`)
     },
   })
@@ -265,7 +276,7 @@ export const documentSourceContract = <M extends SourceFile>(
     async run() {
       const fixture = await make()
       const sync = fixture.faults?.sync
-      if (fixture.source.changes || !sync || (!fixture.change && !fixture.remove)) return
+      if (feedOf(fixture.source) || !sync || (!fixture.change && !fixture.remove)) return
       const before = await finish(sync)
       const removed = await fixture.remove?.()
       if (removed !== undefined)
@@ -322,11 +333,11 @@ const faultCases = <M extends SourceFile>(
     name: "faults: a clock off by ten minutes either way loses no change",
     async run() {
       const first = await make()
-      if (!first.faults?.skewed || !first.change || !first.source.changes) return
+      if (!first.faults?.skewed || !first.change || !feedOf(first.source)) return
       for (const ms of [SKEW_MS, -SKEW_MS]) {
         const fixture = ms === SKEW_MS ? first : await make()
-        const source = (await fixture.faults?.skewed?.(ms)) as DocumentSource<M>
-        const { startToken, changes } = source as Required<Pick<DocumentSource<M>, "startToken" | "changes">>
+        const source = (await fixture.faults?.skewed?.(ms)) as FeedlessDocumentSource<M>
+        const { startToken, changes } = source as DocumentSource<M>
         const token = await startToken.call(source)
         await fixture.change?.()
         const page = await changes.call(source, token)
@@ -341,7 +352,7 @@ const faultCases = <M extends SourceFile>(
       const other = await fixture.faults?.sameToken?.()
       if (!other) return
       assert.equal(await other.identity(), await fixture.source.identity(), "both profiles name one account")
-      const ids = async (source: DocumentSource<M>) =>
+      const ids = async (source: FeedlessDocumentSource<M>) =>
         (await walk({ ...fixture, source })).map((entry) => entry.id).sort()
       assert.deepEqual(await ids(other), await ids(fixture.source), "both profiles list the same tree")
     },

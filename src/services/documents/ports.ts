@@ -1,9 +1,15 @@
 import type { CliError } from "@wirecat/cli-base"
 import type { Deadline } from "../../background/budget.js"
-import type { DocumentSource, SourceFile, SourceIndex, SourceSkip, SourceStatePort } from "../../documents/model.js"
+import type {
+  FeedlessDocumentSource,
+  SourceFile,
+  SourceIndex,
+  SourceSkip,
+  SourceStatePort,
+} from "../../documents/model.js"
 import type { SourceQuery } from "../../documents/scope.js"
 export interface SyncOptions<M extends SourceFile> {
-  source: DocumentSource<M> | undefined
+  source: FeedlessDocumentSource<M> | undefined
   index: SourceIndex<M>
   state: SourceStatePort<M>
   principal: string

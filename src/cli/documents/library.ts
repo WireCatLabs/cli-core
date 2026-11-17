@@ -9,9 +9,9 @@ import type { Deadline } from "../../background/budget.js"
 import { progressOf } from "../../background/checkpoints.js"
 import {
   catalogFiles,
-  type DocumentSource,
   type documentIngestion,
   documentKnowledge,
+  type FeedlessDocumentSource,
   type SourceContent,
   type SourceFile,
   type SourceState,
@@ -79,13 +79,13 @@ export interface DocumentLibraryOptions<M extends SourceFile> {
   /** The service's name in messages: "Yandex Disk". */
   service: string
   /** The provider's adapter for one run, built inside cli-core's run so its requests are recorded. */
-  source(command: Command, events: EventSink, run: DocumentSourceRun): DocumentSource<M>
+  source(command: Command, events: EventSink, run: DocumentSourceRun): FeedlessDocumentSource<M>
   /** How the CLI files a document in the shared store: its catalog entry and front matter. */
   ingestion(store: MessageStore): Ingestion<M>
   /** A file or folder id from what the user typed: an id, a link, a path. */
   idOf(input: string): string
   /** The folder `folders add` names, read live; refuse one the account cannot use. Defaults to `metadata(idOf(input))`. */
-  folder?(source: DocumentSource<M>, input: string): Promise<M>
+  folder?(source: FeedlessDocumentSource<M>, input: string): Promise<M>
   isFolder(file: M): boolean
   isDocument?(file: M): boolean
   /** Why a file is kept by name only (an unsupported type, too large); undefined reads it. */
@@ -111,7 +111,7 @@ export interface DocumentLibraryTools<M extends SourceFile> {
   output(body: Body): void
   roots(): string[]
   /** Runs `body` with the provider's source inside cli-core's run. */
-  withSource<T>(body: (source: DocumentSource<M>) => Promise<T>): Promise<T>
+  withSource<T>(body: (source: FeedlessDocumentSource<M>) => Promise<T>): Promise<T>
 }
 
 const readJson = <T>(path: string): T | undefined => {
@@ -318,11 +318,11 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
     })
   }
   // The folder as `folders add` read it stands in for the one the last pass held, before the first sync.
-  const known = (source: DocumentSource<M>): DocumentSource<M> => {
+  const known = (source: FeedlessDocumentSource<M>): FeedlessDocumentSource<M> => {
     const chosen = files().folders().files ?? {}
     return { ...source, metadata: (id, held) => source.metadata(id, held ?? chosen[id]) }
   }
-  const withSource = <T>(body: (source: DocumentSource<M>) => Promise<T>, deadline?: Deadline) => {
+  const withSource = <T>(body: (source: FeedlessDocumentSource<M>) => Promise<T>, deadline?: Deadline) => {
     refuseOffline(command(), options.service)
     return context().run((events) =>
       body(

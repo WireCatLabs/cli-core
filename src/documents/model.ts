@@ -32,7 +32,11 @@ export interface SourceChange<M extends SourceFile = SourceFile> {
   removed: boolean
   file?: M
 }
-export interface DocumentSource<M extends SourceFile = SourceFile> {
+/**
+ * A provider without a change feed (Yandex Disk, WebDAV, S3): every sync walks the selected folders in full, saves only
+ * what changed since the last pass, and removes what the finished pass no longer found. A `DocumentSource` is one too.
+ */
+export interface FeedlessDocumentSource<M extends SourceFile = SourceFile> {
   identity(): Promise<string>
   /**
    * The file `known` is the one the sync last listed under this id, when it has one: a provider that addresses files
@@ -48,16 +52,17 @@ export interface DocumentSource<M extends SourceFile = SourceFile> {
    * from its first page, where any other error fails every later sync on that page until a `--rescan`.
    */
   childrenPage?(id: string, cursor?: string, folder?: M): Promise<{ files: M[]; cursor?: string }>
-  /**
-   * The change feed. A provider without one (Yandex Disk, WebDAV, S3) leaves out both `startToken` and `changes`:
-   * every sync then walks the selected folders in full, saves only what changed since the last pass, and removes
-   * what the finished pass no longer found.
-   */
-  startToken?(): Promise<string>
-  changes?(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
   content(id: string, maxChars?: number, file?: M): Promise<SourceContent<M>>
   bytes(id: string, file?: M): Promise<Uint8Array>
 }
+/** A provider with a change feed: after the first walk, a sync reads only what the feed names. */
+export interface DocumentSource<M extends SourceFile = SourceFile> extends FeedlessDocumentSource<M> {
+  startToken(): Promise<string>
+  changes(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
+}
+/** The feed of a source that has one. */
+export const feedOf = <M extends SourceFile>(source: FeedlessDocumentSource<M>) =>
+  "changes" in source && typeof source.changes === "function" ? (source as DocumentSource<M>) : undefined
 export interface IndexedSource<M extends SourceFile = SourceFile> {
   metadata: M
   hash: string

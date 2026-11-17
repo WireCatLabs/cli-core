@@ -139,10 +139,12 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   get past its first page over MCP (45 s); `documentSourceContract` checks that the pages list what `children()`
   does, each entry once.
 <a id="a-source-without-a-change-feed"></a>
-- **A source without a change feed** (Yandex Disk, WebDAV, S3) leaves out both `startToken` and `changes`. Every sync
+- **A source without a change feed** (Yandex Disk, WebDAV, S3) is a `FeedlessDocumentSource`: no `startToken`, no
+  `changes`. Every sync
   is then a full walk of the selected folders: no folder is skipped as already walked, the cursor is `walked`, and a
   file is saved only when `changedSince` its last pass (version, time, name, parents). What the finished pass did not
-  find is removed; a pass cut short removes nothing and goes on from its saved walk. The cost is one listing of every
+  find is removed; a pass cut short removes nothing and goes on from its saved walk. A chosen folder that answers
+  `not_found` is skipped as unavailable and its documents go; with a feed, the same root fails the rescan instead. The cost is one listing of every
   folder per sync, so such a CLI keeps its folders selected rather than the whole account.
 - **A source that addresses files by path** reads the path from the file the sync passes: `metadata(id, known)` (the
   folder as the last pass held it, for a root or a folder that answered 404), `children(id, folder)`,

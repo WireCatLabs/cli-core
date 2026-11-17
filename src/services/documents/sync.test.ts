@@ -4,7 +4,14 @@ import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { catalogFiles } from "../../documents/catalog.js"
-import type { DocumentSource, SourceChange, SourceFile, SourceState, SourceWalk } from "../../documents/model.js"
+import type {
+  DocumentSource,
+  FeedlessDocumentSource,
+  SourceChange,
+  SourceFile,
+  SourceState,
+  SourceWalk,
+} from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
 import { documentSource } from "../document-source.js"
@@ -155,7 +162,7 @@ describe("provider-neutral document sync", () => {
   it("without a change feed walks every pass, saves only what changed and removes what a finished pass lost", async () => {
     const f = await setup()
     const { startToken: _start, changes: _changes, ...rest } = f.source
-    const source: DocumentSource = rest
+    const source: FeedlessDocumentSource = rest
     const options = { ...f.options, source }
     expect(await syncDocuments(options)).toMatchObject({ saved: 2, removed: 0, pending: 0 })
     expect(f.state().cursor).toBe("walked")
@@ -179,13 +186,20 @@ describe("provider-neutral document sync", () => {
   it("without a change feed skips a selected folder that is gone and drops its documents, instead of failing", async () => {
     const f = await setup()
     const { startToken: _start, changes: _changes, ...rest } = f.source
-    const options = { ...f.options, source: rest as DocumentSource, roots: ["root", "nested"] }
+    const options = { ...f.options, source: rest as FeedlessDocumentSource, roots: ["root", "nested"] }
     expect(await syncDocuments(options)).toMatchObject({ saved: 2, pending: 0 })
     f.files.delete("nested")
     f.files.delete("a")
     expect(await syncDocuments(options)).toMatchObject({ removed: 1, pending: 0, complete: true })
     expect(Object.keys(f.state().documents)).toEqual(["b"])
     expect(f.state().skipped).toEqual([{ id: "nested", reason: "selected folder is unavailable" }])
+  })
+  it("with a change feed, a rescan whose root answers 404 fails and keeps what the profile holds", async () => {
+    const f = await setup()
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 2 })
+    f.files.delete("root")
+    await expect(syncDocuments({ ...f.options, rescan: true })).rejects.toThrow("gone")
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b"])
   })
   it("names the synced profile's account, so a hit says the CLI and profile, not a notes folder", async () => {
     const f = await setup()

@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
+import {
+  type FeedlessDocumentSource,
+  feedOf,
+  type SourceFile,
+  type SourceState,
+  type SourceWalk,
+  type SourceWork,
+} from "../../documents/model.js"
 import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
 // Without a query or pages the hash stays what it was, so a profile that never set them keeps its checkpoint. Turning
@@ -46,7 +53,7 @@ const changesScope = (scope: string, cursor: string) => `${scope}:changes:${curs
 
 export const planDocuments = async <M extends SourceFile>(
   options: SyncOptions<M>,
-  source: DocumentSource<M> | undefined,
+  source: FeedlessDocumentSource<M> | undefined,
   state: SourceState<M>,
   roots: string[],
   limit: number,
@@ -85,7 +92,8 @@ export const planDocuments = async <M extends SourceFile>(
     throw new CliError("configuration_error", "a query that includes files must list them")
   const initial = !state.cursor || scope !== state.scope
   // Without a feed every pass walks the whole tree again; only a first one saves every file.
-  const full = initial || !source.changes
+  const feed = feedOf(source)
+  const full = initial || !feed
   const resumed = walks?.read(full ? scope : changesScope(scope, state.cursor as string))
   const folders: Record<string, M> = full ? {} : structuredClone(state.folders)
   const files = new Map<string, M>(Object.values(state.documents).map((doc) => [doc.metadata.id, doc.metadata]))
@@ -121,7 +129,7 @@ export const planDocuments = async <M extends SourceFile>(
   if (!walk && full) {
     const before = charge()
     if (before) return { walk: { folders_left: roots.length, entries: 0, listed: 0, stopped: before } }
-    const start = source.startToken ? await source.startToken() : WALKED
+    const start = feed ? await feed.startToken() : WALKED
     walk = {
       scope,
       cursor: start,
@@ -136,7 +144,7 @@ export const planDocuments = async <M extends SourceFile>(
     // in every call.
     const before = charge()
     if (before) return { walk: { folders_left: 0, entries: 0, listed: 0, stopped: before } }
-    const page = await (source.changes as NonNullable<typeof source.changes>)(cursor)
+    const page = await (feed as NonNullable<typeof feed>).changes(cursor)
     const latest = new Map(page.items.map((change) => [change.id, change]))
     const entering: M[] = []
     // Apply all ancestry changes before classifying document scope.
@@ -233,9 +241,10 @@ export const planDocuments = async <M extends SourceFile>(
           try {
             root = await source.metadata(step.id, known)
           } catch (error) {
-            // A folder the last pass held and the provider no longer finds is skipped as unavailable, as a round of
-            // changes does, so a moved or deleted root does not fail every sync of a source without a feed.
-            if (!known || errorOf(error).code !== "not_found") throw error
+            // Without a feed, a folder the last pass held and the provider no longer finds is skipped as unavailable,
+            // as a round of changes does, so a moved or deleted root does not fail every sync. A source with a feed
+            // walks in full only on a rescan, where a root it cannot read still fails and keeps what it holds.
+            if (feed || !known || errorOf(error).code !== "not_found") throw error
             walk.stack.pop()
             visited.add(step.id)
             folders[step.id] = { ...known, trashed: true }

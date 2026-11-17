@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { DocumentSource, SourceChange, SourceContent, SourceFile } from "../../../documents.js"
+import type { FeedlessDocumentSource, SourceChange, SourceContent, SourceFile } from "../../../documents.js"
 
 /** The folder type of the fake source: no provider's own. */
 export const FAKE_FOLDER = "inode/directory"
@@ -16,7 +16,10 @@ export const fakeFile = (id: string, parents: string[] = ["root"], mime = "text/
   modifiedAt: "2026-10-16T00:00:00.000Z",
 })
 
-export interface FakeDocumentSource extends DocumentSource {
+export interface FakeDocumentSource extends FeedlessDocumentSource {
+  /** Absent with `feed: false`. */
+  startToken?(): Promise<string>
+  changes?(token: string): Promise<{ items: SourceChange[]; cursor: string }>
   files: Map<string, SourceFile>
   /** Puts a file or folder in, or changes it, and lists it in the next change feed. */
   put(file: SourceFile, text?: string): void
