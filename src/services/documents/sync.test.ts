@@ -176,6 +176,17 @@ describe("provider-neutral document sync", () => {
     expect(f.source.content).toHaveBeenCalledWith("a", 200000, expect.objectContaining({ id: "a", version: "2" }))
     expect(f.source.children).toHaveBeenCalledWith("nested", expect.objectContaining({ id: "nested" }))
   })
+  it("without a change feed skips a selected folder that is gone and drops its documents, instead of failing", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const options = { ...f.options, source: rest as DocumentSource, roots: ["root", "nested"] }
+    expect(await syncDocuments(options)).toMatchObject({ saved: 2, pending: 0 })
+    f.files.delete("nested")
+    f.files.delete("a")
+    expect(await syncDocuments(options)).toMatchObject({ removed: 1, pending: 0, complete: true })
+    expect(Object.keys(f.state().documents)).toEqual(["b"])
+    expect(f.state().skipped).toEqual([{ id: "nested", reason: "selected folder is unavailable" }])
+  })
   it("names the synced profile's account, so a hit says the CLI and profile, not a notes folder", async () => {
     const f = await setup()
     const ingest = documentIngestion(f.store, {

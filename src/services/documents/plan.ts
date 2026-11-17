@@ -228,7 +228,21 @@ export const planDocuments = async <M extends SourceFile>(
         stopped = taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
         if (stopped) break
         if (!step.folder) {
-          const root = await source.metadata(step.id, state.folders[step.id])
+          const known = state.folders[step.id]
+          let root: M
+          try {
+            root = await source.metadata(step.id, known)
+          } catch (error) {
+            // A folder the last pass held and the provider no longer finds is skipped as unavailable, as a round of
+            // changes does, so a moved or deleted root does not fail every sync of a source without a feed.
+            if (!known || errorOf(error).code !== "not_found") throw error
+            walk.stack.pop()
+            visited.add(step.id)
+            folders[step.id] = { ...known, trashed: true }
+            spent++
+            listed++
+            continue
+          }
           if (!isFolder(root) || root.trashed)
             throw new CliError("validation_error", "configured root is not an accessible folder")
           container(root)
