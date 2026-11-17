@@ -89,4 +89,11 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     package: "@wirecat/notion-cli",
     does: "Notion pages and databases as local text, searchable with your other WireCat data",
   },
+  {
+    command: "hubspot",
+    appName: "hubspot-cli",
+    envPrefix: "WCHUBSPOT",
+    package: "@wirecat/hubspot-cli",
+    does: "HubSpot CRM: deals, contacts, companies and pipelines, searchable with your other WireCat data",
+  },
 ]
