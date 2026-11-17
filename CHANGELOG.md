@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.690.0 — 17.11.2026
+
+### Fixed
+
+- **A chosen folder moved on a path-addressed provider comes back once it is added again under its new path.**
+  `documentLibraryCommands` read the folder's old path from the last sync before the one `folders add` had just read,
+  so the folder stayed unavailable for good. `folders add` now keeps a chosen folder's new metadata (without changing
+  its date), and that copy wins.
+
 ## 0.689.0 — 17.11.2026
 
 ### Added
