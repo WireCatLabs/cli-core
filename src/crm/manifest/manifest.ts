@@ -62,10 +62,20 @@ export interface CrmManifestEntity<K extends CrmKind = CrmKind> {
    * The service names the fields a read returns (HubSpot `properties=`, Bitrix24 `select`): `{select}` becomes the
    * names under `from` that `map` reads, the custom field codes, and `also`.
    */
-  select?: { from: string; also?: readonly string[] }
+  select?: {
+    from: string
+    also?: readonly string[]
+    /** The longest `{select}` the service takes, in characters joined by commas; the rest is a gap. */
+    max?: number
+  }
   map: { readonly [F in keyof CrmRecords[K]]?: CrmRule } & { amount?: CrmRule; currency?: CrmRule }
   /** The account's own fields' values, by the codes `fields` lists, under this object of the row. */
   custom?: { from: string; split?: string }
+  /**
+   * A kind the plan or the sign-in may not have (HubSpot's leads): the service refusing it is a gap with this text and
+   * scope, and the other kinds still sync.
+   */
+  optional?: { message: string; scope?: string }
 }
 
 export interface CrmManifestPipelines {
@@ -126,6 +136,13 @@ export type CrmAfterHook<K extends CrmKind> = (
 export interface CrmManifestHooks {
   /** Corrects one record after the map, such as a default the account keeps elsewhere. */
   after?: { readonly [K in CrmKind]?: CrmAfterHook<K> }
+  /**
+   * Reads more for a whole page before the map, in one batch request: what an answer leaves out and another operation
+   * gives (HubSpot's associations, which a search does not answer).
+   */
+  enrich?: {
+    readonly [K in CrmKind]?: (rows: CrmRaw[], service: { call: ServiceApiCall }) => Promise<CrmRaw[]>
+  }
   /** Adds or replaces source methods (`self`, `activities`, a live `list`); `base` is what the manifest built. */
   extend?: (base: CrmSource) => Partial<CrmSource>
 }
@@ -170,9 +187,16 @@ const entity = v.strictObject({
   ),
   ids: v.optional(call),
   get: v.optional(call),
-  select: v.optional(v.strictObject({ from: path, also: v.optional(v.array(v.string())) })),
+  select: v.optional(
+    v.strictObject({
+      from: path,
+      also: v.optional(v.array(v.string())),
+      max: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    }),
+  ),
   map: v.record(v.string(), rule),
   custom: v.optional(v.strictObject({ from: path, split: v.optional(v.string()) })),
+  optional: v.optional(v.strictObject({ message: v.pipe(v.string(), v.minLength(1)), scope: v.optional(v.string()) })),
 })
 
 const pipelines = v.strictObject({

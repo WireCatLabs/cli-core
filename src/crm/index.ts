@@ -8,6 +8,7 @@ export {
   refuseForeignClientReads,
 } from "./foreign-contacts.js"
 export {
+  type CrmAfterHook,
   type CrmChangesCall,
   type CrmManifest,
   type CrmManifestEntity,
@@ -18,6 +19,7 @@ export {
   type CrmRule,
   parseCrmManifest,
 } from "./manifest/manifest.js"
+export { crmManifestProblems } from "./manifest/paths.js"
 export { type CrmManifestSourceOptions, crmSourceFromManifest } from "./manifest/source.js"
 export { type ProviderCallOptions, providerCall } from "./provider-call.js"
 export {
