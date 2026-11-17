@@ -181,9 +181,10 @@ const numberOf = (value: unknown): number | undefined => {
 export const parameterValue = (input: ApiCommandInput, parameter: { in: "query" | "body"; name: string }): unknown =>
   parameter.in === "query"
     ? input.query[parameter.name]
-    : input.body === undefined
-      ? undefined
-      : (parseApiJson(input.body) as Record<string, unknown> | null)?.[parameter.name]
+    : (input.fields[parameter.name] ??
+      (input.body === undefined
+        ? undefined
+        : (parseApiJson(input.body) as Record<string, unknown> | null)?.[parameter.name]))
 
 export const withValue = (
   input: ApiCommandInput,
@@ -192,7 +193,9 @@ export const withValue = (
 ): ApiCommandInput => {
   if (parameter.in === "query") return { ...input, query: { ...input.query, [parameter.name]: String(value) } }
   const body = input.body === undefined ? {} : parseApiJson(input.body)
-  return { ...input, body: apiJson({ ...(body as Record<string, unknown>), [parameter.name]: value }) }
+  // A flag of the same name would stand over the body, and every page would ask for the first.
+  const { [parameter.name]: _, ...fields } = input.fields
+  return { ...input, fields, body: apiJson({ ...(body as Record<string, unknown>), [parameter.name]: value }) }
 }
 
 /** One page's items, and how to ask for the next: new flags, the next page's whole URL, or `undefined` at the end. */

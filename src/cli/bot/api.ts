@@ -4,7 +4,15 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
-import { apiFlagOf, apiOptionKey, readApiBody, readApiBytes, sendsBytes } from "./api-input.js"
+import {
+  apiFlagOf,
+  apiJson,
+  apiOptionKey,
+  graphqlVariables,
+  readApiBody,
+  readApiBytes,
+  sendsBytes,
+} from "./api-input.js"
 
 export interface ApiCommandInput {
   path: Record<string, string>
@@ -16,6 +24,8 @@ export interface ApiCommandInput {
   bytes?: Uint8Array<ArrayBuffer>
   bodySource?: "argument" | "stdin" | "file"
   tokenProfile?: string
+  /** A GraphQL operation's selection in place of its default, for a source that needs more than one level. */
+  selection?: string
 }
 
 export interface ApiCommands {
@@ -45,7 +55,9 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
     const binding =
       operation.binding.kind === "http"
         ? `${operation.binding.method} ${operation.binding.path}`
-        : operation.binding.name
+        : operation.binding.kind === "graphql"
+          ? `${operation.binding.operation} ${operation.binding.field}`
+          : operation.binding.name
     const command = annotate(new Command(operation.command), {
       effects: operation.effect === "read" ? REMOTE_READ : REMOTE_WRITE,
     }).description(`${operation.summary ?? operation.id} — ${operation.effect} (${binding})`)
@@ -55,6 +67,8 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
         `--${apiFlagOf(parameter.name)} <value>`,
         parameter.description?.split("\n")[0] ?? parameter.name,
       )
+      // A GraphQL flag is the request body, which never reaches the run's files (SEC-196).
+      if (operation.binding.kind === "graphql" && parameter.in === "body") secretInput(option)
       if (parameter.required && parameter.in !== "body") {
         // A required parameter the spec gives a default (Notion's `Notion-Version`) is sent with it, never asked for.
         const fallback = scalarOf(parameter.schema.default)
@@ -123,7 +137,11 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       const text = (api.readBody ?? ((_command, body) => readApiBody(body)))(this, options)
       if (options.body !== undefined) input.bodySource = options.body === "-" ? "stdin" : "argument"
       else if (options.bodyFile !== undefined) input.bodySource = options.bodyFile === "-" ? "stdin" : "file"
-      const body = operation.binding.kind === "rpc" ? text : api.checkBody ? api.checkBody(operation, text) : text
+      // A GraphQL body is all the variables: the flags join it here, so the schema check sees what is sent.
+      const given =
+        operation.binding.kind === "graphql" ? apiJson(graphqlVariables(operation, text, input.fields)) : text
+      if (operation.binding.kind === "graphql") input.fields = {}
+      const body = operation.binding.kind === "rpc" ? text : api.checkBody ? api.checkBody(operation, given) : given
       if (body !== undefined) input.body = body
       await api.execute(this, operation, input)
     })
