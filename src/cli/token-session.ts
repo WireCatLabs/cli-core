@@ -33,6 +33,8 @@ export interface TokenSessionOptions {
   token?: string
   /** One sentence more for `session start --help`: which token, and what it can see. */
   about?: string
+  /** One sentence more for `session end --help`, such as what of the service's own tools it leaves alone. */
+  endNote?: string
 }
 
 const storageOf = (raw: string): TokenStorage => {
@@ -70,7 +72,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       ],
     }),
   )
-    .summary(`sign in to ${service} with an ${word}`)
+    .summary(`sign in to ${service} with its ${word}`)
     .description(
       `sign this profile in: the ${service} ${word} is asked hidden or read from stdin, never taken as an argument, ` +
         `checked with ${service}, and only then kept in the keyring, or in a private file` +
@@ -123,7 +125,10 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     }),
   )
     .summary("forget this profile's token on this computer")
-    .description(`forget this profile's token on this computer; the token itself stays valid in ${service}`)
+    .description(
+      `forget this profile's token on this computer; the token itself stays valid in ${service}` +
+        (options.endNote ? `. ${options.endNote}` : ""),
+    )
     .action(function (this: Command) {
       refuseUnderReadOnly(this, "session end")
       const { profile, tokens } = contextOf(this)

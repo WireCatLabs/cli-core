@@ -8,7 +8,7 @@ import { afterEach, expect, it } from "vitest"
 import { accountFileFor } from "./messenger/accounts.js"
 import { run } from "./program.js"
 import { settingsFor } from "./settings.js"
-import { tokenSessionCommand } from "./token-session.js"
+import { type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
 
 const app = { command: "pages", appName: "pages-cli", envPrefix: "PAGES", description: "synthetic", version: "1.0.0" }
 const roots: string[] = []
@@ -29,7 +29,7 @@ const setup = () => {
   }
   const keyring = memoryKeyring()
   const checked: string[] = []
-  const cli = async (argv: string[], stdin?: string) => {
+  const cli = async (argv: string[], stdin?: string, claim?: TokenSessionOptions["claim"]) => {
     const streams = captureStreams()
     const code = await run(
       argv,
@@ -40,6 +40,7 @@ const setup = () => {
             app,
             service: "Pages",
             resolveSettings: settingsFor(app).resolveSettings,
+            ...(claim ? { claim } : {}),
             verify: async (_command, token) => {
               checked.push(token)
               if (token !== "good-token") throw new CliError("authentication_error", "Pages refused the token")
@@ -92,4 +93,25 @@ it("session start keeps nothing when the service refuses the token, or when none
   expect(empty.error).toMatchObject({ code: "validation_error" })
   const storage = await cli(["personal", "session", "start", "--credential-storage", "vault", "--json"], "good-token\n")
   expect(storage.error).toMatchObject({ code: "validation_error" })
+})
+
+it("session start refuses --offline and a taken account before keeping anything", async () => {
+  const { cli, checked } = setup()
+  const offline = await cli(["--offline", "personal", "session", "start", "--json"], "good-token\n")
+  expect(offline.error).toMatchObject({ code: "permission_error" })
+  expect(checked).toEqual([])
+  const taken = await cli(["work", "session", "start", "--json"], "good-token\n", () => {
+    throw new CliError("conflict", "profile personal already uses this account")
+  })
+  expect(taken.error).toMatchObject({ code: "conflict" })
+  expect((await cli(["work", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
+})
+
+it("session status --check checks a token from the environment variable, and never prints it", async () => {
+  const { env, cli, checked } = setup()
+  env.PAGES_TOKEN = "good-token"
+  const status = await cli(["personal", "session", "status", "--check", "--json"])
+  expect(status.json.item).toMatchObject({ state: "saved", token_from: "environment", verified: true })
+  expect(checked).toEqual(["good-token"])
+  expect(JSON.stringify(status.json)).not.toContain("good-token")
 })

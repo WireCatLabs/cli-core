@@ -592,7 +592,7 @@ describe("the shared service api group", () => {
       ({ url }) =>
         url.includes("page=2")
           ? Response.json({ events: ["b"], links: {} })
-          : Response.json({ events: ["a"], links: { next: "/v1/events?page=2" } }),
+          : Response.json({ events: ["a"], links: { next: "/v1/events?page=2&api_key=stale" } }),
       { manifest: keyed },
     )
     expect((await link.cli("work", "api", "list-events", "--all", "--json")).json.items).toEqual(["a", "b"])
@@ -606,6 +606,16 @@ describe("the shared service api group", () => {
     const refused = await moved.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
     expect(refused.error).toMatchObject({ code: "provider_error" })
     expect(moved.sent).toHaveLength(1)
+    const either = {
+      ...keyed,
+      securitySchemes: { ...keyed.securitySchemes, bearer: { type: "http" as const, scheme: "bearer" } },
+      security: [{ key: [] }, { bearer: [] }],
+    }
+    const header = fixture({}, undefined, { manifest: either })
+    expect((await header.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).code).toBe(0)
+    expect(header.sent).toEqual([
+      { method: "GET", url: "https://api.pages.test/v1/pages/p1", authorization: "Bearer page-token" },
+    ])
   })
 
   it("**refuses a free server variable, a plain-http base and a body key the manifest does not name**", () => {

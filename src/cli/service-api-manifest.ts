@@ -60,18 +60,21 @@ const headerOf = (scheme: SecurityScheme): Auth | undefined => {
 /**
  * The header, or query parameter, that carries the sign-in for one operation, from the first scheme of its requirements the api can send;
  * `undefined` for one that needs none (`security: []`, or only `{}`). A manifest without schemes signs in with a bearer
- * token, as most services do. An optional sign-in (`[{}, { oauth: [] }]`) still sends the token.
+ * token, as most services do. An optional sign-in (`[{}, { oauth: [] }]`) still sends the token. A header wins over a
+ * key in the query, which a proxy or a server log could keep.
  */
-export const authHeader = (manifest: ServiceApiManifest, operation: ManifestOperation): Auth | undefined => {
+const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): Auth | undefined => {
   const requirements = operation.security ?? manifest.security
   if (requirements?.every((one) => Object.keys(one).length === 0)) return undefined
   if (!manifest.securitySchemes) return BEARER
   const names = (requirements ?? []).flatMap((one) => Object.keys(one))
-  for (const name of names) {
-    const scheme = manifest.securitySchemes[name]
+  const sendable = names.flatMap((name) => {
+    const scheme = manifest.securitySchemes?.[name]
     const auth = scheme && headerOf(scheme)
-    if (auth) return auth
-  }
+    return auth ? [auth] : []
+  })
+  const auth = sendable.find((one) => one.in === undefined) ?? sendable[0]
+  if (auth) return auth
   if (names.length === 0) return BEARER
   throw new CliError(
     "configuration_error",
@@ -81,7 +84,8 @@ export const authHeader = (manifest: ServiceApiManifest, operation: ManifestOper
 
 /**
  * Signs one request for its operation. Set the final URL first: a key in the query goes into it. Anything but the
- * standard sign-in header, or a key in the query, never follows a redirect: another host would get the key.
+ * standard sign-in header, or a key in the query, never follows a redirect, even to the same host: another host would
+ * get the key. The URL then holds the key, so a fetch wrapper must not log it.
  */
 export const signRequest = async (
   manifest: ServiceApiManifest,
@@ -89,7 +93,7 @@ export const signRequest = async (
   request: { url: URL; headers: Headers; redirect?: "follow" | "manual" | "error" },
   token: () => Promise<string> | string,
 ): Promise<void> => {
-  const auth = authHeader(manifest, operation)
+  const auth = authOf(manifest, operation)
   if (!auth) return
   const value = auth.value(await token())
   if (auth.in === "query") request.url.searchParams.set(auth.name, value)
