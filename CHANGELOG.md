@@ -5,6 +5,62 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.688.0 — 17.11.2026
+
+### Added
+
+- **`files list`, `files download` and `files sync` in every CRM CLI** whose adapter has `files`
+  (`addCrmCommands(program, { files: true })`). `files list --deal|--lead|--person|--organization <id>` reads a
+  record's files live; `files download <id>` saves one under the state folder (folders 700, file 600) or `--dir`, at
+  most 100 MB unless `--max-size` (up to 2048), and reads its text; `files sync` prefetches the files of your own deals
+  and leads changed in the last `files.days`, within per-run limits, and goes on where it stopped. A colleague's record
+  counts toward the day's limit of 100.
+- **CRM file limits** as owner-only store settings `crm.<provider>:<account>.files.max_files`, `max_file_mb`,
+  `max_run_mb`, `run_minutes`, `days` and `max_total_mb`; a value outside its range is refused. The account's folder
+  is kept under `max_total_mb` by dropping the oldest files whose text is kept.
+- **`search all` finds the text of downloaded CRM files** (`crm_file` hits, also under `--only crm`): a limited profile
+  only those of records assigned to it, in the CRM CLI's and in memo's and tg's `search all` alike.
+- **`fetchCrmFile`** for adapters: a file link fetched over https from the account's own hosts only, never naming the
+  link in an error; **`crmFilesContract`** in `@wirecat/cli-core/crm/testing`.
+- **`search messages` helps a query of plain words the way `search conversations` does.** A word no message holds is
+  searched beside its Latin spelling or nearest known spellings (a note says so). Without `chat:`, a word
+  the messages show is a name in one private chat has that chat's hits first, searched without the name
+  (a note says so). A query with fields, quotes, groups or operators is searched exactly as written.
+- **`search conversations` over every chat searches first the private chat a name in the query points to.** The name
+  is learned from the messages, with no list of nicknames: the private chat that holds most of a word's uses, at least
+  twice as many as any other private chat, and writes it with a capital letter nearly every time («Петька, привет»).
+  That chat is searched without the name and its hits come first; a note says so. An ordinary word, spread over many chats in lower case, names none.
+- **`search conversations` respells a query word that no message holds.** It searches the word's Latin spelling
+  («ноксвел» → `noxvel`) or the nearest known spellings of that, and only when there are none, the word's own nearest
+  known spellings, up to two edits. A word any message holds is never respelled. A note says what was searched instead.
+
+### Changed — may break callers
+
+- **memo's, tg's and the MCP's `search all` apply each CRM copy's viewer rule to deals and leads too**, taking the
+  user that copy's own sync signed in as: a non-admin copy's colleagues' deals no longer show there, as they never
+  did in the CRM CLI. A copy with no recorded own user shows none of its deals and leads there; a copy whose sync
+  recorded no list of who may read it shows only its own user's.
+- **`search all` has a new hit kind, `crm_file`**, in every CLI: a caller that switches over `kind` gets it.
+- **`safeName` cuts a name to 200 bytes**, its extension kept, for every download that uses it.
+
+### Fixed
+
+- **`meetings batch --format text|markdown` marks other people's text in a scheduled agent's run.** Transcript cues
+  and search hit excerpts and titles were printed with no untrusted marks; only JSON carried them. The report a host
+  formats with `formatMeetingBatch` now comes marked, so a host needs no change.
+- **`callMeetingPassageTool` takes how the host prints a passage in this run.** Pass
+  `(result, format) => passageForRun(command, result, format)` as its new last argument, and the `meeting_passage`
+  text carries the same marks as `meetings passage` in a scheduled agent's run. Without it the text stays unmarked.
+- **`search conversations --chat` no longer stops at 20 word hits.** The per-chat share that keeps a large group from
+  filling the list across chats also applied inside one chat, so a word used often there found only 20 messages.
+- **A message search for «домен» no longer finds «дом» and «дома».** Snowball cuts some words to another word's stem.
+  When a query word's stem is under 4 letters, drops 2 or more letters, and the stored stems show the whole word is a
+  stem itself («доменов» → «домен»), the search keeps the word whole. The stems stored for messages do not change.
+- **A message search for a word of 4 letters or more also finds the longer words it begins, as grep does.** Snowball
+  stems some forms of one word apart («журнал» → «журна», «журналом» → «журнал»), so a search found only the
+  forms that shared the typed word's stem. Quotes keep the old match: the word and its stem's forms only. The note now
+  says what was searched: `квартира → квартира… and words stemmed to квартир`.
+
 ## 0.687.0 — 16.11.2026
 
 ### Added
