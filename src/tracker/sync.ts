@@ -210,12 +210,15 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, m
     })
     const unread = run.report.gaps.some((gap) => gap.kind === kind)
     const emptied = pass.ids.length === 0 && unlisted > 0
-    if (!mode.full && (unread || emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
+    const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
+    // What the sign-in could not read is not gone: even a rescan never marks it deleted.
+    if (unlisted > 0 && (unread || (many && !mode.full))) {
       result.pass = "held"
-      result.held =
-        `${source.provider} listed ${pass.ids.length} ${kind} ids${unread ? " and could not read all of them" : ""}, ` +
-        `so ${unlisted} of the ${stored} stored would be marked deleted; nothing was. Check the sign-in's rights, ` +
-        "then run sync --rescan to let it through"
+      result.held = unread
+        ? `${source.provider} could not read all ${kind}s, so the ${unlisted} it did not list stay; nothing was ` +
+          "marked deleted. Check the sign-in's rights, then run sync again"
+        : `${source.provider} listed ${pass.ids.length} ${kind} ids, so ${unlisted} of the ${stored} stored would be ` +
+          "marked deleted; nothing was. Check the sign-in's rights, then run sync --rescan to let it through"
     } else {
       result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
       result.pass = "complete"

@@ -1,7 +1,7 @@
 import { crmValues } from "../../crm/index.js"
 import type { CrmRule } from "../../crm/manifest/manifest.js"
 import type { Conversion } from "../../crm/manifest/map.js"
-import { mapFields } from "../../crm/manifest/map.js"
+import { convert, mapFields, rulePaths } from "../../crm/manifest/map.js"
 import { STATE_TYPES, type TrackerKind, type TrackerRecords } from "../../domain/tracker.js"
 
 const TIMES = { externalId: "id", createdAt: "epoch", updatedAt: "epoch", archivedAt: "epoch" } as const
@@ -72,18 +72,12 @@ export const mapTrackerRecord = <K extends TrackerKind>(
   raw: crmValues.CrmRaw,
 ): TrackerRecords[K] | null => {
   const out = mapFields(map, TRACKER_FIELDS[kind], raw)
-  for (const [field, rule] of Object.entries(map))
-    if (out[field] === undefined && typeof rule === "string" && TRACKER_FIELDS[kind][field] && nulled(raw, rule))
-      out[field] = null
-  for (const [field, rule] of Object.entries(map))
-    if (
-      out[field] === undefined &&
-      typeof rule === "object" &&
-      rule !== null &&
-      "each" in rule &&
-      nulled(raw, rule.each)
-    )
-      out[field] = []
+  for (const [field, rule] of Object.entries(map)) {
+    const type = TRACKER_FIELDS[kind][field]
+    if (out[field] !== undefined || type === undefined) continue
+    if (rulePaths(rule).some(({ path, inside }) => inside === undefined && nulled(raw, path)))
+      out[field] = convert(type, null)
+  }
   if (typeof out.externalId !== "string") return null
   for (const [field, empty] of Object.entries(REQUIRED[kind])) if (out[field] == null) out[field] = empty
   // "Open work" is read by the type, so a state of an unknown type would hide its issues from every filter.

@@ -38,11 +38,12 @@ stops keeps its ids and the page it reached.
   `state: "partial"` and `stopped`; the kinds it finished are skipped by the next run until every kind has had its
   round, so a budget smaller than the number of kinds still moves on.
 - **Held passes.** A pass is held (`pass: "held"`, with the reason in `held`) and marks nothing when the list is empty
-  while rows are stored, when it would mark more than half of ten or more stored rows deleted, or when the sign-in
-  reported a gap for the kind: a tracker that lost rights lists none of what it can no longer see.
+  while rows are stored, or when it would mark more than half of ten or more stored rows deleted: a tracker that lost
+  rights lists none of what it can no longer see. `--rescan` lets those through. A pass after the sign-in reported a
+  gap for the kind is held even then: what it could not read is not gone.
 - **Failures.** A kind that fails is named in its result's `error` and the others still sync. A page that says there is
   more but gives no next page fails the kind.
-- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through. A
+- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a gap held it. A
   rescan that stops goes on as one in the next run.
 
 A save merges: a field the read left out keeps its stored value, so a partial selection never erases.

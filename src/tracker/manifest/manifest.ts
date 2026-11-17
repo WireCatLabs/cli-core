@@ -128,7 +128,7 @@ const selects = (tree: Selection, steps: readonly string[]): boolean => {
   if (/^\d+$/.test(first)) return selects(tree, rest)
   const found = tree[first]
   if (found === undefined) return false
-  return found === true ? rest.length === 0 : selects(found, rest)
+  return found === true ? rest.every((step) => /^\d+$/.test(step)) : selects(found, rest)
 }
 
 /** The selection of one row: under the operation's `items` (a connection's `nodes`) or the call's own. */
@@ -209,6 +209,6 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
   for (const [kind, one] of Object.entries(manifest.entities))
     if (one && !manifest.kinds.includes(kind as TrackerKind))
       throw invalid(`entities.${kind}`, `${kind} has an entity but is not in kinds`)
-  if (manifest.self) checkCall("self.call", manifest.self.call)
+  if (manifest.self) checkCall("self.call", manifest.self.call, { self: manifest.self.path })
   return manifest
 }

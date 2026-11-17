@@ -488,6 +488,14 @@ describe("parseTrackerManifest", () => {
     ).toThrow(/no "\{since\}"/)
   })
 
+  it("checks the signed-in user's path against the selection", () => {
+    expect(
+      broken((manifest) => {
+        ;(manifest.self as Row).path = "viewer.id"
+      }),
+    ).toThrow(/self\.call\.selection: map\.self reads viewer\.id/)
+  })
+
   it("refuses kinds out of order", () => {
     expect(
       broken((manifest) => {
