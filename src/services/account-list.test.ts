@@ -189,6 +189,32 @@ describe("--source as a list of accounts and groups", () => {
     ).toThrow(/no stored documents for drive:home/)
   })
 
+  it("names documents accounts by the word documents, and answers a word that names nothing with what does", async () => {
+    const store = await seeded()
+    const drive = await store.notes.documentsAccount({ provider: "google-drive", account: "owner-1" }, true)
+    const folder = await store.notes.addFolder({ name: "Vault" })
+    await store.accounts.saveAccount({ provider: "import", account: "i1" }, { name: null })
+    const context = {
+      held: await store.accounts.storedAccounts(),
+      groups: { work: ["tg:101", "meetings"] },
+      profiles: {},
+      running: { provider: "telegram", command: "tg" },
+    }
+    expect(entriesOfList("tg:101,documents", context)[1]?.accounts).toEqual([
+      expect.objectContaining({ provider: "import", account: "i1" }),
+      { provider: "notes", account: String(drive?.id), kind: "notes" },
+    ])
+    expect(entriesOfList("notes", context)[0]?.accounts.map(({ account }) => account)).toContain(folder.id)
+    expect(await prepared(store, "tg:101,meetings", "messages").then(({ skipped }) => skipped)).toEqual([
+      { source: "meetings", code: "not_found", reason: "no account in the store" },
+    ])
+    await expect(prepared(store, "meetings", "messages")).rejects.toThrow(
+      "--source names nothing tg search messages reads: meetings (no account in the store) — the store holds all, " +
+        "personal, mail, documents, messages, events, notes, email, import, max, telegram, obsidian, google-drive",
+    )
+    expect(entriesOfList("group:work", context)[1]).toEqual({ entry: "meetings", accounts: [] })
+  })
+
   it("names the notes folders of one provider by it: obsidian for vaults, local for plain folders", async () => {
     const store = await seeded()
     const vault = await store.notes.addFolder({ name: "Vault" })
