@@ -239,6 +239,7 @@
     "search:docs": "pnpm build && node scripts/search-docs.ts",
     "check:agent-process": "pnpm build && node --experimental-strip-types scripts/check-agent-process.ts",
     "standards:check": "node config/wirecat/check.mjs",
+    "docs:images": "node docs/images/src/render.ts",
     "docs:lint": "markdownlint-cli2",
     "docs:spell": "cspell lint --config cspell.json --no-progress README.md",
     "ci:quick": "pnpm typecheck && vitest run src/cli/command-lint.test.ts",
