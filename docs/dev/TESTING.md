@@ -161,3 +161,12 @@ fixture checks saving/deleting/restoring thread counts, read/star changes and no
 account isolation. It refuses an existing database path. This protects the Node22 SQLite binding
 boundary that a Node 24-only mail suite cannot establish. Use a new temporary path when running it
 locally; no owner store or credentials are needed.
+
+## Platforms
+
+CI runs on Linux: the test suite on Node 24, smoke checks on Bun and on Node 22.16, a parity workflow that builds the
+Telegram, MAX and WhatsApp CLIs against this repository, and gitleaks over the full history. macOS and Windows run
+only four workflows. The SQLite library build (macOS) and the ONNX runtime probe (macOS and Windows) run monthly and
+when started by hand. The native-runtime check (Linux, macOS and Windows, x64 and arm64, and Alpine) runs monthly and
+on every pull request that changes how models load. The scheduler test (macOS and Windows) runs only when started by
+hand. The rest of the suite does not run on macOS or Windows.
