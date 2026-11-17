@@ -772,6 +772,8 @@ export const REASONS: ErrorReason[] = defineReasons([
  * that can hold a provider's or SQLite's raw text.
  */
 export const DETAILS = [
+  "holders",
+  "profile",
   "contracts",
   "calendars",
   "allowed",

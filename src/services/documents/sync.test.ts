@@ -183,6 +183,28 @@ describe("provider-neutral document sync", () => {
     expect(f.source.content).toHaveBeenCalledWith("a", 200000, expect.objectContaining({ id: "a", version: "2" }))
     expect(f.source.children).toHaveBeenCalledWith("nested", expect.objectContaining({ id: "nested" }))
   })
+  it("without a change feed reads a skipped file again only once it changes, and a moved path saves again", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const options = { ...f.options, source: rest as FeedlessDocumentSource, retryable: () => false }
+    f.files.set("scan", file("scan", ["nested"]))
+    f.files.set("denied", file("denied", ["nested"]))
+    const content = vi.mocked(f.source.content)
+    const real = content.getMockImplementation()
+    content.mockImplementation(async (id, max, known) => {
+      if (id === "scan") throw new CliError("validation_error", "no text layer")
+      if (id === "denied") throw new CliError("not_found", "gone for this account")
+      return (real as NonNullable<typeof real>)(id, max, known)
+    })
+    await syncDocuments(options)
+    content.mockClear()
+    expect(await syncDocuments(options)).toMatchObject({ saved: 0, pending: 0 })
+    expect(content).not.toHaveBeenCalled()
+    f.files.set("scan", { ...must(f.files.get("scan")), version: "2" })
+    f.files.set("b", { ...must(f.files.get("b")), providerMetadata: { path: "/renamed/b" } })
+    await syncDocuments(options)
+    expect(content.mock.calls.map(([id]) => id).sort()).toEqual(["b", "scan"])
+  })
   it("without a change feed skips a selected folder that is gone and drops its documents, instead of failing", async () => {
     const f = await setup()
     const { startToken: _start, changes: _changes, ...rest } = f.source

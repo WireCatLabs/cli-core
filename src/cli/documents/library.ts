@@ -129,7 +129,7 @@ const writeJson = (path: string, value: unknown) => writeSecurely(path, JSON.str
 
 /** A provider id is a file name as it is; anything else is hashed, so no id reaches outside the folder. */
 const fileName = (id: string) =>
-  /^[0-9A-Za-z_-]{1,64}$/u.test(id) ? id : createHash("sha256").update(id).digest("hex").slice(0, 40)
+  /^[0-9a-f-]{1,64}$/u.test(id) ? id : createHash("sha256").update(id).digest("hex").slice(0, 40)
 
 interface Folders<M extends SourceFile> {
   roots: string[]
@@ -320,7 +320,15 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
   // The folder as `folders add` read it stands in for the one the last pass held, before the first sync.
   const known = (source: FeedlessDocumentSource<M>): FeedlessDocumentSource<M> => {
     const chosen = files().folders().files ?? {}
-    return { ...source, metadata: (id, held) => source.metadata(id, held ?? chosen[id]) }
+    const metadata: FeedlessDocumentSource<M>["metadata"] = (id, held) => source.metadata(id, held ?? chosen[id])
+    // A proxy, not a spread: a source written as a class keeps its methods and private fields.
+    return new Proxy(source, {
+      get: (target, name) => {
+        if (name === "metadata") return metadata
+        const value = Reflect.get(target, name)
+        return typeof value === "function" ? value.bind(target) : value
+      },
+    })
   }
   const withSource = <T>(body: (source: FeedlessDocumentSource<M>) => Promise<T>, deadline?: Deadline) => {
     refuseOffline(command(), options.service)
@@ -401,8 +409,9 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
             reason: "folder.not-a-folder",
           })
         const chosen = files().folders()
-        const kept = { ...chosen.files, [file.id]: file }
-        files().saveFolders(chosen.roots.includes(file.id) ? chosen.roots : [...chosen.roots, file.id], kept)
+        // A folder already chosen keeps its date, so status does not report a new plan for it.
+        if (!chosen.roots.includes(file.id))
+          files().saveFolders([...chosen.roots, file.id], { ...chosen.files, [file.id]: file })
         return { id: file.id, name: file.name }
       },
       list: (filter) =>

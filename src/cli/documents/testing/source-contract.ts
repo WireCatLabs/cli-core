@@ -278,6 +278,8 @@ export const documentSourceContract = <M extends SourceFile>(
       const sync = fixture.faults?.sync
       if (feedOf(fixture.source) || !sync || (!fixture.change && !fixture.remove)) return
       const before = await finish(sync)
+      const idle = await finish(sync)
+      assert.equal(idle.result.saved, 0, "a sync with nothing changed on the provider saves nothing again")
       const removed = await fixture.remove?.()
       if (removed !== undefined)
         assert.ok(before.saved.includes(removed), `the first sync holds ${removed} before it is removed`)

@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
-import { documentIngestion, type SourceFile } from "../../documents.js"
+import { documentIngestion, type FeedlessDocumentSource, type SourceFile } from "../../documents.js"
 import { commandPermissions } from "../permission-keys.js"
 import { createProgram, type ProgramDefinition, run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -23,7 +23,7 @@ const provider = { name: "synthetic-box", kind: "documents", aliases: [], comman
 const WORDS: DocumentWords = { app: "box", remote: "box", provider: "Box", source: provider.name }
 const isFolder = (file: SourceFile) => file.mime === FAKE_FOLDER
 
-const definition = (source: FakeDocumentSource): ProgramDefinition => {
+const definition = (source: FeedlessDocumentSource): ProgramDefinition => {
   const configuration = settingsFor(app, { permissions: commandPermissions() })
   return {
     app,
@@ -60,7 +60,10 @@ const definition = (source: FakeDocumentSource): ProgramDefinition => {
   }
 }
 
-const setup = (source = fakeDocumentSource("alpha", { feed: false })) => {
+const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
+  source: S = fakeDocumentSource("alpha", { feed: false }) as unknown as S,
+  keyring?: KeyringStore,
+) => {
   const root = mkdtempSync(join(tmpdir(), "documents-library-"))
   const env: NodeJS.ProcessEnv = {
     MESSAGING_STORE: join(root, "wirecat.db"),
@@ -71,7 +74,13 @@ const setup = (source = fakeDocumentSource("alpha", { feed: false })) => {
   const program = createProgram(definition(source))
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
-    const exit = await run(["personal", ...argv, "--json"], definition(source), { streams, tty: false, env })
+    const words = argv[0] === "--as" ? argv.slice(1) : ["personal", ...argv]
+    const exit = await run([...words, "--json"], definition(source), {
+      streams,
+      tty: false,
+      env,
+      ...(keyring ? { keyring } : {}),
+    })
     return { exit, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
   }
   return { source, program, cli }
@@ -101,6 +110,46 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     const refused = await cli(["folders", "remove", "nested"])
     expect(refused.exit).not.toBe(0)
     expect(refused.stdout + refused.stderr).toContain("is not a chosen folder")
+  })
+
+  it("keeps one provider account to one signed-in profile", async () => {
+    const { cli } = setup(
+      fakeDocumentSource("alpha", { feed: false }),
+      memoryKeyring({ "box-cli:token:personal": "x" }),
+    )
+    expect((await cli(["folders", "add", "root"])).exit).toBe(0)
+    expect((await cli(["sync"])).exit).toBe(0)
+    expect((await cli(["--as", "work", "folders", "add", "root"])).exit).toBe(0)
+    const taken = await cli(["--as", "work", "sync"])
+    expect(taken.exit).not.toBe(0)
+    expect(taken.stdout + taken.stderr).toContain("already uses this account")
+  })
+
+  it("serves a source written as a class, its private fields and missing feed included", async () => {
+    const inner = fakeDocumentSource("alpha", { feed: false })
+    class Box {
+      readonly #inner = inner
+      identity() {
+        return this.#inner.identity()
+      }
+      metadata(id: string, known?: SourceFile) {
+        return this.#inner.metadata(id, known)
+      }
+      children(id: string, folder?: SourceFile) {
+        return this.#inner.children(id, folder)
+      }
+      content(id: string, max?: number, file?: SourceFile) {
+        return this.#inner.content(id, max, file)
+      }
+      bytes(id: string, file?: SourceFile) {
+        return this.#inner.bytes(id, file)
+      }
+    }
+    const { cli } = setup(new Box())
+    expect((await cli(["folders", "add", "root"])).exit).toBe(0)
+    const synced = await cli(["sync"])
+    expect(synced.exit, synced.stderr).toBe(0)
+    expect(JSON.parse(synced.stdout).item).toMatchObject({ saved: 2 })
   })
 
   it("refuses a file as a folder, and a list or search before the first sync says to sync", async () => {

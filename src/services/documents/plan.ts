@@ -102,9 +102,15 @@ export const planDocuments = async <M extends SourceFile>(
   const delta = new Map<string, M>()
   for (const skipped of state.skipped) if (skipped.file) files.set(skipped.id, skipped.file)
   if (full) files.clear()
+  // A pass without a feed lists every file again; only one new or changed since the last pass is work, so a file kept
+  // by name only is not read again each sync. A changed path (a folder renamed above it) counts as a change.
+  const prior = (id: string) => state.documents[id]?.metadata ?? state.skipped.find((item) => item.id === id)?.file
+  const moved = (before: M, file: M) =>
+    JSON.stringify(before.providerMetadata ?? null) !== JSON.stringify(file.providerMetadata ?? null)
   const keep = (file: M) => {
     files.set(file.id, file)
-    changed.add(file.id)
+    const before = feed || initial ? undefined : prior(file.id)
+    if (!before || changedSince(before, file) || moved(before, file)) changed.add(file.id)
     delta.set(file.id, file)
   }
   const drop = (id: string) => {
@@ -359,7 +365,13 @@ export const planDocuments = async <M extends SourceFile>(
       continue
     }
     if (changed.has(id) || retry || known?.notRead) {
-      if (!known || known.notRead || changedSince(known.metadata, file) || initial)
+      if (
+        !known ||
+        known.notRead ||
+        changedSince(known.metadata, file) ||
+        initial ||
+        (!feed && moved(known.metadata, file))
+      )
         jobs.push({ id, kind: "save", file })
     }
   }

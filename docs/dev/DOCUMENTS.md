@@ -144,7 +144,9 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   is then a full walk of the selected folders: no folder is skipped as already walked, the cursor is `walked`, and a
   file is saved only when `changedSince` its last pass (version, time, name, parents). What the finished pass did not
   find is removed; a pass cut short removes nothing and goes on from its saved walk. A chosen folder that answers
-  `not_found` is skipped as unavailable and its documents go; with a feed, the same root fails the rescan instead. The cost is one listing of every
+  `not_found` is skipped as unavailable and its documents go; with a feed, the same root fails the rescan instead.
+  On a path-addressed source a root moved on the provider answers `not_found` too, so its documents go until the
+  folder is chosen again under its new path. A file kept by name only is read again only once it changes. The cost is one listing of every
   folder per sync, so such a CLI keeps its folders selected rather than the whole account.
 - **A source that addresses files by path** reads the path from the file the sync passes: `metadata(id, known)` (the
   folder as the last pass held it, for a root or a folder that answered 404), `children(id, folder)`,
