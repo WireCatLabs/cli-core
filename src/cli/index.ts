@@ -248,6 +248,7 @@ export {
   type Observation,
 } from "./agent-evaluation.js"
 export { answerEntity } from "./answer-entity.js"
+export { linkedApiRoot } from "./api-discovery.js"
 export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
 export type { AppMcpOptions } from "./app-mcp-command.js"
 export { openAppStore } from "./app-store.js"

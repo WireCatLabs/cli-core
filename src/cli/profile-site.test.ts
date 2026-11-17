@@ -38,7 +38,10 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-const setup = (extra: Record<string, string> = {}) => {
+const setup = (extra: Record<string, string> = {}, basic = false) => {
+  // With basic, a site knows `editor:<its token>`, as WordPress knows a user's application password.
+  const header = (token: string) => (basic ? `Basic ${Buffer.from(token).toString("base64")}` : `Bearer ${token}`)
+  const expected = (at: string) => header(basic ? `editor:${TOKENS[at]}` : (TOKENS[at] as string))
   const root = mkdtempSync(join(tmpdir(), "profile-site-"))
   roots.push(root)
   const env = { HOME: root, BLOG_STATE_DIR: join(root, "state"), BLOG_CONFIG_DIR: join(root, "config"), ...extra }
@@ -51,7 +54,7 @@ const setup = (extra: Record<string, string> = {}) => {
     const authorization = new Headers(init?.headers).get("authorization")
     sent.push({ url: url.href, authorization })
     const at = `${url.host}${url.pathname.replace(/\/wp-json\/.*$/, "")}`
-    if (authorization !== `Bearer ${TOKENS[at]}`) return new Response("{}", { status: 401 })
+    if (authorization !== expected(at)) return new Response("{}", { status: 401 })
     return Response.json(url.pathname.endsWith("/users/me") ? { id: `me@${at}` } : [{ id: 1, site: at }])
   }
   const fetchFor = (host: string) => hostFetch({ hosts: [host], fetch: answer as typeof fetch })
@@ -68,10 +71,13 @@ const setup = (extra: Record<string, string> = {}) => {
         service: "Blog",
         resolveSettings: configuration.resolveSettings,
         site: { example: "blog.example.com" },
+        ...(basic
+          ? { login: { page: (at: string | undefined) => `https://${at}/wp-admin/authorize-application.php` } }
+          : {}),
         verify: async (_command, token, _events, at) => {
           const host = (at ?? "").split("/")[0] as string
           const response = await fetchFor(host)(`https://${at}/wp-json/users/me`, {
-            headers: { authorization: `Bearer ${token}` },
+            headers: { authorization: header(token) },
           })
           if (!response.ok) throw new CliError("authentication_error", "Blog refused the token")
           const { id } = (await response.json()) as { id: string }
@@ -81,7 +87,7 @@ const setup = (extra: Record<string, string> = {}) => {
       serviceApiCommand({
         app,
         configuration,
-        manifest,
+        manifest: basic ? { ...manifest, securitySchemes: { basic: { type: "http", scheme: "basic" } } } : manifest,
         service: "Blog",
         serverVariables: site,
         fetch: (command) => fetchFor(site(command).site.split("/")[0] as string),
@@ -105,6 +111,7 @@ const setup = (extra: Record<string, string> = {}) => {
     const err = streams.stderr.join("")
     return {
       code,
+      err,
       json: out.startsWith("{") ? JSON.parse(out) : undefined,
       error: err.startsWith("{") ? JSON.parse(err).error : undefined,
     }
@@ -190,4 +197,31 @@ it("a free variable inside a host takes one name, not a host with a path", async
   const sub = { ...manifest, servers: [{ url: "https://{site}.blog.test/v1", variables: {} }] }
   expect(manifestBaseUrl(sub, undefined, { site: "acme" })).toBe("https://acme.blog.test/v1")
   expect(() => manifestBaseUrl(sub, undefined, { site: "evil.test/x" })).toThrow("not one name without dots")
+})
+
+it("a password for a user name: --login keeps <name>:<password>, sent as Basic, and the page is shown first", async () => {
+  const { cli, sent } = setup({}, true)
+  expect((await cli(["one", "session", "start", "--site", "a.blog.test", "--json"], "token-a\n")).error).toMatchObject({
+    code: "validation_error",
+  })
+  const colon = await cli(
+    ["one", "session", "start", "--site", "a.blog.test", "--login", "ed:x", "--json"],
+    "token-a\n",
+  )
+  expect(colon.error.message).toContain("colon")
+  expect(sent).toEqual([])
+  const started = await cli(
+    ["one", "session", "start", "--site", "a.blog.test", "--login", "editor", "--json"],
+    "token-a\n",
+  )
+  expect(started.json.item).toMatchObject({ site: "a.blog.test", verified: true })
+  expect(started.err).toContain("at https://a.blog.test/wp-admin/authorize-application.php")
+  sent.length = 0
+  expect((await cli(["one", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
+  expect(sent).toEqual([
+    {
+      url: "https://a.blog.test/wp-json/posts",
+      authorization: `Basic ${Buffer.from("editor:token-a").toString("base64")}`,
+    },
+  ])
 })
