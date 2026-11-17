@@ -105,16 +105,38 @@ const serverValue = (
  * none: its security, its own or else the document's, is absent, as in a spec that says nothing about sign-in, or
  * empty (`[]`, `[{}]`). An optional sign-in (`[{}, { oauth: [] }]`) still sends the token.
  */
+// cli-base reads no basic scheme yet; the token of one is `<user>:<password>`, as `session start --login` keeps it.
+const basicPlace = (scheme: SecurityScheme): SignInPlace | undefined =>
+  scheme.type === "http" && /^basic$/i.test(scheme.scheme ?? "")
+    ? {
+        in: "header",
+        name: "authorization",
+        value: (token) => {
+          if (!token.includes(":"))
+            throw new CliError(
+              "authentication_error",
+              "this service signs in with a user name and a password: run session start --login <name>",
+            )
+          return `Basic ${Buffer.from(token).toString("base64")}`
+        },
+      }
+    : undefined
+
 const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): SignInPlace | undefined => {
   const requirements = signInRequirements(operation, manifest.security)
   if (!requirements) return undefined
   const names = requirements.flatMap((one) => Object.keys(one))
   const sendable = names.flatMap((name) => {
     const scheme = manifest.securitySchemes?.[name]
-    const place = scheme && signInPlace(scheme)
-    return place ? [place] : []
+    const place = scheme && (signInPlace(scheme) ?? basicPlace(scheme))
+    return place ? [{ place, basic: !signInPlace(scheme) }] : []
   })
-  const auth = sendable.find((one) => one.in === "header") ?? sendable[0]
+  // Basic only when nothing else is offered: it needs a user name a token sign-in does not keep.
+  const auth = (
+    sendable.find((one) => one.place.in === "header" && !one.basic) ??
+    sendable.find((one) => !one.basic) ??
+    sendable[0]
+  )?.place
   if (auth) return auth
   throw new CliError(
     "configuration_error",

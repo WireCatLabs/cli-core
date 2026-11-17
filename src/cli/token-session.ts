@@ -36,6 +36,13 @@ export interface TokenSessionOptions {
    * for the help, such as "blog.example.com".
    */
   site?: { example: string }
+  /**
+   * The secret is a password for a user name, as WordPress's application passwords: `session start --login <name>`
+   * asks only the password hidden, and the profile keeps `<name>:<password>`, which a `basic` scheme sends.
+   * `page` names where the owner makes one, shown before the question. `<PREFIX>_TOKEN` then holds
+   * `<name>:<password>` too.
+   */
+  login?: { page?: (site: string | undefined) => string }
   /** Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so. */
   claim?: (env: NodeJS.ProcessEnv, profile: string, id: string, tokens: ProfileTokenStore) => void
   /** What the token is, for the prompt and help: "API token" when not given. */
@@ -57,7 +64,7 @@ export const storageOf = (raw: string): TokenStorage => {
  */
 export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
   const { app, service } = options
-  const word = options.token ?? "API token"
+  const word = options.token ?? (options.login ? "password" : "API token")
   const contextOf = (command: Command) => {
     const base = baseContext(command, options.resolveSettings)
     const tokens = new ProfileTokenStore({
@@ -77,7 +84,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       lifetime: "interactive",
       mcp: false,
       examples: [
-        `${app.command} personal session start`,
+        `${app.command} personal session start${options.site ? ` --site ${options.site.example}` : ""}${options.login ? " --login <name>" : ""}`,
         `${app.command} personal session start --credential-storage file`,
       ],
     }),
@@ -94,21 +101,32 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       storageOf,
       "keyring" as TokenStorage,
     )
+  if (options.login) start.option("--login <name>", `the ${service} user name the password belongs to`)
   if (options.site)
     start.option(
       "--site <address>",
       `the ${service} site, as https://${options.site.example} or ${options.site.example}`,
     )
-  start.action(async function (this: Command, args: { credentialStorage: TokenStorage; site?: string }) {
-    const { env, profile, tokens, run } = contextOf(this)
+  start.action(async function (
+    this: Command,
+    args: { credentialStorage: TokenStorage; site?: string; login?: string },
+  ) {
+    const { env, profile, tokens, run, renderer } = contextOf(this)
     refuseCommandName(profile, commandWords(rootOf(this)), app.command)
     if (options.site && args.site === undefined)
       throw new CliError("validation_error", `give the ${service} site: --site ${options.site.example}`)
     const site = options.site && args.site !== undefined ? siteValue(args.site) : undefined
+    const login = args.login?.trim()
+    if (options.login && !login) throw new CliError("validation_error", `give the ${service} user name: --login <name>`)
+    // Basic sign-in splits at the first colon, so a colon in the name would move part of it into the password.
+    if (login?.includes(":")) throw new CliError("validation_error", "a user name with a colon cannot sign in")
     refuseOffline(this, service)
+    const page = options.login?.page?.(site)
+    if (page) renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
     // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
-    const token = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
-    if (!token) throw new CliError("validation_error", "no token was given")
+    const secret = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
+    if (!secret) throw new CliError("validation_error", `no ${word} was given`)
+    const token = login === undefined ? secret : `${login}:${secret}`
     const { id, account } = await run((events) => options.verify(this, token, events, site))
     ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(env, profile, id, tokens)
     const storedIn = tokens.write(profile, token, args.credentialStorage, site === undefined ? {} : { site })
