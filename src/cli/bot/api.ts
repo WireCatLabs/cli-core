@@ -30,6 +30,9 @@ export interface ApiCommands {
   execute: (command: Command, operation: ManifestOperation, input: ApiCommandInput) => Promise<void>
 }
 
+const scalarOf = (value: unknown): string | undefined =>
+  typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : undefined
+
 export const generatedApiCommand = (api: ApiCommands): Command => {
   const group = new Command("api").description(
     api.description ?? "every operation of the official Bot API, generated from its schema",
@@ -52,7 +55,13 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
         `--${apiFlagOf(parameter.name)} <value>`,
         parameter.description?.split("\n")[0] ?? parameter.name,
       )
-      command.addOption(parameter.required && parameter.in !== "body" ? option.makeOptionMandatory() : option)
+      if (parameter.required && parameter.in !== "body") {
+        // A required parameter the spec gives a default (Notion's `Notion-Version`) is sent with it, never asked for.
+        const fallback = scalarOf(parameter.schema.default)
+        if (fallback === undefined) option.makeOptionMandatory()
+        else option.default(fallback)
+      }
+      command.addOption(option)
     }
     if (operation.request && sendsBytes(operation)) {
       command.option("--body-file <path>", `the file to upload, sent as ${operation.request.contentType}; - is stdin`)

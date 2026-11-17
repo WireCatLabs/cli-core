@@ -230,6 +230,7 @@ type Sent = {
   authorization?: string
   key?: string
   redirect?: string
+  version?: string
 }
 
 const fixture = (
@@ -269,6 +270,7 @@ const fixture = (
               const headers = new Headers(init?.headers)
               const authorization = headers.get("authorization")
               const key = headers.get("x-api-key")
+              const version = headers.get("markdown-version")
               const one: Sent = {
                 method: init?.method ?? "GET",
                 url: String(input),
@@ -278,6 +280,7 @@ const fixture = (
                   : {}),
                 ...(authorization ? { authorization } : {}),
                 ...(key ? { key, redirect: String(init?.redirect) } : {}),
+                ...(version ? { version } : {}),
               }
               sent.push(one)
               return answer(one)
@@ -355,6 +358,46 @@ describe("the shared service api group", () => {
     const unsigned = fixture({}, undefined, { signsIn: false })
     expect((await unsigned.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).code).toBe(0)
     expect(unsigned.sent).toEqual([{ method: "GET", url: "https://api.pages.test/v1/pages/p1" }])
+  })
+
+  it("**sends a required parameter's default when its flag is left out**, as Notion's `Notion-Version`", async () => {
+    const markdown: Operation = {
+      id: "page-markdown",
+      command: "page-markdown",
+      binding: { kind: "http", method: "GET", path: "/pages/{page_id}/markdown" },
+      effect: "read",
+      tags: [],
+      parameters: [
+        page("page_id"),
+        { name: "Markdown-Version", in: "header", required: true, schema: { type: "string", default: "2026-03-11" } },
+        { name: "format", in: "query", required: true, schema: { type: "string" } },
+      ],
+    }
+    const { cli, sent, definition } = fixture({}, undefined, {
+      manifest: { ...manifest, operations: [...operations, markdown] },
+    })
+    const command = createProgram(definition)
+      .commands.find((one) => one.name() === "api")
+      ?.commands.find((one) => one.name() === "page-markdown")
+    const option = (long: string) => command?.options.find((one) => one.long === long)
+    expect(option("--markdown-version")).toMatchObject({ mandatory: false, defaultValue: "2026-03-11" })
+    expect(option("--format")?.mandatory).toBe(true)
+
+    const missing = await cli("work", "api", "page-markdown", "--page-id", "p1", "--json")
+    expect(missing.error?.message).toBe("required option '--format <value>' not specified")
+    expect((await cli("work", "api", "page-markdown", "--page-id", "p1", "--format", "md", "--json")).code).toBe(0)
+    expect(
+      (
+        await cli(
+          ...["work", "api", "page-markdown", "--page-id", "p2", "--format", "md", "--markdown-version", "2027-01-01"],
+          "--json",
+        )
+      ).code,
+    ).toBe(0)
+    expect(sent).toEqual([
+      expect.objectContaining({ url: "https://api.pages.test/v1/pages/p1/markdown?format=md", version: "2026-03-11" }),
+      expect.objectContaining({ url: "https://api.pages.test/v1/pages/p2/markdown?format=md", version: "2027-01-01" }),
+    ])
   })
 
   it("**uploads a file's bytes with --body-file**, as Petstore's octet-stream body, and leaves out a multipart form", async () => {
