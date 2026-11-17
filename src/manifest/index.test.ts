@@ -23,6 +23,13 @@ describe("parseCliConfig", () => {
       hooks: "./src/hooks.ts",
     }
     expect(parseCliConfig(oauth)).toEqual(oauth)
+    const tracker = {
+      ...config,
+      spec: { kind: "graphql" as const, from: "https://api.acme.test/graphql" },
+      category: "tracker" as const,
+      source: { provider: "acme", kinds: ["issue"], entities: {} },
+    }
+    expect(parseCliConfig(tracker)).toEqual(tracker)
   })
 
   it("names where a config is wrong", () => {
@@ -40,6 +47,8 @@ describe("parseCliConfig", () => {
       "spec.from",
     )
     expect(() => parseCliConfig({ ...config, category: "crm" })).toThrow("a crm CLI needs its source")
+    expect(() => parseCliConfig({ ...config, category: "tracker" })).toThrow("a tracker CLI needs its source")
+    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm or tracker CLI")
     for (const from of [
       "/etc/spec.json",
       "//evil.test/x",
@@ -55,7 +64,7 @@ describe("parseCliConfig", () => {
     expect(() => parseCliConfig({ ...config, identity: { ...config.identity, owner: "-owner" } })).toThrow(
       "identity.owner",
     )
-    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm CLI")
+    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm or tracker CLI")
     expect(() => parseCliConfig({ ...config, extra: true })).toThrow(
       "wirecat.config: extra: not a field of wirecat.config",
     )
@@ -64,7 +73,7 @@ describe("parseCliConfig", () => {
   it("takes each category, a crm CLI with its source, and a token's verify call", () => {
     for (const category of ["mail", "files", "other"] as const)
       expect(parseCliConfig({ ...config, category }).category).toBe(category)
-    expect(() => parseCliConfig({ ...config, category: "tracker" })).toThrow("wirecat.config: category")
+    expect(() => parseCliConfig({ ...config, category: "erp" })).toThrow("wirecat.config: category")
     const crm = { ...config, category: "crm" as const, source: { provider: "acme" } }
     expect(parseCliConfig(crm).source).toEqual({ provider: "acme" })
     const verify = { operation: "getV2Self", id: "workspace_id", name: "workspace_name" }

@@ -150,7 +150,7 @@ export interface CrmManifestHooks {
 const path = v.pipe(v.string(), v.regex(/^[^.\s]+(\.[^.\s]+)*$/, "a dotted path such as properties.name"))
 const paths = v.pipe(v.array(path), v.minLength(1))
 
-const rule: v.GenericSchema<CrmRule> = v.union(
+export const crmRuleSchema: v.GenericSchema<CrmRule> = v.union(
   [
     path,
     v.strictObject({ first: paths }),
@@ -165,6 +165,8 @@ const rule: v.GenericSchema<CrmRule> = v.union(
   ],
   "a path, one of first, join, all, path, each, value, or a function",
 ) as v.GenericSchema<CrmRule>
+
+const rule = crmRuleSchema
 
 const call = v.strictObject({
   operation: v.pipe(v.string(), v.minLength(1)),

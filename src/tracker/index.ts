@@ -13,6 +13,20 @@ export {
   type TrackerUser,
 } from "../domain/tracker.js"
 export { addTrackerCommands, type TrackerCommandOptions, type TrackerRun } from "./cli/index.js"
+export {
+  parseTrackerManifest,
+  type TrackerAfterHook,
+  type TrackerChangesCall,
+  type TrackerManifest,
+  type TrackerManifestEntity,
+  type TrackerManifestHooks,
+  type TrackerOperationCall,
+} from "./manifest/manifest.js"
+export { TRACKER_FIELDS } from "./manifest/map.js"
+export {
+  type TrackerManifestSourceOptions,
+  trackerSourceFromManifest,
+} from "./manifest/source.js"
 export type {
   TrackerCallContext,
   TrackerChanges,

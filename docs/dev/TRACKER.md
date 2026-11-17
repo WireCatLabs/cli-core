@@ -38,11 +38,12 @@ stops keeps its ids and the page it reached.
   `state: "partial"` and `stopped`; the kinds it finished are skipped by the next run until every kind has had its
   round, so a budget smaller than the number of kinds still moves on.
 - **Held passes.** A pass is held (`pass: "held"`, with the reason in `held`) and marks nothing when the list is empty
-  while rows are stored, when it would mark more than half of ten or more stored rows deleted, or when the sign-in
-  reported a gap for the kind: a tracker that lost rights lists none of what it can no longer see.
+  while rows are stored, or when it would mark more than half of ten or more stored rows deleted: a tracker that lost
+  rights lists none of what it can no longer see. `--rescan` lets those through. A pass after the sign-in reported a
+  gap for the kind is held even then: what it could not read is not gone.
 - **Failures.** A kind that fails is named in its result's `error` and the others still sync. A page that says there is
   more but gives no next page fails the kind.
-- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through. A
+- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a gap held it. A
   rescan that stops goes on as one in the next run.
 
 A save merges: a field the read left out keeps its stored value, so a partial selection never erases.
@@ -65,6 +66,24 @@ to the issue and copies none of its text. The same issue again answers the task 
 `addTrackerCommands(program, { app, open })` mounts `sync`, `issues list|show|search|task`, and `list` for
 `projects`, `teams`, `users` (each with its person), `states` and `labels`. Every text field from the tracker is named
 in the row's `untrusted`.
+
+## A tracker described as data
+
+`trackerSourceFromManifest(manifest, { api, call, hooks? })` builds a `TrackerSource` from the generated API manifest
+and a `TrackerManifest`, as `crmSourceFromManifest` does for a CRM. Each kind names a `list` call, a `changes` call
+whose `variables` hold `"{since}"` (the cursor less `overlapMs`, ten minutes by default), an `ids` call that selects
+only the id, and a `map` from our fields to paths in a row, in the CRM manifest's rule language. A selected object
+the tracker answers `null` (`project: null`) is none, so the stored link is cleared.
+
+Over GraphQL a call's `selection` replaces the operation's default one, so a tracker reads `state { id }` or
+`labels { nodes { id } }`. `parseTrackerManifest` refuses a map path the selection leaves out, before any request:
+a field missing from the request would read as "the tracker cleared it". The variables travel as the request body;
+the selection rides on the request as `selection`, which the `api` group's GraphQL executor sends.
+
+`self: { call, path }` names the signed-in user. `hooks.after` corrects a record; `hooks.extend` adds methods.
+
+A `wirecat.config.ts` with `category: "tracker"` needs its `source`; `spec.kind: "graphql"` names an introspection
+result.
 
 ## The contract kit
 

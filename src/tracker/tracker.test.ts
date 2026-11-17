@@ -145,7 +145,11 @@ describe("syncTracker guards", () => {
       ...lost,
       changes: (async () => ({ items: [], hasMore: false, cursor: null })) as unknown as typeof source.changes,
     }
-    const through = await syncTracker(emptied, store, account, { now: T + 3 * DAYS, rescan: true })
+    const refused = await syncTracker(gapped, store, account, { now: T + 3 * DAYS, rescan: true })
+    expect(refused.synced.find((one) => one.kind === "comment")?.pass).toBe("held")
+    expect(await store.tracker.count(account, "comment")).toBe(1)
+
+    const through = await syncTracker(emptied, store, account, { now: T + 4 * DAYS, rescan: true })
     expect(through.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "complete", unlisted: 3 })
   })
 
