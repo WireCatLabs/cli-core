@@ -34,19 +34,29 @@ export interface SourceChange<M extends SourceFile = SourceFile> {
 }
 export interface DocumentSource<M extends SourceFile = SourceFile> {
   identity(): Promise<string>
-  metadata(id: string): Promise<M>
-  children(id: string): Promise<M[]>
+  /**
+   * The file `known` is the one the sync last listed under this id, when it has one: a provider that addresses files
+   * by path, not by id (Yandex Disk, WebDAV), reads its path from there. The same holds for `children`,
+   * `childrenPage`, `content` and `bytes`.
+   */
+  metadata(id: string, known?: M): Promise<M>
+  children(id: string, folder?: M): Promise<M[]>
   /**
    * One page of a folder's children, for a provider whose folder can be too big for one step of a sync (a Notion
    * database of 12,000 rows). A sync with it lists one page per step and saves the cursor between calls. A cursor
    * the provider no longer accepts must fail as `not_found` (through `errorOf`): the sync then lists the folder again
    * from its first page, where any other error fails every later sync on that page until a `--rescan`.
    */
-  childrenPage?(id: string, cursor?: string): Promise<{ files: M[]; cursor?: string }>
-  startToken(): Promise<string>
-  changes(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
-  content(id: string, maxChars?: number): Promise<SourceContent<M>>
-  bytes(id: string): Promise<Uint8Array>
+  childrenPage?(id: string, cursor?: string, folder?: M): Promise<{ files: M[]; cursor?: string }>
+  /**
+   * The change feed. A provider without one (Yandex Disk, WebDAV, S3) leaves out both `startToken` and `changes`:
+   * every sync then walks the selected folders in full, saves only what changed since the last pass, and removes
+   * what the finished pass no longer found.
+   */
+  startToken?(): Promise<string>
+  changes?(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
+  content(id: string, maxChars?: number, file?: M): Promise<SourceContent<M>>
+  bytes(id: string, file?: M): Promise<Uint8Array>
 }
 export interface IndexedSource<M extends SourceFile = SourceFile> {
   metadata: M

@@ -11,6 +11,8 @@ import { documentIngestion } from "./ingestion.js"
 import type { SyncOptions } from "./ports.js"
 import { type SyncResult, syncDocuments } from "./sync.js"
 
+type FeedSource = DocumentSource & Required<Pick<DocumentSource, "startToken" | "changes">>
+
 /**
  * A synthetic page tree: every page holds sub-pages, so every node is a folder
  * and a document, as a Notion workspace is.
@@ -381,7 +383,7 @@ describe("a sync of a tree larger than one call's bound", () => {
 
   it("makes one request in every call of a run shorter than the deadline's margin, and ends", async () => {
     const tree = treeSync(pageTree(1, 2, 2))
-    const base = tree.options.source as DocumentSource
+    const base = tree.options.source as FeedSource
     let requests = 0
     // The start token and the root's own metadata are requests too, each in a call of its own.
     const source: DocumentSource = {
@@ -423,7 +425,7 @@ describe("a sync of a tree larger than one call's bound", () => {
 
   it("lets only a call's first request past the deadline's margin: the start token, and nothing after it", async () => {
     const tree = treeSync(pageTree(0, 0, 0))
-    const base = tree.options.source as DocumentSource
+    const base = tree.options.source as FeedSource
     let clock = 0
     const calls: string[] = []
     const source: DocumentSource = {
@@ -539,7 +541,7 @@ describe("a sync of a tree larger than one call's bound", () => {
 
   it("takes the start token and the root's metadata from the budget, so a 45 s run of slow reads ends with time left", async () => {
     const tree = treeSync(pageTree(2, 2, 2))
-    const base = tree.options.source as DocumentSource
+    const base = tree.options.source as FeedSource
     let clock = 0
     const slow =
       <A extends unknown[], R>(read: (...args: A) => Promise<R>) =>

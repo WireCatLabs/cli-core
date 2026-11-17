@@ -138,6 +138,17 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   folder bigger than one call starts over each sync and never ends. A Notion database of 12 000 rows needs this to
   get past its first page over MCP (45 s); `documentSourceContract` checks that the pages list what `children()`
   does, each entry once.
+<a id="a-source-without-a-change-feed"></a>
+- **A source without a change feed** (Yandex Disk, WebDAV, S3) leaves out both `startToken` and `changes`. Every sync
+  is then a full walk of the selected folders: no folder is skipped as already walked, the cursor is `walked`, and a
+  file is saved only when `changedSince` its last pass (version, time, name, parents). What the finished pass did not
+  find is removed; a pass cut short removes nothing and goes on from its saved walk. The cost is one listing of every
+  folder per sync, so such a CLI keeps its folders selected rather than the whole account.
+- **A source that addresses files by path** reads the path from the file the sync passes: `metadata(id, known)` (the
+  folder as the last pass held it, for a root or a folder that answered 404), `children(id, folder)`,
+  `childrenPage(id, cursor, folder)`, `content(id, maxChars, file)` and `bytes(id, file)`. Its ids stay stable ids
+  (Yandex Disk's `resource_id`), so a moved file keeps its notes and tags; a root it cannot find by id is the CLI's
+  to resolve from its own settings.
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one
   `changes()`. A folder listed with `children()` is listed whole, so a source caps its own listing (drive at 10 000
   entries in one folder or one change feed).
@@ -240,7 +251,7 @@ CLI's run; the builders honour a global `--dry-run`.
   mirror once.
 
 `@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
-for pages with sub-pages, and `change` to check the change feed), and `documentCommandsContract` the CLI's mounted
+for pages with sub-pages, `change` to check the change feed, and `change` with `remove` for a source without one), and `documentCommandsContract` the CLI's mounted
 commands over its fakes: every shared path, its effects, no override of a shared contract, and the answers by id.
 `fakeDocumentSource` is a provider in memory, and the kit's own test runs both contracts over a reference CLI on a
 temporary store.

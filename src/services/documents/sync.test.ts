@@ -152,6 +152,30 @@ describe("provider-neutral document sync", () => {
       expect(f.state().lastSync).toBe("2026-10-16T00:00:00.000Z")
     },
   )
+  it("without a change feed walks every pass, saves only what changed and removes what a finished pass lost", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const source: DocumentSource = rest
+    const options = { ...f.options, source }
+    expect(await syncDocuments(options)).toMatchObject({ saved: 2, removed: 0, pending: 0 })
+    expect(f.state().cursor).toBe("walked")
+    vi.mocked(f.source.content).mockClear()
+    expect(await syncDocuments(options)).toMatchObject({ saved: 0, removed: 0, pending: 0 })
+    expect(f.source.content).not.toHaveBeenCalled()
+    f.files.set("a", { ...must(f.files.get("a")), version: "2" })
+    f.files.delete("b")
+    f.files.set("c", file("c", ["nested"]))
+    const cut = await syncDocuments({ ...options, maxEntries: 1 })
+    expect(cut).toMatchObject({ complete: false, removed: 0 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b"])
+    let last = cut
+    for (let call = 0; call < 10 && !(last.complete && last.pending === 0); call++)
+      last = await syncDocuments({ ...options, maxEntries: 1 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "c"])
+    expect(f.source.content).toHaveBeenCalledTimes(2)
+    expect(f.source.content).toHaveBeenCalledWith("a", 200000, expect.objectContaining({ id: "a", version: "2" }))
+    expect(f.source.children).toHaveBeenCalledWith("nested", expect.objectContaining({ id: "nested" }))
+  })
   it("names the synced profile's account, so a hit says the CLI and profile, not a notes folder", async () => {
     const f = await setup()
     const ingest = documentIngestion(f.store, {
