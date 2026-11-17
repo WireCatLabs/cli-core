@@ -89,6 +89,8 @@ export const listedHolds = (account: Pick<ListedAccount, "kind" | "kinds">, kind
 export interface ListedEntry {
   entry: string
   accounts: ListedAccount[]
+  /** For a bare word that names no account: the words that name something in the store. */
+  holds?: string
 }
 
 /** `stored` is a folder's or a documents account's own key (`local:<ulid>`); either is listed as `notes:<id>`. */
@@ -211,6 +213,9 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   if (wanted === "all") return [...held]
   if (wanted === "personal" || wanted === "bots")
     return held.filter((one) => listedHolds(one, "messages") && isBotProvider(one.provider) === (wanted === "bots"))
+  // Drive and Notion accounts are stored and searched as notes folders, so their kind stays `notes`; the word still
+  // names them, beside the imports whose kind is documents.
+  if (wanted === "documents") return held.filter((one) => listedHolds(one, "documents") || isDocumentAccount(one))
   if (isKind(wanted)) return held.filter((one) => listedHolds(one, wanted))
   const recorded = context.profiles[wanted]
   if (
@@ -222,6 +227,28 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   if (isDocumentAccountProvider(provider) || isFolderProvider(provider))
     return storedAs(held, { provider, account: "" })
   return held.filter((one) => one.provider === provider)
+}
+
+const isDocumentAccount = ({ stored }: Held) => stored !== undefined && isDocumentAccountProvider(stored.provider)
+
+/** The words that name something the store holds: the groups no one saves, each kind with an account, each provider. */
+const choices = (held: readonly Held[]) => {
+  const kinds = held.flatMap((one) => one.kinds ?? (one.kind ? [one.kind] : []))
+  const messengers = held.filter((one) => listedHolds(one, "messages"))
+  // `added` names no account by itself: the owner's added sources are found as notes.
+  const providers = held.flatMap(({ stored, provider }) =>
+    stored?.provider === ADDED_PROVIDER ? [] : [stored?.provider ?? provider],
+  )
+  return [
+    ...new Set([
+      "all",
+      ...(messengers.some((one) => !isBotProvider(one.provider)) ? ["personal"] : []),
+      ...(messengers.some((one) => isBotProvider(one.provider)) ? ["bots"] : []),
+      ...kinds,
+      ...(held.some(isDocumentAccount) ? ["documents"] : []),
+      ...providers,
+    ]),
+  ].join(", ")
 }
 
 export const keyOf = ({ provider, account }: AccountKey): string => `${provider}\u0000${account}`
@@ -245,7 +272,9 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
     const colon = item.indexOf(":")
     if (colon === -1) {
       try {
-        entries.push({ entry: item, accounts: accountsOfWord(item, held, context) })
+        const accounts = accountsOfWord(item, held, context)
+        // A search that reads nothing because a word named nothing answers with the words that do name something.
+        entries.push({ entry: item, accounts, ...(accounts.length === 0 && !group ? { holds: choices(held) } : {}) })
       } catch (error) {
         if (!group || !(error instanceof CliError)) throw error
         fail(`"${item}" in group ${group}: ${error.message}`)
@@ -272,8 +301,9 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
   }
   for (const item of itemsOf(value)) entry(item)
   const { only } = context
-  return entries.map(({ entry, accounts }) => ({
+  return entries.map(({ entry, accounts, holds }) => ({
     entry,
+    ...(holds === undefined ? {} : { holds }),
     accounts: accounts
       .filter((one) => only === undefined || only.has(keyOf(one)))
       .map(({ provider, account, kind, kinds }) => ({
@@ -343,9 +373,12 @@ export const fitting = (
           : { source: entry, code: "not_found", reason: "no account in the store" },
     )
   }
-  if (chosen.size === 0)
+  if (chosen.size === 0) {
+    const words = entries.length === 1 ? entries[0]?.holds : undefined
     fail(
-      `--source names nothing ${what} reads: ${skipped.map(({ source, reason }) => `${source} (${reason})`).join(", ")}`,
+      `--source names nothing ${what} reads: ${skipped.map(({ source, reason }) => `${source} (${reason})`).join(", ")}` +
+        (words === undefined ? "" : ` — the store holds ${words}`),
     )
+  }
   return { accounts: [...chosen.values()], skipped }
 }

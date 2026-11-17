@@ -147,6 +147,7 @@ describe("a run in a group", () => {
     expect(scopeToGroup(inGroup("work"), {}, context)).toEqual({ source: "group:work" })
     expect(scopeToGroup(inGroup("work"), { source: "telegram" }, context)).toEqual({ source: "telegram:102" })
     expect(scopeToGroup(inGroup("work"), { source: "telegram:102" }, context)).toEqual({ source: "telegram:102" })
+    expect(scopeToGroup(inGroup("work"), { source: "telegram,meetings" }, context).source).toContain("telegram:102")
   })
 
   it("refuses an account outside the group by what was typed, for a read and for a write's --account", async () => {
