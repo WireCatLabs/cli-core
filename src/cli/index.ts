@@ -556,9 +556,7 @@ export {
   accountFileFor,
   profilesHere,
   recalledAccount,
-  recalledSite,
   rememberAccount,
-  rememberSite,
 } from "./messenger/accounts.js"
 export { terminalAsker } from "./messenger/ask.js"
 export type { CompletionOptions } from "./messenger/complete-command.js"

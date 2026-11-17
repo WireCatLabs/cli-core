@@ -37,7 +37,10 @@ export const manifestBaseUrl = (
     given ??
     (server as ApiServer).url.replace(/\{([^}]+)\}/g, (_, name: string) => {
       const value = variables[name]
-      if (value !== undefined) return serverValue(name, value)
+      // Only a variable that is the whole host takes a host with a port or a path: `{subdomain}.example.com` given
+      // `evil.test/x` would send the token to evil.test.
+      if (value !== undefined)
+        return wholeHost(server as ApiServer, name) ? serverValue(name, value) : labelValue(name, value)
       const variable = server?.variables?.[name]
       if (variable?.default === undefined || !variable.enum?.includes(variable.default))
         throw new CliError(
@@ -63,7 +66,26 @@ export const siteValue = (raw: string): string => {
     .replace(/\/+$/, "")
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text))
     throw new CliError("validation_error", `--site takes an https address or a host, not ${JSON.stringify(raw)}`)
-  return serverValue("site", text, "validation_error")
+  const [host = "", ...path] = serverValue("site", text, "validation_error").split("/")
+  const site = [host.toLowerCase(), ...path].join("/")
+  // What a URL makes of it must be what was typed: `0x7f.1`, `a.test/..` or a port past 65535 lands elsewhere.
+  const url = URL.canParse(`https://${site}`) ? new URL(`https://${site}`) : undefined
+  if (
+    !url ||
+    url.host !== site.split("/")[0] ||
+    url.pathname.replace(/\/$/, "") !== site.slice(site.split("/")[0]?.length)
+  )
+    throw new CliError("validation_error", `--site ${JSON.stringify(raw)} is not a plain https address`)
+  return site
+}
+
+const wholeHost = (server: ApiServer, name: string) =>
+  server.url === `https://{${name}}` || server.url.startsWith(`https://{${name}}/`)
+
+const labelValue = (name: string, value: string) => {
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(value))
+    throw new CliError("configuration_error", `{${name}} ${JSON.stringify(value)} is not one name without dots`)
+  return value
 }
 
 // A value only names a place: a user name, query or fragment in it would change where the token goes, or add to it.

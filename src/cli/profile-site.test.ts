@@ -38,10 +38,10 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-const setup = () => {
+const setup = (extra: Record<string, string> = {}) => {
   const root = mkdtempSync(join(tmpdir(), "profile-site-"))
   roots.push(root)
-  const env = { HOME: root, BLOG_STATE_DIR: join(root, "state"), BLOG_CONFIG_DIR: join(root, "config") }
+  const env = { HOME: root, BLOG_STATE_DIR: join(root, "state"), BLOG_CONFIG_DIR: join(root, "config"), ...extra }
   const keyring = memoryKeyring()
   const sent: { url: string; authorization: string | null }[] = []
   const configuration = settingsFor(app)
@@ -116,7 +116,9 @@ it("one CLI reads two sites through two profiles, each token only at its own sit
   const { cli, sent } = setup()
   expect((await cli(["one", "api", "list", "--json"])).code).toBe(0)
   const before = await cli(["one", "api", "list-posts", "--json"])
-  expect(before.error.message).toContain("one has no site yet: blog one session start --site <address>")
+  expect(before.error.message).toContain(
+    "one is not signed in to a site — run `blog one session start --site <address>`",
+  )
 
   const a = await cli(["one", "session", "start", "--site", "https://a.blog.test/", "--json"], "token-a\n")
   expect(a.json.item).toMatchObject({ site: "a.blog.test", verified: true })
@@ -124,6 +126,10 @@ it("one CLI reads two sites through two profiles, each token only at its own sit
   expect(b.json.item).toMatchObject({ site: "b.blog.test/news", verified: true })
   expect((await cli(["two", "session", "status", "--json"])).json.item).toMatchObject({ site: "b.blog.test/news" })
 
+  expect(sent.map(({ url, authorization }) => `${url} ${authorization}`)).toEqual([
+    "https://a.blog.test/wp-json/users/me Bearer token-a",
+    "https://b.blog.test/news/wp-json/users/me Bearer token-b",
+  ])
   sent.length = 0
   expect((await cli(["one", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
   expect((await cli(["two", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "b.blog.test/news" }])
@@ -145,4 +151,43 @@ it("session start refuses a missing, plain-http or credential-bearing site befor
     expect(refused.error).toMatchObject({ code: "validation_error" })
   }
   expect(sent).toEqual([])
+})
+
+it("a site goes with its token: end forgets both, a failed sign-in keeps the old pair, a new one moves both", async () => {
+  const { cli, sent } = setup()
+  await cli(["one", "session", "start", "--site", "a.blog.test", "--json"], "token-a\n")
+  const refused = await cli(["one", "session", "start", "--site", "b.blog.test/news", "--json"], "token-a\n")
+  expect(refused.error).toMatchObject({ code: "authentication_error" })
+  expect((await cli(["one", "session", "status", "--json"])).json.item).toMatchObject({ site: "a.blog.test" })
+  await cli(["one", "session", "start", "--site", "b.blog.test/news", "--json"], "token-b\n")
+  sent.length = 0
+  await cli(["one", "api", "list-posts", "--json"])
+  expect(sent).toEqual([{ url: "https://b.blog.test/news/wp-json/posts", authorization: "Bearer token-b" }])
+  await cli(["one", "session", "end", "--json"])
+  sent.length = 0
+  expect((await cli(["one", "api", "list-posts", "--json"])).error).toMatchObject({ code: "authentication_error" })
+  expect((await cli(["one", "session", "status", "--json"])).json.item).toMatchObject({ site: null })
+  expect(sent).toEqual([])
+})
+
+it("BLOG_TOKEN goes only to BLOG_TOKEN_SITE, never to a profile's stored site", async () => {
+  const bare = setup({ BLOG_TOKEN: "token-a" })
+  await bare.cli(["two", "session", "start", "--site", "b.blog.test/news", "--json"], "token-b\n")
+  bare.sent.length = 0
+  const missing = await bare.cli(["two", "api", "list-posts", "--json"])
+  expect(missing.error.message).toContain("session start --site")
+  expect((await bare.cli(["two", "session", "status", "--check", "--json"])).error).toMatchObject({
+    code: "authentication_error",
+  })
+  expect(bare.sent).toEqual([])
+  const paired = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test" })
+  expect((await paired.cli(["two", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
+  expect(paired.sent).toEqual([{ url: "https://a.blog.test/wp-json/posts", authorization: "Bearer token-a" }])
+})
+
+it("a free variable inside a host takes one name, not a host with a path", async () => {
+  const { manifestBaseUrl } = await import("./service-api-manifest.js")
+  const sub = { ...manifest, servers: [{ url: "https://{site}.blog.test/v1", variables: {} }] }
+  expect(manifestBaseUrl(sub, undefined, { site: "acme" })).toBe("https://acme.blog.test/v1")
+  expect(() => manifestBaseUrl(sub, undefined, { site: "evil.test/x" })).toThrow("not one name without dots")
 })

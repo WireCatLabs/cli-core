@@ -8,7 +8,7 @@ import { baseContext, environmentOf, outputFor, secretInputOf } from "./context.
 import { refuseOffline } from "./early-refusal.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, logsInOrOut, REMOTE_READ, refuseUnderReadOnly } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
-import { profilesHere, recalledSite, rememberAccount, rememberSite } from "./messenger/accounts.js"
+import { profilesHere, rememberAccount } from "./messenger/accounts.js"
 import { commandWords, profileFree, refuseCommandName, rootOf } from "./profile.js"
 import { ProfileTokenStore, type TokenStorage } from "./profile-token.js"
 import { siteValue } from "./service-api-manifest.js"
@@ -31,8 +31,9 @@ export interface TokenSessionOptions {
   ) => Promise<{ id: string; account: Readonly<Record<string, unknown>> }>
   /**
    * The service runs on the owner's own site, its server's `{site}`: `session start` takes `--site`, verifies the
-   * token there and keeps the site beside the account, so the token only ever goes to it (`recalledSite`). The example
-   * is a site for the help, such as "blog.example.com".
+   * token there and keeps the site in the token's own entry, written and forgotten with it, so the token only ever
+   * goes to that site (`signedInSite`). `<PREFIX>_TOKEN` needs `<PREFIX>_TOKEN_SITE` beside it. The example is a site
+   * for the help, such as "blog.example.com".
    */
   site?: { example: string }
   /** Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so. */
@@ -110,8 +111,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     if (!token) throw new CliError("validation_error", "no token was given")
     const { id, account } = await run((events) => options.verify(this, token, events, site))
     ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(env, profile, id, tokens)
-    if (site !== undefined) rememberSite(app, profile, site, env)
-    const storedIn = tokens.write(profile, token, args.credentialStorage)
+    const storedIn = tokens.write(profile, token, args.credentialStorage, site === undefined ? {} : { site })
     answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...siteOf(site), ...account })
   })
 
@@ -126,11 +126,12 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     )
     .option("--check", `ask ${service} whether the token still works, and whose it is`)
     .action(async function (this: Command, args: { check?: boolean }) {
-      const { env, profile, tokens, run } = contextOf(this)
+      const { profile, tokens, run } = contextOf(this)
       const saved = tokens.read(profile)
-      const site = options.site ? recalledSite(app, profile, env) : undefined
+      const site = options.site ? tokens.readWith(profile, SITE)?.secret : undefined
       const state = { profile, state: saved ? "saved" : "missing", token_from: saved?.source ?? null, ...siteOf(site) }
       if (!args.check || !saved) return answer(this, { ...state, verified: false })
+      if (options.site && site === undefined) throw noSite(app, profile)
       refuseOffline(this, service)
       const { account } = await run((events) => options.verify(this, saved.secret, events, site))
       answer(this, { ...state, verified: true, ...account })
@@ -191,22 +192,28 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     .addCommand(list)
 }
 
+const SITE = "site"
+const noSite = (app: AppIdentity, profile: string) =>
+  new CliError(
+    "authentication_error",
+    `profile ${profile} is not signed in to a site — run \`${app.command} ${profile} session start --site <address>\``,
+    { reason: "session.missing" },
+  )
+
 /**
- * The site this run's profile signed in to, as the `{ site }` server variable of `serviceApiCommand` and
- * `serviceApiCall`; an authentication error naming `session start --site` before any sign-in.
+ * The site this run's profile signed in to, as the `{ site }` server variable of `serviceApiCommand` (give it as is)
+ * and `serviceApiCall` (give it the command's). It comes from where the token does: the profile's entry, or
+ * `<PREFIX>_TOKEN_SITE` beside `<PREFIX>_TOKEN`; never one of each.
  */
 export const signedInSite = (
   app: AppIdentity,
   resolveSettings: TokenSessionOptions["resolveSettings"],
 ): ((command: Command) => { site: string }) => {
   return (command) => {
-    const { env, settings } = baseContext(command, resolveSettings)
-    const site = recalledSite(app, settings.profile, env)
-    if (site === undefined)
-      throw new CliError(
-        "authentication_error",
-        `${settings.profile} has no site yet: ${app.command} ${settings.profile} session start --site <address>`,
-      )
+    const { env, keyring, settings } = baseContext(command, resolveSettings)
+    const tokens = new ProfileTokenStore({ app, env, ...(keyring ? { keyring } : {}) })
+    const site = tokens.readWith(settings.profile, SITE)?.secret
+    if (site === undefined) throw noSite(app, settings.profile)
     return { site }
   }
 }
