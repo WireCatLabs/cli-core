@@ -666,6 +666,10 @@ describe("crmSourceFromManifest", () => {
       url: null,
     })
     expect(mapFields(rules, types, { id: "1", values: {} })).toEqual({ externalId: "1" })
+    const links = { externalId: "id", organizations: { each: "values.company", id: "target_record_id" } } as const
+    expect(
+      mapFields(links, { externalId: "id", organizations: "organizations" }, { id: "1", values: { company: null } }),
+    ).toEqual({ externalId: "1", organizations: [] })
   })
 
   it("asks only for the properties the map reads and the account's own fields", async () => {

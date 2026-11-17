@@ -173,12 +173,23 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     if (keys.length === 0) return node
     const found = resolve(node, definitions)
     const [key, ...rest] = keys as [string, ...string[]]
-    if (found.type === "union") {
-      const fits = found.of.find((one) => "node" in walk(one, keys.join("."), definitions))
-      return fits ? narrowed(fits, keys) : node
+    const fits = (one: SchemaNode) => "node" in walk(one, keys.join("."), definitions)
+    switch (found.type) {
+      case "union": {
+        const branch = found.of.find(fits)
+        return branch ? narrowed(branch, keys) : node
+      }
+      case "allOf":
+        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys) : one)) }
+      case "array":
+        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest) } : node
+      case "object": {
+        const inner = found.properties[key] ?? found.additionalProperties
+        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest) } } : node
+      }
+      default:
+        return node
     }
-    if (found.type === "array" && /^\d+$/.test(key)) return { ...found, items: narrowed(found.items, rest) }
-    return node
   }
 
   /** The object a dotted path ends in, with its last key and schema: what is missing is built from the schema's sample. */
@@ -237,7 +248,9 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     n: number,
     given: Readonly<Record<string, Value | undefined>>,
   ): CrmRaw => {
-    const made = sample(node)
+    // Sampled already cut to the branches the rules write into, so a list the first sample holds has the right type.
+    const paths = Object.values(rules).flatMap((rule) => pathOf(rule) ?? [])
+    const made = sample(node && paths.reduce((cut, path) => narrowed(cut, path.split(".")), node))
     const row = isRaw(made) ? made : {}
     for (const [field, rule] of Object.entries(rules)) {
       const path = pathOf(rule)

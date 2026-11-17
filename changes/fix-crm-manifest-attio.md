@@ -10,7 +10,8 @@
 
 - **A value the service cleared clears the stored copy.** A path past the end of a list, or under a `null` the
   service sent, is now `null`, not "not sent": Attio's `values.job_title.0.value` on an empty list used to keep the
-  old position ([CRM.md](../docs/dev/CRM.md#a-source-from-a-manifest)).
+  old position ([CRM.md](../docs/dev/CRM.md#a-source-from-a-manifest)). Watch for: an `each` rule under such
+  a `null` now gives an empty list, so the record's links are cleared too.
 - **`crmManifestFake` takes its own answer when a value is one of several types.** It wrote a mapped value into a
   sample of the union's first branch, and its strict fake refused the row: every contract case of an Attio CLI
-  failed.
+  failed. The row is now sampled from the branch each mapped path needs, through objects, lists and `allOf`.

@@ -314,5 +314,18 @@ describe("crmManifestFake over values that are one of several types", () => {
     expect(fake.refusals).toEqual([])
   })
 
+  it("does the same when the row's first sample already holds the list, as a value object with fixed fields", async () => {
+    const entry = typed.Entry as Extract<SchemaNode, { type: "object" }>
+    const fixed = obj(
+      Object.fromEntries(["name", "owner", "updated_at", "email_addresses"].map((one) => [one, list(ref("Value"))])),
+      ["name", "owner", "updated_at", "email_addresses"],
+    )
+    const closed = { ...typed, Entry: { ...entry, properties: { ...entry.properties, values: fixed } } }
+    const { source, fake } = crmManifestFixture(SOURCE, { api, definitions: closed })
+    const people = (await source.changes("person", null)) as CrmPage<CrmPerson>
+    expect(people.items.map(({ name }) => name)).toEqual(["name 1", "name 2"])
+    expect(fake.refusals).toEqual([])
+  })
+
   for (const { name, run } of crmManifestContract(SOURCE, { api, definitions: typed })) it(name, run)
 })
