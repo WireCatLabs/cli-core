@@ -111,9 +111,29 @@ export class ProfileTokenStore {
     return token === undefined ? undefined : { secret: token, source: found.source }
   }
 
-  /** The token; the profile's named secrets stay as they were. */
-  write(profile: string, token: string, storage: TokenStorage = "keyring"): CredentialSource {
-    return this.#put(profile, { ...this.#heldUnlessUnreachable(profile), token }, storage)
+  /** The token, and `secrets` beside it in the same write; the profile's other named secrets stay as they were. */
+  write(
+    profile: string,
+    token: string,
+    storage: TokenStorage = "keyring",
+    secrets: Readonly<Record<string, string>> = {},
+  ): CredentialSource {
+    for (const name of Object.keys(secrets)) checkName(name)
+    const held = this.#heldUnlessUnreachable(profile)
+    return this.#put(profile, { ...held, token, secrets: { ...held.secrets, ...secrets } }, storage)
+  }
+
+  /**
+   * The token and one named secret from the same place, never one of each: `<PREFIX>_TOKEN` with
+   * `<PREFIX>_TOKEN_<NAME>`, or the profile's entry. A site kept beside a token so stays the token's own.
+   */
+  readWith(profile: string, name: string): { token: StoredCredential; secret: string | undefined } | undefined {
+    checkName(name)
+    const token = this.read(profile)
+    if (!token) return undefined
+    if (token.source === "environment")
+      return { token, secret: this.#options.env?.[this.secretVariable(name)] || undefined }
+    return { token, secret: this.#held(profile).secrets[name] }
   }
 
   /** The token and every named secret: the whole entry, as `session end` wants. */

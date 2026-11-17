@@ -552,7 +552,12 @@ export { readMeetingProjectCandidates } from "./meeting-project-candidates-read.
 export { meetingResultItem } from "./meeting-results.js"
 export { type MeetingSeriesInventoryReader, readMeetingSeriesInventory } from "./meeting-series-inventory-read.js"
 export { addMeetingTagsCommand, type MeetingTagsCommandDeps } from "./meeting-tags-command.js"
-export { accountFileFor, profilesHere, recalledAccount, rememberAccount } from "./messenger/accounts.js"
+export {
+  accountFileFor,
+  profilesHere,
+  recalledAccount,
+  rememberAccount,
+} from "./messenger/accounts.js"
 export { terminalAsker } from "./messenger/ask.js"
 export type { CompletionOptions } from "./messenger/complete-command.js"
 export {
@@ -687,7 +692,7 @@ export {
   serviceApiPermissions,
 } from "./service-api.js"
 export { type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
-export { manifestBaseUrl, type ServiceApiManifest, signRequest } from "./service-api-manifest.js"
+export { manifestBaseUrl, type ServiceApiManifest, signRequest, siteValue } from "./service-api-manifest.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,
@@ -802,5 +807,5 @@ export {
 } from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export type { TemplatesOptions } from "./templates-command.js"
-export { type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
+export { signedInSite, type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"
