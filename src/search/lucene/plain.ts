@@ -59,7 +59,8 @@ const literal = (word: string, keepParens: boolean, fields: ReadonlySet<string>)
   const prefix = FIELD_PREFIX.exec(word)
   const field = prefix && fields.has(prefix[1] ?? "") ? prefix[0] : ""
   const rest = word.slice(field.length)
-  const opening = keepParens ? (/^[(+-]*/u.exec(rest)?.[0] ?? "") : ""
+  // After `field:` a minus is part of the value (a group's id is `-100…`); only a bare word's `-` means NOT.
+  const opening = keepParens ? ((field ? /^\(*/u : /^[(+-]*/u).exec(rest)?.[0] ?? "") : ""
   const closing = keepParens ? (/\)*$/u.exec(rest.slice(opening.length))?.[0] ?? "") : ""
   const body = rest.slice(opening.length, rest.length - closing.length)
   if (!body) return keepParens ? literal(word, false, fields) : `${field}${quoted(rest)}`
