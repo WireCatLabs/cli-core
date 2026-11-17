@@ -23,11 +23,15 @@ export interface DocumentSearchCommands {
   imported(): { profile: string; chosen: boolean; documents: number }
 }
 
-const notImported = (app: string, { profile, chosen, documents }: ReturnType<DocumentSearchCommands["imported"]>) => {
+const notImported = (
+  app: string,
+  folder: string,
+  { profile, chosen, documents }: ReturnType<DocumentSearchCommands["imported"]>,
+) => {
   if (documents > 0) return undefined
   return !chosen
     ? `profile ${profile} has no folders selected, so nothing is imported to search — ` +
-        `${app} ${profile} folders add FOLDER_ID, then ${app} ${profile} sync`
+        `${app} ${profile} folders add ${folder}, then ${app} ${profile} sync`
     : `profile ${profile} has imported no documents yet — ${app} ${profile} sync`
 }
 
@@ -49,7 +53,7 @@ const addDocumentSearchCommandDefinition = (program: Command, helpers: DocumentS
         offset: (page - 1) * args.limit,
         exact: args.exact ?? false,
       })
-      const hint = notImported(wording.app, helpers.imported())
+      const hint = notImported(wording.app, wording.text.folderToAdd, helpers.imported())
       helpers.output(itemOf(hint ? { ...result, not_imported: hint } : result))
     })
 }

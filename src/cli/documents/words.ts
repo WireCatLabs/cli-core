@@ -32,6 +32,8 @@ export interface DocumentTexts {
   treeArgument: string
   folders: string
   folderArgument: string
+  /** What `folders add` takes in examples and hints: `FOLDER_ID`, or a path for a CLI that adds by path. */
+  folderToAdd: string
   syncLimit: string
   identities: string
   identitiesList: string
@@ -68,6 +70,7 @@ export const wordsOf = (words: DocumentWords): Words => {
       treeArgument: `${provider} folder id or URL; defaults to the explicitly selected profile's roots`,
       folders: `choose the ${place} folders that sync imports`,
       folderArgument: `folder id or ${place} URL`,
+      folderToAdd: "FOLDER_ID",
       syncLimit: `how many documents to read from ${provider} in this run`,
       identities: `the ${provider} accounts seen on a document, and the people they belong to`,
       identitiesList: `list the people ${provider} shows for a document`,

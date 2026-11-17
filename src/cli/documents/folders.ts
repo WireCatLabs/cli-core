@@ -29,7 +29,7 @@ const addDocumentFolderCommandsDefinition = (program: Command, helpers: Document
     annotate(folders.command("add"), { effects: FETCH })
       .argument("<folder>", text.folderArgument)
       .description("import a folder and everything under it on the next sync"),
-    [`${prefix} folders add FOLDER_ID`],
+    [`${prefix} folders add ${text.folderToAdd}`],
   ).action(async (input: string) => {
     const { id, name } = await helpers.add(input)
     output(itemOf({ id, name, added: true }))
