@@ -289,6 +289,29 @@ it("marks transcript text in a scheduled agent's text and markdown passage as a 
     expect(await passage(format, {}), format).not.toContain("⟦untrusted")
   }
 })
+it("marks transcript text in a scheduled agent's MCP meeting_passage text, and only there", async () => {
+  const f = await fixture()
+  const read = (reference: string, options: Parameters<typeof readMeetingPassage>[3]) =>
+    readMeetingPassage(f.store.meetings, f.accountId, reference, options)
+  const MARK = "0123456789abcdef"
+  const app = { command: "example", appName: "example-cli", envPrefix: "EXAMPLE", description: "", version: "1.0.0" }
+  const passage = async (format: "text" | "markdown", env: NodeJS.ProcessEnv) => {
+    const program = new Command("example")
+    provide(program, { app, env })
+    const answer = await callMeetingPassageTool(read, { reference: f.ref, format }, undefined, {}, (result, chosen) =>
+      passageForRun(program, result, chosen),
+    )
+    return answer.content[0]?.text ?? ""
+  }
+  const block = new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*⟦/untrusted:${MARK}⟧`, "gu")
+  for (const format of ["text", "markdown"] as const) {
+    const content = await passage(format, { EXAMPLE_READ_ONLY: "1", EXAMPLE_UNTRUSTED_MARK: MARK })
+    expect(content, format).toMatch(new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*context 20`, "u"))
+    expect(content.replace(block, ""), format).not.toContain("context")
+    expect(content.replace(block, ""), format).toContain(f.ref)
+    expect(await passage(format, {}), format).not.toContain("⟦untrusted")
+  }
+})
 it("keeps CLI JSON structured and refuses MCP overrides, malformed limits and cancellation", async () => {
   const f = await fixture()
   const read = vi.fn((reference: string, options: Parameters<typeof readMeetingPassage>[3]) =>

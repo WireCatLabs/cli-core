@@ -1,5 +1,6 @@
 import type { Command } from "commander"
 import { type AppIdentity, ancestorValue, envName, readOnlyLockOf } from "../ports/app.js"
+import { environmentOf } from "./context.js"
 
 const OPEN = "⟦"
 const CLOSE = "⟧"
@@ -12,6 +13,12 @@ export const untrustedMarkOf = (app: AppIdentity, env: NodeJS.ProcessEnv): strin
   if (readOnlyLockOf(app, env) === undefined) return undefined
   const mark = ancestorValue(envName(app, "UNTRUSTED_MARK"), env)
   return mark && /^[0-9a-f]{16}$/.test(mark) ? mark : undefined
+}
+
+/** `untrustedMarkOf` for the app and environment the command runs in. */
+export const runMarkOf = (command: Command): string | undefined => {
+  const { app, env } = environmentOf(command)
+  return app ? untrustedMarkOf(app, env ?? process.env) : undefined
 }
 
 /** Other people's text between the run's markers, with every bracket and the mark taken out, so it can close none. */

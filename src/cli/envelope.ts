@@ -24,7 +24,7 @@ import { environmentOf, setExitCode } from "./context.js"
 import { largeAnswerSteps, SOFT_OUTPUT_BYTES } from "./output-budget.js"
 import { withoutProviderRefs } from "./provider-refs.js"
 import { nextStep, rootOf, runnable, stepLine, withLines, withSafety } from "./steps.js"
-import { untrustedFieldsOf, untrustedMarkOf, withFieldsMarked, withUntrustedMarked } from "./untrusted-marks.js"
+import { runMarkOf, untrustedFieldsOf, withFieldsMarked, withUntrustedMarked } from "./untrusted-marks.js"
 
 export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
 export type ItemBody<T> = Omit<ItemEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
@@ -255,8 +255,7 @@ export const renderAnswer = <T>(
   const root = rootOf(command)
   const runnableSteps = runnable(root, body.next)
   const next = environmentOf(command).agent ? runnableSteps : withLines(root, runnableSteps)
-  const { app, env } = environmentOf(command)
-  const mark = app ? untrustedMarkOf(app, env ?? process.env) : undefined
+  const mark = runMarkOf(command)
   const declared = untrustedFieldsOf(command)
   const shown =
     mark === undefined ? body : withUntrustedMarked(declared ? withFieldsMarked(body, declared, mark) : body, mark)

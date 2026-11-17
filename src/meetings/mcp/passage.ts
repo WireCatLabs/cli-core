@@ -1,5 +1,11 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
-import { type MeetingPassageReader, markedPassage, validateMeetingPassage } from "../passage.js"
+import {
+  type MeetingPassageOutputFormat,
+  type MeetingPassageReader,
+  type MeetingPassageResult,
+  markedPassage,
+  validateMeetingPassage,
+} from "../passage.js"
 import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 const count = { type: "integer", minimum: 0, maximum: 999 }
@@ -22,11 +28,17 @@ export const meetingPassageTool = {
     additionalProperties: false,
   },
 }
+/**
+ * `forRun` is how the host prints the passage in this run: `passageForRun` from `@wirecat/cli-core/cli`, which marks
+ * the cues in a scheduled agent's run. This module cannot read the run's mark.
+ */
 export const callMeetingPassageTool = async (
   read: MeetingPassageReader,
   input: unknown,
   signal?: AbortSignal,
   failure: FailureContext = {},
+  forRun: (result: MeetingPassageResult, format: MeetingPassageOutputFormat) => MeetingPassageResult = (result) =>
+    result,
 ) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
@@ -46,7 +58,7 @@ export const callMeetingPassageTool = async (
     const reference = args.reference as string
     validateMeetingPassage(reference, options)
     signal?.throwIfAborted()
-    const result = markedPassage(await read(reference, options))
+    const result = forRun(markedPassage(await read(reference, options)), options.format)
     signal?.throwIfAborted()
     return agentResult({ content: [{ type: "text" as const, text: result.content }], structuredContent: result.packet })
   } catch (error) {
