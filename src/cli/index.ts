@@ -523,6 +523,7 @@ export {
   type McpServerTarget,
   mcpServerCommand,
 } from "./mcp-server-command.js"
+export { meetingAnswerBody } from "./meeting-answer-body.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
 export {

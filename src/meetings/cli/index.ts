@@ -44,7 +44,8 @@ export interface MeetingCommandDeps {
    * never writes over a file.
    */
   newFileOutput?: (command: Command, option: string) => void
-  write: (value: unknown, format: "json" | "jsonl" | "text") => void
+  /** Prints an answer; `meetingAnswerBody(command, value)` from `@wirecat/cli-core/cli` makes it the host's body. */
+  write: (value: unknown, format: "json" | "jsonl" | "text", command: Command) => void
   /**
    * Runs a command that reaches the account inside cli-core's run, so it is recorded and ended by `--timeout`:
    * `inCommandRun` from `@wirecat/cli-core/cli`. Required, since this module cannot reach the run itself.
@@ -118,7 +119,7 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   const output = (command: Command) => command
   const print = (value: unknown, command: Command) => {
     const opts = command.optsWithGlobals()
-    deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
+    deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text", command)
   }
   const access = (command: Command, backend: Backend | undefined): MeetingServerAccess => {
     const signal = deps.signal?.()
