@@ -14,5 +14,3 @@
   `auth.revokeUrl` and a relay redirect take an https URL with a host and no user name, password, or key or token in
   its query. `hooks` takes a `.ts` or `.js` module under `./`. An unknown field reads "not a field of wirecat.config",
   a missing one "missing".
-- **`parseCliConfig` returns `ParsedCliConfig`**, whose `source` is a plain object until `parseCrmManifest` checks it
-  against the generated API.

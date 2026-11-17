@@ -58,9 +58,6 @@ export interface CliConfig {
   hooks?: string
 }
 
-/** What `parseCliConfig` gives: `source` is not checked until `parseCrmManifest` runs against the generated API. */
-export type ParsedCliConfig = Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> }
-
 /** Types the config in the editor; it returns what it is given. */
 export const defineCli = (config: CliConfig): CliConfig => config
 
@@ -139,7 +136,8 @@ const schema = v.strictObject({
 })
 
 /** The config checked against its shape; every error names where it is. A CRM CLI needs its source. */
-export const parseCliConfig = (input: unknown): ParsedCliConfig => {
+/** `source` comes back unchecked: `parseCrmManifest` checks it against the generated API. */
+export const parseCliConfig = (input: unknown): CliConfig => {
   const parsed = v.safeParse(schema, input)
   if (!parsed.success) {
     const [issue] = parsed.issues
@@ -154,7 +152,9 @@ export const parseCliConfig = (input: unknown): ParsedCliConfig => {
       reason: "manifest.invalid",
     })
   }
-  const config: ParsedCliConfig = parsed.output
+  // Typed, not cast, so a field the schema and CliConfig disagree on fails to compile.
+  const output: Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> } = parsed.output
+  const config = output as CliConfig
   if (config.category !== "crm" && config.source)
     throw new CliError("configuration_error", "wirecat.config: source: only a crm CLI reads a source yet", {
       reason: "manifest.invalid",
