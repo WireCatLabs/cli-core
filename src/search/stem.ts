@@ -26,7 +26,7 @@ export const DEFAULT_STEMMERS_VERSION = 2
  * Between the stem sequences of one text when several Latin stemmers give different ones, so a phrase
  * never matches across two sequences. Letters and digits, so `unicode61` keeps it as one token.
  */
-/** The fewest letters a searched word has for the longer words it begins to count too: `рост` finds `ростислав`. */
+/** The fewest letters a searched word has for the longer words it begins to count too: `рост` finds `ростовщик`. */
 export const START_LETTERS = 4
 export const STEM_SEPARATOR = "0stemsep0"
 

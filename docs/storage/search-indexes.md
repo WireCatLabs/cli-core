@@ -298,14 +298,19 @@ at least 50 candidates and ranks them by cosine.
 The word half matches whole words and their beginnings. A query word that no message holds, not even as a beginning,
 is searched as the words it may stand for: its Latin spelling («ноксвел» → `noksvel`, `noxvel`) or the nearest known
 spellings of that, and only when there are none, the nearest known spellings of the word itself, up to two edits.
-`meta.respelled` and a note list them. A word some message holds is never respelled, so «kitten» does not find
+A note lists them. A word some message holds is never respelled, so «kitten» does not find
 «kitchen» once any message says «kittens».
 
 A query that names someone by the name their private chat uses for them («счёт Петьке», where that chat says «Петька,
-привет») is searched inside that chat as well, without the name, and those hits come first; `meta.named_chat` says
+привет») is searched inside that chat as well, without the name, and those hits come first; a note says
 which word named which chat. A word names a private chat when that chat holds most of its uses, at least twice as many
 as any other private chat and at least three, and writes it with a capital letter at least 8 times in 10. An ordinary
 word is spread over many chats and written in lower case, so it names none.
+
+`search messages` gives the same two kinds of help to a query of plain words (no fields other than `chat:`, no
+quotes, groups or operators): a word no message holds is searched beside its Latin spelling or nearest known spellings,
+and without `chat:` a word that names a private chat has that chat's hits first, searched without
+the name; a note says so. Any other query is searched exactly as written.
 
 Each result says how it was found:
 

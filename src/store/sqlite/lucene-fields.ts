@@ -229,7 +229,7 @@ const stemmedText: FieldCompiler = (node, scope) => {
     throw new Error("a stemmed leaf reached the compiler without the store's stemmer")
   const text = normalize(node.value)
   const match = ftsMatch(node)
-  // Snowball stems a word's forms apart («ярослав» → «яросла», «ярослава» → «ярослав»), so a word of 4 letters or more
+  // Snowball stems a word's forms apart («журнал» → «журна», «журналом» → «журнал»), so a word of 4 letters or more
   // also finds every word it begins, as grep finds them; a shorter one would find most of the store.
   const start =
     node.operator === "term" && /^[\p{L}\p{N}]+$/u.test(text) && [...text].length >= START_LETTERS ? text : undefined

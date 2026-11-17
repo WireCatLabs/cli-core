@@ -174,6 +174,12 @@ const searchAction = (messenger: Messenger) =>
     noteServer(context, found.server)
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
+    for (const [word, forms] of Object.entries(found.respelled ?? {}))
+      context.renderer.note(`no message holds «${word}»: also searched ${forms.map((form) => `«${form}»`).join(", ")}`)
+    if (found.named)
+      context.renderer.note(
+        `«${found.named.word}» is a name in chat ${found.named.title ?? found.named.chatId} (${found.named.chatId}): its hits come first`,
+      )
     for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
     if (found.meaningSkipped) context.renderer.note(meaningNote(found.meaningSkipped, command))
     const rerank = found.rerankSkipped

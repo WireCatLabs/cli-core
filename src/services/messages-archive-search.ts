@@ -2,12 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { isQueryLimit } from "../search/lucene/types.js"
+import { respelled } from "../search/respell.js"
 import { TOTAL_CAP, totalOf } from "../search/total.js"
 import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
 import type { Saved } from "./message-resolution.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { discoveryRequest, type MeaningLane, type RerankLane, searchDiscovery } from "./messages-discovery.js"
 import { countLucene, type MessageStats, type StatsGrouping, searchLucene, statsLucene } from "./messages-search.js"
+import { namedChat, queryWords, without } from "./named-chat.js"
 import { readThreadContext, threadBounds } from "./thread-context.js"
 
 /** How long a search may spend building the word index, then the stems, first (phase 2 plan S3: about 200 ms). */
@@ -67,18 +69,34 @@ export const searchStore = async (
   meaning?: MeaningLane,
   rerank?: RerankLane,
 ): Promise<SearchFound> => {
-  if (request.text !== undefined) request = { ...request, text: plainQuery(request.text) }
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
-  const found = await searchPage(
-    store,
-    account,
-    { ...request, limit: request.limit + offset },
-    messenger,
-    meaning,
-    rerank,
-  )
+  const typed = request.text
+  const helped = await helpPlainWords(store, account, request, messenger)
+  if (helped.text !== undefined) request = { ...request, text: plainQuery(helped.text) }
+  const page = (asked: SearchQuery) =>
+    searchPage(store, account, { ...asked, limit: asked.limit + offset }, messenger, meaning, rerank)
+  const all = await page(request)
+  const { named } = helped
+  const inside =
+    named && typed !== undefined
+      ? await page({
+          ...request,
+          text: plainQuery(without(helped.text ?? typed, named.word) || typed),
+          chat: named.chatId,
+        })
+      : undefined
+  const shown = new Set(inside?.items.map(({ locator }) => locator))
+  const found = inside
+    ? {
+        ...all,
+        items: [...inside.items, ...all.items.filter(({ locator }) => !shown.has(locator))].slice(
+          0,
+          request.limit + offset,
+        ),
+      }
+    : all
   const discovery = found.query?.discovery
   const total = discovery
     ? totalOf(discovery.candidates, found.items.length, found.hasMore, !discovery.truncated)
@@ -98,10 +116,45 @@ export const searchStore = async (
       )
   return {
     ...found,
+    ...(named ? { named: { word: named.word, chatId: named.chatId, title: named.title } } : {}),
+    ...(helped.respelled.size ? { respelled: Object.fromEntries(helped.respelled) } : {}),
     total,
     items: found.items.slice(offset),
     ...(found.hasMore && offset + request.limit <= MAX_SEARCH_OFFSET ? { nextOffset: offset + request.limit } : {}),
   }
+}
+
+// Plain words only: a query with fields, quotes, groups or operators says exactly what it wants.
+const PLAIN = /^[\p{L}\p{N}\s,.?!]+$/u
+const OPERATORS = /(?<![\p{L}\p{N}])(?:AND|OR|NOT)(?![\p{L}\p{N}])/u
+
+/**
+ * For a query of plain words over every chat: each word no message holds also searched as the words it may stand for
+ * (`respelled`), and the private chat a word names (`namedChat`), searched first.
+ */
+const helpPlainWords = async (store: MessageStore, account: AccountKey, request: SearchQuery, messenger: Saved) => {
+  const none = { text: request.text, respelled: new Map<string, string[]>(), named: undefined }
+  const { text } = request
+  if (text === undefined || request.exact || request.discover || request.kind === "mail" || request.only) return none
+  const chat = /(?<!\S)chat:\S+/gu
+  const bare = text.replace(chat, " ")
+  if (!PLAIN.test(bare) || OPERATORS.test(bare)) return none
+  const words = queryWords(bare)
+  const respellings = await respelled(store.searchIndex, words)
+  let helped = text
+  for (const [word, forms] of respellings)
+    helped = helped.replace(
+      new RegExp(`(?<![\\p{L}\\p{N}])${word}(?![\\p{L}\\p{N}])`, "giu"),
+      `(${[word, ...forms].join(" OR ")})`,
+    )
+  const named =
+    request.chat === undefined && bare === text
+      ? await namedChat(store, account, messenger, request.accounts, words).catch((error: unknown) => {
+          if (isQueryLimit(error)) return undefined
+          throw error
+        })
+      : undefined
+  return { text: helped, respelled: respellings, named }
 }
 
 const searchPage = async (
