@@ -1,7 +1,10 @@
 import type { Id, Message } from "../domain/models.js"
 
-/** 5: a message longer than a chunk is split into overlapping pieces, so builds before it are outdated. */
-export const RULES_VERSION = 5
+/**
+ * 5: a message longer than a chunk is split into overlapping pieces. 6: a message's parent is always in its own
+ * topic or thread, so a forum's topics are no longer one conversation. Builds before the current version are outdated.
+ */
+export const RULES_VERSION = 6
 
 /** How far back a rule looks, in messages: 97% of reply parents sat within 50 in a measured group. */
 export const LOOK_BACK = 50
@@ -55,24 +58,26 @@ export const linkMessages = (
   const links: Link[] = []
   const parents = new Map<Id, Id | null>()
   const conversationOf = new Map<Id, number>()
+  const threadOf = new Map<Id, Id | undefined>()
   const conversations: Id[][] = []
   const window: LinkInput[] = []
 
   for (const message of messages) {
     check?.()
     const found = [
-      ...replyLink(message, conversationOf),
+      ...replyLink(message, threadOf),
       ...mentionLinks(message, window, handles),
       ...sameSenderLink(message, window),
     ]
     links.push(...found)
-    const parent = choose(found, answers, message.id, conversationOf)
+    const parent = choose(found, answers, message, threadOf)
     parents.set(message.id, parent)
 
     const conversation = parent === null ? conversations.length : (conversationOf.get(parent) as number)
     if (conversation === conversations.length) conversations.push([])
     conversations[conversation]?.push(message.id)
     conversationOf.set(message.id, conversation)
+    threadOf.set(message.id, message.threadId)
 
     window.push(message)
     if (window.length > LOOK_BACK) window.shift()
@@ -80,10 +85,18 @@ export const linkMessages = (
   return { links, parents, conversations }
 }
 
-const replyLink = (message: LinkInput, held: ReadonlyMap<Id, number>): Link[] =>
-  message.replyToId !== undefined && held.has(message.replyToId)
+/**
+ * A reply into another topic or thread is no link. In a Telegram forum every message of a topic replies to the
+ * topic's first message, which has no topic of its own: taken as a reply, it chained the whole topic, and through
+ * that first message's sender, every topic, into one conversation.
+ */
+const replyLink = (message: LinkInput, threads: ReadonlyMap<Id, Id | undefined>): Link[] =>
+  message.replyToId !== undefined && inThread(threads, message.replyToId, message)
     ? [link(message, message.replyToId, "provider", "reply", 1, "reply")]
     : []
+
+const inThread = (threads: ReadonlyMap<Id, Id | undefined>, id: Id, message: LinkInput) =>
+  threads.has(id) && threads.get(id) === message.threadId
 
 const mentionLinks = (message: LinkInput, window: LinkInput[], handles: ReadonlyMap<string, Id>): Link[] => {
   const links: Link[] = []
@@ -123,15 +136,16 @@ const mentioned = (text: string, handles: ReadonlyMap<string, Id>): Set<string> 
 const choose = (
   links: Link[],
   answers: ReadonlyMap<Id, Id | null>,
-  id: Id,
-  held: ReadonlyMap<Id, number>,
+  message: LinkInput,
+  threads: ReadonlyMap<Id, Id | undefined>,
 ): Id | null => {
   const provider = links.find((one) => one.source === "provider")
   if (provider) return provider.parentId
-  // An answer naming a message this chat no longer holds, or a later one, leaves the choice to the rules.
-  const answer = answers.get(id)
+  // An answer naming a message this chat no longer holds, a later one or one in another topic leaves the choice
+  // to the rules.
+  const answer = answers.get(message.id)
   if (answer === null) return null
-  if (answer !== undefined && held.has(answer)) return answer
+  if (answer !== undefined && inThread(threads, answer, message)) return answer
   let best: Link | undefined
   for (const one of links) if (!best || one.confidence > best.confidence) best = one
   return best?.parentId ?? null

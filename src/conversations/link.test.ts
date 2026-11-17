@@ -109,8 +109,8 @@ describe("linkMessages", () => {
     expect(parents.get("3")).toBe("2")
   })
 
-  it("never links across forum threads by a rule, but keeps an explicit reply", () => {
-    const { parents } = linkMessages(
+  it("never links across forum threads, not by a rule and not by an explicit reply", () => {
+    const { parents, links } = linkMessages(
       [
         said("1", "a", "visa question", { threadId: "t1" }),
         said("2", "a", "also", { threadId: "t2" }),
@@ -121,7 +121,32 @@ describe("linkMessages", () => {
     )
     expect(parents.get("2")).toBeNull()
     expect(parents.get("3")).toBe("2")
-    expect(parents.get("4")).toBe("1")
+    expect(parents.get("4")).toBe("3")
+    expect(links).not.toContainEqual(expect.objectContaining({ messageId: "4", parentId: "1" }))
+  })
+
+  it("**keeps each forum topic apart**: a reply to the topic's first message is no link, a reply inside it is", () => {
+    const { conversations, links } = linkMessages([
+      said("10", "a", ""),
+      said("20", "a", ""),
+      said("11", "b", "who has the hall key?", { threadId: "10", replyToId: "10" }),
+      said("21", "c", "the boat leaves at nine", { threadId: "20", replyToId: "20" }),
+      said("12", "d", "I do", { threadId: "10", replyToId: "11" }),
+      said("22", "e", "noted", { threadId: "20", replyToId: "20" }),
+    ])
+
+    expect(conversations).toEqual([["10", "20"], ["11", "12"], ["21"], ["22"]])
+    expect(links.filter(({ parentId }) => parentId === "10" || parentId === "20")).toEqual([
+      expect.objectContaining({ messageId: "20", kind: "same_sender" }),
+    ])
+  })
+
+  it("leaves the choice to the rules when the agent names a message in another topic", () => {
+    const { parents } = linkMessages(
+      [said("1", "a", "lunch?", { threadId: "t1" }), said("2", "b", "rain later", { threadId: "t2" })],
+      { answers: new Map([["2", "1"]]) },
+    )
+    expect(parents.get("2")).toBeNull()
   })
 
   it("starts a conversation for a reply to a message it does not hold", () => {

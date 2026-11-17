@@ -81,6 +81,25 @@ describe("batches for the user's agent", () => {
     await store.close()
   })
 
+  it("asks about a forum message whose only reply is to its topic's first message", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "batches-")), "messages.db")
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [
+      { id: "-1", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [message(1), { ...message(2, "1"), threadId: "1" }, { ...message(3, "2"), threadId: "1" }],
+      { via: "history" },
+    )
+
+    const batch = await store.conversations.nextBatch(OWNER, "-1", { size: 50 })
+
+    expect(ids(batch?.messages ?? [], true)).toEqual([1, 2])
+    await store.close()
+  })
+
   it("asks again about a message whose answer went stale, and about nothing once all are answered", async () => {
     const { store, path } = await chatOf(3)
     await answered(path, 1)
