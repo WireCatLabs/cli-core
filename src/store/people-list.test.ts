@@ -483,14 +483,14 @@ describe("a name in another script (BUG-678)", () => {
 describe("a person with no name of their own", () => {
   it("is shown by an account's name, not its username", async () => {
     const { store, db } = await opened()
-    await store.people.savePeople(TG, [{ id: "40", name: "Ярослав Орлов", username: "Xorlov" }])
+    await store.people.savePeople(TG, [{ id: "40", name: "Станислав Соколов", username: "Xsokolov" }])
     const uid = (await store.people.personOf({ provider: "telegram", id: "40" }))?.uid
     db.prepare("UPDATE persons SET name = NULL WHERE id = ?").run(Number(uid))
 
     const row = (await store.people.list({ limit: 10, kind: "all" })).items.find(
       ({ person }) => person === `person:${uid}`,
     )
-    expect(row).toMatchObject({ name: null, displayName: "Ярослав Орлов", contact: "@Xorlov" })
+    expect(row).toMatchObject({ name: null, displayName: "Станислав Соколов", contact: "@Xsokolov" })
   })
 })
 
@@ -508,10 +508,10 @@ describe("a person's shown name (DEBT-311)", () => {
   it("is the same in a person's record as in the list", async () => {
     const { store } = await opened()
     await store.people.savePeople(TG, [
-      { id: "30", name: "!", username: "xorlov" },
+      { id: "30", name: "!", username: "xsokolov" },
       { id: "31", name: "null" },
     ])
-    await store.people.savePeople(CRM, [{ id: "c/30", name: "Ярослав Орлов" }])
+    await store.people.savePeople(CRM, [{ id: "c/30", name: "Станислав Соколов" }])
     await store.people.linkIdentities(
       { provider: "telegram", id: "30" },
       { provider: "bitrix24", id: "c/30" },
@@ -524,7 +524,7 @@ describe("a person's shown name (DEBT-311)", () => {
       const row = listed.items.find(({ person }) => person === `person:${record?.uid}`)
       expect(record?.displayName).toBe(row?.displayName)
     }
-    expect((await store.people.personOf({ provider: "telegram", id: "30" }))?.displayName).toBe("Ярослав Орлов")
+    expect((await store.people.personOf({ provider: "telegram", id: "30" }))?.displayName).toBe("Станислав Соколов")
   })
 })
 

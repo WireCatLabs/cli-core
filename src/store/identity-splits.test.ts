@@ -193,8 +193,8 @@ describe("taking identities off the person named (BUG-709)", () => {
   const withColleague = async () => {
     const store = await absorbed()
     await store.people.savePeople(OWN, [
-      { id: "8", name: "Ярослав Орлов" },
-      { id: "9", name: "Yaroslav (work)" },
+      { id: "8", name: "Станислав Соколов" },
+      { id: "9", name: "Stanislav (work)" },
     ])
     await store.people.linkIdentities(tg("8"), tg("9"), { method: "manual", by: "owner" })
     const owner = (await store.people.owner())?.uid as string
@@ -217,7 +217,7 @@ describe("taking identities off the person named (BUG-709)", () => {
       store.people.proposeSplit({ identities: [tg("9")], from: owner, by: agent, reason: "not mine" }),
     ).rejects.toMatchObject(refused)
     await expect(store.people.unlinkIdentity(tg("9"), { method: "unlink", by: "owner", from: owner })).rejects.toThrow(
-      `telegram:9 sits on Ярослав Орлов (person:${colleague})`,
+      `telegram:9 sits on Станислав Соколов (person:${colleague})`,
     )
 
     expect((await store.people.personOf(tg("9")))?.uid).toBe(colleague)

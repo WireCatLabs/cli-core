@@ -332,11 +332,11 @@ describe("people in doubt (IDEA-270)", () => {
   it("does not doubt a short form of a name on one address, in either script", async () => {
     const store = await open()
     await store.people.savePeople(MAIL, [
-      { id: "orlov@acme.ru", name: "Ярик" },
+      { id: "sokolov@acme.ru", name: "Стас" },
       { id: "petrov@acme.ru", name: "Bob" },
     ])
     await store.people.savePeople(CRM, [
-      { id: "c/1", name: "Yaroslav Orlov", email: "orlov@acme.ru" },
+      { id: "c/1", name: "Stanislav Sokolov", email: "sokolov@acme.ru" },
       { id: "c/2", name: "Роберт Петров", email: "petrov@acme.ru" },
     ])
 
