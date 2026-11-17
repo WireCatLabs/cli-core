@@ -5,6 +5,36 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.696.0 — 17.11.2026
+
+### Added
+
+- **A service that signs in with a user name and a password, as WordPress's application passwords, gets the same
+  `session` group.** `tokenSessionCommand` takes `login: { page? }`: `session start --login <name>` asks only the
+  password hidden, shows where to make one first, and keeps `<name>:<password>` in the profile's entry;
+  `<PREFIX>_TOKEN` holds the same pair. A manifest whose scheme is `http` `basic` now signs each call with it, where
+  the `api` group refused that scheme; a token without a user name is refused before anything is sent, and a spec
+  that also offers a bearer or a key sends that. A name with a colon is refused, since Basic splits there. cli-base's
+  `fakeApi`, and so `crmManifestFake`, does not take Basic yet.
+- **One CLI can serve a service that runs on each owner's own site, a profile per site.** `tokenSessionCommand` takes
+  `site: { example }`: `session start --site blog.example.com` checks the token on that site and keeps the site in
+  the token's own keyring entry, written and forgotten with it, so a token only goes to the site it signed in to.
+  `session status` shows the site. `<PREFIX>_TOKEN` needs `<PREFIX>_TOKEN_SITE` beside it. `serviceApiCommand` takes
+  `serverVariables`, read when a call is sent, so `api list` and `api show` work before sign-in; give it
+  `signedInSite(app, resolveSettings)`, and give `serviceApiCall` that function's value for the command. Build the
+  fetch per run with the site's host in `hostFetch`. A site is https only, a host with a port or a path, never a user
+  name, query or fragment. A free variable inside a host (`{subdomain}.example.com`) takes one name only.
+- **`ProfileTokenStore.write` takes named secrets to keep in the same write, and `readWith` reads the token and one
+  named secret from the same place:** both from the environment, or both from the profile's entry.
+
+### Fixed
+
+- **A generated `api` command no longer demands a required parameter that the spec gives a default.** Notion's
+  page-markdown calls stopped with `required option '--notion-version <value>' not specified`, though its spec says
+  `Notion-Version` defaults to `2026-03-11`. Such a flag is now optional, shows its default in `--help`, and the call
+  sends the default when the flag is left out; a value given on the command line wins. A required parameter with no
+  default is still required. This covers the Bot API group too.
+
 ## 0.695.0 — 17.11.2026
 
 ### Added
