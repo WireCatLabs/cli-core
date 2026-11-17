@@ -3,6 +3,8 @@
 - **`wirecat.config`'s `auth.verify`: the call that checks a token.** For `token` and `oauth2-pkce`, `{ operation, id,
   name? }` names the operation that answers whose the token is and where its answer holds the account's id and name;
   cli-template's `session start` checks a token with it.
+- **`recalledAccount` from `@wirecat/cli-core/cli`**: the account a profile signed in to, as `session start`
+  remembered it, for a CLI's own account key (cli-template's CRM wiring from `wirecat.config`).
 
 ### Changed — may break callers
 
