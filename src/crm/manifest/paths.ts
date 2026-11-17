@@ -6,14 +6,14 @@ import { rulePaths } from "./map.js"
 
 type Definitions = Readonly<Record<string, SchemaNode>>
 
-const resolve = (node: SchemaNode, definitions: Definitions, seen = new Set<string>()): SchemaNode => {
+export const resolve = (node: SchemaNode, definitions: Definitions, seen = new Set<string>()): SchemaNode => {
   if (node.type !== "ref" || seen.has(node.ref)) return node
   const found = definitions[node.ref]
   return found ? resolve(found, definitions, new Set([...seen, node.ref])) : { type: "unknown" }
 }
 
 /** The node one step down, `null` when the schema has no such field, `undefined` when the schema cannot say. */
-const step = (node: SchemaNode, key: string, definitions: Definitions): SchemaNode | null | undefined => {
+export const step = (node: SchemaNode, key: string, definitions: Definitions): SchemaNode | null | undefined => {
   const at = resolve(node, definitions)
   switch (at.type) {
     case "object": {
@@ -48,7 +48,7 @@ const keysOf = (node: SchemaNode, definitions: Definitions): string[] => {
 
 type Walked = { node: SchemaNode | undefined } | { missing: string; near?: string }
 
-const walk = (node: SchemaNode, path: string, definitions: Definitions): Walked => {
+export const walk = (node: SchemaNode, path: string, definitions: Definitions): Walked => {
   let at: SchemaNode | undefined = node
   const segments = path === "." ? [] : path.split(".")
   for (const [place, key] of segments.entries()) {
@@ -70,7 +70,7 @@ const walk = (node: SchemaNode, path: string, definitions: Definitions): Walked 
 }
 
 /** One item of the list a path ends on; a path that ends on one object is read as a list of it, as the map does. */
-const itemOf = (node: SchemaNode | undefined, definitions: Definitions) => {
+export const itemOf = (node: SchemaNode | undefined, definitions: Definitions) => {
   if (node === undefined) return undefined
   const at = resolve(node, definitions)
   return at.type === "array" ? at.items : at
