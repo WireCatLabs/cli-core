@@ -8,7 +8,8 @@ import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/c
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
-import { queryTerms, termField, withQuery } from "../../cli/list-query.js"
+import { listQuery, nativeTermLists, queryTerms, termField, typedQuery, withQuery } from "../../cli/list-query.js"
+import { aheadOf } from "../../domain/moment.js"
 import {
   STATE_TYPES,
   type StateType,
@@ -51,13 +52,6 @@ const integer = (most: number) => (value: string) => {
   return number
 }
 
-/** A due time as the vocabulary's `<time>`: a day, or a moment in ISO 8601. */
-const dueTime = (value: string) => {
-  const at = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value)
-  if (Number.isNaN(at)) throw new InvalidArgumentError("a day as YYYY-MM-DD, or a time in ISO 8601")
-  return new Date(at)
-}
-
 const ARCHIVED = termField("archived", "enum", "archived:include", {
   values: ["include"],
   relation: "archived ones too; left out, only those not archived",
@@ -78,7 +72,7 @@ const ISSUES_QUERY = {
     termField("project", "kw", "project:project-1", { relation: "the project's id, as projects list shows it" }),
     termField("assignee", "kw", "assignee:none", { relation: "the user's id, as users list shows it, or none" }),
     termField("state", "kw", "state:state-1", { relation: "the state's id, as states list shows it" }),
-    termField("type", "enum", "type:started", { values: [...STATE_TYPES] }),
+    termField("type", "enum", "type:started", { values: [...STATE_TYPES], relation: "repeat for any of several" }),
     termField("label", "kw", "label:label-1", { relation: "the label's id, as labels list shows it" }),
     ARCHIVED,
   ],
@@ -269,15 +263,21 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     "issues list type:started",
     "issues list assignee:none --json",
   ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
-    const terms = queryTerms(words, ISSUES_QUERY, "issues list")
-    const assignee = terms.get("assignee")
+    const lists = nativeTermLists(listQuery(typedQuery(words), ISSUES_QUERY, "issues list"), "issues list", ["type"])
+    if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
+      throw new InvalidArgumentError("issues list takes field:value terms, each one whole value")
+    const types = (lists.get("type") ?? []).map((one) => one.value.toLowerCase() as StateType)
+    const terms = new Map(
+      [...lists].filter(([field]) => field !== "type").map(([field, [one]]) => [field, one?.value as string]),
+    )
+    const assignee = terms.get("assignee")?.toLowerCase() === "none" ? "none" : terms.get("assignee")
     await within(command, true, async (run) => {
       const filter: TrackerFilter = {
         ...(terms.has("team") ? { parent: terms.get("team") as string } : {}),
         ...(terms.has("project") ? { project: terms.get("project") as string } : {}),
         ...(assignee !== undefined ? { assignee: assignee === "none" ? null : assignee } : {}),
         ...(terms.has("state") ? { state: terms.get("state") as string } : {}),
-        ...(terms.has("type") ? { stateTypes: [terms.get("type") as StateType] } : {}),
+        ...(types.length ? { stateTypes: types } : {}),
         ...(terms.has("label") ? { label: terms.get("label") as string } : {}),
         ...(terms.has("archived") ? { archived: true } : {}),
         limit: opts.limit,
@@ -344,7 +344,11 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
           "again answers its existing task",
       )
       .argument("<issue>", "the issue's key (ENG-12) or id")
-      .option("--due <time>", "when it is due: a day as YYYY-MM-DD, or a time in ISO 8601", dueTime),
+      .option(
+        "--due <time>",
+        "when it is due: an ISO 8601 time, a day, today, or 3d from now",
+        (typed: string) => new Date(aheadOf(typed, "--due", Date.now(), { end: true })),
+      ),
     "issues assign ENG-12 --due 2026-12-01",
   ).action(async (reference: string, opts: { due?: Date }, command: Command) => {
     await within(command, false, async (run) => {

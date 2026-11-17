@@ -57,6 +57,8 @@ describe("tracker commands", () => {
 
     expect(ids(await cli("issues", "list", "type:started"))).toEqual(["issue-1"])
     expect(ids(await cli("issues", "list", "type:unstarted"))).toEqual(["issue-2"])
+    expect(ids(await cli("issues", "list", "type:started", "type:unstarted"))).toEqual(["issue-2", "issue-1"])
+    expect(ids(await cli("issues", "list", "assignee:None"))).toEqual(["issue-3"])
     expect(ids(await cli("issues", "list", "assignee:none"))).toEqual(["issue-3"])
     const [first] = (await cli("issues", "list", "label:label-bug")).items
     expect(first).toMatchObject({
