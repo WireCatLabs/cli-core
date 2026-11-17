@@ -581,6 +581,33 @@ describe("the shared service api group", () => {
     expect(moved.sent).toHaveLength(1)
   })
 
+  it("**a key in the query goes on every page of --all**, and never through a redirect", async () => {
+    const keyed = {
+      ...manifest,
+      securitySchemes: { key: { type: "apiKey" as const, in: "query" as const, name: "api_key" } },
+      security: [{ key: [] }],
+    }
+    const link = fixture(
+      {},
+      ({ url }) =>
+        url.includes("page=2")
+          ? Response.json({ events: ["b"], links: {} })
+          : Response.json({ events: ["a"], links: { next: "/v1/events?page=2" } }),
+      { manifest: keyed },
+    )
+    expect((await link.cli("work", "api", "list-events", "--all", "--json")).json.items).toEqual(["a", "b"])
+    expect(link.sent.map(({ url, authorization }) => ({ url, authorization }))).toEqual([
+      { url: "https://api.pages.test/v1/events?api_key=page-token", authorization: undefined },
+      { url: "https://api.pages.test/v1/events?page=2&api_key=page-token", authorization: undefined },
+    ])
+    const moved = fixture({}, () => new Response(null, { status: 302, headers: { location: "https://evil.test/" } }), {
+      manifest: keyed,
+    })
+    const refused = await moved.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
+    expect(refused.error).toMatchObject({ code: "provider_error" })
+    expect(moved.sent).toHaveLength(1)
+  })
+
   it("**refuses a free server variable, a plain-http base and a body key the manifest does not name**", () => {
     const free = {
       ...manifest,

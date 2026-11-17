@@ -22,11 +22,11 @@ import { queryTerms, termField, withQuery } from "./list-query.js"
 import { terminalAsker } from "./messenger/ask.js"
 import type { ConditionalKey } from "./permission-keys.js"
 import {
-  authHeader,
   manifestBaseUrl,
   nextPage,
   parameterValue,
   type ServiceApiManifest,
+  signRequest,
 } from "./service-api-manifest.js"
 import type { Configuration } from "./settings.js"
 
@@ -226,10 +226,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   }
 
   const signed = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) => {
-    const auth = authHeader(manifest, operation)
-    if (auth) request.headers.set(auth.name, auth.value(await options.token(command)))
-    // A redirect to another host drops only the standard sign-in headers; an API key header would go along.
-    if (auth && auth.name !== "authorization") request.redirect = "manual"
+    await signRequest(manifest, operation, request, () => options.token(command))
     for (const [name, value] of Object.entries(options.headers?.(command, operation) ?? {}))
       request.headers.set(name, value)
     return request
@@ -288,8 +285,10 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
             "validation_error",
             `${operation.command} has more than ${MOST_PAGES} pages; narrow it with its own flags, or page it yourself`,
           )
-        const request = await signed(command, operation, httpApiRequest(operation, call, baseUrl))
-        if (url !== undefined) request.url = url
+        const unsigned = httpApiRequest(operation, call, baseUrl)
+        // A next link replaces the URL, so the request is signed after: a key in the query goes into the link.
+        if (url !== undefined) unsigned.url = new URL(url)
+        const request = await signed(command, operation, unsigned)
         const key = `${request.url.href} ${request.body ?? ""}`
         if (asked.has(key))
           throw new CliError("invalid_response", `${options.service} gave the same next page twice; nothing more read`)

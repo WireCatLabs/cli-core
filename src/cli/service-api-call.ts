@@ -4,7 +4,7 @@ import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
 import type { ApiCommandInput } from "./bot/api.js"
 import { type HttpApiSendOptions, httpApiRequest, httpApiSend } from "./bot/api-http.js"
-import { authHeader, manifestBaseUrl, type ServiceApiManifest } from "./service-api-manifest.js"
+import { manifestBaseUrl, type ServiceApiManifest, signRequest } from "./service-api-manifest.js"
 
 /** One operation of the generated manifest, by its id, sent with the sign-in its security scheme names. */
 export type ServiceApiCall = (operation: string, input: ApiCommandInput) => Promise<unknown>
@@ -43,10 +43,9 @@ export const serviceApiCall = (options: ServiceApiCallOptions): ServiceApiCall =
     const request = httpApiRequest(operation, input, baseUrl)
     const extra = Object.entries(options.headers?.(operation) ?? {})
     for (const [name, value] of extra) request.headers.set(name, value)
-    const auth = authHeader(options.manifest, operation)
-    if (auth) request.headers.set(auth.name, auth.value(await options.token()))
-    // A redirect to another host drops only the standard sign-in headers; an API key or a hook's header would go along.
-    if ((auth && auth.name !== "authorization") || extra.length) request.redirect = "manual"
+    await signRequest(options.manifest, operation, request, options.token)
+    // A redirect to another host drops only the standard sign-in headers; a hook's header would go along.
+    if (extra.length) request.redirect = "manual"
     return send(NO_COMMAND, operation, request)
   }
 }

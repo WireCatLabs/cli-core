@@ -37,16 +37,17 @@ export const manifestBaseUrl = (manifest: ServiceApiManifest, given?: string): s
   return url
 }
 
-type Auth = { name: string; value: (token: string) => string }
+type Auth = { name: string; value: (token: string) => string; in?: "query" }
 
 const BEARER: Auth = { name: "authorization", value: (token) => `Bearer ${token}` }
 
-/** The header one scheme signs in with; `undefined` for one the api cannot send (basic, a key in the query). */
+/** Where one scheme puts the sign-in; `undefined` for one the api cannot send (basic, a key in a cookie). */
 const headerOf = (scheme: SecurityScheme): Auth | undefined => {
-  if (scheme.type === "apiKey")
-    return scheme.in === "header" && scheme.name
-      ? { name: scheme.name.toLowerCase(), value: (token) => token }
-      : undefined
+  if (scheme.type === "apiKey") {
+    if (!scheme.name) return undefined
+    if (scheme.in === "header") return { name: scheme.name.toLowerCase(), value: (token) => token }
+    return scheme.in === "query" ? { name: scheme.name, value: (token) => token, in: "query" } : undefined
+  }
   if (scheme.type === "http") {
     if (!scheme.scheme || /^bearer$/i.test(scheme.scheme)) return BEARER
     return /^(basic|digest)$/i.test(scheme.scheme)
@@ -57,7 +58,7 @@ const headerOf = (scheme: SecurityScheme): Auth | undefined => {
 }
 
 /**
- * The header that carries the sign-in for one operation, from the first scheme of its requirements the api can send;
+ * The header, or query parameter, that carries the sign-in for one operation, from the first scheme of its requirements the api can send;
  * `undefined` for one that needs none (`security: []`, or only `{}`). A manifest without schemes signs in with a bearer
  * token, as most services do. An optional sign-in (`[{}, { oauth: [] }]`) still sends the token.
  */
@@ -76,6 +77,24 @@ export const authHeader = (manifest: ServiceApiManifest, operation: ManifestOper
     "configuration_error",
     `${operation.command} signs in by ${names.join(" or ")}, which the api cannot send`,
   )
+}
+
+/**
+ * Signs one request for its operation. Set the final URL first: a key in the query goes into it. Anything but the
+ * standard sign-in header, or a key in the query, never follows a redirect: another host would get the key.
+ */
+export const signRequest = async (
+  manifest: ServiceApiManifest,
+  operation: ManifestOperation,
+  request: { url: URL; headers: Headers; redirect?: "follow" | "manual" | "error" },
+  token: () => Promise<string> | string,
+): Promise<void> => {
+  const auth = authHeader(manifest, operation)
+  if (!auth) return
+  const value = auth.value(await token())
+  if (auth.in === "query") request.url.searchParams.set(auth.name, value)
+  else request.headers.set(auth.name, value)
+  if (auth.in === "query" || auth.name !== "authorization") request.redirect = "manual"
 }
 
 const at = (value: unknown, path: string): unknown =>
