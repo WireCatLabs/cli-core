@@ -606,7 +606,7 @@ describe("the shared service api group", () => {
     const refused = await moved.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
     expect(refused.error).toMatchObject({ code: "provider_error" })
     expect(moved.sent).toHaveLength(1)
-    const either = {
+    const either: ServiceApiManifest = {
       ...keyed,
       securitySchemes: { ...keyed.securitySchemes, bearer: { type: "http" as const, scheme: "bearer" } },
       security: [{ key: [] }, { bearer: [] }],
