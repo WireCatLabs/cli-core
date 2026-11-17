@@ -590,6 +590,14 @@ export { type Saving, stored } from "./messenger/stored.js"
 export { dateOrNone } from "./messenger/tasks-command.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { writeNewFile } from "./new-file.js"
+export {
+  type OAuthEnvironment,
+  type OAuthPresetOptions,
+  type OAuthSessionOptions,
+  oauthFlowOf,
+  oauthPreset,
+  oauthSessionCommand,
+} from "./oauth-session.js"
 export { pagingOf, positiveCount, window, withPaging } from "./paging.js"
 export {
   type CommandPermissions,
