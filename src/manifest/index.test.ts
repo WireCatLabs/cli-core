@@ -72,22 +72,27 @@ describe("parseCliConfig", () => {
     expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { id: "id" } } })).toThrow(
       "wirecat.config: auth.verify.operation: missing",
     )
+    for (const id of ["", "a..b", ".a"])
+      expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { operation: "me", id } } })).toThrow(
+        "auth.verify.id: a dot path",
+      )
   })
 
   it("refuses a URL that would put a secret, a space or no host into the CLI's files", () => {
-    for (const [from, why] of [
+    for (const [from, why] of <[string, string][]>[
       ["https://user:pass@api.acme.test/o.json", "without a user name or password"],
       ["https://api.acme.test/o.json?api_key=x", "without a key or token in its query"],
+      ["https://api.acme.test/o.json?accessToken=x", "without a key or token in its query"],
+      ["https://api.acme.test/o.json?x=1#access_token=abc", "without a #fragment"],
       ["https://api.acme.test/a b.json", "without spaces"],
-      ["https://@", "with a host"],
-      ["https://api.acme.test:99999/x", "with a host"],
+      ["https://@", "a valid https URL with a host"],
+      ["https://api.acme.test:99999/x", "a valid https URL with a host"],
     ])
       expect(() => parseCliConfig({ ...config, spec: { kind: "openapi", from } }), from).toThrow(
-        `spec.from: an https URL ${why}`,
+        `spec.from: ${why.startsWith("a valid") ? why : `an https URL ${why}`}`,
       )
-    expect(
-      parseCliConfig({ ...config, spec: { kind: "openapi", from: "https://api.acme.test/o.json?v=2" } }),
-    ).toBeTruthy()
+    for (const from of ["https://api.acme.test/o.json?v=2", "https://api.acme.test/auth/o.json?design=1&keyword=x"])
+      expect(parseCliConfig({ ...config, spec: { kind: "openapi", from } }), from).toBeTruthy()
     const oauth = (extra: object) => ({ ...config, auth: { preset: "oauth2-pkce", scopes: [], ...extra } })
     expect(() => parseCliConfig(oauth({ revokeUrl: "https://" }))).toThrow("auth.revokeUrl")
     expect(() => parseCliConfig(oauth({ redirect: { kind: "relay", url: "https://u:p@r.test/" } }))).toThrow(
@@ -101,10 +106,21 @@ describe("parseCliConfig", () => {
     )
     const { spec: _, ...noSpec } = config
     expect(() => parseCliConfig(noSpec)).toThrow("wirecat.config: spec: missing")
+    expect(() => parseCliConfig({ ...config, auth: { preset: "oauth2-pkce", scopes: [undefined] } })).toThrow(
+      /auth\.scopes\.0: (?!missing)/,
+    )
   })
 
   it("takes the hooks module only as a script in the project", () => {
-    for (const hooks of ["./", "./src/hooks.json", "./src/hooks.ts ", "./a/../../x.ts", "src/hooks.ts"])
+    for (const hooks of [
+      "./",
+      "./src/hooks.json",
+      "./src/hooks.ts ",
+      "./a/../../x.ts",
+      "src/hooks.ts",
+      "./.ts",
+      "./src/hooks.d.ts",
+    ])
       expect(() => parseCliConfig({ ...config, hooks }), hooks).toThrow("wirecat.config: hooks")
     expect(parseCliConfig({ ...config, hooks: "./src/hooks.js" }).hooks).toBe("./src/hooks.js")
   })

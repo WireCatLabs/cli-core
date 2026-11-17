@@ -66,8 +66,28 @@ const word = v.pipe(
   v.regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "lower-case letters and digits, words joined by one dash"),
 )
 
-// A query parameter by such a name holds a secret, which the URL would put into a committed file.
-const SECRET_PARAM = /key|token|secret|sig|auth|pass/i
+// A query parameter with such a word in its name holds a secret, which the URL would put into a committed file. Whole
+// words, so `design` or `keyword` stay allowed.
+const SECRET_WORDS = new Set([
+  "key",
+  "apikey",
+  "token",
+  "secret",
+  "sig",
+  "signature",
+  "auth",
+  "password",
+  "pass",
+  "passwd",
+  "credential",
+  "credentials",
+  "session",
+  "sessionid",
+  "jwt",
+  "code",
+])
+const secretName = (name: string) =>
+  name.split(/[_\-.]+|(?<=[a-z0-9])(?=[A-Z])/).some((part) => SECRET_WORDS.has(part.toLowerCase()))
 
 const urlOf = (text: string) => (URL.canParse(text) ? new URL(text) : undefined)
 
@@ -78,19 +98,23 @@ const httpsUrl = v.pipe(
   v.check((text) => {
     const url = urlOf(text)
     return url?.protocol === "https:" && url.hostname.length > 0
-  }, "an https URL with a host"),
+  }, "a valid https URL with a host"),
   v.check((text) => {
     const url = urlOf(text)
     return !url?.username && !url?.password
   }, "an https URL without a user name or password, which would be committed"),
   v.check(
-    (text) => ![...(urlOf(text)?.searchParams.keys() ?? [])].some((name) => SECRET_PARAM.test(name)),
+    (text) => ![...(urlOf(text)?.searchParams.keys() ?? [])].some(secretName),
     "an https URL without a key or token in its query, which would be committed",
   ),
+  // A token handed back in the fragment (OAuth's implicit flow) would be committed too; a description needs none.
+  v.check((text) => !urlOf(text)?.hash, "an https URL without a #fragment"),
 )
 
+const dotPath = v.pipe(v.string(), v.regex(/^[^.\s]+(\.[^.\s]+)*$/, "a dot path into the answer, such as data.id"))
+
 const verify = v.optional(
-  v.strictObject({ operation: v.pipe(v.string(), v.minLength(1)), id: v.string(), name: v.optional(v.string()) }),
+  v.strictObject({ operation: v.pipe(v.string(), v.minLength(1)), id: dotPath, name: v.optional(dotPath) }),
 )
 
 const schema = v.strictObject({
@@ -129,30 +153,35 @@ const schema = v.strictObject({
   hooks: v.optional(
     v.pipe(
       v.string(),
-      v.regex(/^\.\/[^\s]*\.[cm]?[jt]s$/, "a module in the project, such as ./src/hooks.ts"),
+      v.regex(/^\.\/([^\s]*\/)?[^/\s.][^/\s]*\.[cm]?[jt]s$/, "a module in the project, such as ./src/hooks.ts"),
+      v.check((text) => !/\.d\.[cm]?ts$/.test(text), "a module, not a .d.ts declaration file"),
       v.check((text) => !text.split(/[\\/]/).includes(".."), "a module in the project, without .."),
     ),
   ),
 })
 
-/** The config checked against its shape; every error names where it is. A CRM CLI needs its source. */
-/** `source` comes back unchecked: `parseCrmManifest` checks it against the generated API. */
+/**
+ * The config checked against its shape; every error names where it is. A CRM CLI needs its source. `source` comes back
+ * unchecked: `parseCrmManifest` checks it against the generated API.
+ */
 export const parseCliConfig = (input: unknown): CliConfig => {
   const parsed = v.safeParse(schema, input)
   if (!parsed.success) {
     const [issue] = parsed.issues
-    // valibot's own words for a key: "Invalid key: Expected never but received …"
+    // valibot's own words for a key: "Invalid key: Expected never but received …". By the issue's shape, so a value
+    // that is undefined inside a list or record keeps valibot's words.
+    const keyed = issue.type === "strict_object" || issue.type === "variant"
     const message =
-      issue.expected === "never"
+      keyed && issue.expected === "never"
         ? "not a field of wirecat.config"
-        : issue.received === "undefined"
+        : keyed && issue.input === undefined
           ? "missing"
           : issue.message
     throw new CliError("configuration_error", `wirecat.config: ${v.getDotPath(issue) ?? "(root)"}: ${message}`, {
       reason: "manifest.invalid",
     })
   }
-  // Typed, not cast, so a field the schema and CliConfig disagree on fails to compile.
+  // Typed, not cast: a field CliConfig needs that the schema lacks or types otherwise fails to compile (not the reverse).
   const output: Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> } = parsed.output
   const config = output as CliConfig
   if (config.category !== "crm" && config.source)

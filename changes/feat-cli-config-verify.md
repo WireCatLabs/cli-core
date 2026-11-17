@@ -11,6 +11,6 @@
 - **cli-core needs `@wirecat/cli-base` 0.112.0 or later** (peer `>=0.112.0 <1.0.0`), since 0.693.0, for
   `signInRequirements` and `signInPlace`.
 - **`parseCliConfig` refuses a URL that would put a secret, a space or no host into a CLI's files**: `spec.from`,
-  `auth.revokeUrl` and a relay redirect take an https URL with a host and no user name, password, or key or token in
-  its query. `hooks` takes a `.ts` or `.js` module under `./`. An unknown field reads "not a field of wirecat.config",
-  a missing one "missing".
+  `auth.revokeUrl` and a relay redirect take an https URL with a host, and no user name, password, #fragment, or
+  key or token in its query. `auth.verify`'s `id` and `name` are dot paths. `hooks` takes a `.ts` or `.js` module
+  under `./`. An unknown field reads "not a field of wirecat.config", a missing one "missing".
