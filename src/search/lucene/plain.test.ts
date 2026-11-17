@@ -76,6 +76,11 @@ describe("plainQuery", () => {
     expect(words("subject:10:30")).toEqual(["subject:10:30"])
   })
 
+  it("reads a field value that starts with a minus as the value, and a bare minus still as NOT", () => {
+    expect(words("chat:-1001234567890 budget")).toEqual(["chat:-1001234567890", "text:budget"])
+    expect(plainQuery("-budget review")).toBe("-budget review")
+  })
+
   it("can run on its own output", () => {
     for (const [, text] of SPECIAL_TEXT) expect(plainQuery(plainQuery(text))).toBe(plainQuery(text))
   })
