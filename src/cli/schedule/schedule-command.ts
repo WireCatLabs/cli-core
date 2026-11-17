@@ -187,10 +187,13 @@ const deliveryOf = ({ notifyOn, deliverTo }: WhenOptions): Pick<Schedule, "notif
 })
 
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
-/** `skill show follow-ups` exists only for messenger CLIs; any other CLI gets a read-only summary it can run. */
+/**
+ * `skill show follow-ups` exists only for messenger CLIs. The others share no search or sync command, so their example
+ * names `doctor`, which every CLI has and which takes no profile there.
+ */
 const promptExample = (app: AppIdentity) =>
   app.messenger === false
-    ? `summarize what came in during the last day: ${app.command} personal search messages 'date>1d' --newest --limit 20`
+    ? `say what needs attention in this installation: ${app.command} doctor`
     : `run the daily follow-up review: ${app.command} skill show follow-ups`
 
 export interface ScheduleHost {
@@ -585,6 +588,8 @@ export const scheduleCommandFor = ({
   agentRuns = [],
 }: ScheduleHost): Command => {
   const agentClis = [app, ...agentRuns]
+  const messenger = app.messenger !== false
+  const commandExample = messenger ? "messages list <chat> --limit 50" : "doctor"
   const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
@@ -681,10 +686,10 @@ export const scheduleCommandFor = ({
       }),
     )
       .description(
-        `run ${app.command} <args…> on a timer — reads save what they read, so this is how a chat's history fills the store`,
+        `run ${app.command} <args…> on a timer — reads save what they read, so this is how ${messenger ? "a chat's history fills the store" : "the store stays current"}`,
       )
       .argument("<name>", "lowercase letters, digits and dashes")
-      .argument("<args...>", `the ${app.command} command after its name, e.g. -- messages list <chat> --limit 50`),
+      .argument("<args...>", `the ${app.command} command after its name, e.g. -- ${commandExample}`),
   ).action(async function (this: Command, name: string, args: string[]) {
     const { environment, save } = prepare(this)
     if (args[0] === "schedule") throw new CliError("validation_error", "a schedule cannot run schedule")

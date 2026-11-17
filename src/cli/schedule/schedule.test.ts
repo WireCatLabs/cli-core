@@ -100,10 +100,28 @@ describe("the schedule agent prompt example", () => {
     expect(exampleFor(app)).toContain("chat skill show follow-ups")
   })
 
-  it("gives a CLI without that skill a read-only search it can run", () => {
-    const example = exampleFor({ ...app, command: "mail", messenger: false })
+  it("gives a CLI without that skill a command every CLI has", () => {
+    const example = exampleFor({ ...app, command: "b24", messenger: false })
     expect(example).not.toContain("follow-ups")
-    expect(example).toContain("mail personal search messages 'date>1d' --newest")
+    expect(example).toContain("b24 doctor")
+  })
+})
+
+describe("the schedule command help", () => {
+  const helpOf = (identity: typeof app & { messenger?: boolean }) => {
+    const command = scheduleCommandFor({ app: identity, context: () => ({}) as never })
+    const sub = command.commands.find((one) => one.name() === "command")
+    return `${sub?.description()} ${sub?.registeredArguments[1]?.description}`
+  }
+
+  it("names a messenger's chats", () => {
+    expect(helpOf(app)).toContain("-- messages list <chat>")
+  })
+
+  it("leaves chats and messages out for a CLI that is not a messenger", () => {
+    const help = helpOf({ ...app, command: "b24", messenger: false })
+    expect(help).toContain("e.g. -- doctor")
+    expect(help).not.toMatch(/chat|messages/)
   })
 })
 
