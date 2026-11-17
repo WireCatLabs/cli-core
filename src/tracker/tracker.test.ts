@@ -115,6 +115,86 @@ describe("syncTracker", () => {
   })
 })
 
+describe("syncTracker guards", () => {
+  const DAYS = 2 * 86_400_000
+  const T = Date.UTC(2026, 10, 17)
+
+  it("holds an id pass that would empty a kind, or follows a gap, until --rescan lets it through", async () => {
+    const store = await storeOf()
+    const source = fakeTrackerSource({ rows: exampleTrackerRows() })
+    await syncTracker(source, store, account, { now: T })
+    const lost = { ...source, ids: (async () => ({ items: [], hasMore: false })) as typeof source.ids }
+    const held = await syncTracker(lost, store, account, { now: T + DAYS })
+    expect(held.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "held", unlisted: 0 })
+    expect(held.synced.find((one) => one.kind === "issue")?.held).toMatch(/run sync --rescan/)
+    expect(await store.tracker.count(account, "issue")).toBe(3)
+
+    const gapped = {
+      ...source,
+      ids: (async (kind, page, context) => {
+        if (kind === "comment") context?.gap({ kind, message: "the sign-in cannot read one team's comments" })
+        return source.ids(kind, page, context)
+      }) as typeof source.ids,
+    }
+    source.remove("comment", "comment-1")
+    const partly = await syncTracker(gapped, store, account, { now: T + 2 * DAYS })
+    expect(partly.synced.find((one) => one.kind === "comment")?.pass).toBe("held")
+    expect(await store.tracker.count(account, "comment")).toBe(1)
+
+    const emptied = {
+      ...lost,
+      changes: (async () => ({ items: [], hasMore: false, cursor: null })) as unknown as typeof source.changes,
+    }
+    const through = await syncTracker(emptied, store, account, { now: T + 3 * DAYS, rescan: true })
+    expect(through.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "complete", unlisted: 3 })
+  })
+
+  it("fails a kind whose page says there is more but gives no cursor, keeping the old cursor", async () => {
+    const store = await storeOf()
+    const source = fakeTrackerSource({ rows: exampleTrackerRows() })
+    const broken = {
+      ...source,
+      changes: (async () => ({ items: [], hasMore: true })) as unknown as typeof source.changes,
+    }
+    const report = await syncTracker(broken, store, account, { now: T })
+    expect(report.synced[0]?.error).toMatch(/gave no cursor/)
+    expect(report.state).toBe("partial")
+  })
+
+  it("goes on with a stopped --rescan as a rescan: the kinds it had not reached get a full list and an id pass", async () => {
+    const store = await storeOf()
+    const source = fakeTrackerSource({ rows: exampleTrackerRows() })
+    await syncTracker(source, store, account, { now: T })
+    const cut = await syncTracker(source, store, account, {
+      now: T + 1,
+      rescan: true,
+      budget: runBudget({ requests: 3 }),
+    })
+    expect(cut.stopped).toBe("requests")
+    const rest = await syncTracker(source, store, account, { now: T + 2 })
+    expect(rest.state).toBe("complete")
+    for (const one of rest.synced) expect(one).toMatchObject({ round: "full", pass: "complete" })
+    const after = await syncTracker(source, store, account, { now: T + 3 })
+    expect(after.synced.every((one) => one.round === "changes" && one.pass === undefined)).toBe(true)
+  })
+
+  it("stops an id pass when cancelled, keeping the ids it read", async () => {
+    const store = await storeOf()
+    const source = fakeTrackerSource({ rows: exampleTrackerRows(), pageSize: 1 })
+    const controller = new AbortController()
+    const cancelling = {
+      ...source,
+      ids: (async (kind, page, context) => {
+        if (kind === "state" && page !== undefined) controller.abort()
+        return source.ids(kind, page, context)
+      }) as typeof source.ids,
+    }
+    const report = await syncTracker(cancelling, store, account, { now: T, signal: controller.signal })
+    expect(report).toMatchObject({ stopped: "cancelled", state: "partial" })
+    expect(report.synced.find((one) => one.kind === "state")).toMatchObject({ pass: "partial", unlisted: 0 })
+  })
+})
+
 describe("store.tracker", () => {
   it("filters issues by state type, assignee and label, and finds them by their words", async () => {
     const store = await storeOf()

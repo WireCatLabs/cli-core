@@ -3,6 +3,7 @@ CREATE VIRTUAL TABLE tracker_item_words USING fts5(
   normalized_text,
   content = '', contentless_delete = 1,
   tokenize = 'unicode61 remove_diacritics 2', prefix = '3');--> statement-breakpoint
+CREATE VIRTUAL TABLE tracker_item_words_vocab USING fts5vocab(tracker_item_words, 'col');--> statement-breakpoint
 CREATE TRIGGER tracker_item_words_ai AFTER INSERT ON tracker_items WHEN new.normalized_text <> '' BEGIN
   INSERT INTO tracker_item_words (rowid, normalized_text) VALUES (new.id, new.normalized_text);
 END;--> statement-breakpoint

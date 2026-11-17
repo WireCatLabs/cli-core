@@ -6,6 +6,15 @@ import type { AccountKey } from "../store/types.js"
 import type { TrackerCallContext, TrackerGap, TrackerSource } from "./source.js"
 
 const DAY = 86_400_000
+/** An id pass that would mark more than this share of a kind deleted is held: a tracker that lost rights lists none. */
+const MOST_UNLISTED = 0.5
+const GUARDED_FROM = 10
+
+/** `drop`: `--rescan` itself, which drops what is in progress; `full`: a rescan, asked now or by the run it goes on. */
+interface Mode {
+  drop: boolean
+  full: boolean
+}
 
 /** Where a kind stands between runs: the cursor of its last finished round, and the round or id pass in progress. */
 interface TrackerCursor {
@@ -63,8 +72,13 @@ export interface TrackerSyncResult {
   saved: number
   /** Rows a complete id pass did not list, now marked deleted. */
   unlisted: number
-  /** `complete`: a full list of ids arrived; `partial`: it stopped and goes on next run. Absent: none was due. */
-  pass?: "complete" | "partial"
+  /**
+   * `complete`: a full list of ids arrived; `partial`: it stopped and goes on next run; `held`: it would mark too many
+   * deleted, or the sign-in could not read all of the kind, so nothing was. Absent: none was due.
+   */
+  pass?: "complete" | "partial" | "held"
+  /** Why the pass was held, and how to let it through. */
+  held?: string
   /** Set when the kind failed; its cursor stays at its last saved page. */
   error?: string
 }
@@ -101,11 +115,13 @@ interface Run {
 }
 
 /** Reads one kind's changes from where it stood, page by page, saving each page and the cursor after it. */
-const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, rescan: boolean) => {
+const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, mode: Mode) => {
   const { source, store, account, budget } = run
   const name = trackerCursorName(kind)
   let cursor = parsed<TrackerCursor>((await store.sync.syncState(account, name))?.value) ?? fresh()
-  let round = rescan ? { from: null, page: null } : (cursor.round ?? { from: cursor.token, page: null })
+  let round = mode.drop
+    ? { from: null, page: null }
+    : (cursor.round ?? { from: mode.full ? null : cursor.token, page: null })
   const save = (patch: Partial<TrackerCursor>) => {
     cursor = { ...cursor, ...patch }
     return store.sync.setSyncState(account, name, JSON.stringify(cursor))
@@ -137,10 +153,12 @@ const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResul
       run.report.progress.saved += page.items.length
     }
     run.report.progress.steps += 1
-    if (!page.hasMore || page.nextCursor === undefined) {
+    if (!page.hasMore) {
       await save({ token: page.cursor ?? null, round: null })
       return null
     }
+    if (page.nextCursor === undefined)
+      throw new CliError("invalid_response", `${source.provider} said there are more ${kind}s but gave no cursor`)
     if (pages.has(page.nextCursor))
       throw new CliError("invalid_response", `${source.provider} gave the same page of ${kind}s twice`)
     pages.add(page.nextCursor)
@@ -153,10 +171,10 @@ const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResul
  * Lists every id of the kind and marks deleted each stored row the list lacks. Archived rows are listed, so only a row
  * the tracker deleted outright goes. A pass that stops keeps its ids and goes on next run.
  */
-const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, rescan: boolean) => {
+const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, mode: Mode) => {
   const { source, store, account, budget } = run
   const name = passName(kind)
-  const pending = rescan ? null : parsed<TrackerPass>((await store.sync.syncState(account, name))?.value)
+  const pending = mode.drop ? null : parsed<TrackerPass>((await store.sync.syncState(account, name))?.value)
   let pass = pending ?? {
     v: 1,
     started: run.now,
@@ -172,6 +190,11 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, r
     }
     run.report.progress.requests += 1
     const page = await source.ids(kind, pass.page ?? undefined, run.context)
+    if (run.signal?.aborted) {
+      await store.sync.setSyncState(account, name, JSON.stringify(pass))
+      result.pass = "partial"
+      return "cancelled" as const
+    }
     pass = { ...pass, ids: [...pass.ids, ...page.items] }
     if (page.hasMore) {
       // A pass that ended early would mark every unread row deleted.
@@ -181,12 +204,26 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, r
       await store.sync.setSyncState(account, name, JSON.stringify(pass))
       continue
     }
-    result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
+    const stored = await store.tracker.count(account, kind)
+    const unlisted = await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now, {
+      dryRun: true,
+    })
+    const unread = run.report.gaps.some((gap) => gap.kind === kind)
+    const emptied = pass.ids.length === 0 && unlisted > 0
+    if (!mode.full && (unread || emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
+      result.pass = "held"
+      result.held =
+        `${source.provider} listed ${pass.ids.length} ${kind} ids${unread ? " and could not read all of them" : ""}, ` +
+        `so ${unlisted} of the ${stored} stored would be marked deleted; nothing was. Check the sign-in's rights, ` +
+        "then run sync --rescan to let it through"
+    } else {
+      result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
+      result.pass = "complete"
+    }
     await store.sync.setSyncState(account, name, "null")
     const cursor =
       parsed<TrackerCursor>((await store.sync.syncState(account, trackerCursorName(kind)))?.value) ?? fresh()
     await store.sync.setSyncState(account, trackerCursorName(kind), JSON.stringify({ ...cursor, passAt: pass.started }))
-    result.pass = "complete"
     return null
   }
 }
@@ -249,21 +286,29 @@ export const syncTracker = async (
   const kinds = TRACKER_KINDS.filter((one) => source.traits.kinds.includes(one))
   // A budget smaller than the kinds would spend itself re-reading the finished ones: a run that stopped leaves the kinds
   // it finished, and the next one goes on with the rest.
-  const done = new Set(
-    options.rescan
-      ? []
-      : (parsed<{ v: 1; done: TrackerKind[] }>((await store.sync.syncState(account, RESUME))?.value)?.done ?? []),
-  )
+  const resumed = options.rescan
+    ? null
+    : parsed<{ v: 1; done: TrackerKind[]; rescan?: true }>((await store.sync.syncState(account, RESUME))?.value)
+  const done = new Set(resumed?.done ?? [])
+  // A stopped rescan goes on as one: the kinds it had not reached still get their full list and their id pass.
+  const mode: Mode = { drop: options.rescan === true, full: options.rescan === true || resumed?.rescan === true }
+  // The kinds this run skips keep the gaps the runs that read them recorded.
+  if (resumed)
+    for (const gap of await trackerGapsOf(store, account))
+      if (done.has(gap.kind)) {
+        said.add(`${gap.kind} ${gap.message}`)
+        report.gaps.push(gap)
+      }
   for (const kind of kinds.filter((one) => !done.has(one))) {
     const result: TrackerSyncResult = { kind, round: "full", reset: false, state: "partial", saved: 0, unlisted: 0 }
     report.synced.push(result)
     let stop: BudgetStop | null
     try {
-      stop = await stopping(() => syncChanges(run, kind, result, options.rescan === true))
+      stop = await stopping(() => syncChanges(run, kind, result, mode))
       const cursor = parsed<TrackerCursor>((await store.sync.syncState(account, trackerCursorName(kind)))?.value)
       const pending = parsed<TrackerPass>((await store.sync.syncState(account, passName(kind)))?.value)
-      const due = options.rescan === true || pending !== null || now - (cursor?.passAt ?? 0) >= passEvery
-      if (!stop && due) stop = await stopping(() => passIds(run, kind, result, options.rescan === true))
+      const due = mode.full || pending !== null || now - (cursor?.passAt ?? 0) >= passEvery
+      if (!stop && due) stop = await stopping(() => passIds(run, kind, result, mode))
     } catch (error) {
       result.error = error instanceof Error ? error.message : String(error)
       report.complete = false
@@ -279,7 +324,11 @@ export const syncTracker = async (
     result.state = "complete"
     done.add(kind)
   }
-  await store.sync.setSyncState(account, RESUME, report.stopped ? JSON.stringify({ v: 1, done: [...done] }) : "null")
+  await store.sync.setSyncState(
+    account,
+    RESUME,
+    report.stopped ? JSON.stringify({ v: 1, done: [...done], ...(mode.full ? { rescan: true } : {}) }) : "null",
+  )
   await store.sync.setSyncState(account, GAPS, JSON.stringify(report.gaps))
   return report
 }

@@ -37,8 +37,13 @@ stops keeps its ids and the page it reached.
 - **Budget.** The engine takes one request from `options.budget` before each call. A run that stops answers
   `state: "partial"` and `stopped`; the kinds it finished are skipped by the next run until every kind has had its
   round, so a budget smaller than the number of kinds still moves on.
-- **Failures.** A kind that fails is named in its result's `error` and the others still sync.
-- **`rescan`.** Lists everything again and every id, dropping a round in progress.
+- **Held passes.** A pass is held (`pass: "held"`, with the reason in `held`) and marks nothing when the list is empty
+  while rows are stored, when it would mark more than half of ten or more stored rows deleted, or when the sign-in
+  reported a gap for the kind: a tracker that lost rights lists none of what it can no longer see.
+- **Failures.** A kind that fails is named in its result's `error` and the others still sync. A page that says there is
+  more but gives no next page fails the kind.
+- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through. A
+  rescan that stops goes on as one in the next run.
 
 A save merges: a field the read left out keeps its stored value, so a partial selection never erases.
 

@@ -50,7 +50,9 @@ export interface TrackerSource {
   self?(context?: TrackerCallContext): Promise<string>
   /**
    * What changed since `cursor`, a page at a time; `cursor: null` lists everything. A tracker without a change feed
-   * reads by its own modified time, with an overlap, and gives that time back as the cursor.
+   * reads by its own modified time, with an overlap, and gives back as the last page's cursor the time the round's
+   * first page was read, never the last one's: a round spread over runs must not skip what changed while it ran.
+   * `page` tokens carry that time along.
    */
   changes<K extends TrackerKind>(
     kind: K,

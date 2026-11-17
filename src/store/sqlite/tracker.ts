@@ -54,9 +54,10 @@ export interface TrackerSearch {
   accounts?: AccountKey[]
   kinds?: readonly TrackerKind[]
   limit?: number
+  offset?: number
 }
 
-/** A tracker user joined to a person the store knows by the same exact e-mail. */
+/** A tracker user joined to the one person the store knows by the same e-mail. */
 export interface TrackerPerson {
   user: string
   person: string
@@ -84,6 +85,7 @@ export interface TrackerStore {
     listed: readonly string[],
     before: number,
     now: number,
+    options?: { dryRun?: boolean },
   ): Promise<number>
   get<K extends TrackerKind>(key: AccountKey, kind: K, externalId: string): Promise<TrackerItem<K> | undefined>
   /** An issue by its readable key (`ENG-12`), in any letter case. */
@@ -97,7 +99,7 @@ export interface TrackerStore {
   find(search: TrackerSearch): Promise<{ items: TrackerHit[]; hasMore: boolean }>
   /** Live rows of the kind, archived ones included. */
   count(key: AccountKey, kind: TrackerKind): Promise<number>
-  /** The tracker users among `users` whose exact e-mail an identity linked to a person has. */
+  /** The tracker users among `users` whose e-mail, in any letter case, an identity linked to one person has. */
   people(key: AccountKey, users: readonly string[]): Promise<TrackerPerson[]>
 }
 
@@ -192,6 +194,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     listed: readonly string[],
     before: number,
     now: number,
+    { dryRun = false }: { dryRun?: boolean } = {},
   ) => {
     const accountId = findAccountPk(context, key)
     if (accountId === undefined) return 0
@@ -206,7 +209,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         )
         .all(accountId, kind, before)) {
         if (keep.has(String(row.external_id))) continue
-        mark.run(now, Number(row.id))
+        if (!dryRun) mark.run(now, Number(row.id))
         removed += 1
       }
       return removed
@@ -251,7 +254,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     return { items: rows.slice(0, limit).map((row) => itemOf<K>(row)), hasMore: rows.length > limit }
   }
 
-  const find = ({ words, anyWord = false, exact = false, accounts, kinds, limit }: TrackerSearch) => {
+  const find = ({ words, anyWord = false, exact = false, accounts, kinds, limit, offset = 0 }: TrackerSearch) => {
     const match = matchOf(words, anyWord, exact)
     if (!match) return { items: [], hasMore: false }
     const most = Math.min(Math.max(limit ?? 100, 1), MOST)
@@ -271,8 +274,8 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       sql += ` AND t.kind IN (${kinds.map(() => "?").join(", ")})`
       for (const kind of kinds) params.push(kind)
     }
-    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ?"
-    params.push(most + 1)
+    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ? OFFSET ?"
+    params.push(most + 1, offset)
     const rows = database.prepare(sql).all(...params)
     return {
       items: rows.slice(0, most).map(
@@ -288,7 +291,8 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
 
   return {
     save: async (key, kind, records, now) => save(key, kind, records, now),
-    removeUnlisted: async (key, kind, listed, before, now) => removeUnlisted(key, kind, listed, before, now),
+    removeUnlisted: async (key, kind, listed, before, now, options) =>
+      removeUnlisted(key, kind, listed, before, now, options),
     get: async <K extends TrackerKind>(key: AccountKey, kind: K, externalId: string) => {
       const accountId = findAccountPk(context, key)
       if (accountId === undefined) return undefined
@@ -328,7 +332,8 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
             "JOIN identities i ON i.email IS NOT NULL AND lower(i.email) = lower(json_extract(u.data, '$.email')) " +
             "JOIN identity_links l ON l.identity_id = i.id JOIN persons p ON p.id = l.person_id " +
             `WHERE u.account_id = ? AND u.kind = 'user' AND u.external_id IN (${users.map(() => "?").join(", ")}) ` +
-            "GROUP BY u.external_id ORDER BY u.external_id",
+            // Two persons behind one address say nothing about which one this user is.
+            "GROUP BY u.external_id HAVING count(DISTINCT p.id) = 1 ORDER BY u.external_id",
         )
         .all(accountId, ...users)
         .map((row) => ({

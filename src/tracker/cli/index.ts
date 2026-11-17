@@ -105,7 +105,8 @@ const trackerSync = v.strictObject({
       state: v.picklist(["partial", "complete"]),
       saved: count,
       unlisted: count,
-      pass: v.optional(v.picklist(["complete", "partial"])),
+      pass: v.optional(v.picklist(["complete", "partial", "held"])),
+      held: v.optional(text),
       error: v.optional(text),
     }),
   ),
@@ -209,13 +210,24 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
                 },
               ]
             : undefined
-        const issues = failed.map((one) => ({
-          code: "provider_error" as const,
-          reason: "sync.partial",
-          source: `tracker:${one.kind}`,
-        }))
+        const issues = [
+          ...failed.map((one) => ({
+            code: "provider_error" as const,
+            reason: "sync.partial",
+            source: `tracker:${one.kind}`,
+          })),
+          ...report.synced
+            .filter((one) => one.pass === "held")
+            .map((one) => ({
+              code: "validation_error" as const,
+              reason: "tracker.unlisted-held",
+              source: `tracker:${one.kind}`,
+            })),
+        ]
         return itemOf(report, {
-          ...(report.state === "partial" ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
+          ...(report.state === "partial" || issues.length
+            ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } }
+            : {}),
           ...(next ? { next } : {}),
         })
       })
@@ -292,7 +304,10 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
         parent: found.record.externalId,
         limit: MOST,
       })
-      return itemOf({ ...issue, comments: comments.items.map((one) => viewOf(one)) })
+      return itemOf(
+        { ...issue, comments: comments.items.map((one) => viewOf(one)) },
+        comments.hasMore ? { meta: { complete: false } } : {},
+      )
     })
   })
   example(
@@ -303,18 +318,20 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
         .option("--any", "any word may match"),
     ),
     'issues search "invoice currency"',
-  ).action(async (words: string[], opts: { any?: boolean; limit: number }, command: Command) => {
+  ).action(async (words: string[], opts: { any?: boolean; limit: number; page: number }, command: Command) => {
     await within(command, true, async (run) => {
       const found = await run.store.tracker.find({
         words,
         accounts: [run.account],
         kinds: ["issue", "project", "comment"],
         limit: opts.limit,
+        offset: (opts.page - 1) * opts.limit,
         ...(opts.any ? { anyWord: true } : {}),
       })
       return listOf("issues search", {
         items: found.items.map((hit) => viewOf(hit.item, { excerpt: hit.excerpt })),
         limit: opts.limit,
+        page: opts.page,
         has_more: found.hasMore,
         args: { words },
       })

@@ -1393,6 +1393,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "name": "20261117211414_version-70-tracker-item-words",
     "statements": [
       "-- Words of a tracker item's title and text, rowid = tracker_items.id: issues, projects and comments found by any word.\nCREATE VIRTUAL TABLE tracker_item_words USING fts5(\n  normalized_text,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE tracker_item_words_vocab USING fts5vocab(tracker_item_words, 'col');",
       "CREATE TRIGGER tracker_item_words_ai AFTER INSERT ON tracker_items WHEN new.normalized_text <> '' BEGIN\n  INSERT INTO tracker_item_words (rowid, normalized_text) VALUES (new.id, new.normalized_text);\nEND;",
       "CREATE TRIGGER tracker_item_words_au AFTER UPDATE OF normalized_text ON tracker_items\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM tracker_item_words WHERE rowid = old.id;\n  INSERT INTO tracker_item_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
       "CREATE TRIGGER tracker_item_words_ad AFTER DELETE ON tracker_items BEGIN\n  DELETE FROM tracker_item_words WHERE rowid = old.id;\nEND;"

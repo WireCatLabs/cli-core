@@ -72,6 +72,10 @@ describe("tracker commands", () => {
     expect((shown.comments as Record<string, unknown>[]).map((one) => one.body)).toEqual(["Seen on three accounts"])
 
     expect(ids(await cli("issues", "search", "provider")).sort()).toEqual(["issue-1", "project-1"])
+    const [one] = ids(await cli("issues", "search", "provider", "--limit", "1"))
+    const second = await cli("issues", "search", "provider", "--limit", "1", "--page", "2")
+    expect(ids(second)).toHaveLength(1)
+    expect(ids(second)[0]).not.toBe(one)
 
     const task = (await cli("issues", "task", "ENG-2", "--due", "2026-12-01")).item
     expect(task).toMatchObject({ issue: "tracker:issue/issue-2", created: true })
