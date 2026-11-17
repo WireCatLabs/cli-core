@@ -165,6 +165,33 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     return ["string", "unknown"].includes(type) ? String(value) : undefined
   }
 
+  /**
+   * The schema with each union on the way to `keys` cut to the branch that has the rest of the path: a sample of the
+   * first branch of Attio's seventeen value types would carry another type's fields, and the strict fake refuses it.
+   */
+  const narrowed = (node: SchemaNode, keys: readonly string[]): SchemaNode => {
+    if (keys.length === 0) return node
+    const found = resolve(node, definitions)
+    const [key, ...rest] = keys as [string, ...string[]]
+    const fits = (one: SchemaNode) => "node" in walk(one, keys.join("."), definitions)
+    switch (found.type) {
+      case "union": {
+        const branch = found.of.find(fits)
+        return branch ? narrowed(branch, keys) : node
+      }
+      case "allOf":
+        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys) : one)) }
+      case "array":
+        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest) } : node
+      case "object": {
+        const inner = found.properties[key] ?? found.additionalProperties
+        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest) } } : node
+      }
+      default:
+        return node
+    }
+  }
+
   /** The object a dotted path ends in, with its last key and schema: what is missing is built from the schema's sample. */
   const parentOf = (row: CrmRaw, path: string, node: SchemaNode | undefined) => {
     const keys = path.split(".")
@@ -174,7 +201,7 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     for (const [place, one] of keys.entries()) {
       const inner = schema === undefined ? undefined : (step(schema, one, definitions) ?? undefined)
       if (typeof here[one] !== "object" || here[one] === null) {
-        const made = sample(inner)
+        const made = sample(inner && narrowed(inner, [...keys.slice(place + 1), key]))
         here[one] = typeof made === "object" && made !== null ? made : /^\d+$/.test(keys[place + 1] ?? key) ? [] : {}
       }
       here = here[one] as Record<string, unknown>
@@ -221,7 +248,9 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     n: number,
     given: Readonly<Record<string, Value | undefined>>,
   ): CrmRaw => {
-    const made = sample(node)
+    // Sampled already cut to the branches the rules write into, so a list the first sample holds has the right type.
+    const paths = Object.values(rules).flatMap((rule) => pathOf(rule) ?? [])
+    const made = sample(node && paths.reduce((cut, path) => narrowed(cut, path.split(".")), node))
     const row = isRaw(made) ? made : {}
     for (const [field, rule] of Object.entries(rules)) {
       const path = pathOf(rule)
