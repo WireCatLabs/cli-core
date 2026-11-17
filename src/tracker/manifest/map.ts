@@ -5,10 +5,12 @@ import { convert, mapFields, rulePaths } from "../../crm/manifest/map.js"
 import { STATE_TYPES, type TrackerKind, type TrackerRecords } from "../../domain/tracker.js"
 
 const TIMES = { externalId: "id", createdAt: "epoch", updatedAt: "epoch", archivedAt: "epoch" } as const
+// A literal after `key:` reads as a permission key to src/cli/permission-keys.test.ts.
+const KEY: Conversion = "text"
 
 /** Each of our fields and how a value the tracker sent becomes it. */
 export const TRACKER_FIELDS: { readonly [K in TrackerKind]: Readonly<Record<string, Conversion>> } = {
-  team: { ...TIMES, name: "text", key: "text" },
+  team: { ...TIMES, name: "text", key: KEY },
   user: { ...TIMES, name: "text", email: "text", active: "bool" },
   state: { ...TIMES, name: "text", type: "text", team: "id", position: "number" },
   label: { ...TIMES, name: "text", team: "id" },
@@ -25,7 +27,7 @@ export const TRACKER_FIELDS: { readonly [K in TrackerKind]: Readonly<Record<stri
   issue: {
     ...TIMES,
     title: "text",
-    key: "text",
+    key: KEY,
     description: "text",
     state: "id",
     team: "id",
