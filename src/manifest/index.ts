@@ -20,6 +20,9 @@ export type CliAuth =
       rotating?: boolean
     }
 
+export const CLI_CATEGORIES = ["messenger", "mail", "notes", "files", "meetings", "calendar", "crm", "other"] as const
+export type CliCategory = (typeof CLI_CATEGORIES)[number]
+
 /** One file, `wirecat.config.ts`, that `new --from-config` builds a CLI from. */
 export interface CliConfig {
   identity: {
@@ -38,7 +41,8 @@ export interface CliConfig {
   }
   spec: { kind: "openapi" | "swagger"; from: string }
   auth: CliAuth
-  category: "crm" | "other"
+  /** cli-template's `--category`; `other` is any API outside them. */
+  category: CliCategory
   /** The CRM source; checked against the generated API by `parseCrmManifest` once the api group exists. */
   source?: CrmManifest
   /** The module of named hooks, relative to the config: `./src/hooks.ts`. */
@@ -94,7 +98,7 @@ const schema = v.strictObject({
       ),
     }),
   ]),
-  category: v.picklist(["crm", "other"]),
+  category: v.picklist(CLI_CATEGORIES),
   source: v.optional(v.looseObject({})),
   hooks: v.optional(v.pipe(v.string(), v.startsWith("./"), v.check(projectPath, "a module in the project"))),
 })
