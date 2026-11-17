@@ -64,6 +64,7 @@ describe("the first screen", () => {
         b24                     Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data
         pbx                     Asterisk PBX calls and recordings, searchable with your other WireCat data
         notion                  Notion pages and databases as local text, searchable with your other WireCat data
+        ydisk                   Yandex Disk folders as local text, searchable with your other WireCat data
 
       Start here:   tg personal setup  (any profile name works)
                     tg account list    your profiles and their logged-in accounts
