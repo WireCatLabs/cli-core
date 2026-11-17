@@ -56,6 +56,72 @@ describe("parseCliConfig", () => {
       "identity.owner",
     )
     expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm CLI")
-    expect(() => parseCliConfig({ ...config, extra: true })).toThrow("wirecat.config")
+    expect(() => parseCliConfig({ ...config, extra: true })).toThrow(
+      "wirecat.config: extra: not a field of wirecat.config",
+    )
+  })
+
+  it("takes each category, a crm CLI with its source, and a token's verify call", () => {
+    for (const category of ["mail", "files", "other"] as const)
+      expect(parseCliConfig({ ...config, category }).category).toBe(category)
+    expect(() => parseCliConfig({ ...config, category: "tracker" })).toThrow("wirecat.config: category")
+    const crm = { ...config, category: "crm" as const, source: { provider: "acme" } }
+    expect(parseCliConfig(crm).source).toEqual({ provider: "acme" })
+    const verify = { operation: "getV2Self", id: "workspace_id", name: "workspace_name" }
+    expect(parseCliConfig({ ...config, auth: { preset: "token", verify } }).auth).toEqual({ preset: "token", verify })
+    expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { id: "id" } } })).toThrow(
+      "wirecat.config: auth.verify.operation: missing",
+    )
+    for (const id of ["", "a..b", ".a"])
+      expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { operation: "me", id } } })).toThrow(
+        "auth.verify.id: a dot path",
+      )
+  })
+
+  it("refuses a URL that would put a secret, a space or no host into the CLI's files", () => {
+    for (const [from, why] of <[string, string][]>[
+      ["https://user:pass@api.acme.test/o.json", "without a user name or password"],
+      ["https://api.acme.test/o.json?api_key=x", "without a key or token in its query"],
+      ["https://api.acme.test/o.json?accessToken=x", "without a key or token in its query"],
+      ["https://api.acme.test/o.json?x=1#access_token=abc", "without a #fragment"],
+      ["https://api.acme.test/a b.json", "without spaces"],
+      ["https://@", "a valid https URL with a host"],
+      ["https://api.acme.test:99999/x", "a valid https URL with a host"],
+    ])
+      expect(() => parseCliConfig({ ...config, spec: { kind: "openapi", from } }), from).toThrow(
+        `spec.from: ${why.startsWith("a valid") ? why : `an https URL ${why}`}`,
+      )
+    for (const from of ["https://api.acme.test/o.json?v=2", "https://api.acme.test/auth/o.json?design=1&keyword=x"])
+      expect(parseCliConfig({ ...config, spec: { kind: "openapi", from } }), from).toBeTruthy()
+    const oauth = (extra: object) => ({ ...config, auth: { preset: "oauth2-pkce", scopes: [], ...extra } })
+    expect(() => parseCliConfig(oauth({ revokeUrl: "https://" }))).toThrow("auth.revokeUrl")
+    expect(() => parseCliConfig(oauth({ redirect: { kind: "relay", url: "https://u:p@r.test/" } }))).toThrow(
+      "auth.redirect.url",
+    )
+  })
+
+  it("refuses an old field and names a missing one", () => {
+    expect(() => parseCliConfig({ ...config, identity: { ...config.identity, provider: "acme" } })).toThrow(
+      "wirecat.config: identity.provider: not a field of wirecat.config",
+    )
+    const { spec: _, ...noSpec } = config
+    expect(() => parseCliConfig(noSpec)).toThrow("wirecat.config: spec: missing")
+    expect(() => parseCliConfig({ ...config, auth: { preset: "oauth2-pkce", scopes: [undefined] } })).toThrow(
+      /auth\.scopes\.0: (?!missing)/,
+    )
+  })
+
+  it("takes the hooks module only as a script in the project", () => {
+    for (const hooks of [
+      "./",
+      "./src/hooks.json",
+      "./src/hooks.ts ",
+      "./a/../../x.ts",
+      "src/hooks.ts",
+      "./.ts",
+      "./src/hooks.d.ts",
+    ])
+      expect(() => parseCliConfig({ ...config, hooks }), hooks).toThrow("wirecat.config: hooks")
+    expect(parseCliConfig({ ...config, hooks: "./src/hooks.js" }).hooks).toBe("./src/hooks.js")
   })
 })
