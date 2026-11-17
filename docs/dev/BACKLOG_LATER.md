@@ -3,12 +3,6 @@
 Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line format as
 [BACKLOG.md](BACKLOG.md#rules). An item moves to [BACKLOG.md](BACKLOG.md) when it becomes P2.
 
-- **CORE-71** · P3 · MCP `meetings_list` and `meeting_show` read only the store; the CLI's `list` and `show` also
-  read the service (`--backend both`). The tools say "stored", so nothing is untrue; parity needs the source and the
-  run's account in `callMeetingTool`. `src/meetings/mcp/index.ts:121`, `src/meetings/read-through.ts`.
-- **CORE-72** · P3 · zoom (`src/answer-output.ts` `bodyOf`) and gcal (`src/commands/meetings.ts` `answerOf`) each
-  turn the plain objects the shared meetings commands `write` into `listOf`/`itemOf` envelopes, about 25 lines each,
-  and differ in small ways (gcal drops `page.next`). One `meetingAnswerBody` in `src/cli` would remove both.
 - **CORE-47** · P3 · Split `src/store/sqlite/schema.ts` (about 2,880 lines, its biome cap raised for store version 57)
   into area modules. Tables whose foreign keys run both ways, as the business tables and payments do, form an import
   cycle biome refuses, so the split needs the codegen diff (`scripts/schema/codegen/diff-schema.sh`) and drizzle-kit

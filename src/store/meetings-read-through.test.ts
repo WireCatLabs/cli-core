@@ -25,6 +25,7 @@ import {
   type SourceParticipant,
   saveSourceMeeting,
 } from "../meetings/index.js"
+import { callMeetingTool, meetingTools } from "../meetings/mcp/index.js"
 import { fakeMeetingSource, flagPaging } from "../meetings/testing/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { DEFAULT_PERMISSIONS } from "../sends/permissions.js"
@@ -1047,5 +1048,122 @@ describe("meetings in a real run", () => {
     )
     expect(answered.code, answered.err).toBe(0)
     expect(created).toEqual(["Example planning"])
+  })
+})
+
+describe("the MCP meetings_list and meeting_show read the service as the CLI does", () => {
+  const tool = async (
+    name: string,
+    input: Record<string, unknown>,
+    store: Awaited<ReturnType<typeof fixture>>["store"],
+    options: Omit<Parameters<typeof callMeetingTool>[3], "limit"> = {},
+  ) => callMeetingTool(store.meetings, name, input, { limit: 100, now: NOW, ...options })
+
+  it("lists the service's and the stored meetings with where each was found, marked as other people's text", async () => {
+    const { source, asked, got } = serviceOf([ROADMAP, WEEKLY])
+    const cli = await fixture(serviceOf([ROADMAP, WEEKLY]).source)
+    const { store, accountId, keep } = await fixture(source)
+    for (const one of [cli, { keep }]) {
+      await one.keep(WEEKLY)
+      await one.keep(LOCAL)
+    }
+    const listed = await tool("meetings_list", {}, store, { source, accountId })
+    const answer = listed.structuredContent as { items: Record<string, unknown>[] }
+    expect(listed.isError).toBeUndefined()
+    expect(titles(answer)).toEqual(titles(await cli.run("list", "--json")))
+    expect(titles(answer)).toEqual([
+      ["Example retro", "archive"],
+      ["Example weekly sync", "both"],
+      ["Example roadmap review", "server"],
+    ])
+    expect(answer).not.toHaveProperty("server")
+    expect(answer.items.every(({ untrusted }) => Array.isArray(untrusted) && untrusted.includes("title"))).toBe(true)
+    expect(asked).toHaveLength(1)
+
+    const roadmap = answer.items.find(({ title }) => title === "Example roadmap review")
+    const shown = await tool("meeting_show", { meeting: Number(roadmap?.id) }, store, { source, accountId })
+    expect(shown.structuredContent).toMatchObject({
+      item: { title: "Example roadmap review", found_in: "both", untrusted: expect.arrayContaining(["title"]) },
+    })
+    expect(got).toEqual(["svc-1"])
+
+    const archived = await tool("meetings_list", { backend: "archive" }, store, { source, accountId })
+    expect([asked.length, got.length]).toEqual([1, 1])
+    expect((archived.structuredContent as { items: unknown[] }).items).toHaveLength(3)
+  })
+
+  it("answers from the store with a missing line when the service fails, and refuses a typed backend server", async () => {
+    const { source } = serviceOf([ROADMAP], { fail: new CliError("network_error", "offline") })
+    const { store, accountId, keep } = await fixture(source)
+    await keep(LOCAL)
+    const answer = (await tool("meetings_list", {}, store, { source, accountId })).structuredContent
+    expect(answer).toMatchObject({
+      items: [{ title: "Example retro", found_in: "archive" }],
+      missing: [{ field: "server", why: expect.stringContaining("could not be reached") }],
+      meta: { complete: false },
+    })
+    expect((await tool("meetings_list", { backend: "server" }, store, { source, accountId })).isError).toBe(true)
+  })
+
+  it("stops at the run's stop signal and hands the service the signal", async () => {
+    for (const [name, input] of [
+      ["meetings_list", {}],
+      ["meeting_show", { meeting: 1 }],
+    ] as const) {
+      const controller = new AbortController()
+      const signals: (AbortSignal | undefined)[] = []
+      const aborting = (signal?: AbortSignal): never => {
+        signals.push(signal)
+        controller.abort(new CliError("cancelled", "the run was stopped"))
+        throw new Error("The operation was aborted")
+      }
+      const { source } = serviceOf([ROADMAP], {
+        async find(_window, _terms, _cursor, signal) {
+          return aborting(signal)
+        },
+        async get(_id, signal) {
+          return aborting(signal)
+        },
+      })
+      const { store, accountId, keep } = await fixture(source)
+      await keep(ROADMAP)
+      const stopped = await tool(name, input, store, { source, accountId, signal: controller.signal })
+      expect(stopped.isError, name).toBe(true)
+      expect(stopped.structuredContent, name).toMatchObject({ error: { code: "cancelled" } })
+      expect(signals, name).toEqual([controller.signal])
+    }
+  })
+
+  it("reads the run's account only and never picks one for a service", async () => {
+    const { source, asked } = serviceOf([ROADMAP])
+    const { store, accountId } = await fixture(source)
+    const other = await store.accounts.saveAccount({ provider: "example", account: "other" }, { name: "Other" })
+    const unbound = await tool("meetings_list", {}, store, { source })
+    expect(unbound.structuredContent).toMatchObject({ error: { code: "configuration_error" } })
+    const elsewhere = await tool("meetings_list", { account_id: other }, store, { source, accountId })
+    expect(elsewhere.structuredContent).toMatchObject({
+      error: { code: "validation_error", message: expect.stringContaining(`account ${accountId} only`) },
+    })
+    expect(asked).toEqual([])
+    const named = await tool("meetings_list", { account_id: accountId }, store, { source, accountId })
+    expect(titles(named.structuredContent as { items: Record<string, unknown>[] })).toEqual([
+      ["Example roadmap review", "server"],
+    ])
+  })
+
+  it("says so when a host gives no service, and refuses backend server there", async () => {
+    const { store, keep } = await fixture()
+    await keep(LOCAL)
+    expect(await tool("meetings_list", { backend: "both" }, store)).toMatchObject({
+      structuredContent: { items: [{ title: "Example retro" }], missing: [{ field: "server" }] },
+    })
+    expect((await tool("meetings_list", { backend: "server" }, store)).isError).toBe(true)
+    expect((await tool("meetings_list", {}, store)).structuredContent).not.toHaveProperty("missing")
+  })
+
+  it("declares that list and show may reach the service", () => {
+    const reach = Object.fromEntries(meetingTools.map(({ name, annotations }) => [name, annotations.openWorldHint]))
+    expect(reach).toMatchObject({ meetings_list: true, meeting_show: true, meeting_transcript: false })
+    expect(meetingTools.find(({ name }) => name === "meetings_list")?.description).not.toMatch(/^stored/)
   })
 })
