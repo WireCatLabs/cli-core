@@ -177,8 +177,13 @@ export const serviceApiPermissions = (
 
 const rowOf = (operation: ManifestOperation) => ({
   command: operation.command,
-  method: operation.binding.kind === "http" ? operation.binding.method : "",
-  path: operation.binding.kind === "http" ? operation.binding.path : "",
+  method: operation.binding.kind === "http" ? operation.binding.method : "POST",
+  path:
+    operation.binding.kind === "http"
+      ? operation.binding.path
+      : operation.binding.kind === "graphql"
+        ? `${operation.binding.operation} ${operation.binding.field}`
+        : "",
   effect: operation.effect,
   summary: operation.summary ?? "",
 })

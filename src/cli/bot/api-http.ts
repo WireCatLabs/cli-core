@@ -1,12 +1,12 @@
-import { CliError, wallClock } from "@wirecat/cli-base"
-import type { ManifestOperation } from "@wirecat/cli-base/codegen"
+import { CliError, type ErrorCode, wallClock } from "@wirecat/cli-base"
+import { type GraphqlBinding, graphqlDocument, type ManifestOperation } from "@wirecat/cli-base/codegen"
 import { type FetchLike, providerWaitMs, readJsonResponse, statusToCode } from "@wirecat/cli-base/http"
 import type { Command } from "commander"
 import { providerRequest } from "../command-runs.js"
 import { outputFor } from "../context.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import type { ApiCommandInput } from "./api.js"
-import { parseApiJson, sendsBytes } from "./api-input.js"
+import { apiJson, parseApiJson, sendsBytes } from "./api-input.js"
 
 export interface HttpApiRequest {
   method: string
@@ -66,6 +66,7 @@ export const httpApiRequest = (
   baseUrl: string,
 ): HttpApiRequest => {
   const { binding } = operation
+  if (binding.kind === "graphql") return graphqlRequest(operation, binding, input, baseUrl)
   if (binding.kind !== "http")
     throw new CliError("configuration_error", `${operation.command} is not an HTTP operation`)
   if (unsendableBody(operation))
@@ -107,8 +108,113 @@ export const httpApiRequest = (
   return { method: binding.method, url, headers, ...(body === undefined ? {} : { body }) }
 }
 
+/**
+ * A GraphQL operation's variables: the body's (`--body`, all of them as one object) with each flag over it, read by
+ * the variable's schema. A name the operation does not declare is refused before anything is sent.
+ */
+export const graphqlVariables = (
+  operation: ManifestOperation,
+  body: string | undefined,
+  fields: Readonly<Record<string, string>>,
+): Record<string, unknown> => {
+  const { binding } = operation
+  if (binding.kind !== "graphql")
+    throw new CliError("configuration_error", `${operation.command} is not a GraphQL operation`)
+  const given = body?.trim() ? parseApiJson(body) : {}
+  if (given === null || typeof given !== "object" || Array.isArray(given))
+    throw new CliError("validation_error", `${operation.command} takes its variables as one JSON object`, {
+      sent: false,
+    })
+  const variables: Record<string, unknown> = { ...(given as Record<string, unknown>) }
+  for (const [name, raw] of Object.entries(fields)) {
+    const schema = operation.parameters.find((one) => one.in === "body" && one.name === name)?.schema
+    variables[name] = flagValue(operation, name, raw, schema?.type)
+  }
+  const unknown = Object.keys(variables).filter((name) => !(name in binding.variables))
+  if (unknown.length > 0)
+    throw new CliError("validation_error", `${operation.command} has no variable ${unknown.join(", ")}`, {
+      sent: false,
+    })
+  return variables
+}
+
+const flagValue = (operation: ManifestOperation, name: string, raw: string, type: string | undefined): unknown => {
+  if (type === "integer" || type === "number") {
+    const number = Number(raw)
+    if (raw.trim() === "" || !Number.isFinite(number))
+      throw new CliError("validation_error", `--${name} of ${operation.command} takes a number`, { sent: false })
+    return number
+  }
+  if (type === "boolean") {
+    if (raw !== "true" && raw !== "false")
+      throw new CliError("validation_error", `--${name} of ${operation.command} takes true or false`, { sent: false })
+    return raw === "true"
+  }
+  if (type === "object" || type === "array") return parseApiJson(raw)
+  // An input object or a list given as JSON; an enum's value, behind a ref too, is a bare word.
+  if (type === "ref" && /^\s*[{["]/.test(raw)) return parseApiJson(raw)
+  return raw
+}
+
+/** One GraphQL operation as a POST of its one document to the endpoint, with its variables. */
+const graphqlRequest = (
+  operation: ManifestOperation,
+  binding: GraphqlBinding,
+  input: ApiCommandInput,
+  baseUrl: string,
+): HttpApiRequest => {
+  const variables = graphqlVariables(operation, input.body, input.fields)
+  const headers = new Headers(input.headers)
+  headers.set("accept", "application/json")
+  headers.set("content-type", "application/json")
+  const query = graphqlDocument(binding, input.selection)
+  return { method: "POST", url: new URL(baseUrl), headers, body: apiJson({ query, variables }) }
+}
+
 /** `/v1/pages/{page_id}` → `/v1/pages/:page_id`: the run record keeps the template, never an id. */
 const templateOf = (path: string): string => path.replace(/\{([^}]+)\}/g, ":$1")
+
+/** What the run record names a request by: the path template, or a GraphQL operation's root field. */
+const endpointOf = (operation: ManifestOperation): string =>
+  operation.binding.kind === "http"
+    ? templateOf(operation.binding.path)
+    : operation.binding.kind === "graphql"
+      ? `${operation.binding.operation} ${operation.binding.field}`
+      : ""
+
+// Common GraphQL server codes (Apollo's names) as the CLI's; any other is the provider's.
+const GRAPHQL_CODES: Readonly<Record<string, string>> = {
+  UNAUTHENTICATED: "authentication_error",
+  AUTHENTICATION_ERROR: "authentication_error",
+  FORBIDDEN: "permission_error",
+  RATELIMITED: "rate_limited",
+  BAD_USER_INPUT: "validation_error",
+  GRAPHQL_VALIDATION_FAILED: "validation_error",
+  INVALID_INPUT: "validation_error",
+}
+
+/**
+ * A GraphQL answer comes with HTTP 200 even when it failed: `errors[]` is the failure, named by its first
+ * `extensions.code`, never by the service's own message (WC-SECR-6). Otherwise the answer is `data.<field>`.
+ */
+const graphqlAnswer = (service: string, operation: ManifestOperation, answer: unknown): unknown => {
+  const { binding } = operation
+  if (binding.kind !== "graphql") return answer
+  const { data, errors } = (answer ?? {}) as { data?: Record<string, unknown> | null; errors?: unknown }
+  if (Array.isArray(errors) && errors.length > 0) {
+    const code = (errors[0] as { extensions?: { code?: unknown } } | null)?.extensions?.code
+    const known = typeof code === "string" ? GRAPHQL_CODES[code.toUpperCase()] : undefined
+    const writes = operation.effect !== "read"
+    throw new CliError(
+      (known ?? "provider_error") as ErrorCode,
+      `${service} refused ${operation.command}${typeof code === "string" ? ` (${code})` : ""}` +
+        (writes && data?.[binding.field] != null ? "; part of it may have been done, check before repeating" : ""),
+    )
+  }
+  if (!data || !(binding.field in data))
+    throw new CliError("invalid_response", `${service} answered ${operation.command} without data.${binding.field}`)
+  return data[binding.field]
+}
 
 const answerOf = async (response: Response, maxBytes: number): Promise<unknown> => {
   if (response.status === 204 || !response.body || response.headers.get("content-length") === "0") return {}
@@ -126,7 +232,7 @@ export const httpApiSend =
   (options: HttpApiSendOptions) =>
   async (command: Command, operation: ManifestOperation, request: HttpApiRequest): Promise<unknown> => {
     const writes = operation.effect !== "read"
-    const template = templateOf(operation.binding.kind === "http" ? operation.binding.path : "")
+    const template = endpointOf(operation)
     const end = providerRequest(`${request.method} ${template}`, undefined, {
       method: request.method,
       endpointTemplate: template,
@@ -164,7 +270,7 @@ export const httpApiSend =
       throw failed
     }
     end({ status })
-    return answer
+    return graphqlAnswer(options.service, operation, answer)
   }
 
 /**
