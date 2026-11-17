@@ -13,6 +13,7 @@ export {
   type CrmManifestFake,
   type CrmManifestFakeOptions,
   type CrmManifestFixtureOptions,
+  crmManifestContract,
   crmManifestFake,
   crmManifestFixture,
   FAKE_MANIFEST_TOKEN,

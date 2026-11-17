@@ -10,6 +10,7 @@ import { serviceApiCall } from "../../cli/service-api-call.js"
 import { manifestBaseUrl, type ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../../domain/deals.js"
+import type { ContractCase } from "../../meetings/index.js"
 import {
   type CrmChangesCall,
   type CrmManifest,
@@ -18,12 +19,12 @@ import {
   type CrmRule,
   parseCrmManifest,
 } from "../manifest/manifest.js"
-import { at, type Conversion, convert, FIELDS } from "../manifest/map.js"
+import { at, type Conversion, convert, evaluate, FIELDS, MISSING } from "../manifest/map.js"
 import { itemOf, resolve, step, walk } from "../manifest/paths.js"
 import { crmSourceFromManifest } from "../manifest/source.js"
 import type { CrmSource } from "../source.js"
-import { type CrmRaw, isRaw } from "../values.js"
-import type { CrmSourceFixture } from "./source-contract.js"
+import { type CrmRaw, id, isRaw } from "../values.js"
+import { type CrmSourceFixture, crmSourceContract } from "./source-contract.js"
 
 type Definitions = Readonly<Record<string, SchemaNode>>
 
@@ -97,11 +98,16 @@ const SINCE: Record<CrmChangesCall["since"], (value: string) => number> = {
   datetime: (value) => Date.parse(`${value.replace(" ", "T")}Z`),
 }
 
-const fixedOf = (value: unknown) =>
-  Object.entries(isRaw(value) ? value : {}).filter(
-    (entry): entry is [string, string | number | boolean] =>
-      ["string", "number", "boolean"].includes(typeof entry[1]) && !/^\{\w+\}$/.test(String(entry[1])),
-  )
+/** Every fixed value of a call's template by its dotted path; a placeholder is not fixed. */
+const fixedOf = (value: unknown, trail: readonly string[] = []): [string, string | number | boolean][] => {
+  if (Array.isArray(value) || isRaw(value))
+    return Object.entries(value).flatMap(([key, inner]) => fixedOf(inner, [...trail, key]))
+  if (!["string", "number", "boolean"].includes(typeof value) || /^\{\w+\}$/.test(String(value))) return []
+  return [[trail.join("."), value as string | number | boolean]]
+}
+
+const fixedCount = (call: CrmOperationCall) =>
+  fixedOf(call.path).length + fixedOf(call.query).length + fixedOf(call.body).length
 
 interface Route {
   call: CrmOperationCall
@@ -221,18 +227,24 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       const path = pathOf(rule)
       if (path === undefined) continue
       const mapped = typeof rule === "object" && "map" in rule ? Object.keys(rule.map)[0] : undefined
+      const reverse =
+        typeof rule === "object" && "map" in rule && field in given
+          ? Object.keys(rule.map).find((key) => String(rule.map[key]) === String(given[field]))
+          : undefined
       const value =
-        field in given
-          ? given[field]
-          : mapped !== undefined
-            ? mapped
-            : types[field] === "text"
-              ? `${field} ${n + 1}`
-              : types[field] === "epoch"
-                ? { ms: SEEDED + (n + 1) * 60_000 }
-                : types[field] === "day"
-                  ? `2026-11-0${n + 1}`
-                  : undefined
+        reverse !== undefined
+          ? reverse
+          : field in given
+            ? given[field]
+            : mapped !== undefined
+              ? mapped
+              : types[field] === "text"
+                ? `${field} ${n + 1}`
+                : types[field] === "epoch"
+                  ? { ms: SEEDED + (n + 1) * 60_000 }
+                  : types[field] === "day"
+                    ? `2026-11-0${n + 1}`
+                    : undefined
       if (value !== undefined) put(row, path, value, node)
     }
     return row
@@ -303,6 +315,15 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     return typeof found === "number" ? found : null
   }
 
+  for (const kind of manifest.kinds) {
+    if (!manifest.entities[kind]?.changes) continue
+    const unread = (rows[kind] ?? []).some((row) => timeOf(kind, row) === null)
+    if (!changeAt[kind]?.length || unread)
+      throw new Error(
+        `the fake cannot write a change time ${kind} rows read back: map updatedAt or keyset.field to a path`,
+      )
+  }
+
   const routes: Route[] = []
   for (const kind of manifest.kinds) {
     const entity = manifest.entities[kind]
@@ -348,6 +369,12 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     fixedOf(route.call.query).every(([key, value]) => readPlace(call, { in: "query", path: key }) === String(value)) &&
     fixedOf(route.call.body).every(([key, value]) => at(call.body, key) === value)
 
+  /** The route whose template the call matches most closely; a list wins a tie with a change read. */
+  const routeOf = (call: FakeCall) =>
+    routes
+      .filter((route) => matches(route, call))
+      .sort((a, b) => fixedCount(b.call) - fixedCount(a.call) || Number(!!a.since) - Number(!!b.since))[0]
+
   const page = (route: Route, call: FakeCall, listed: CrmRaw[]): FakeAnswer => {
     const operation = operations.get(route.call.operation)
     const pagination = operation?.pagination
@@ -356,10 +383,13 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     if (items === undefined) return { body: listed }
     const made = sample(root)
     const answer = isRaw(made) ? made : {}
-    if (!pagination || pagination.style === "link") {
+    if (!pagination) {
       putList(answer, items, listed, root)
       return { body: answer }
     }
+    // The manifest refuses a link-paged read; the check stays for a style cli-base adds later.
+    if (pagination.style !== "cursor" && pagination.style !== "offset" && pagination.style !== "page")
+      throw new Error(`${route.call.operation}: the fake does not page by ${pagination.style}`)
     const parameter =
       pagination.style === "cursor"
         ? pagination.cursor
@@ -382,25 +412,32 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     const more = from + size < listed.length
     putList(answer, items, chunk, root)
     if (pagination.style === "cursor") {
-      if (more) put(answer, pagination.next, String(from + size), root)
-      else drop(answer, pagination.next, root)
+      if (more) {
+        put(answer, pagination.next, String(from + size), root)
+        const written = at(answer, pagination.next)
+        if (typeof written !== "string" || written === "")
+          throw new Error(`${route.call.operation}: the schema takes no text cursor at ${pagination.next}`)
+      } else drop(answer, pagination.next, root)
       if (pagination.hasMore) put(answer, pagination.hasMore, more, root)
     } else if (pagination.total) put(answer, pagination.total, listed.length, root)
     return { body: answer }
   }
 
   const answerOf = (call: FakeCall): FakeAnswer => {
-    const found = routes.filter((route) => matches(route, call))
-    const changes = found.find((route) => route.since && readPlace(call, route.since.place) !== undefined)
-    const route = changes ?? found.find((one) => !one.since) ?? found[0]
+    const route = routeOf(call)
     if (!route) return refuse(`${call.operation ?? call.url.pathname}: no call of the source manifest is this one`, 404)
+    const changes = route.since ? route : undefined
+    if (changes?.since && readPlace(call, changes.since.place) === undefined)
+      return refuse(`${call.operation}: a read of changes without its since`)
     if (route.get && route.kind) {
       const kind = route.kind
       const id = String(readPlace(call, route.get) ?? "")
       const status = denied.get(`${kind} ${id}`)
       if (status) return { status, body: { message: "denied" } }
       const row = route.rows().find((one) => idOf(kind, one) === id)
-      if (!row) return { status: 404, body: { message: "not found" } }
+      // The contract asks for this id on purpose; any other id the fake lacks is one the source made up.
+      if (!row && id.startsWith("contract-missing")) return { status: 404, body: { message: "not found" } }
+      if (!row) return refuse(`${call.operation}: no ${kind} ${id} in the fake`, 404)
       if (route.call.items === undefined) return { body: row }
       const root = rootOf(route.call)
       const made = sample(root)
@@ -415,7 +452,7 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
         return refuse(`${call.operation}: since ${String(readPlace(call, place))} is unreadable`)
       const listed = changes
         .rows()
-        .filter((row) => (timeAt(row) ?? from) >= from)
+        .filter((row) => (timeAt(row) ?? Number.NEGATIVE_INFINITY) >= from)
         .sort((a, b) => (timeAt(a) ?? 0) - (timeAt(b) ?? 0))
       return page(changes, call, listed)
     }
@@ -444,21 +481,26 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       const row = rows[kind]?.find((one) => idOf(kind, one) === id)
       if (!row) throw new Error(`the fake holds no ${kind} ${id}`)
       const node = rowNodeOf((manifest.entities[kind] as NonNullable<CrmManifest["entities"][CrmKind]>).list)
-      for (const path of changeAt[kind] ?? []) if (path) put(row, path, { ms: Date.now() }, node)
+      const paths = changeAt[kind] ?? []
+      for (const path of paths) if (path) put(row, path, { ms: Date.now() }, node)
+      if (timeOf(kind, row) === null) throw new Error(`the fake cannot change the time of ${kind} ${id}`)
     },
   }
 }
 
-const externalIdOf = (manifest: CrmManifest, kind: CrmKind, row: CrmRaw | undefined) =>
-  String(at(row, pathOf(manifest.entities[kind]?.map.externalId) ?? "id"))
+const externalIdOf = (manifest: CrmManifest, kind: CrmKind, row: CrmRaw | undefined) => {
+  const rule = manifest.entities[kind]?.map.externalId
+  const found = rule === undefined || row === undefined ? MISSING : evaluate(rule, row)
+  return found === MISSING ? null : id(found)
+}
 
 export interface CrmManifestFixtureOptions extends CrmManifestFakeOptions {
   hooks?: CrmManifestHooks
 }
 
 /**
- * A `crmSourceContract` fixture for a source built from a manifest, over `crmManifestFake`: the source, a dead
- * cursor, every fault the manifest allows, and the fake itself, whose `refusals` a test asserts empty.
+ * A `crmSourceContract` fixture for a source built from a manifest, over `crmManifestFake`: the source, the rows it
+ * holds, a dead cursor, every fault the manifest allows, and the fake itself, whose `refusals` a test asserts empty.
  */
 export const crmManifestFixture = (
   manifest: CrmManifest,
@@ -475,28 +517,28 @@ export const crmManifestFixture = (
   const sourceAt = (now: () => number = Date.now): CrmSource =>
     crmSourceFromManifest(manifest, { api: options.api, call, now, ...(options.hooks ? { hooks: options.hooks } : {}) })
   const source = sourceAt()
+  const held = Object.fromEntries(
+    manifest.kinds.map((kind) => [
+      kind,
+      (fake.rows[kind] ?? []).map((row) => externalIdOf(manifest, kind, row) as string),
+    ]),
+  ) as Partial<Record<CrmKind, string[]>>
   const live = (["person", "organization"] as const).find((kind) => manifest.entities[kind]?.get)
-  const changed = manifest.kinds.find((kind) => manifest.entities[kind]?.changes) ?? manifest.kinds[0]
-  const first = (kind: CrmKind) => externalIdOf(manifest, kind, fake.rows[kind]?.[0])
+  const changed = manifest.kinds.find((kind) => manifest.entities[kind]?.changes)
+  const first = (kind: CrmKind) => held[kind]?.[0] as string
   return {
     source,
     fake,
-    ...(source.list
-      ? {
-          live: Object.fromEntries(
-            (["person", "organization"] as const).map((kind) => [
-              kind,
-              (fake.rows[kind] ?? []).map((row) => externalIdOf(manifest, kind, row)),
-            ]),
-          ),
-        }
-      : {}),
+    held,
+    ...(source.list ? { live: { person: held.person ?? [], organization: held.organization ?? [] } } : {}),
     deadCursor: { kind: manifest.kinds[0] as CrmKind, cursor: "not a time" },
     faults: {
       ...(live
         ? {
-            deny: (status: 403 | 404) => {
+            async deny(status: 403 | 404) {
               const id = first(live)
+              // A get that reads a wrong id answers null too: the row must read before it is denied.
+              if ((await source.get?.(live, id)) == null) throw new Error(`get(${live}, ${id}) did not read the row`)
               fake.deny(live, id, status)
               return { kind: live, id }
             },
@@ -515,4 +557,25 @@ export const crmManifestFixture = (
       sameToken: () => sourceAt(),
     },
   }
+}
+
+/**
+ * `crmSourceContract` over `crmManifestFixture`, each case failing too when the fake refused a call: what a generated
+ * test runs, `for (const { name, run } of crmManifestContract(SOURCE, { api, definitions })) it(name, run)`.
+ */
+export const crmManifestContract = (manifest: CrmManifest, options: CrmManifestFixtureOptions): ContractCase[] => {
+  const fakes: CrmManifestFake[] = []
+  return crmSourceContract(() => {
+    const fixture = crmManifestFixture(manifest, options)
+    fakes.push(fixture.fake)
+    return fixture
+  }).map(({ name, run }) => ({
+    name,
+    async run() {
+      fakes.length = 0
+      await run()
+      const refused = fakes.flatMap((fake) => fake.refusals)
+      if (refused.length) throw new Error(`the fake refused calls the source made:\n${refused.join("\n")}`)
+    },
+  }))
 }

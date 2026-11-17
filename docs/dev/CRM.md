@@ -257,21 +257,27 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
 A CLI made from `wirecat.config.ts` tests its source with no code of its own (`@wirecat/cli-core/crm/testing`):
 
 ```ts
-for (const { name, run } of crmSourceContract(() => crmManifestFixture(SOURCE, { api, definitions, hooks })))
-  it(name, run)
+for (const { name, run } of crmManifestContract(SOURCE, { api, definitions, hooks })) it(name, run)
 ```
 
 - `crmManifestFake(manifest, { api, definitions })` is cli-base's strict `fakeApi` with a service behind it: three
   rows of each kind, sampled from the list operation's answer schema (`sampleOf`), with distinct ids and the values
   the map reads written where it reads them (names, the stage of a listed pipeline, times, an amount with its
-  currency). Every operation pages by its own `pagination`, two rows a page; a change read filters by the time at
-  `keyset.field` or `updatedAt`, oldest first; a read by id answers 404 for a row it lacks.
-- `crmManifestFixture` adds the source over it, a dead cursor and every fault the manifest allows: `deny` when a
-  contact or company has `get`, `change` (the row's time becomes now), `skewed` and `sameToken`.
-- A call no route of the manifest makes is refused and listed in `fake.refusals`, beside `fakeApi`'s own; assert it
-  empty after each case (`src/crm/testing/manifest-fake.test.ts` does, for an Attio-like manifest).
+  currency). Every operation pages by its own `pagination`, two rows a page; a change read keeps the rows whose time
+  at `keyset.field` or `updatedAt` is at or after its since, oldest first.
+- A kind with `changes` whose time the fake cannot write and read back (a function rule, an enum) fails when the fake
+  is built: otherwise every row would look changed and the change cases would prove nothing.
+- A call is matched to the manifest's call with the most fixed values in common (nested body fields included). A
+  change read sent without its since, a read by an id the fake does not hold (other than the contract's
+  `contract-missing-*`) and a call no route makes are refused and listed in `fake.refusals`.
+- `crmManifestFixture` adds the source over it, the ids it holds per kind (`held`: a full list must give each, a
+  change read must leave the untouched ones out), a dead cursor and the faults the manifest allows: `deny` when a
+  contact or company has `get` (after checking that `get` reads the row), `change` when a kind has `changes`,
+  `skewed` and `sameToken`. `crmManifestContract` runs `crmSourceContract` over it and fails a case whose calls the
+  fake refused.
 - A rule that is a function, an `each` or a `{ value }` writes nothing: the row keeps the sample there. `self` and a
-  live `list` come from hooks, so their cases pass without running unless the hooks add them.
+  live `list` come from hooks, so their cases pass without running unless the hooks add them. The dead cursor is
+  answered by the source itself (`reset` for a cursor that is not a time) and never reaches the fake.
 
 ## Adapter helpers
 

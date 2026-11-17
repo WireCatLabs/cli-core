@@ -3,9 +3,8 @@ import { describe, expect, it } from "vitest"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmOrganization, CrmPerson } from "../../domain/crm.js"
 import type { CrmManifest } from "../manifest/manifest.js"
-import type { CrmPage } from "../source.js"
-import { type CrmManifestFake, crmManifestFixture } from "./manifest-fake.js"
-import { crmSourceContract } from "./source-contract.js"
+import type { CrmPage, CrmSource } from "../source.js"
+import { crmManifestContract, crmManifestFixture } from "./manifest-fake.js"
 
 // An Attio-like API, synthetic: records read by a POST query that pages by limit and offset in the body, rows under
 // `data`, the id an object, and every value a list of dated entries.
@@ -163,17 +162,8 @@ const SOURCE: CrmManifest = {
   },
 }
 
-describe("crmSourceContract over an Attio-like manifest and the fake built from it", () => {
-  const fakes: CrmManifestFake[] = []
-  for (const { name, run } of crmSourceContract(() => {
-    const fixture = crmManifestFixture(SOURCE, { api, definitions })
-    fakes.push(fixture.fake)
-    return fixture
-  }))
-    it(name, async () => {
-      await run()
-      for (const fake of fakes.splice(0)) expect(fake.refusals).toEqual([])
-    })
+describe("crmManifestContract over an Attio-like manifest", () => {
+  for (const { name, run } of crmManifestContract(SOURCE, { api, definitions })) it(name, run)
 })
 
 describe("crmManifestFake", () => {
@@ -223,5 +213,69 @@ describe("crmManifestFake", () => {
     })
     expect(answer.status).toBe(404)
     expect(fake.refusals).toEqual(["attributes_list: no call of the source manifest is this one"])
+  })
+})
+
+// Each a broken source the contract once passed: the case must now fail.
+describe("crmManifestContract catches a broken source", () => {
+  const failing = (prefix: string, extend: (base: CrmSource) => Partial<CrmSource>) => {
+    const found = crmManifestContract(SOURCE, { api, definitions, hooks: { extend } }).find(({ name }) =>
+      name.startsWith(prefix),
+    )
+    if (!found) throw new Error(`no case ${prefix}`)
+    return found.run()
+  }
+
+  it("a get that reads a wrong id fails the denied cases", async () => {
+    const wrong = (base: CrmSource) => ({
+      get: ((kind, id, context) => base.get?.(kind, `9${id}`, context)) as CrmSource["get"],
+    })
+    await expect(failing("faults: a contact or company that answers 403", wrong)).rejects.toThrow(/did not read/)
+  })
+
+  it("a change time the fake cannot write refuses to build, rather than list every row as changed", () => {
+    const organization = SOURCE.entities.organization as NonNullable<CrmManifest["entities"]["organization"]>
+    const broken: CrmManifest = {
+      ...SOURCE,
+      entities: {
+        ...SOURCE.entities,
+        organization: { ...organization, map: { ...organization.map, updatedAt: () => 0 } },
+      },
+    }
+    expect(() => crmManifestFixture(broken, { api, definitions })).toThrow(/cannot write a change time organization/)
+  })
+
+  it("a list that stops after its first page fails the held rows case", async () => {
+    const cut = (base: CrmSource) => ({
+      changes: (async (kind, cursor, page, context) => {
+        const answer = await base.changes(kind, cursor, page, context)
+        return "reset" in answer || !answer.hasMore
+          ? answer
+          : { items: answer.items, hasMore: false, cursor: new Date().toISOString() }
+      }) as CrmSource["changes"],
+    })
+    await expect(failing("changes: a full list gives every row the fixture holds", cut)).rejects.toThrow(/listed/)
+  })
+
+  it("a read of changes that ignores its cursor fails the change case", async () => {
+    const full = (base: CrmSource) => ({
+      changes: ((kind, _cursor, page, context) => base.changes(kind, null, page, context)) as CrmSource["changes"],
+    })
+    await expect(failing("faults: a clock off by ten minutes", full)).rejects.toThrow(/did not change/)
+  })
+
+  it("refuses a read of changes sent without its since", async () => {
+    const { fake } = crmManifestFixture(SOURCE, { api, definitions })
+    const answer = await fake.fetch("https://api.attio.test/v2/objects/people/records/query", {
+      method: "POST",
+      headers: { authorization: "Bearer fake-manifest-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        limit: 2,
+        filter: { updated_at: {} },
+        sorts: [{ attribute: "updated_at", direction: "asc" }],
+      }),
+    })
+    expect(answer.status).toBe(400)
+    expect(fake.refusals).toEqual(["records_query: a read of changes without its since"])
   })
 })
