@@ -246,6 +246,8 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   answers; a CLI runs it in a test, so a wrong path fails before any sync.
 - `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind a gap;
   `select.max` caps the account's own fields in `{select}`; mapped fields are always asked for.
+- `defineCli` and `parseCliConfig` (`@wirecat/cli-core/manifest`) give the whole CLI's `wirecat.config.ts`: identity,
+  API description, sign-in preset, category and this source.
 - Not yet: deletions named in the answer, a live `list`.
 - `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
   `crmSourceContract`, faults included, against a strict fake of HubSpot's API.

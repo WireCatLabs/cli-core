@@ -143,6 +143,10 @@
       "types": "./dist/calendar/testing/index.d.ts",
       "default": "./dist/calendar/testing/index.js"
     },
+    "./manifest": {
+      "types": "./dist/manifest/index.d.ts",
+      "default": "./dist/manifest/index.js"
+    },
     "./crm": {
       "types": "./dist/crm/index.d.ts",
       "default": "./dist/crm/index.js"
