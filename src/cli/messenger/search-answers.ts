@@ -353,6 +353,8 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   // A CRM's copy is typed by the CRM's users; the owner's own deal is his, but one rule keeps a hit's marking simple.
   deal: ["title", "excerpt"],
   lead: ["title", "excerpt"],
+  // A client's file: its name and every word of it are someone else's.
+  crm_file: ["title", "excerpt"],
   ...BUSINESS_UNTRUSTED,
 }
 

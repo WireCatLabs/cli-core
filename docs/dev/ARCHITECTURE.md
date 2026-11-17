@@ -84,7 +84,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./calendar`, `/calendar/cli`, `/calendar/mcp`, `/calendar/testing` | `src/calendar/` | the calendar provider port, the sync engine over `EventStore`, the shared commands and MCP reads; the store types stay in `src/meetings/`, which depends on nothing else but the query simplifier `src/search/service-query.ts` and, in its commands, the past-time grammar `src/services/moment.ts` — see [Calendars](CALENDARS.md) |
 | `./constants` | `src/constants/` | the packaged constants (`constants`, `constantsSchema`), the app a sign-in uses (`googleApp`, `microsoftApp`, `oauthApp`) and `doctor`'s report of it (`oauthClientReport`) — see [Constants](CONSTANTS.md) |
 | `./mail`, `/mail/testing` | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
-| `./crm`, `/crm/cli`, `/crm/testing` | `src/crm/` | the CRM port, the sync engine, the guarded writes, the live `people`, `organizations` and `users` commands, the adapter helpers and the contract kit — see [CRM](CRM.md) |
+| `./crm`, `/crm/cli`, `/crm/testing` | `src/crm/` | the CRM port, the sync engine, the guarded writes, the live `people`, `organizations` and `users` commands, the `files` commands, the adapter helpers and the contract kit — see [CRM](CRM.md) |
 | `./google` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
 | `./sftp` | `src/sftp/` | a read-only SFTP client and an SSH tunnel that only forwards: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
 | `./sql` | `src/sql/` | a read-only SQL reader: `reader.ts` opens mysql2 or pg (optional peers, imported on first use) read-only, pages a host's table and maps driver errors — see [SQL](../sql.md) |
@@ -378,7 +378,10 @@ contacts' names, e-mails and phones (not the owner's; for a CRM copy, only that 
 and company a CRM keeps on the item itself (`CrmItem.contactName`, `companyName`: a lead with nobody linked), and matches
 whole words: a query word matches a stored word it begins (four letters or more) or one of the same stem; a phrase's
 words must follow each other; when nothing matches, `correctWords` corrects a misspelt word against those same words
-once, and the hits say `match: corrected`.
+once, and the hits say `match: corrected`. The `crm` lane also reads the text of downloaded CRM files
+(`store.crmFiles.find` over `crm_file_words`, hits `crm_file` with ref `crmfile:<file id>`) under the same viewers as the
+deals, so a limited profile finds only its own records' files; a caller that passes no viewers, as memo and tg do,
+gets each copy's own rule for deals, leads and files ([CRM.md § Client files](CRM.md#client-files)).
 `store.business.find` (`src/store/sqlite/business-search.ts`) reads the numbers and names of invoices, payments,
 orders, contracts, subscriptions, products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)), each word at a
 word start. A business hit's

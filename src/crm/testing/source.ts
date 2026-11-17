@@ -15,6 +15,7 @@ import type { DealKind } from "../../domain/deals.js"
 import { foldName } from "../../resolve.js"
 import { crmFileId } from "../files.js"
 import type {
+  CrmCallContext,
   CrmChanges,
   CrmCondition,
   CrmFileOwner,
@@ -58,6 +59,8 @@ export interface FakeCrmSourceOptions {
    * `FAKE_FILE_TOKEN`, as a careless adapter's might, so a test sees whether the token gets out.
    */
   files?: FakeCrmFile[]
+  /** Kinds of file the sign-in may not read: each `files()` reports them as a gap naming the scope. */
+  fileGaps?: { scope: string; message: string }[]
 }
 
 /** The token in every fake file link: it must reach no output, store, file or error. */
@@ -401,8 +404,9 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     ...(options.files === undefined
       ? {}
       : {
-          files: async (owner: CrmFileOwner) => {
+          files: async (owner: CrmFileOwner, context?: CrmCallContext) => {
             calls.files += 1
+            for (const gap of options.fileGaps ?? []) context?.gap({ kind: owner.kind, ...gap })
             const record = of(owner.kind).get(owner.id)
             if (!record || record.deleted) return null
             const listed = (options.files as FakeCrmFile[]).filter(

@@ -488,8 +488,19 @@ const OTHERS: Entry[] = [
   [
     "crm.foreign-contacts-spent",
     "permission_error",
-    "the day's views of contacts and companies that are not yours are spent",
+    "the day's reads of records that are not yours (contacts, companies, other people's files) are spent",
   ],
+  validation("crm.files-limit-range", "a files setting takes a whole number within its range; it is never clamped"),
+  validation("crm.file-too-large", "the file is larger than the download may take; --max-size raises it up to 2048 MB"),
+  validation("crm.files-disk-full", "the account's files folder is at its files.max_total_mb even after dropping"),
+  ["crm.file-unavailable", "provider_error", "the CRM did not give the file; its link is never shown"],
+  ["crm.files-denied", "permission_error", "the profile's files.download level stops downloading files"],
+  [
+    "crm.file-exists",
+    "conflict",
+    "the --dir folder already holds a file of that name, which a download never overwrites",
+  ],
+  ["crm.scope-missing", "permission_error", "the CRM sign-in lacks a scope one kind of a record's files needs"],
   [
     "crm.client-reads-admin-only",
     "permission_error",

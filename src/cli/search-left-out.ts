@@ -15,6 +15,7 @@ const LIST_KEYS = {
   notes: "notes.list",
   events: "events.list",
   meetings: "meetings.list",
+  crm_file: "files.list",
 } as const satisfies Record<string, PermissionKey>
 
 export type SearchedKind = keyof typeof LIST_KEYS
@@ -59,4 +60,16 @@ export const deniedKinds = <K extends SearchedKind>(
     readOnly: true,
   })
   return deniedKindsOf(permissions, kinds, `profile ${profile}`, environment.permissionDefaults)
+}
+
+/** The level the profile, `--permission` and an MCP server's own levels give `key` for this run. */
+export const commandLevel = (command: Command, app: AppIdentity, key: PermissionKey): Level => {
+  const environment = environmentOf(command)
+  const resolve = environment.resolveSettings ?? settingsFor(app).resolveSettings
+  const { permissions } = resolve(withAgentLevels(command, command.optsWithGlobals()), {
+    env: environment.env ?? process.env,
+    needsProfile: false,
+    readOnly: true,
+  })
+  return levelFor(permissions, key, environment.permissionDefaults).level
 }

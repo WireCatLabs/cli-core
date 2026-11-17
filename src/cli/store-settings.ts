@@ -24,6 +24,7 @@ import {
 } from "../store/shared-config.js"
 import {
   accountGroupsOf,
+  CRM_FILE_LIMITS,
   crmSettingsOf,
   DEFAULT_AGENT_CLOSE,
   DEFAULT_FIRST_PASS_PER_CHAT,
@@ -72,11 +73,19 @@ export const STORE_SETTINGS = [
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 /**
  * A CRM account's: whether what it reports is a relationship or waits for review, what its company types mean, whose
- * deals and leads its sync copies, which stages open a task, and whether activities and tasks are read.
+ * deals and leads its sync copies, which stages open a task, whether activities and tasks are read, and the limits
+ * of downloading its files.
  */
-const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks", "activities"].map(
-  (name) => `crm.<provider>:<account>.${name}`,
-)
+const CRM_SETTINGS = [
+  "links",
+  "company-types",
+  "scope",
+  "unassigned",
+  "self",
+  "stage-tasks",
+  "activities",
+  ...Object.keys(CRM_FILE_LIMITS).map((name) => `files.${name}`),
+].map((name) => `crm.<provider>:<account>.${name}`)
 
 /**
  * The store settings a CLI offers. Phone countries, task rules and account groups belong to messages; a CLI that is
@@ -96,7 +105,15 @@ export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting:
  */
 export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
   const name = parseCrmSetting(setting)?.name
-  return name === "scope" || name === "self" || name === "unassigned" || name === "stage-tasks" || name === "activities"
+  return (
+    name === "scope" ||
+    name === "self" ||
+    name === "unassigned" ||
+    name === "stage-tasks" ||
+    name === "activities" ||
+    // An agent must not lift the limits on what it may download.
+    name?.startsWith("files.") === true
+  )
 }
 
 export const isStoreSetting = (setting: string): boolean =>
@@ -328,9 +345,12 @@ const CRM_DEFAULTS = {
   self: "",
   "stage-tasks": {},
   activities: "off",
-} as const
+  ...Object.fromEntries(Object.entries(CRM_FILE_LIMITS).map(([name, range]) => [`files.${name}`, range.default])),
+} as Record<NonNullable<ReturnType<typeof parseCrmSetting>>["name"], unknown>
 
 const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
+  if (name.startsWith("files."))
+    return `store-wide — files sync and files download of that account keep to it from the next run`
   if (name === "links")
     return `store-wide — the next sync of that account writes what it reports as ${
       now === "review" ? "proposals for the owner to review" : "reported relationships"
