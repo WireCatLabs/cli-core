@@ -51,13 +51,16 @@ const setup = async () => {
 const ids = (answer: Answer) => answer.items.map((one) => one.external_id)
 
 describe("tracker commands", () => {
-  it("syncs, then lists, shows, searches and makes a task of an issue", async () => {
+  it("syncs, then lists, shows, searches and assigns an issue to the owner as a task", async () => {
     const { cli, store } = await setup()
     expect((await cli("sync")).item).toMatchObject({ state: "complete", provider: "fake-tracker" })
 
-    expect(ids(await cli("issues", "list", "--type", "started", "--type", "unstarted"))).toEqual(["issue-2", "issue-1"])
-    expect(ids(await cli("issues", "list", "--assignee", "none"))).toEqual(["issue-3"])
-    const [first] = (await cli("issues", "list", "--label", "label-bug")).items
+    expect(ids(await cli("issues", "list", "type:started"))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", "type:unstarted"))).toEqual(["issue-2"])
+    expect(ids(await cli("issues", "list", "type:started", "type:unstarted"))).toEqual(["issue-2", "issue-1"])
+    expect(ids(await cli("issues", "list", "assignee:None"))).toEqual(["issue-3"])
+    expect(ids(await cli("issues", "list", "assignee:none"))).toEqual(["issue-3"])
+    const [first] = (await cli("issues", "list", "label:label-bug")).items
     expect(first).toMatchObject({
       key: "ENG-1",
       state_name: "In Progress",
@@ -77,14 +80,15 @@ describe("tracker commands", () => {
     expect(ids(second)).toHaveLength(1)
     expect(ids(second)[0]).not.toBe(one)
 
-    const task = (await cli("issues", "task", "ENG-2", "--due", "2026-12-01")).item
+    const task = (await cli("issues", "assign", "ENG-2", "--due", "2026-12-01")).item
     expect(task).toMatchObject({ issue: "tracker:issue/issue-2", created: true })
-    expect((await cli("issues", "task", "issue-2")).item).toMatchObject({ task_id: task.task_id, created: false })
+    expect((await cli("issues", "assign", "issue-2")).item).toMatchObject({ task_id: task.task_id, created: false })
     const [stored] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 10, offset: 0 })
     expect(stored).toMatchObject({ title: "ENG-2", task: { source: "tracker:issue/issue-2" } })
     expect(stored?.task).not.toHaveProperty("description")
 
     expect(ids(await cli("states", "list", "--limit", "10"))).toHaveLength(6)
+    await expect(cli("issues", "list", "team:a", "team:b")).rejects.toThrow()
     expect(ids(await cli("projects", "list"))).toEqual(["project-1"])
   })
 })

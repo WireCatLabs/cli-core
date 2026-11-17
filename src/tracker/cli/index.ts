@@ -1,4 +1,5 @@
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
+import type { QueryRegistry } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
@@ -7,6 +8,8 @@ import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/c
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
+import { listQuery, nativeTermLists, queryTerms, termField, typedQuery, withQuery } from "../../cli/list-query.js"
+import { aheadOf } from "../../domain/moment.js"
 import {
   STATE_TYPES,
   type StateType,
@@ -49,17 +52,31 @@ const integer = (most: number) => (value: string) => {
   return number
 }
 
-const day = (value: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value)))
-    throw new InvalidArgumentError("a day as YYYY-MM-DD")
-  return value
-}
+const ARCHIVED = termField("archived", "enum", "archived:include", {
+  values: ["include"],
+  relation: "archived ones too; left out, only those not archived",
+})
 
-const stateTypes = (value: string, previous: StateType[] = []) => {
-  if (!(STATE_TYPES as readonly string[]).includes(value))
-    throw new InvalidArgumentError(`one of ${STATE_TYPES.join(", ")}`)
-  return [...previous, value as StateType]
-}
+const listQueryOf = (kind: TrackerKind): QueryRegistry => ({
+  entity: `tracker_${kind}`,
+  backend: "native",
+  fields: [ARCHIVED],
+})
+
+/** What `issues list` narrows by: each by the tracker's id, as `issues show` and the lists name them. */
+const ISSUES_QUERY = {
+  entity: "tracker_issue",
+  backend: "native",
+  fields: [
+    termField("team", "kw", "team:team-1", { relation: "the team's id, as teams list shows it" }),
+    termField("project", "kw", "project:project-1", { relation: "the project's id, as projects list shows it" }),
+    termField("assignee", "kw", "assignee:none", { relation: "the user's id, as users list shows it, or none" }),
+    termField("state", "kw", "state:state-1", { relation: "the state's id, as states list shows it" }),
+    termField("type", "enum", "type:started", { values: [...STATE_TYPES], relation: "repeat for any of several" }),
+    termField("label", "kw", "label:label-1", { relation: "the label's id, as labels list shows it" }),
+    ARCHIVED,
+  ],
+} as const satisfies QueryRegistry
 
 const TIMES = new Set(["createdAt", "updatedAt", "archivedAt", "completedAt", "canceledAt"])
 
@@ -238,59 +255,44 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
   )
   example(
     paging(
-      answerEntity(annotate(issues.command("list"), { effects: LOCAL_READ }), "tracker_issue", trackerView)
-        .description("issues copied from the tracker, newest change first; run sync to bring them up to date")
-        .option("--team <id>", "only this team's issues")
-        .option("--project <id>", "only this project's issues")
-        .option("--assignee <id>", "only issues assigned to this user; `none` for unassigned ones")
-        .option("--state <id>", "only issues in this state")
-        .option(
-          "--type <type>",
-          `only issues whose state is of this type, repeatable: ${STATE_TYPES.join(", ")}`,
-          stateTypes,
-        )
-        .option("--label <id>", "only issues with this label")
-        .option("--archived", "archived issues too"),
+      withQuery(
+        answerEntity(annotate(issues.command("list"), { effects: LOCAL_READ }), "tracker_issue", trackerView),
+        ISSUES_QUERY,
+      ).description("issues copied from the tracker, newest change first; run sync to bring them up to date"),
     ),
-    "issues list --type started --type unstarted",
-    "issues list --assignee none --json",
-  ).action(
-    async (
-      opts: {
-        team?: string
-        project?: string
-        assignee?: string
-        state?: string
-        type?: StateType[]
-        label?: string
-        archived?: boolean
-        limit: number
-        page: number
-      },
-      command: Command,
-    ) => {
-      await within(command, true, async (run) => {
-        const filter: TrackerFilter = {
-          ...(opts.team ? { parent: opts.team } : {}),
-          ...(opts.project ? { project: opts.project } : {}),
-          ...(opts.assignee ? { assignee: opts.assignee === "none" ? null : opts.assignee } : {}),
-          ...(opts.state ? { state: opts.state } : {}),
-          ...(opts.type?.length ? { stateTypes: opts.type } : {}),
-          ...(opts.label ? { label: opts.label } : {}),
-          ...(opts.archived ? { archived: true } : {}),
-          limit: opts.limit,
-          offset: (opts.page - 1) * opts.limit,
-        }
-        const found = await run.store.tracker.list(run.account, "issue", filter)
-        return listOf("issues list", {
-          items: await withNames(run, found.items),
-          limit: opts.limit,
-          page: opts.page,
-          has_more: found.hasMore,
-        })
+    "issues list type:started",
+    "issues list assignee:none --json",
+  ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+    const lists = nativeTermLists(listQuery(typedQuery(words), ISSUES_QUERY, "issues list"), "issues list", ["type"])
+    if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
+      throw new InvalidArgumentError("issues list takes field:value terms, each one whole value")
+    const types = (lists.get("type") ?? []).map((one) => one.value.toLowerCase() as StateType)
+    const terms = new Map(
+      [...lists].filter(([field]) => field !== "type").map(([field, [one]]) => [field, one?.value as string]),
+    )
+    const assignee = terms.get("assignee")?.toLowerCase() === "none" ? "none" : terms.get("assignee")
+    await within(command, true, async (run) => {
+      const filter: TrackerFilter = {
+        ...(terms.has("team") ? { parent: terms.get("team") as string } : {}),
+        ...(terms.has("project") ? { project: terms.get("project") as string } : {}),
+        ...(assignee !== undefined ? { assignee: assignee === "none" ? null : assignee } : {}),
+        ...(terms.has("state") ? { state: terms.get("state") as string } : {}),
+        ...(types.length ? { stateTypes: types } : {}),
+        ...(terms.has("label") ? { label: terms.get("label") as string } : {}),
+        ...(terms.has("archived") ? { archived: true } : {}),
+        limit: opts.limit,
+        offset: (opts.page - 1) * opts.limit,
+      }
+      const found = await run.store.tracker.list(run.account, "issue", filter)
+      return listOf("issues list", {
+        items: await withNames(run, found.items),
+        limit: opts.limit,
+        page: opts.page,
+        has_more: found.hasMore,
+        ...(words.length ? { args: { query: words } } : {}),
       })
-    },
-  )
+    })
+  })
   example(
     answerEntity(annotate(issues.command("show"), { effects: LOCAL_READ }), "tracker_issue_detail", trackerView)
       .description("one issue with its state, assignee and comments")
@@ -314,11 +316,10 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     paging(
       answerEntity(annotate(issues.command("search"), { effects: LOCAL_READ }), "tracker_hit", trackerView)
         .description("find issues, projects and comments in the copy by their words")
-        .argument("<words...>", "every word must match; prefixes of three letters or more match too")
-        .option("--any", "any word may match"),
+        .argument("<words...>", "every word must match; prefixes of three letters or more match too"),
     ),
     'issues search "invoice currency"',
-  ).action(async (words: string[], opts: { any?: boolean; limit: number; page: number }, command: Command) => {
+  ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
     await within(command, true, async (run) => {
       const found = await run.store.tracker.find({
         words,
@@ -326,7 +327,6 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
         kinds: ["issue", "project", "comment"],
         limit: opts.limit,
         offset: (opts.page - 1) * opts.limit,
-        ...(opts.any ? { anyWord: true } : {}),
       })
       return listOf("issues search", {
         items: found.items.map((hit) => viewOf(hit.item, { excerpt: hit.excerpt })),
@@ -338,19 +338,23 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     })
   })
   example(
-    answerEntity(annotate(issues.command("task"), { effects: LOCAL_WRITE }), "tracker_issue_task", trackerTask)
+    answerEntity(annotate(issues.command("assign"), { effects: LOCAL_WRITE }), "tracker_issue_task", trackerTask)
       .description(
         "make an issue the owner's task: the task points at the issue and copies none of its text; the same issue " +
           "again answers its existing task",
       )
       .argument("<issue>", "the issue's key (ENG-12) or id")
-      .option("--due <day>", "when it is due, YYYY-MM-DD", day),
-    "issues task ENG-12 --due 2026-12-01",
-  ).action(async (reference: string, opts: { due?: string }, command: Command) => {
+      .option(
+        "--due <time>",
+        "when it is due: an ISO 8601 time, a day, today, or 3d from now",
+        (typed: string) => new Date(aheadOf(typed, "--due", Date.now(), { end: true })),
+      ),
+    "issues assign ENG-12 --due 2026-12-01",
+  ).action(async (reference: string, opts: { due?: Date }, command: Command) => {
     await within(command, false, async (run) => {
       const { task, created } = await trackerIssueTask(run.store, run.account, reference, {
         now: now(),
-        ...(opts.due ? { dueAt: new Date(`${opts.due}T00:00:00Z`) } : {}),
+        ...(opts.due ? { dueAt: opts.due } : {}),
       })
       return itemOf({ task_id: task.id, ...(task.key ? { key: task.key } : {}), issue: task.source, created })
     })
@@ -364,19 +368,23 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     ["label", "labels", "the tracker's labels"],
   ] as const) {
     const group = annotate(program.command(plural), { effects: NO_EFFECTS }).description(what)
+    const query = listQueryOf(kind)
     example(
       paging(
-        answerEntity(annotate(group.command("list"), { effects: LOCAL_READ }), `tracker_${kind}`, trackerView)
-          .description(`${plural} copied from the tracker, newest change first`)
-          .option("--archived", `archived ${plural} too`),
+        withQuery(
+          answerEntity(annotate(group.command("list"), { effects: LOCAL_READ }), `tracker_${kind}`, trackerView),
+          query,
+        ).description(`${plural} copied from the tracker, newest change first`),
       ),
       `${plural} list`,
-    ).action(async (opts: { archived?: boolean; limit: number; page: number }, command: Command) => {
+      `${plural} list archived:include`,
+    ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+      const terms = queryTerms(words, query, `${plural} list`)
       await within(command, true, async (run) => {
         const found = await run.store.tracker.list(run.account, kind, {
           limit: opts.limit,
           offset: (opts.page - 1) * opts.limit,
-          ...(opts.archived ? { archived: true } : {}),
+          ...(terms.has("archived") ? { archived: true } : {}),
         })
         const people =
           kind === "user"
@@ -396,11 +404,12 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
           limit: opts.limit,
           page: opts.page,
           has_more: found.hasMore,
+          ...(words.length ? { args: { query: words } } : {}),
         })
       })
     })
   }
 }
 
-/** The tracker's commands: `sync`, `issues list|show|search|task`, and a `list` of each other kind. */
+/** The tracker's commands: `sync`, `issues list|show|search|assign`, and a `list` of each other kind. */
 export const addTrackerCommands = honoursDryRun(sharedCommand(addTrackerCommandsDefinition))
