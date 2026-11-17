@@ -5,6 +5,60 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.693.0 — 17.11.2026
+
+### Added
+
+- **`@wirecat/cli-core/manifest`: `defineCli` and `parseCliConfig`, the shape of `wirecat.config.ts`.** One file names
+  the CLI (command, package, environment prefix, service, owner), its API description (an https URL), its sign-in
+  (`none`, `token`, or `oauth2-pkce` with the options `oauthPreset` takes), its category (cli-template's, or `other`)
+  and, for a CRM, its source. cli-template's `new --from-config` builds a CLI from it. Each error names the field; the
+  source is checked against the generated API by `parseCrmManifest`.
+- **`crmManifestProblems(manifest, api, definitions)` checks every path a CRM manifest reads against what each
+  operation answers**, from the generated `definitions`: a misspelt or moved field is named with its operation and the
+  field it likely meant, before a sync runs. A part of a schema that says nothing passes.
+- **A CRM manifest's `hooks.enrich`** reads more for a whole page before the map, in one batch request (HubSpot's
+  associations, which its search does not answer).
+- **`optional` on a manifest kind:** the service refusing it (a plan or scope without it) is a gap with the manifest's
+  text and scope, and the other kinds still sync. A refusal part way through the id pass still fails it, so no unread row
+  is taken as deleted. Each gap is said once per call.
+- **`select.max`:** `{select}` always asks for every mapped field, then the account's own while they fit; the count left
+  out is a gap, so an account with hundreds of custom fields still syncs.
+- **A CRM source from a manifest: `crmSourceFromManifest(manifest, { api, call, hooks })` in `@wirecat/cli-core/crm`.**
+  A CLI with an OpenAPI spec describes its CRM as data: per kind, the operations (by their generated id) that list
+  every row, read changes after `{since}` (in the query or the body), list every id and read one record, and where each
+  shared field sits in the answer (a path, `first`, `join`, `all`, `each`, `map`, a constant or a function). The engine
+  pages by each operation's own `pagination` (or, for a change read sorted by modified time, by `keyset`: from the
+  last row's time, `reset` past the service's cap), keeps `<page>@<round start>` page tokens, re-reads a 10-minute overlap,
+  spends the run's budget after the first request, answers a 403 or 404 on `get` with null, asks a service that names
+  its returned fields (`"{select}"`) for only the mapped ones and the account's own, and leaves out a field the answer
+  did not carry, so the stored copy keeps it. Pipelines, custom field definitions and users are described the same
+  way; `hooks.after` corrects one record (async, with the metered call) and `hooks.extend` adds or replaces any `CrmSource` method.
+  `parseCrmManifest` checks the shape, every operation id (a read only) and every mapped field, and names the field at fault and the operation a typo
+  meant. See [docs/dev/CRM.md](docs/dev/CRM.md#a-source-from-a-manifest).
+- `serviceApiCall({ manifest, service, fetch, token })` in `@wirecat/cli-core/cli`: one read operation of a generated
+  manifest sent as the `api` group sends it (request, sign-in header, redirect rule, run record, refusals), for code
+  that is not a command.
+- **`oauthPreset(flow, options)`: an installed app's browser sign-in from the flow a spec declares.**
+  `oauthFlowOf(manifest)` reads the OpenAPI authorization code flow; a GraphQL service writes the same object by hand.
+  Each scope the CLI asks for must be one the flow lists, with a "did you mean" for a typo. The redirect stays the
+  CLI's choice: the spec cannot say which one the app registered. A sign-in URL that is not https is refused, and
+  `rotating` marks a provider that sends a new refresh token on each refresh, so a run with moved folders never
+  refreshes it.
+- **`oauthSessionCommand(options)`: the shared `session start | status | end | list` for a browser sign-in.** PKCE on
+  the loopback, the CLI's `verify` and `claim` before anything is kept, refreshes under one lock, `--no-browser` and
+  `--credential-storage file`, which also forgets an older keyring copy. In a run with moved folders, `session end`
+  says the owner's sign-in stays.
+- **A generated `api` group signs in with an API key in the query** (`apiKey` with `in: query`), as it already did
+  with one in a header. The key goes on every page of `--all`, a next link included, and never follows a redirect.
+  The run record keeps only the path template, so the key never lands in a file. Where an operation also takes a
+  header or a bearer token, that one is sent: a URL can be kept by a proxy or a server log.
+- **`signRequest(manifest, operation, request, token)`** signs one request the way the `api` group and
+  `serviceApiCall` do.
+- **`tokenSessionCommand(options)`: the shared `session start | status | end | list`** for a service signed in with one
+  token. The CLI gives its `verify` (ask the service whose the token is); the token is read hidden or from stdin,
+  checked, and only then kept in the keyring or a private file. It replaces each token CLI's own `session.ts`.
+
 ## 0.692.0 — 17.11.2026
 
 ### Fixed
