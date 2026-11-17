@@ -12,6 +12,7 @@ import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 import { templateSection } from "./templates.mjs"
+import { trackerTables } from "./tracker.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -1803,6 +1804,13 @@ const GROUPS = [
       "search_term_trigrams",
     ],
     [...NEW.embeddings, ...conversationReadinessTables],
+  ],
+  [
+    "tracker",
+    "Issue trackers",
+    "What an issue tracker account holds, as last synced: teams, users, workflow states, labels, projects, issues and comments. A user joins a person only by exact e-mail, when read; nothing here writes to the people graph.",
+    [],
+    trackerTables,
   ],
   ["store", "Store", "Bookkeeping for the file itself.", ["schema_migrations", "store_settings"], []],
 ]

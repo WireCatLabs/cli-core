@@ -142,6 +142,7 @@ export const purgeAccount = (context: StoreContext, accountKey: number): void =>
   purgeCrmCopies(database, accountKey)
   orm.run(sql`DELETE FROM crm_fields WHERE account_id = ${accountKey}`)
   orm.run(sql`DELETE FROM crm_files WHERE account_id = ${accountKey}`)
+  orm.run(sql`DELETE FROM tracker_items WHERE account_id = ${accountKey}`)
   // An entity made from a record is the owner's and stays; only what the source said goes.
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`
   orm.run(sql`DELETE FROM record_relations WHERE record_id IN ${recordsOf} OR target_id IN ${recordsOf}`)

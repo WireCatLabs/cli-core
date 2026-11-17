@@ -73,6 +73,7 @@ import * as stems from "./sqlite/stems.js"
 import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { type TemplateStore, templateStoreOver } from "./sqlite/templates.js"
+import { type TrackerStore, trackerStoreOver } from "./sqlite/tracker.js"
 import { type WalletsStore, walletsStoreOver } from "./sqlite/wallets.js"
 import { storeErrors } from "./store-errors.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
@@ -163,6 +164,8 @@ export interface MessageStore {
   readonly crm: CrmCopies
   /** The CRM files the owner downloaded, with their text; only CRM code reads them, under the copy's viewer rule. */
   readonly crmFiles: CrmFileStore
+  /** Issue trackers' copies: teams, users, states, labels, projects, issues and comments, as last synced. */
+  readonly tracker: TrackerStore
   /** Relationships a source account reports, written as a diff that never overrides the owner's. */
   readonly relations: RelationsStore
   /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
@@ -295,6 +298,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const transactions = once(() => transactionsStoreOver(context))
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
   const crmFiles = once(() => crmFilesOver(context))
+  const tracker = once(() => trackerStoreOver(context))
   const relations = once(() => relationsStoreOver(context))
   const decisionRequests = once(() => decisionRequestStoreOver(context))
   const templates = once(() => templateStoreOver(context))
@@ -440,6 +444,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get crm() {
       return crm()
+    },
+    get tracker() {
+      return tracker()
     },
     get crmFiles() {
       return crmFiles()

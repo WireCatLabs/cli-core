@@ -523,6 +523,10 @@ const OTHERS: Entry[] = [
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
   validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
   validation(
+    "tracker.unlisted-held",
+    "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan",
+  ),
+  validation(
     "crm.narrowing-held",
     "the default scope mine would mark most of a kind's stored rows deleted; none is, until the owner sets the scope",
   ),
