@@ -1,10 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
-import type {
-  ApiServer,
-  ManifestOperation,
-  Pagination,
-  SecurityRequirement,
-  SecurityScheme,
+import {
+  type ApiServer,
+  type ManifestOperation,
+  type Pagination,
+  type SecurityRequirement,
+  type SecurityScheme,
+  type SignInPlace,
+  signInPlace,
+  signInRequirements,
 } from "@wirecat/cli-base/codegen"
 import type { ApiCommandInput } from "./bot/api.js"
 import { apiJson, parseApiJson } from "./bot/api-input.js"
@@ -37,45 +40,23 @@ export const manifestBaseUrl = (manifest: ServiceApiManifest, given?: string): s
   return url
 }
 
-type Auth = { name: string; value: (token: string) => string; in?: "query" }
-
-const BEARER: Auth = { name: "authorization", value: (token) => `Bearer ${token}` }
-
-/** Where one scheme puts the sign-in; `undefined` for one the api cannot send (basic, a key in a cookie). */
-const headerOf = (scheme: SecurityScheme): Auth | undefined => {
-  if (scheme.type === "apiKey") {
-    if (!scheme.name) return undefined
-    if (scheme.in === "header") return { name: scheme.name.toLowerCase(), value: (token) => token }
-    return scheme.in === "query" ? { name: scheme.name, value: (token) => token, in: "query" } : undefined
-  }
-  if (scheme.type === "http") {
-    if (!scheme.scheme || /^bearer$/i.test(scheme.scheme)) return BEARER
-    return /^(basic|digest)$/i.test(scheme.scheme)
-      ? undefined
-      : { name: "authorization", value: (token) => `${scheme.scheme} ${token}` }
-  }
-  return scheme.type === "oauth2" || scheme.type === "openIdConnect" ? BEARER : undefined
-}
-
 /**
- * The header, or query parameter, that carries the sign-in for one operation, from the first scheme of its requirements the api can send;
- * `undefined` for one that needs none (`security: []`, or only `{}`). A manifest without schemes signs in with a bearer
- * token, as most services do. An optional sign-in (`[{}, { oauth: [] }]`) still sends the token. A header wins over a
- * key in the query, which a proxy or a server log could keep.
+ * Where the sign-in goes for one operation: the first place its requirements' schemes name that a token can be sent
+ * to, a header before a key in the query, which a proxy or a server log could keep. `undefined` for a call that needs
+ * none: its security, its own or else the document's, is absent, as in a spec that says nothing about sign-in, or
+ * empty (`[]`, `[{}]`). An optional sign-in (`[{}, { oauth: [] }]`) still sends the token.
  */
-const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): Auth | undefined => {
-  const requirements = operation.security ?? manifest.security
-  if (requirements?.every((one) => Object.keys(one).length === 0)) return undefined
-  if (!manifest.securitySchemes) return BEARER
-  const names = (requirements ?? []).flatMap((one) => Object.keys(one))
+const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): SignInPlace | undefined => {
+  const requirements = signInRequirements(operation, manifest.security)
+  if (!requirements) return undefined
+  const names = requirements.flatMap((one) => Object.keys(one))
   const sendable = names.flatMap((name) => {
     const scheme = manifest.securitySchemes?.[name]
-    const auth = scheme && headerOf(scheme)
-    return auth ? [auth] : []
+    const place = scheme && signInPlace(scheme)
+    return place ? [place] : []
   })
-  const auth = sendable.find((one) => one.in === undefined) ?? sendable[0]
+  const auth = sendable.find((one) => one.in === "header") ?? sendable[0]
   if (auth) return auth
-  if (names.length === 0) return BEARER
   throw new CliError(
     "configuration_error",
     `${operation.command} signs in by ${names.join(" or ")}, which the api cannot send`,
@@ -85,14 +66,16 @@ const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): Aut
 /**
  * Signs one request for its operation. Set the final URL first: a key in the query goes into it. Anything but the
  * standard sign-in header, or a key in the query, never follows a redirect, even to the same host: another host would
- * get the key. The URL then holds the key, so a fetch wrapper must not log it.
+ * get the key. The URL then holds the key, so a fetch wrapper must not log it. Without `token`, for a CLI that never
+ * signs in, nothing is added.
  */
 export const signRequest = async (
   manifest: ServiceApiManifest,
   operation: ManifestOperation,
   request: { url: URL; headers: Headers; redirect?: "follow" | "manual" | "error" },
-  token: () => Promise<string> | string,
+  token: (() => Promise<string> | string) | undefined,
 ): Promise<void> => {
+  if (!token) return
   const auth = authOf(manifest, operation)
   if (!auth) return
   const value = auth.value(await token())

@@ -15,7 +15,8 @@ export interface ServiceApiCallOptions {
   service: string
   /** The host-checked fetch with the CLI's pace and retry of reads, as the `api` group gets it. */
   fetch: FetchLike
-  token: () => string | Promise<string>
+  /** Left out, for a CLI without sign-in, no call carries one. */
+  token?: () => string | Promise<string>
   /** In place of the manifest's first server. */
   baseUrl?: string
   /** Headers beside the sign-in, such as the API version. */

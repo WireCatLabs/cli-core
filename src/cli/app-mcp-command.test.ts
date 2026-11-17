@@ -351,7 +351,7 @@ describe("appDoctorCommand", () => {
       "})",
     ].join("\n")
 
-    const check = async (signedIn: NonNullable<AppMcpOptions["signedIn"]>, keyring: KeyringStore) => {
+    const check = async (signedIn: AppMcpOptions["signedIn"], keyring: KeyringStore) => {
       const env = home()
       const scriptPath = join(env.CAL_STATE_DIR, "..", "server.mjs")
       writeFileSync(scriptPath, FAKE_SERVER)
@@ -360,7 +360,7 @@ describe("appDoctorCommand", () => {
         name: "Calendar",
         untrusted: ["event titles"],
         permissionExample: "events.delete=deny",
-        signedIn,
+        ...(signedIn ? { signedIn } : {}),
       })
       const code = await run(["work", "mcp", "check", "--json"], { app, configuration, commands: () => [mcp] }, {
         streams,
@@ -387,6 +387,12 @@ describe("appDoctorCommand", () => {
       }, memoryKeyring())
       expect(code).toBe(0)
       expect(item).toMatchObject({ healthy: false, signed_in: false })
+    })
+
+    it("is healthy for a CLI without sign-in, which gives no signedIn, and says nothing of an account", async () => {
+      const { code, item } = await check(undefined, memoryKeyring())
+      expect(code).toBe(0)
+      expect(item).toMatchObject({ healthy: true, signed_in: null })
     })
   })
 })

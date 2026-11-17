@@ -255,7 +255,13 @@ export { askBeforeWrite } from "./ask-before-write.js"
 export { actorOf } from "./author.js"
 export { type BaseStagesCommandOptions, baseStagesCommand } from "./base-stages-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
-export { type HttpApiExecutorOptions, type HttpApiRequest, httpApiExecutor, httpApiRequest } from "./bot/api-http.js"
+export {
+  type HttpApiExecutorOptions,
+  type HttpApiRequest,
+  httpApiExecutor,
+  httpApiRequest,
+  unsendableBody,
+} from "./bot/api-http.js"
 export {
   apiFlagOf,
   apiJson,
@@ -265,6 +271,8 @@ export {
   checkApiParameter,
   parseApiJson,
   readApiBody,
+  readApiBytes,
+  sendsBytes,
 } from "./bot/api-input.js"
 export { prepareRpcApiBody, type RpcApiBody } from "./bot/api-rpc.js"
 export { type BotContext, botContext, botWords } from "./bot/context.js"
@@ -675,6 +683,7 @@ export {
   type ServiceApiOptions,
   type ServiceApiPermissionsInput,
   serviceApiKeys,
+  serviceApiOperations,
   serviceApiPermissions,
 } from "./service-api.js"
 export { type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
