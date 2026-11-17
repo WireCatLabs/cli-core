@@ -23,7 +23,7 @@ const provider = { name: "synthetic-box", kind: "documents", aliases: [], comman
 const WORDS: DocumentWords = { app: "box", remote: "box", provider: "Box", source: provider.name }
 const isFolder = (file: SourceFile) => file.mime === FAKE_FOLDER
 
-const definition = (source: FeedlessDocumentSource): ProgramDefinition => {
+const definition = (source: FeedlessDocumentSource, words: DocumentWords = WORDS): ProgramDefinition => {
   const configuration = settingsFor(app, { permissions: commandPermissions() })
   return {
     app,
@@ -33,7 +33,7 @@ const definition = (source: FeedlessDocumentSource): ProgramDefinition => {
         app,
         resolveSettings: configuration.resolveSettings,
         provider,
-        words: WORDS,
+        words,
         service: "Box",
         source: () => source,
         ingestion: (store) =>
@@ -67,6 +67,7 @@ const definition = (source: FeedlessDocumentSource): ProgramDefinition => {
 const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
   source: S = fakeDocumentSource("alpha", { feed: false }) as unknown as S,
   keyring?: KeyringStore,
+  words: DocumentWords = WORDS,
 ) => {
   const root = mkdtempSync(join(tmpdir(), "documents-library-"))
   const env: NodeJS.ProcessEnv = {
@@ -75,11 +76,11 @@ const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
     BOX_CONFIG_DIR: join(root, "config"),
     BOX_CACHE_DIR: join(root, "cache"),
   }
-  const program = createProgram(definition(source))
+  const program = createProgram(definition(source, words))
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
-    const words = argv[0] === "--as" ? argv.slice(1) : ["personal", ...argv]
-    const exit = await run([...words, "--json"], definition(source), {
+    const args = argv[0] === "--as" ? argv.slice(1) : ["personal", ...argv]
+    const exit = await run([...args, "--json"], definition(source, words), {
       streams,
       tty: false,
       env,
@@ -207,5 +208,16 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     expect(file.stdout + file.stderr).toContain("choose a folder")
     const listed = await cli(["documents", "list"])
     expect(listed.stdout + listed.stderr).toContain("box personal sync")
+  })
+
+  it("names what folders add takes, in its example and in the hint before any folder is chosen", async () => {
+    const { cli } = setup(undefined, undefined, { ...WORDS, text: { folderToAdd: "/Documents" } })
+    const help = await cli(["folders", "add", "--help"])
+    expect(help.stdout).toContain("box personal folders add /Documents")
+    expect(help.stdout).not.toContain("FOLDER_ID")
+    for (const step of [["folders", "add", "root"], ["sync"], ["folders", "remove", "root"], ["sync"]])
+      expect((await cli(step)).exit).toBe(0)
+    const search = await cli(["search", "quarterly"])
+    expect(search.stdout).toContain("box personal folders add /Documents, then box personal sync")
   })
 })
