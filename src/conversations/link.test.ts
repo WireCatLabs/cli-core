@@ -141,6 +141,20 @@ describe("linkMessages", () => {
     ])
   })
 
+  it("keeps a comment linked to the post it comments on, a thread whose first message has text", () => {
+    const { conversations } = linkMessages([
+      said("p1", "a", "Garden cleanup on Saturday, bring gloves"),
+      said("p2", "d", "The pool opens in June"),
+      said("c1", "b", "I can bring two rakes", { threadId: "p1", replyToId: "p1" }),
+      said("c2", "c", "what time?", { threadId: "p2", replyToId: "p2" }),
+    ])
+
+    expect(conversations).toEqual([
+      ["p1", "c1"],
+      ["p2", "c2"],
+    ])
+  })
+
   it("leaves the choice to the rules when the agent names a message in another topic", () => {
     const { parents } = linkMessages(
       [said("1", "a", "lunch?", { threadId: "t1" }), said("2", "b", "rain later", { threadId: "t2" })],

@@ -11,11 +11,13 @@ export const BATCH_CONTEXT = 50
 
 /**
  * Phase 4 plan A2: a live message the agent is asked about — no reply the messenger itself records to a
- * message held here in the same topic, and no current agent answer. A stale answer makes it need the agent again.
+ * message held here that the build links (`inThread` in conversations/link.ts), and no current agent answer.
+ * A stale answer makes it need the agent again.
  */
 const replied = (m: SQL) => sql`EXISTS (SELECT 1 FROM messages p WHERE p.chat_id = ${m}.chat_id
   AND p.external_id = ${m}.reply_to_external_id AND p.deleted_at IS NULL
-  AND p.thread_external_id IS ${m}.thread_external_id)`
+  AND (p.thread_external_id IS ${m}.thread_external_id
+    OR (p.external_id = ${m}.thread_external_id AND trim(p.text) <> '')))`
 
 const needsAgent = (m: SQL) => sql`(
   NOT ${replied(m)}
