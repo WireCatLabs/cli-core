@@ -98,7 +98,7 @@ export const parameterValue = (input: ApiCommandInput, parameter: { in: "query" 
       ? undefined
       : (parseApiJson(input.body) as Record<string, unknown> | null)?.[parameter.name]
 
-const withValue = (
+export const withValue = (
   input: ApiCommandInput,
   parameter: { in: "query" | "body"; name: string },
   value: string | number,
