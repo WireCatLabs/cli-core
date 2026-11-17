@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-core/main/docs/images/cli-core-banner.png" alt="cli-core: messages and mail your agent can search" width="100%">
+  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-core/main/docs/images/cli-core-banner.png" alt="cli-core: the foundation for agent-ready CLIs" width="100%">
 </p>
 
 # @wirecat/cli-core
