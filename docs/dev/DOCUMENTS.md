@@ -233,6 +233,15 @@ one builder per group lets a CLI place its own groups between them (drive puts `
   provider's source and the item shapes. The builders never pick a profile, open a store or take a lock.
   `status`, `folders add|remove` and the mirror config stay the CLI's own code behind the port.
 
+**`documentLibraryCommands(options)` fills every port at once** for a CLI with a plain source: the profile's files
+under its state folder (`documentProfile`: `folders.json` with each chosen folder's metadata, `sync/state.json`,
+`sync/walk.json`, one snapshot per document, and `sync.lock`), the shared store opened read-only for a read, the
+account check (`claimDocumentAccount`: one provider account per profile) and the knowledge port. The CLI gives
+`source(command, events, run)` (built inside cli-core's run, so each request lands in the run record), `ingestion`,
+`idOf`, `isFolder`, a `documents list` `row`, its limits and `coverage`, and optionally `folder` (how `folders add`
+reads what the user typed: Yandex Disk reads a path) and `browse`. It answers the commands to add to the program.
+notion-cli and drive-cli predate it and keep their own wiring.
+
 The `documents` group the builders return takes the CLI's live subcommands (`get`, `create`, `update`, …), added after
 the shared ones. `folders` takes the CLI's `browse`, which stays outside the shared contract. Catalog entries use the
 `<id>.md` external ids the ingestion writes. Permissions, `--read-only`, the profile lock and MCP stay with the

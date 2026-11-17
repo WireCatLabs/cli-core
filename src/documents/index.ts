@@ -6,6 +6,7 @@ export {
   mergeBlocks,
 } from "../services/documents/block-diff.js"
 export { type Complete, extractMemories } from "../services/documents/extraction.js"
+export { fileText, readableFile } from "../services/documents/file-text.js"
 export { documentIngestion, type IngestionOptions } from "../services/documents/ingestion.js"
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
 export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
