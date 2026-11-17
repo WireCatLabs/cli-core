@@ -12,6 +12,27 @@ export const accountFileFor = (app: AppIdentity, profile: string, env: NodeJS.Pr
 export const rememberAccount = (app: AppIdentity, profile: string, id: string, env: NodeJS.ProcessEnv): void =>
   writeSecurely(accountFileFor(app, profile, env), `${JSON.stringify({ account: id })}\n`, 0o600)
 
+const recorded = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): Record<string, unknown> => {
+  try {
+    return JSON.parse(readFileSync(accountFileFor(app, profile, env), "utf8")) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+/** The site a profile signed in to, kept beside its account: only `session start --site` sets it, with the token. */
+export const rememberSite = (app: AppIdentity, profile: string, site: string, env: NodeJS.ProcessEnv): void =>
+  writeSecurely(
+    accountFileFor(app, profile, env),
+    `${JSON.stringify({ ...recorded(app, profile, env), site })}\n`,
+    0o600,
+  )
+
+export const recalledSite = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string | undefined => {
+  const { site } = recorded(app, profile, env)
+  return typeof site === "string" ? site : undefined
+}
+
 export const recalledAccount = (
   app: AppIdentity,
   provider: Provider,

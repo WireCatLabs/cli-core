@@ -53,6 +53,11 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   service: string
   /** In place of the manifest's first server. */
   baseUrl?: string
+  /**
+   * The values of the server's free variables for this run, such as `{ site }` from the profile's sign-in
+   * (`recalledSite`). Read only when a call is sent, so `api list` and `api show` work before sign-in.
+   */
+  serverVariables?: (command: Command) => Readonly<Record<string, string>>
   /** The host-checked fetch with the CLI's pace and its retry of reads (cli-base `retrying` over `hostFetch`). */
   fetch: (command: Command) => FetchLike
   /**
@@ -197,8 +202,9 @@ const API_QUERY = {
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const { app, configuration, manifest } = options
   const { offered: operations, left } = serviceApiOperations(manifest)
-  const baseUrl = manifestBaseUrl(manifest, options.baseUrl)
-  const base = new URL(baseUrl)
+  // Without variables the server is known now, and a CLI built against a manifest it cannot reach fails at once.
+  if (!options.serverVariables) manifestBaseUrl(manifest, options.baseUrl)
+  const baseUrlOf = (command: Command) => manifestBaseUrl(manifest, options.baseUrl, options.serverVariables?.(command))
   const own = serviceApiPermissions(options)
   // The group's own levels hold even where the CLI's permissions left them out.
   const defaults = { ...own.defaults, ...configuration.permissions?.defaults }
@@ -295,6 +301,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       )
     const items: unknown[] = []
     const asked = new Set<string>()
+    const baseUrl = baseUrlOf(command)
     let call = input
     let url: URL | undefined
     await baseContext(command, configuration.resolveSettings).run(async () => {
@@ -317,7 +324,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
         if (!step.next) return
         if ("url" in step.next) {
           url = new URL(step.next.url, request.url)
-          if (url.origin !== base.origin)
+          if (url.origin !== new URL(baseUrl).origin)
             throw new CliError("invalid_response", `${options.service} pointed the next page at another host`)
         } else call = step.next.input
       }
@@ -358,7 +365,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
           )
         return allPages(command, operation, input)
       }
-      const request = await signed(command, operation, httpApiRequest(operation, input, baseUrl))
+      const request = await signed(command, operation, httpApiRequest(operation, input, baseUrlOf(command)))
       const answer =
         operation.effect === "read" && extra.length === 0
           ? await baseContext(command, configuration.resolveSettings).run(() => send(command, operation, request))

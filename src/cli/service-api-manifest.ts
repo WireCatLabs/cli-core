@@ -21,23 +21,60 @@ export interface ServiceApiManifest {
 }
 
 /**
- * The first server the spec names. A variable is filled with its default only when its `enum` lists the choices: a
- * free one (`{subdomain}`) names the owner's own host, which the default would send the token past.
+ * The first server the spec names. A variable is filled from `variables` first, such as the site a profile signed in
+ * to; else with its default, only when its `enum` lists the choices: a free one (`{site}`) names the owner's own host,
+ * which the default would send the token past.
  */
-export const manifestBaseUrl = (manifest: ServiceApiManifest, given?: string): string => {
+export const manifestBaseUrl = (
+  manifest: ServiceApiManifest,
+  given?: string,
+  variables: Readonly<Record<string, string>> = {},
+): string => {
   const server = manifest.servers?.[0]
   if (given === undefined && !server)
     throw new CliError("configuration_error", "the manifest names no server; give the api a baseUrl")
   const url =
     given ??
     (server as ApiServer).url.replace(/\{([^}]+)\}/g, (_, name: string) => {
+      const value = variables[name]
+      if (value !== undefined) return serverValue(name, value)
       const variable = server?.variables?.[name]
       if (variable?.default === undefined || !variable.enum?.includes(variable.default))
-        throw new CliError("configuration_error", `the server's {${name}} is the owner's own; give the api a baseUrl`)
+        throw new CliError(
+          "configuration_error",
+          `the server's {${name}} is the owner's own; sign in with session start --${name}, or give the api a baseUrl`,
+        )
       return variable.default
     })
   if (!/^https:\/\//.test(url)) throw new CliError("configuration_error", `the api's server ${url} is not https`)
+  if (!URL.canParse(url) || new URL(url).username || new URL(url).password)
+    throw new CliError("configuration_error", `the api's server ${url} is not a URL without a user name`)
   return url
+}
+
+/**
+ * The site an owner types, as a server's free variable takes it: a host with a port or a path if any, from
+ * `blog.example.com` or `https://blog.example.com/`. Only https: an `http://` address is refused, not rewritten.
+ */
+export const siteValue = (raw: string): string => {
+  const text = raw
+    .trim()
+    .replace(/^https:\/\//i, "")
+    .replace(/\/+$/, "")
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text))
+    throw new CliError("validation_error", `--site takes an https address or a host, not ${JSON.stringify(raw)}`)
+  return serverValue("site", text, "validation_error")
+}
+
+// A value only names a place: a user name, query or fragment in it would change where the token goes, or add to it.
+const serverValue = (
+  name: string,
+  value: string,
+  code: "configuration_error" | "validation_error" = "configuration_error",
+) => {
+  if (!/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*(:\d+)?(\/[A-Za-z0-9._~%-]+)*$/.test(value))
+    throw new CliError(code, `{${name}} ${JSON.stringify(value)} is not a host, with a port or a path if any`)
+  return value
 }
 
 /**

@@ -8,9 +8,10 @@ import { baseContext, environmentOf, outputFor, secretInputOf } from "./context.
 import { refuseOffline } from "./early-refusal.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, logsInOrOut, REMOTE_READ, refuseUnderReadOnly } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
-import { profilesHere, rememberAccount } from "./messenger/accounts.js"
+import { profilesHere, recalledSite, rememberAccount, rememberSite } from "./messenger/accounts.js"
 import { commandWords, profileFree, refuseCommandName, rootOf } from "./profile.js"
 import { ProfileTokenStore, type TokenStorage } from "./profile-token.js"
+import { siteValue } from "./service-api-manifest.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
 export interface TokenSessionOptions {
@@ -26,7 +27,14 @@ export interface TokenSessionOptions {
     command: Command,
     token: string,
     events: EventSink,
+    site: string | undefined,
   ) => Promise<{ id: string; account: Readonly<Record<string, unknown>> }>
+  /**
+   * The service runs on the owner's own site, its server's `{site}`: `session start` takes `--site`, verifies the
+   * token there and keeps the site beside the account, so the token only ever goes to it (`recalledSite`). The example
+   * is a site for the help, such as "blog.example.com".
+   */
+  site?: { example: string }
   /** Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so. */
   claim?: (env: NodeJS.ProcessEnv, profile: string, id: string, tokens: ProfileTokenStore) => void
   /** What the token is, for the prompt and help: "API token" when not given. */
@@ -61,6 +69,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
   }
   const answer = (command: Command, item: unknown) => renderAnswer(command, outputFor(command), itemOf(item))
 
+  const siteOf = (site: string | undefined) => (options.site ? { site: site ?? null } : {})
   const start = logsInOrOut(
     annotate(new Command("start"), {
       effects: FETCH,
@@ -84,18 +93,27 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       storageOf,
       "keyring" as TokenStorage,
     )
-    .action(async function (this: Command, args: { credentialStorage: TokenStorage }) {
-      const { env, profile, tokens, run } = contextOf(this)
-      refuseCommandName(profile, commandWords(rootOf(this)), app.command)
-      refuseOffline(this, service)
-      // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
-      const token = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
-      if (!token) throw new CliError("validation_error", "no token was given")
-      const { id, account } = await run((events) => options.verify(this, token, events))
-      ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(env, profile, id, tokens)
-      const storedIn = tokens.write(profile, token, args.credentialStorage)
-      answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...account })
-    })
+  if (options.site)
+    start.option(
+      "--site <address>",
+      `the ${service} site, as https://${options.site.example} or ${options.site.example}`,
+    )
+  start.action(async function (this: Command, args: { credentialStorage: TokenStorage; site?: string }) {
+    const { env, profile, tokens, run } = contextOf(this)
+    refuseCommandName(profile, commandWords(rootOf(this)), app.command)
+    if (options.site && args.site === undefined)
+      throw new CliError("validation_error", `give the ${service} site: --site ${options.site.example}`)
+    const site = options.site && args.site !== undefined ? siteValue(args.site) : undefined
+    refuseOffline(this, service)
+    // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
+    const token = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
+    if (!token) throw new CliError("validation_error", "no token was given")
+    const { id, account } = await run((events) => options.verify(this, token, events, site))
+    ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(env, profile, id, tokens)
+    if (site !== undefined) rememberSite(app, profile, site, env)
+    const storedIn = tokens.write(profile, token, args.credentialStorage)
+    answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...siteOf(site), ...account })
+  })
 
   const status = annotate(new Command("status"), {
     effects: REMOTE_READ,
@@ -108,12 +126,13 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     )
     .option("--check", `ask ${service} whether the token still works, and whose it is`)
     .action(async function (this: Command, args: { check?: boolean }) {
-      const { profile, tokens, run } = contextOf(this)
+      const { env, profile, tokens, run } = contextOf(this)
       const saved = tokens.read(profile)
-      const state = { profile, state: saved ? "saved" : "missing", token_from: saved?.source ?? null }
+      const site = options.site ? recalledSite(app, profile, env) : undefined
+      const state = { profile, state: saved ? "saved" : "missing", token_from: saved?.source ?? null, ...siteOf(site) }
       if (!args.check || !saved) return answer(this, { ...state, verified: false })
       refuseOffline(this, service)
-      const { account } = await run((events) => options.verify(this, saved.secret, events))
+      const { account } = await run((events) => options.verify(this, saved.secret, events, site))
       answer(this, { ...state, verified: true, ...account })
     })
 
@@ -170,4 +189,24 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     .addCommand(status)
     .addCommand(end)
     .addCommand(list)
+}
+
+/**
+ * The site this run's profile signed in to, as the `{ site }` server variable of `serviceApiCommand` and
+ * `serviceApiCall`; an authentication error naming `session start --site` before any sign-in.
+ */
+export const signedInSite = (
+  app: AppIdentity,
+  resolveSettings: TokenSessionOptions["resolveSettings"],
+): ((command: Command) => { site: string }) => {
+  return (command) => {
+    const { env, settings } = baseContext(command, resolveSettings)
+    const site = recalledSite(app, settings.profile, env)
+    if (site === undefined)
+      throw new CliError(
+        "authentication_error",
+        `${settings.profile} has no site yet: ${app.command} ${settings.profile} session start --site <address>`,
+      )
+    return { site }
+  }
 }
