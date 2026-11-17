@@ -56,6 +56,7 @@ const definition = (source: FeedlessDocumentSource, words: DocumentWords = WORDS
             ? (source as unknown as { byPath(path: string): Promise<SourceFile> }).byPath(input)
             : source.metadata(input),
         isFolder,
+        folderPath: (file) => `/${file.name}`,
         row: (file, reference) => ({ id: file.id, name: file.name, url: file.url, reference }),
         textLimit: 100_000,
         maxEntries: 1_000,
@@ -104,7 +105,9 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     expect(JSON.parse((await cli(["folders", "add", "root"])).stdout)).toMatchObject({
       item: { id: "root", added: true },
     })
-    expect(JSON.parse((await cli(["folders", "list"])).stdout).items).toEqual([{ id: "root" }])
+    expect(JSON.parse((await cli(["folders", "list"])).stdout).items).toEqual([
+      { id: "root", name: "root", path: "/root" },
+    ])
     expect(JSON.parse((await cli(["sync"])).stdout).item).toMatchObject({ saved: 2, removed: 0 })
     source.put({ ...source.files.get("a"), version: "2" } as SourceFile, "a new budget line")
     source.remove("b")
