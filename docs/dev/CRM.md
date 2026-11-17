@@ -236,6 +236,8 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   `serviceApiCall` over the same fetch and token as the `api` group; in a test, the same over cli-base `fakeApi`.
 - Paging comes from each operation's `pagination`; an operation without it names its rows with `items`.
 - A path the answer does not have gives no key, never `null`: a read that did not select a field must not erase it.
+- A path past the end of a list, or under a `null`, the answer has is `null`: Attio's `values.job_title.0.value` on
+  an empty list clears the copy's position.
 - A change read sorted by modified time names `keyset`: the next page starts at the last row's time, so a row that
   changes mid-round moves nothing under the next page (a service's own page token is an offset into a moving list).
   Past `cap` rows at one time the round answers `reset`.
@@ -275,6 +277,8 @@ for (const { name, run } of crmManifestContract(SOURCE, { api, definitions, hook
   contact or company has `get` (after checking that `get` reads the row), `change` when a kind has `changes`,
   `skewed` and `sameToken`. `crmManifestContract` runs `crmSourceContract` over it and fails a case whose calls the
   fake refused.
+- A value written inside a union (Attio's seventeen value types) goes into the branch that has its path, so the strict
+  fake takes its own answer.
 - A rule that is a function, an `each` or a `{ value }` writes nothing: the row keeps the sample there. `self` and a
   live `list` come from hooks, so their cases pass without running unless the hooks add them. The dead cursor is
   answered by the source itself (`reset` for a cursor that is not a time) and never reaches the fake.

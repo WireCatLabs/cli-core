@@ -279,3 +279,40 @@ describe("crmManifestContract catches a broken source", () => {
     expect(fake.refusals).toEqual(["records_query: a read of changes without its since"])
   })
 })
+
+// Attio's real value schema: a oneOf of typed values, each with its own fields and an enum attribute_type, so a value
+// sampled from the first branch with another branch's field written in matches none of them.
+describe("crmManifestFake over values that are one of several types", () => {
+  const typedValue = (type: string, fields: Record<string, SchemaNode>) =>
+    obj({ active_from: str, attribute_type: { type: "string", enum: [type] }, ...fields }, [
+      "active_from",
+      "attribute_type",
+      ...Object.keys(fields),
+    ])
+  const typed: Record<string, SchemaNode> = {
+    ...definitions,
+    Value: {
+      type: "union",
+      of: [
+        typedValue("actor-reference", { referenced_actor_id: str }),
+        typedValue("text", { value: str }),
+        typedValue("personal-name", { full_name: str, first_name: str, last_name: str }),
+        typedValue("email-address", { email_address: str }),
+      ],
+    },
+  }
+
+  it("writes each mapped value into the branch that has it, and the strict fake takes its own answer", async () => {
+    const { source, fake } = crmManifestFixture(SOURCE, { api, definitions: typed })
+    const people = (await source.changes("person", null)) as CrmPage<CrmPerson>
+    expect(people.items.map(({ name, lastName }) => [name, lastName])).toEqual([
+      ["name 1", "lastName 1"],
+      ["name 2", "lastName 2"],
+    ])
+    const raw = fake.rows.person?.[0] as { values: Record<string, { attribute_type: string }[]> }
+    expect(raw.values.name?.[0]?.attribute_type).toBe("personal-name")
+    expect(fake.refusals).toEqual([])
+  })
+
+  for (const { name, run } of crmManifestContract(SOURCE, { api, definitions: typed })) it(name, run)
+})

@@ -7,20 +7,27 @@ import type { CrmRule } from "./manifest.js"
 export const MISSING = Symbol("missing")
 type Read = unknown | typeof MISSING
 
-/** A dotted path; a number steps into a list (`results.0.id`), and `.` is the value itself. */
+/**
+ * A dotted path; a number steps into a list (`results.0.id`), and `.` is the value itself. Past the end of a list the
+ * service sent, or under a `null` it sent, is "none" (`null`), not "not sent": a cleared value must clear the copy,
+ * as Attio's `values.job_title.0.value` on an empty list.
+ */
 export const at = (value: unknown, path: string): unknown =>
   path === "."
     ? value
-    : path.split(".").reduce<unknown>(
-        (inner, key) =>
-          // Past the end of a list the service sent is "none", not "not sent": a removed link must leave the copy.
-          Array.isArray(inner) && /^\d+$/.test(key)
-            ? (inner[Number(key)] ?? null)
-            : isRaw(inner)
-              ? inner[key]
-              : undefined,
-        value,
-      )
+    : path
+        .split(".")
+        .reduce<unknown>(
+          (inner, key) =>
+            inner === null
+              ? null
+              : Array.isArray(inner) && /^\d+$/.test(key)
+                ? (inner[Number(key)] ?? null)
+                : isRaw(inner)
+                  ? inner[key]
+                  : undefined,
+          value,
+        )
 
 const read = (raw: CrmRaw, path: string): Read => {
   const found = at(raw, path)

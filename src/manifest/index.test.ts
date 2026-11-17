@@ -76,7 +76,7 @@ describe("parseCliConfig", () => {
     expect(() => parseCliConfig({ ...config, category: "erp" })).toThrow("wirecat.config: category")
     const crm = { ...config, category: "crm" as const, source: { provider: "acme" } }
     expect(parseCliConfig(crm).source).toEqual({ provider: "acme" })
-    const verify = { operation: "getV2Self", id: "workspace_id", name: "workspace_name" }
+    const verify = { operation: "getV2Self", id: "workspace_id", name: "workspace_name", active: "active" }
     expect(parseCliConfig({ ...config, auth: { preset: "token", verify } }).auth).toEqual({ preset: "token", verify })
     expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { id: "id" } } })).toThrow(
       "wirecat.config: auth.verify.operation: missing",

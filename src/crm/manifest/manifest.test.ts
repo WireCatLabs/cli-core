@@ -9,6 +9,7 @@ import { crmManifestContract } from "../testing/manifest-fake.js"
 import { crmSourceContract } from "../testing/source-contract.js"
 import { amountOf, type CrmRaw } from "../values.js"
 import { type CrmManifest, parseCrmManifest } from "./manifest.js"
+import { mapFields } from "./map.js"
 import { crmManifestProblems } from "./paths.js"
 import { crmSourceFromManifest } from "./source.js"
 
@@ -654,6 +655,17 @@ describe("crmSourceFromManifest", () => {
     const [, ben] = (await all(source, "person")) as CrmPerson[]
     // Asked for and none is an empty list, so a link removed in the CRM leaves the copy too.
     expect(ben).toMatchObject({ name: "Ben", lastName: null, organizations: [] })
+  })
+
+  it("reads a value under an empty list or a null the service sent as none, so a cleared value clears the copy", () => {
+    const rules = { externalId: "id", position: "values.job_title.0.value", url: "values.site.value" }
+    const types = { externalId: "id", position: "text", url: "text" } as const
+    expect(mapFields(rules, types, { id: "1", values: { job_title: [], site: null } })).toEqual({
+      externalId: "1",
+      position: null,
+      url: null,
+    })
+    expect(mapFields(rules, types, { id: "1", values: {} })).toEqual({ externalId: "1" })
   })
 
   it("asks only for the properties the map reads and the account's own fields", async () => {

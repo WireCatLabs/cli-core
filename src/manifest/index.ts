@@ -4,6 +4,9 @@ import type { CrmManifest } from "../crm/manifest/manifest.js"
 import type { OAuthProvider } from "../oauth/provider.js"
 import type { TrackerManifest } from "../tracker/manifest/manifest.js"
 
+/** A dotted path into an answer, as the source manifest reads it: `auth.verify`'s `id`, `name` and `active`. */
+export { at as valueAt } from "../crm/manifest/map.js"
+
 /**
  * The operation that answers whose the token is, and where its answer holds the account's id (and a name to show):
  * `{ operation: "getV2Self", id: "workspace_id", name: "workspace_name" }`. `session start` checks a token with it.
@@ -12,6 +15,12 @@ export interface CliVerify {
   operation: string
   id: string
   name?: string
+  /**
+   * Where the answer says the token still works, for a service that answers a dead token with success: Attio's
+   * `GET /v2/self` gives 200 `{ "active": false }` to an unknown, revoked or deleted token. Anything but `true` there is
+   * a refused sign-in.
+   */
+  active?: string
 }
 
 export type CliAuth =
@@ -128,7 +137,12 @@ const httpsUrl = v.pipe(
 const dotPath = v.pipe(v.string(), v.regex(/^[^.\s]+(\.[^.\s]+)*$/, "a dot path into the answer, such as data.id"))
 
 const verify = v.optional(
-  v.strictObject({ operation: v.pipe(v.string(), v.minLength(1)), id: dotPath, name: v.optional(dotPath) }),
+  v.strictObject({
+    operation: v.pipe(v.string(), v.minLength(1)),
+    id: dotPath,
+    name: v.optional(dotPath),
+    active: v.optional(dotPath),
+  }),
 )
 
 const schema = v.strictObject({
