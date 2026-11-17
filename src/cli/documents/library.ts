@@ -177,6 +177,11 @@ export const documentProfile = <M extends SourceFile>(app: AppIdentity, env: Nod
         files: Object.fromEntries(roots.flatMap((id) => (files[id] ? [[id, files[id]]] : []))),
         changed_at: new Date().toISOString(),
       }),
+    /** Keeps a chosen folder's newer metadata (a new path) without changing the choice or its date. */
+    saveFolderFile: (file: M) => {
+      const chosen = folders()
+      writeJson(join(dir, "folders.json"), { ...chosen, files: { ...chosen.files, [file.id]: file } })
+    },
     state,
     synced: () => existsSync(join(sync, "state.json")),
     walkUnderWay: () => existsSync(join(sync, "walk.json")),
@@ -320,7 +325,9 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
   // The folder as `folders add` read it stands in for the one the last pass held, before the first sync.
   const known = (source: FeedlessDocumentSource<M>): FeedlessDocumentSource<M> => {
     const chosen = files().folders().files ?? {}
-    const metadata: FeedlessDocumentSource<M>["metadata"] = (id, held) => source.metadata(id, held ?? chosen[id])
+    // The folder as `folders add` last read it wins over the walk's copy: adding a moved folder again under its new
+    // path is how a path-addressed source finds it.
+    const metadata: FeedlessDocumentSource<M>["metadata"] = (id, held) => source.metadata(id, chosen[id] ?? held)
     // A proxy, not a spread: a source written as a class keeps its methods and private fields.
     return new Proxy(source, {
       get: (target, name) => {
@@ -412,6 +419,7 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
         // A folder already chosen keeps its date, so status does not report a new plan for it.
         if (!chosen.roots.includes(file.id))
           files().saveFolders([...chosen.roots, file.id], { ...chosen.files, [file.id]: file })
+        else files().saveFolderFile(file)
         return { id: file.id, name: file.name }
       },
       list: (filter) =>

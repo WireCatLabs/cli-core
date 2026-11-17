@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
+import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { documentIngestion, type FeedlessDocumentSource, type SourceFile } from "../../documents.js"
 import { commandPermissions } from "../permission-keys.js"
@@ -51,6 +51,10 @@ const definition = (source: FeedlessDocumentSource): ProgramDefinition => {
             frontMatter: (content) => ({ source: provider.name, sourceUrl: content.metadata.url }),
           }),
         idOf: (input) => input,
+        folder: (source, input) =>
+          input.startsWith("/") && "byPath" in source
+            ? (source as unknown as { byPath(path: string): Promise<SourceFile> }).byPath(input)
+            : source.metadata(input),
         isFolder,
         row: (file, reference) => ({ id: file.id, name: file.name, url: file.url, reference }),
         textLimit: 100_000,
@@ -150,6 +154,50 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     const synced = await cli(["sync"])
     expect(synced.exit, synced.stderr).toBe(0)
     expect(JSON.parse(synced.stdout).item).toMatchObject({ saved: 2 })
+  })
+
+  it("finds a chosen folder moved on a path-addressed provider once it is added again under its new path", async () => {
+    const inner = fakeDocumentSource("alpha", { feed: false })
+    const pathOf = (id: string): string => {
+      const file = inner.files.get(id)
+      if (!file) return ""
+      const parent = file.parents[0]
+      return parent ? `${pathOf(parent)}/${file.name}` : `/${file.name}`
+    }
+    const withPath = (file: SourceFile) => ({ ...file, providerMetadata: { path: pathOf(file.id) } })
+    // Reads only by the path it was given, as Yandex Disk does.
+    const reach = (id: string, known?: SourceFile) => {
+      const path = (known?.providerMetadata as { path?: string } | undefined)?.path
+      if (!path || pathOf(id) !== path) throw new CliError("not_found", "nothing at that path")
+    }
+    const source = {
+      identity: () => inner.identity(),
+      byPath: async (path: string) => {
+        const found = [...inner.files.values()].find((file) => pathOf(file.id) === path)
+        if (!found) throw new CliError("not_found", "nothing at that path")
+        return withPath(found)
+      },
+      metadata: async (id: string, known?: SourceFile) => {
+        reach(id, known)
+        return withPath(await inner.metadata(id))
+      },
+      children: async (id: string, folder?: SourceFile) => {
+        reach(id, folder)
+        return (await inner.children(id)).map(withPath)
+      },
+      content: async (id: string, max?: number, file?: SourceFile) => {
+        reach(id, file)
+        return inner.content(id, max)
+      },
+      bytes: (id: string) => inner.bytes(id),
+    }
+    const { cli } = setup(source)
+    expect((await cli(["folders", "add", "/root"])).exit).toBe(0)
+    expect(JSON.parse((await cli(["sync"])).stdout).item).toMatchObject({ saved: 2 })
+    inner.files.set("root", { ...(inner.files.get("root") as SourceFile), name: "moved" })
+    expect(JSON.parse((await cli(["sync"])).stdout).item).toMatchObject({ removed: 2 })
+    expect((await cli(["folders", "add", "/moved"])).exit).toBe(0)
+    expect(JSON.parse((await cli(["sync"])).stdout).item).toMatchObject({ saved: 2 })
   })
 
   it("refuses a file as a folder, and a list or search before the first sync says to sync", async () => {
