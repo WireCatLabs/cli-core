@@ -5,6 +5,34 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.695.0 — 17.11.2026
+
+### Added
+
+- **`wirecat.config`'s `auth.verify`: the call that checks a token.** For `token` and `oauth2-pkce`, `{ operation, id,
+  name? }` names the operation that answers whose the token is and where its answer holds the account's id and name;
+  cli-template's `session start` checks a token with it.
+- **`recalledAccount` from `@wirecat/cli-core/cli`**: the account a profile signed in to, as `session start`
+  remembered it, for a CLI's own account key (cli-template's CRM wiring from `wirecat.config`).
+- **`crmManifestContract` tests a CRM source from a manifest with no service code.** A CLI made from
+  `wirecat.config.ts` runs every `crmSourceContract` case, faults and paging included, in one line
+  ([CRM.md](docs/dev/CRM.md#a-test-for-a-source-from-a-manifest)). Under it, `crmManifestFake` holds rows sampled
+  from each answer's schema, pages them by each operation's own `pagination` and filters change reads by time;
+  `crmManifestFixture` gives the source, the rows it holds and the faults `deny`, `change`, `skewed`, `sameToken`. A
+  call the manifest never makes, a change read without its since and a read of an unknown id land in `refusals`.
+- **`crmSourceContract` takes `held`, the ids of every row a fixture holds.** A full list must give each of them,
+  and a read of changes after `change()` must leave the untouched ones out. Optional: a fixture without it runs as
+  before.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.112.0 or later** (peer `>=0.112.0 <1.0.0`), since 0.693.0, for
+  `signInRequirements` and `signInPlace`.
+- **`parseCliConfig` refuses a URL that would put a secret, a space or no host into a CLI's files**: `spec.from`,
+  `auth.revokeUrl` and a relay redirect take an https URL with a host, and no user name, password, #fragment, or
+  key or token in its query. `auth.verify`'s `id` and `name` are dot paths. `hooks` takes a `.ts` or `.js` module
+  under `./`. An unknown field reads "not a field of wirecat.config", a missing one "missing".
+
 ## 0.694.0 — 17.11.2026
 
 ### Added
