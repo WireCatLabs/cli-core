@@ -1,16 +1,26 @@
-import { isAbsolute } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { CrmManifest } from "../crm/manifest/manifest.js"
 import type { OAuthProvider } from "../oauth/provider.js"
 
+/**
+ * The operation that answers whose the token is, and where its answer holds the account's id (and a name to show):
+ * `{ operation: "getV2Self", id: "workspace_id", name: "workspace_name" }`. `session start` checks a token with it.
+ */
+export interface CliVerify {
+  operation: string
+  id: string
+  name?: string
+}
+
 export type CliAuth =
   | { preset: "none" }
   /** A token or key, sent where the spec's `securitySchemes` say: a bearer header, an API key header or query. */
-  | { preset: "token" }
+  | { preset: "token"; verify?: CliVerify }
   /** The browser sign-in the spec's authorization code flow declares; the redirect is what the app registered. */
   | {
       preset: "oauth2-pkce"
+      verify?: CliVerify
       scopes: readonly string[]
       scheme?: string
       redirect?: OAuthProvider["redirect"]
@@ -48,6 +58,9 @@ export interface CliConfig {
   hooks?: string
 }
 
+/** What `parseCliConfig` gives: `source` is not checked until `parseCrmManifest` runs against the generated API. */
+export type ParsedCliConfig = Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> }
+
 /** Types the config in the editor; it returns what it is given. */
 export const defineCli = (config: CliConfig): CliConfig => config
 
@@ -56,9 +69,32 @@ const word = v.pipe(
   v.regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "lower-case letters and digits, words joined by one dash"),
 )
 
-/** In the project: no absolute path, no `..`, no scheme. */
-const projectPath = (text: string) =>
-  !isAbsolute(text) && !text.split(/[\\/]/).includes("..") && !/^[a-z][a-z0-9+.-]*:/i.test(text)
+// A query parameter by such a name holds a secret, which the URL would put into a committed file.
+const SECRET_PARAM = /key|token|secret|sig|auth|pass/i
+
+const urlOf = (text: string) => (URL.canParse(text) ? new URL(text) : undefined)
+
+/** An https URL that can be committed: a host, no spaces, no user name or password, no secret in its query. */
+const httpsUrl = v.pipe(
+  v.string(),
+  v.check((text) => !/\s/.test(text), "an https URL without spaces"),
+  v.check((text) => {
+    const url = urlOf(text)
+    return url?.protocol === "https:" && url.hostname.length > 0
+  }, "an https URL with a host"),
+  v.check((text) => {
+    const url = urlOf(text)
+    return !url?.username && !url?.password
+  }, "an https URL without a user name or password, which would be committed"),
+  v.check(
+    (text) => ![...(urlOf(text)?.searchParams.keys() ?? [])].some((name) => SECRET_PARAM.test(name)),
+    "an https URL without a key or token in its query, which would be committed",
+  ),
+)
+
+const verify = v.optional(
+  v.strictObject({ operation: v.pipe(v.string(), v.minLength(1)), id: v.string(), name: v.optional(v.string()) }),
+)
 
 const schema = v.strictObject({
   identity: v.strictObject({
@@ -70,44 +106,55 @@ const schema = v.strictObject({
   }),
   spec: v.strictObject({
     kind: v.picklist(["openapi", "swagger"]),
-    from: v.pipe(
-      v.string(),
-      v.check((text) => /^https:\/\/[^/\s]+/.test(text), "the https URL the description is published at"),
-    ),
+    from: httpsUrl,
   }),
   auth: v.variant("preset", [
     v.strictObject({ preset: v.literal("none") }),
-    v.strictObject({ preset: v.literal("token") }),
+    v.strictObject({ preset: v.literal("token"), verify }),
     v.strictObject({
       preset: v.literal("oauth2-pkce"),
+      verify,
       scopes: v.array(v.string()),
       scheme: v.optional(v.string()),
-      revokeUrl: v.optional(v.pipe(v.string(), v.startsWith("https://"))),
+      revokeUrl: v.optional(httpsUrl),
       authorizeParams: v.optional(v.record(v.string(), v.string())),
       rotating: v.optional(v.boolean()),
       redirect: v.optional(
         v.variant("kind", [
           v.strictObject({ kind: v.literal("loopback"), host: v.optional(v.literal("localhost")) }),
-          v.strictObject({ kind: v.literal("relay"), url: v.pipe(v.string(), v.startsWith("https://")) }),
+          v.strictObject({ kind: v.literal("relay"), url: httpsUrl }),
         ]),
       ),
     }),
   ]),
   category: v.picklist(CLI_CATEGORIES),
   source: v.optional(v.looseObject({})),
-  hooks: v.optional(v.pipe(v.string(), v.startsWith("./"), v.check(projectPath, "a module in the project"))),
+  hooks: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\.\/[^\s]*\.[cm]?[jt]s$/, "a module in the project, such as ./src/hooks.ts"),
+      v.check((text) => !text.split(/[\\/]/).includes(".."), "a module in the project, without .."),
+    ),
+  ),
 })
 
 /** The config checked against its shape; every error names where it is. A CRM CLI needs its source. */
-export const parseCliConfig = (input: unknown): CliConfig => {
+export const parseCliConfig = (input: unknown): ParsedCliConfig => {
   const parsed = v.safeParse(schema, input)
   if (!parsed.success) {
     const [issue] = parsed.issues
-    throw new CliError("configuration_error", `wirecat.config: ${v.getDotPath(issue) ?? "(root)"}: ${issue.message}`, {
+    // valibot's own words for a key: "Invalid key: Expected never but received …"
+    const message =
+      issue.expected === "never"
+        ? "not a field of wirecat.config"
+        : issue.received === "undefined"
+          ? "missing"
+          : issue.message
+    throw new CliError("configuration_error", `wirecat.config: ${v.getDotPath(issue) ?? "(root)"}: ${message}`, {
       reason: "manifest.invalid",
     })
   }
-  const config = parsed.output as CliConfig
+  const config: ParsedCliConfig = parsed.output
   if (config.category !== "crm" && config.source)
     throw new CliError("configuration_error", "wirecat.config: source: only a crm CLI reads a source yet", {
       reason: "manifest.invalid",
