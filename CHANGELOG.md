@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.692.0 — 17.11.2026
+
+### Fixed
+
+- **A documents CLI that adds a folder by path shows that path in `folders add`'s example and in `search`'s hint.**
+  Both said `FOLDER_ID`, which ydisk refuses: its `folders add` takes a Disk path such as `/Documents`. The CLI sets
+  `text.folderToAdd` in its `DocumentWords`; without it both keep `FOLDER_ID`.
+
 ## 0.691.0 — 17.11.2026
 
 ### Added
