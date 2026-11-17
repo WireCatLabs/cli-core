@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -18,7 +18,9 @@ import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { afterEach, expect, it } from "vitest"
 import { trackerIntrospection } from "../../test/fixtures/graphql-tracker.js"
+import { commandPermissions } from "./permission-keys.js"
 import { run } from "./program.js"
+import { serviceApiPermissions } from "./service-api.js"
 import { serviceApiCall } from "./service-api-call.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
@@ -46,6 +48,12 @@ const manifest: ServiceApiManifest = {
 }
 const definitions = constant("definitions.ts", "definitions") as Record<string, SchemaNode>
 const app = { command: "track", appName: "track-cli", envPrefix: "TRACK", description: "synthetic", version: "1.0.0" }
+
+const filesUnder = (dir: string): string[] =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name)
+    return statSync(path).isDirectory() ? filesUnder(path) : [path]
+  })
 
 const roots: string[] = []
 afterEach(() => {
@@ -77,23 +85,22 @@ const setup = (answers: Answers = {}) => {
   roots.push(root)
   const env = { HOME: root, TRACK_STATE_DIR: join(root, "state"), TRACK_CONFIG_DIR: join(root, "config") }
   const fake = fakeOf(answers)
-  const configuration = settingsFor(app)
-  const definition = {
+  mkdirSync(env.TRACK_CONFIG_DIR, { recursive: true })
+  writeFileSync(
+    join(env.TRACK_CONFIG_DIR, "config.json"),
+    JSON.stringify({ profiles: { work: { permissions: { api: "allow" } } } }),
+  )
+  const api = {
     app,
-    configuration,
-    commands: () => [
-      serviceApiCommand({
-        app,
-        configuration,
-        manifest,
-        service: "Tracker",
-        fetch: () => hostFetch({ hosts: ["api.tracker.example"], fetch: fake.fetch as typeof fetch }),
-        token: () => "key-1",
-        schemas: async () => SCHEMAS,
-        definitions: async () => definitions,
-      }),
-    ],
+    manifest,
+    service: "Tracker",
+    fetch: () => hostFetch({ hosts: ["api.tracker.example"], fetch: fake.fetch as typeof fetch }),
+    token: () => "key-1",
+    schemas: async () => SCHEMAS,
+    definitions: async () => definitions,
   }
+  const configuration = settingsFor(app, { permissions: commandPermissions(serviceApiPermissions(api)) })
+  const definition = { app, configuration, commands: () => [serviceApiCommand({ ...api, configuration })] }
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
     const code = await run(argv, definition, { streams, env, keyring: memoryKeyring(), tty: false })
@@ -105,7 +112,7 @@ const setup = (answers: Answers = {}) => {
       error: err.startsWith("{") ? JSON.parse(err).error : undefined,
     }
   }
-  return { cli, fake }
+  return { cli, fake, root }
 }
 
 const issue = (id: string) => ({
@@ -158,17 +165,50 @@ it("a query is one POST of its document; flags join --body as variables, read by
 
 it("errors[] is a failure at HTTP 200, named by its code and never by the service's message", async () => {
   const { cli } = setup({
-    issue: () => ({ errors: [{ message: "Entity not found: secret-title", extensions: { code: "FORBIDDEN" } }] }),
+    issue: ({ variables }) => ({
+      errors: [
+        {
+          message: "Entity not found: secret-title",
+          extensions: { code: variables.id === "a" ? "FORBIDDEN" : "pii a@b.c in a code" },
+        },
+      ],
+    }),
   })
   const failed = await cli(["work", "api", "issue", "--id", "a", "--json"])
   expect(failed.code).not.toBe(0)
   expect(failed.error.code).toBe("permission_error")
   expect(failed.error.message).not.toContain("secret-title")
+  const odd = await cli(["work", "api", "issue", "--id", "b", "--json"])
+  expect(odd.error.code).toBe("provider_error")
+  expect(odd.error.message).not.toContain("a@b.c")
+})
+
+it("a write that errors[] does not show as undone is outcome_unknown; its flags stay out of the run's files", async () => {
+  const marker = "secret-title-marker"
+  const { cli, root } = setup({
+    issueCreate: ({ variables }) =>
+      (variables.input as { title: string }).title === "refused"
+        ? { errors: [{ message: "x", extensions: { code: "BAD_USER_INPUT" } }] }
+        : { data: { success: true }, errors: [{ message: "x", extensions: { code: "INTERNAL_SERVER_ERROR" } }] },
+  })
+  const create = (title: string) =>
+    cli(["work", "api", "issue-create", "--input", JSON.stringify({ title, teamId: "t1" }), "--record", "--json"])
+  expect((await create("refused")).error.code).toBe("validation_error")
+  const unsure = await create(marker)
+  expect(unsure.error.code).toBe("outcome_unknown")
+  const files = filesUnder(root).filter((one) => !one.endsWith("config.json"))
+  expect(files.some((one) => one.endsWith("run.json"))).toBe(true)
+  for (const one of files) expect(readFileSync(one).includes(marker), one).toBe(false)
+  const events = files.filter((one) => one.endsWith("events.jsonl")).map((one) => readFileSync(one, "utf8"))
+  expect(events.join("")).toContain("mutation/issueCreate")
 })
 
 it("a flag of the wrong type or an undeclared variable is refused before anything is sent", async () => {
   const { cli, fake } = setup()
-  expect((await cli(["work", "api", "issues", "--first", "many", "--json"])).error.message).toContain("takes a number")
+  for (const bad of ["many", "0x10", "1e1"])
+    expect((await cli(["work", "api", "issues", "--first", bad, "--json"])).error.message).toContain(
+      "takes a whole number",
+    )
   expect((await cli(["work", "api", "issue", "--body", '{"id":"a","nope":1}', "--json"])).error.message).toContain(
     "has no variable nope",
   )

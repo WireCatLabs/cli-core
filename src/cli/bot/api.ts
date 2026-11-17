@@ -4,8 +4,15 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
-import { graphqlVariables } from "./api-http.js"
-import { apiFlagOf, apiJson, apiOptionKey, readApiBody, readApiBytes, sendsBytes } from "./api-input.js"
+import {
+  apiFlagOf,
+  apiJson,
+  apiOptionKey,
+  graphqlVariables,
+  readApiBody,
+  readApiBytes,
+  sendsBytes,
+} from "./api-input.js"
 
 export interface ApiCommandInput {
   path: Record<string, string>
@@ -60,6 +67,8 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
         `--${apiFlagOf(parameter.name)} <value>`,
         parameter.description?.split("\n")[0] ?? parameter.name,
       )
+      // A GraphQL flag is the request body, which never reaches the run's files (SEC-196).
+      if (operation.binding.kind === "graphql" && parameter.in === "body") secretInput(option)
       if (parameter.required && parameter.in !== "body") {
         // A required parameter the spec gives a default (Notion's `Notion-Version`) is sent with it, never asked for.
         const fallback = scalarOf(parameter.schema.default)

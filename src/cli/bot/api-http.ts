@@ -6,7 +6,7 @@ import { providerRequest } from "../command-runs.js"
 import { outputFor } from "../context.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import type { ApiCommandInput } from "./api.js"
-import { apiJson, parseApiJson, sendsBytes } from "./api-input.js"
+import { apiJson, graphqlVariables, parseApiJson, sendsBytes } from "./api-input.js"
 
 export interface HttpApiRequest {
   method: string
@@ -66,8 +66,7 @@ export const httpApiRequest = (
   baseUrl: string,
 ): HttpApiRequest => {
   const { binding } = operation
-  if (binding.kind === "graphql") return graphqlRequest(operation, binding, input, baseUrl)
-  if (binding.kind !== "http")
+  if (binding.kind !== "http" && binding.kind !== "graphql")
     throw new CliError("configuration_error", `${operation.command} is not an HTTP operation`)
   if (unsendableBody(operation))
     throw new CliError(
@@ -81,6 +80,7 @@ export const httpApiRequest = (
       `${operation.command} answers with a credential, which the generated command never prints; nothing was sent`,
       { sent: false },
     )
+  if (binding.kind === "graphql") return graphqlRequest(operation, binding, input, baseUrl)
   if (Object.keys(input.fields).length > 0)
     throw new CliError("configuration_error", `${operation.command} has body fields as flags, which HTTP cannot send`)
   if (!/^\/(?!\/)/.test(binding.path))
@@ -108,54 +108,6 @@ export const httpApiRequest = (
   return { method: binding.method, url, headers, ...(body === undefined ? {} : { body }) }
 }
 
-/**
- * A GraphQL operation's variables: the body's (`--body`, all of them as one object) with each flag over it, read by
- * the variable's schema. A name the operation does not declare is refused before anything is sent.
- */
-export const graphqlVariables = (
-  operation: ManifestOperation,
-  body: string | undefined,
-  fields: Readonly<Record<string, string>>,
-): Record<string, unknown> => {
-  const { binding } = operation
-  if (binding.kind !== "graphql")
-    throw new CliError("configuration_error", `${operation.command} is not a GraphQL operation`)
-  const given = body?.trim() ? parseApiJson(body) : {}
-  if (given === null || typeof given !== "object" || Array.isArray(given))
-    throw new CliError("validation_error", `${operation.command} takes its variables as one JSON object`, {
-      sent: false,
-    })
-  const variables: Record<string, unknown> = { ...(given as Record<string, unknown>) }
-  for (const [name, raw] of Object.entries(fields)) {
-    const schema = operation.parameters.find((one) => one.in === "body" && one.name === name)?.schema
-    variables[name] = flagValue(operation, name, raw, schema?.type)
-  }
-  const unknown = Object.keys(variables).filter((name) => !(name in binding.variables))
-  if (unknown.length > 0)
-    throw new CliError("validation_error", `${operation.command} has no variable ${unknown.join(", ")}`, {
-      sent: false,
-    })
-  return variables
-}
-
-const flagValue = (operation: ManifestOperation, name: string, raw: string, type: string | undefined): unknown => {
-  if (type === "integer" || type === "number") {
-    const number = Number(raw)
-    if (raw.trim() === "" || !Number.isFinite(number))
-      throw new CliError("validation_error", `--${name} of ${operation.command} takes a number`, { sent: false })
-    return number
-  }
-  if (type === "boolean") {
-    if (raw !== "true" && raw !== "false")
-      throw new CliError("validation_error", `--${name} of ${operation.command} takes true or false`, { sent: false })
-    return raw === "true"
-  }
-  if (type === "object" || type === "array") return parseApiJson(raw)
-  // An input object or a list given as JSON; an enum's value, behind a ref too, is a bare word.
-  if (type === "ref" && /^\s*[{["]/.test(raw)) return parseApiJson(raw)
-  return raw
-}
-
 /** One GraphQL operation as a POST of its one document to the endpoint, with its variables. */
 const graphqlRequest = (
   operation: ManifestOperation,
@@ -168,7 +120,8 @@ const graphqlRequest = (
   headers.set("accept", "application/json")
   headers.set("content-type", "application/json")
   const query = graphqlDocument(binding, input.selection)
-  return { method: "POST", url: new URL(baseUrl), headers, body: apiJson({ query, variables }) }
+  // A 307 or 308 would send the variables again, to wherever it points.
+  return { method: "POST", url: new URL(baseUrl), headers, body: apiJson({ query, variables }), redirect: "error" }
 }
 
 /** `/v1/pages/{page_id}` → `/v1/pages/:page_id`: the run record keeps the template, never an id. */
@@ -179,11 +132,11 @@ const endpointOf = (operation: ManifestOperation): string =>
   operation.binding.kind === "http"
     ? templateOf(operation.binding.path)
     : operation.binding.kind === "graphql"
-      ? `${operation.binding.operation} ${operation.binding.field}`
+      ? `${operation.binding.operation}/${operation.binding.field}`
       : ""
 
 // Common GraphQL server codes (Apollo's names) as the CLI's; any other is the provider's.
-const GRAPHQL_CODES: Readonly<Record<string, string>> = {
+const GRAPHQL_CODES = {
   UNAUTHENTICATED: "authentication_error",
   AUTHENTICATION_ERROR: "authentication_error",
   FORBIDDEN: "permission_error",
@@ -191,29 +144,45 @@ const GRAPHQL_CODES: Readonly<Record<string, string>> = {
   BAD_USER_INPUT: "validation_error",
   GRAPHQL_VALIDATION_FAILED: "validation_error",
   INVALID_INPUT: "validation_error",
-}
+} satisfies Record<string, ErrorCode>
+
+// A refusal of these kinds means the service did nothing, so a write that got one is not in doubt.
+const NOTHING_RAN = new Set<ErrorCode>(["authentication_error", "permission_error", "rate_limited", "validation_error"])
 
 /**
- * A GraphQL answer comes with HTTP 200 even when it failed: `errors[]` is the failure, named by its first
- * `extensions.code`, never by the service's own message (WC-SECR-6). Otherwise the answer is `data.<field>`.
+ * A GraphQL answer comes with HTTP 200 even when it failed: `errors[]` is the failure, named by the CLI's own
+ * `failure`, else by its first `extensions.code`, never by the service's message (WC-SECR-6). A write that failed in
+ * any other way, or answered data too, may have landed (WC-LIFE-9). Otherwise the answer is `data.<field>`.
  */
-const graphqlAnswer = (service: string, operation: ManifestOperation, answer: unknown): unknown => {
+const graphqlAnswer = (options: HttpApiSendOptions, operation: ManifestOperation, answer: unknown): unknown => {
   const { binding } = operation
   if (binding.kind !== "graphql") return answer
   const { data, errors } = (answer ?? {}) as { data?: Record<string, unknown> | null; errors?: unknown }
   if (Array.isArray(errors) && errors.length > 0) {
-    const code = (errors[0] as { extensions?: { code?: unknown } } | null)?.extensions?.code
-    const known = typeof code === "string" ? GRAPHQL_CODES[code.toUpperCase()] : undefined
+    const own = options.failure?.(200, answer, operation)
+    if (own) throw own
+    const raw = (errors[0] as { extensions?: { code?: unknown } } | null)?.extensions?.code
+    // The code is the service's text too: only a plain constant is repeated.
+    const code = typeof raw === "string" && /^[A-Z][A-Z0-9_]{0,40}$/.test(raw) ? raw : undefined
+    const known: ErrorCode = (code && GRAPHQL_CODES[code as keyof typeof GRAPHQL_CODES]) || "provider_error"
     const writes = operation.effect !== "read"
-    throw new CliError(
-      (known ?? "provider_error") as ErrorCode,
-      `${service} refused ${operation.command}${typeof code === "string" ? ` (${code})` : ""}` +
-        (writes && data?.[binding.field] != null ? "; part of it may have been done, check before repeating" : ""),
-    )
+    if (writes && (!NOTHING_RAN.has(known) || data?.[binding.field] != null)) return outcomeUnknown(options.service)
+    throw new CliError(known, `${options.service} refused ${operation.command}${code ? ` (${code})` : ""}`, {
+      retryable: known === "rate_limited",
+    })
   }
   if (!data || !(binding.field in data))
-    throw new CliError("invalid_response", `${service} answered ${operation.command} without data.${binding.field}`)
+    throw new CliError(
+      "invalid_response",
+      `${options.service} answered ${operation.command} without data.${binding.field}`,
+    )
   return data[binding.field]
+}
+
+const outcomeUnknown = (service: string): never => {
+  throw new CliError("outcome_unknown", `${service} did not confirm a write; check it before repeating the write`, {
+    retryable: false,
+  })
 }
 
 const answerOf = async (response: Response, maxBytes: number): Promise<unknown> => {
@@ -269,8 +238,14 @@ export const httpApiSend =
       end({ status, error: failed })
       throw failed
     }
-    end({ status })
-    return graphqlAnswer(options.service, operation, answer)
+    try {
+      const result = graphqlAnswer(options, operation, answer)
+      end({ status })
+      return result
+    } catch (error) {
+      end({ status, error })
+      throw error
+    }
   }
 
 /**
