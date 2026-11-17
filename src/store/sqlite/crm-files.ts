@@ -106,7 +106,7 @@ const rowOf = (row: Record<string, unknown>): Omit<CrmFileRow, "text"> => ({
 })
 
 /** One FTS5 phrase per word, quoted so no word is read as syntax; a word may start a longer one unless `exact`. */
-const matchOf = (words: readonly string[], anyWord: boolean, exact: boolean): string | undefined => {
+export const matchOf = (words: readonly string[], anyWord: boolean, exact: boolean): string | undefined => {
   const phrases = words
     .map((word) => normalize(word).trim())
     .filter(Boolean)
@@ -117,7 +117,7 @@ const matchOf = (words: readonly string[], anyWord: boolean, exact: boolean): st
   return phrases.length ? [...new Set(phrases)].join(anyWord ? " OR " : " AND ") : undefined
 }
 
-const excerptOf = (body: string, words: readonly string[]): string => {
+export const excerptOf = (body: string, words: readonly string[]): string => {
   const folded = fold(body)
   const at = words
     .map((word) => folded.indexOf(fold(word).trim()))

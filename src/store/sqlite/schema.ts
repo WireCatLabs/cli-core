@@ -2978,6 +2978,39 @@ export const conversationReadiness = sqliteTable(
   ],
 )
 
+/**
+ * One team, user, workflow state, label, project, issue or comment of an issue tracker account, as last synced. The
+ * columns are what lists, filters and search read; the rest of the record is `data`, JSON in the domain's field names.
+ */
+export const trackerItems = sqliteTable(
+  "tracker_items",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    kind: text("kind").notNull(),
+    externalId: text("external_id").notNull(),
+    /** A comment's issue, an issue's team, a state's or a label's team: the tracker's id. */
+    parentId: text("parent_id"),
+    title: text("title").notNull(),
+    titleFolded: text("title_folded").notNull(),
+    body: text("body"),
+    normalizedText: text("normalized_text").notNull(),
+    data: text("data").notNull(),
+    sourceCreatedAt: integer("source_created_at"),
+    sourceUpdatedAt: integer("source_updated_at"),
+    archivedAt: integer("archived_at"),
+    /** The tracker no longer lists it. */
+    deletedAt: integer("deleted_at"),
+    syncedAt: integer("synced_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.accountId, table.kind, table.externalId),
+    index("tracker_items_by_account_id_kind_parent_id").on(table.accountId, table.kind, table.parentId),
+  ],
+)
+
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */
 export const storeSettings = sqliteTable("store_settings", {
   key: text("key").primaryKey(),

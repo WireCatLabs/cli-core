@@ -152,6 +152,15 @@ export { DEFAULT_FIRST_PASS_PER_CHAT, firstPassPerChatOf, savedFirstPassPerChat 
 export { inboxKey } from "./sqlite/tasks.js"
 export { storedTemplateBodies, type TemplateAddress } from "./sqlite/templates.js"
 export { THREAD_COLUMNS } from "./sqlite/thread-columns.js"
+export {
+  resetTrackerItemWords,
+  type TrackerFilter,
+  type TrackerHit,
+  type TrackerItem,
+  type TrackerPerson,
+  type TrackerSearch,
+  type TrackerStore,
+} from "./sqlite/tracker.js"
 export { dropAllUnusedVectors, vectorIndexCounts } from "./sqlite/vector-index.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

@@ -47,6 +47,7 @@ import {
   resetNoteIndex,
   resetSearchIndex,
   resetStems,
+  resetTrackerItemWords,
   rollBack,
   searchIndexState,
   stemmerCache,
@@ -403,6 +404,7 @@ const inspect = (path: string) =>
       ...(stems ? [["message_stems", indexIntegrity(database, "message_stems", 0)]] : []),
       ...(schema.version > 0 ? [["attachment_words", indexIntegrity(database, "attachment_words", 0)]] : []),
       ...(schema.version >= 68 ? [["crm_file_words", indexIntegrity(database, "crm_file_words", 0)]] : []),
+      ...(schema.version >= 70 ? [["tracker_item_words", indexIntegrity(database, "tracker_item_words", 0)]] : []),
     ])
     const size = bytesOf(path) + bytesOf(`${path}-wal`)
     const { bavail, bsize } = statfsSync(dirname(path))
@@ -629,7 +631,7 @@ const reindexCommand = (owner: StoreOwner): Command =>
           )
         }
         resetSearchIndex(database)
-        const fileTexts = resetAttachmentWords(database) + resetCrmFileWords(database)
+        const fileTexts = resetAttachmentWords(database) + resetCrmFileWords(database) + resetTrackerItemWords(database)
         const words = buildWordIndex(database, (note) => renderer.note(note))
         return {
           path,

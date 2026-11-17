@@ -31,6 +31,7 @@ import { isDerivedTable } from "./sqlite/rollback-copy.js"
 import { fillSearchIndex, resetSearchIndex } from "./sqlite/search-index.js"
 import { stemmerCache } from "./sqlite/stems.js"
 import { fillStems, resetStems } from "./sqlite/stems-fill.js"
+import { resetTrackerItemWords } from "./sqlite/tracker.js"
 import { fillVectorIndexes } from "./sqlite/vector-index.js"
 
 /** `contentless_delete`, which every word index uses, came in SQLite 3.43. */
@@ -430,6 +431,7 @@ const FILLERS: Record<string, (database: CacheDatabase, now: () => number) => vo
   },
   attachment_words: (database) => void resetAttachmentWords(database),
   crm_file_words: (database) => void resetCrmFileWords(database),
+  tracker_item_words: (database) => void resetTrackerItemWords(database),
   attachment_name_words: (database) =>
     // As migration 20 filled it: й and ё fold as the triggers fold them.
     database.exec(

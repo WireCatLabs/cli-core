@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-137 tables, 26 full-text indexes.
+138 tables, 27 full-text indexes.
 
 ## Conventions
 
@@ -3005,6 +3005,43 @@ How up to date one built chat's conversations and one model's vectors are, as `s
 | `counted_at` | integer | not null |  |  |
 
 *Keys and indexes:* `PRIMARY KEY (chat_id, model)`, `INDEX (model)`
+
+## Issue trackers
+
+What an issue tracker account holds, as last synced: teams, users, workflow states, labels, projects, issues and comments. A user joins a person only by exact e-mail, when read; nothing here writes to the people graph.
+
+### `tracker_items`
+
+One team, user, workflow state, label, project, issue or comment of an issue tracker account (Linear), as last synced. The columns are what lists, filters and search read; the rest of the record is `data`.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the tracker account it was copied from |
+| `kind` | text | not null |  | team, user, state, label, project, issue or comment |
+| `external_id` | text | not null |  | its id in the tracker |
+| `parent_id` | text |  |  | the tracker's id of what it hangs under: a comment's issue, an issue's, a state's or a label's team |
+| `title` | text | not null |  | an issue's title, a comment's first line, anything else's name |
+| `title_folded` | text | not null |  | the title in one letter case |
+| `body` | text |  |  | an issue's or a project's description, a comment's text |
+| `normalized_text` | text | not null |  | title and body normalized for the word index |
+| `data` | text | not null |  | JSON: the record in the tracker domain's field names; a field the tracker did not send keeps its stored value |
+| `source_created_at` | integer |  |  | when the tracker says it was made |
+| `source_updated_at` | integer |  |  | when the tracker says it last changed |
+| `archived_at` | integer |  |  | the tracker archived it; it still exists there |
+| `deleted_at` | integer |  |  | the tracker no longer lists it; sync never hard-deletes |
+| `synced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, kind, external_id)`, `INDEX (account_id, kind, parent_id)`
+
+### `tracker_item_words`
+
+Word index over a tracker item's title and text, rowid = `tracker_items.id`.
+
+```sql
+CREATE VIRTUAL TABLE tracker_item_words USING fts5(normalized_text, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE tracker_item_words_vocab USING fts5vocab(tracker_item_words, 'col')
+```
 
 ## Store
 
