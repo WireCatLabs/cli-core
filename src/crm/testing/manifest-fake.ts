@@ -3,6 +3,7 @@ import {
   type FakeApi,
   type FakeCall,
   fakeApi,
+  type Pagination,
   type SchemaNode,
   sampleOf,
 } from "@wirecat/cli-base/codegen"
@@ -98,6 +99,15 @@ const SINCE: Record<CrmChangesCall["since"], (value: string) => number> = {
   datetime: (value) => Date.parse(`${value.replace(" ", "T")}Z`),
 }
 
+const pageParameter = (pagination: Pagination) =>
+  pagination.style === "cursor"
+    ? pagination.cursor
+    : pagination.style === "offset"
+      ? pagination.offset
+      : pagination.style === "page"
+        ? pagination.page
+        : undefined
+
 /** Every fixed value of a call's template by its dotted path; a placeholder is not fixed. */
 const fixedOf = (value: unknown, trail: readonly string[] = []): [string, string | number | boolean][] => {
   if (Array.isArray(value) || isRaw(value))
@@ -106,14 +116,18 @@ const fixedOf = (value: unknown, trail: readonly string[] = []): [string, string
   return [[trail.join("."), value as string | number | boolean]]
 }
 
-const fixedCount = (call: CrmOperationCall) =>
-  fixedOf(call.path).length + fixedOf(call.query).length + fixedOf(call.body).length
+const fixedCount = (call: CrmOperationCall, paging: (where: "query" | "body", key: string) => boolean) =>
+  fixedOf(call.path).length +
+  fixedOf(call.query).filter(([key]) => !paging("query", key)).length +
+  fixedOf(call.body).filter(([key]) => !paging("body", key)).length
 
 interface Route {
   call: CrmOperationCall
   rows: () => CrmRaw[]
   kind?: CrmKind
   get?: Place
+  /** A live search: only the rows whose text holds the words at this place. */
+  query?: Place
   since?: { place: Place; format: CrmChangesCall["since"]; at: (row: CrmRaw) => number | null }
 }
 
@@ -157,7 +171,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
   const typed = (node: SchemaNode | undefined, value: Value): unknown => {
     const found = scalarOf(node)
     const type = found?.type ?? "string"
-    if (typeof value === "boolean") return type === "boolean" ? value : undefined
+    // A place whose schema the walk cannot name keeps a flag a flag: the strict fake still checks it.
+    if (typeof value === "boolean") return type === "boolean" || found === undefined ? value : undefined
     if (typeof value === "object")
       return type === "integer" || type === "number" ? value.ms : new Date(value.ms).toISOString()
     if (type === "integer" || type === "number") return Number.isFinite(Number(value)) ? Number(value) : undefined
@@ -169,23 +184,28 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
    * The schema with each union on the way to `keys` cut to the branch that has the rest of the path: a sample of the
    * first branch of Attio's seventeen value types would carry another type's fields, and the strict fake refuses it.
    */
-  const narrowed = (node: SchemaNode, keys: readonly string[]): SchemaNode => {
+  const narrowed = (node: SchemaNode, keys: readonly string[], value?: Value): SchemaNode => {
     if (keys.length === 0) return node
     const found = resolve(node, definitions)
     const [key, ...rest] = keys as [string, ...string[]]
-    const fits = (one: SchemaNode) => "node" in walk(one, keys.join("."), definitions)
+    // A branch fits when it has the path, and, with a value to write, takes it there: Attio's `value` is text in one
+    // branch and a flag in another.
+    const fits = (one: SchemaNode) => {
+      const leaf = walk(one, keys.join("."), definitions)
+      return "node" in leaf && (value === undefined || typed(leaf.node, value) !== undefined)
+    }
     switch (found.type) {
       case "union": {
-        const branch = found.of.find(fits)
-        return branch ? narrowed(branch, keys) : node
+        const branch = found.of.find(fits) ?? found.of.find((one) => "node" in walk(one, keys.join("."), definitions))
+        return branch ? narrowed(branch, keys, value) : node
       }
       case "allOf":
-        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys) : one)) }
+        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys, value) : one)) }
       case "array":
-        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest) } : node
+        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest, value) } : node
       case "object": {
         const inner = found.properties[key] ?? found.additionalProperties
-        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest) } } : node
+        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest, value) } } : node
       }
       default:
         return node
@@ -248,34 +268,29 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     n: number,
     given: Readonly<Record<string, Value | undefined>>,
   ): CrmRaw => {
-    // Sampled already cut to the branches the rules write into, so a list the first sample holds has the right type.
-    const paths = Object.values(rules).flatMap((rule) => pathOf(rule) ?? [])
-    const made = sample(node && paths.reduce((cut, path) => narrowed(cut, path.split(".")), node))
-    const row = isRaw(made) ? made : {}
-    for (const [field, rule] of Object.entries(rules)) {
-      const path = pathOf(rule)
-      if (path === undefined) continue
+    const sampledValue = (field: string, rule: CrmRule | undefined): Value | undefined => {
       const mapped = typeof rule === "object" && "map" in rule ? Object.keys(rule.map)[0] : undefined
       const reverse =
         typeof rule === "object" && "map" in rule && field in given
           ? Object.keys(rule.map).find((key) => String(rule.map[key]) === String(given[field]))
           : undefined
-      const value =
-        reverse !== undefined
-          ? reverse
-          : field in given
-            ? given[field]
-            : mapped !== undefined
-              ? mapped
-              : types[field] === "text"
-                ? `${field} ${n + 1}`
-                : types[field] === "epoch"
-                  ? { ms: SEEDED + (n + 1) * 60_000 }
-                  : types[field] === "day"
-                    ? `2026-11-0${n + 1}`
-                    : undefined
-      if (value !== undefined) put(row, path, value, node)
+      if (reverse !== undefined) return reverse
+      if (field in given) return given[field]
+      if (mapped !== undefined) return mapped
+      if (types[field] === "text") return `${field} ${n + 1}`
+      if (types[field] === "epoch") return { ms: SEEDED + (n + 1) * 60_000 }
+      return types[field] === "day" ? `2026-11-0${n + 1}` : undefined
     }
+    const writes = Object.entries(rules).flatMap(([field, rule]) => {
+      const path = pathOf(rule)
+      return path === undefined ? [] : [{ path, value: sampledValue(field, rule) }]
+    })
+    // Sampled from the schema cut to the branches the rules write into, each one that takes its value: Attio's
+    // `value` is text in one branch and a flag in another, and a list the first sample holds must have the right type.
+    const cut = node && writes.reduce((one, { path, value }) => narrowed(one, path.split("."), value), node)
+    const made = sample(cut)
+    const row = isRaw(made) ? made : {}
+    for (const { path, value } of writes) if (value !== undefined) put(row, path, value, cut)
     return row
   }
 
@@ -295,7 +310,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     const rule = manifest.entities[kind]?.map.pipeline
     const id = typeof rule === "object" && "value" in rule ? String(rule.value) : String(9001 + index)
     const node = rowNodeOf(spec.call)
-    const stageNode = itemOf(nodeAt(node, spec.stages.each), definitions)
+    const flat = spec.stages.each === "."
+    const stageNode = flat ? node : itemOf(nodeAt(node, spec.stages.each), definitions)
     const outcome = spec.stages.outcome
     const stages = Array.from({ length: ROWS }, (_, n) => {
       const stage = rowOf(stageNode, spec.stages.map, { name: "text" }, n, {
@@ -305,12 +321,22 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       const won =
         typeof outcome === "object" && "path" in outcome ? [outcome.won?.[0], outcome.lost?.[0]][n - 1] : undefined
       if (won !== undefined && typeof outcome === "object" && "path" in outcome)
-        put(stage, outcome.path, won, stageNode)
+        for (const value of won === "true" || won === "false" ? [won === "true", won] : [won]) {
+          // A flag the schema keeps as a boolean takes one; a text field the word.
+          put(stage, outcome.path, value, stageNode)
+          if (at(stage, outcome.path) === value) break
+        }
+      if (flat && spec.stages.pipeline) put(stage, spec.stages.pipeline, id, stageNode)
       return stage
     })
+    const ids = stages.map((_, n) => `${id}0${n + 1}`)
+    if (flat) {
+      pipelines.set(kind, { rows: stages, id, stages: ids })
+      continue
+    }
     const row = rowOf(node, spec.map, { name: "text" }, 0, { externalId: id })
     putList(row, spec.stages.each, stages, node)
-    pipelines.set(kind, { rows: [row], id, stages: stages.map((_, n) => `${id}0${n + 1}`) })
+    pipelines.set(kind, { rows: [row], id, stages: ids })
   }
 
   const rows: Partial<Record<CrmKind, CrmRaw[]>> = {}
@@ -369,6 +395,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     }
     for (const call of [entity.list, entity.ids]) if (call) routes.push({ call, kind, rows: all })
     if (entity.get) routes.push({ call: entity.get, kind, rows: all, get: placeOf(entity.get, "{id}") as Place })
+    if (entity.search)
+      routes.push({ call: entity.search, kind, rows: all, query: placeOf(entity.search, "{query}") as Place })
   }
   for (const [kind, one] of pipelines) {
     const spec = manifest.pipelines?.[kind]
@@ -378,9 +406,12 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     if (!spec) continue
     const node = rowNodeOf(spec.call)
     const { options: _, ...map } = spec.map
-    const fields = Array.from({ length: PAGE }, (_, n) =>
-      rowOf(node, map, { code: "text", label: "text" }, n, { code: `${kind}_field_${n + 1}` }),
-    )
+    const keep = typeof spec.keep === "object" ? spec.keep : undefined
+    const fields = Array.from({ length: PAGE }, (_, n) => {
+      const field = rowOf(node, map, { code: "text", label: "text" }, n, { code: `${kind}_field_${n + 1}` })
+      if (keep && typeof keep.is !== "object") putList(field, keep.path, keep.is, node)
+      return field
+    })
     routes.push({ call: spec.call, rows: () => fields })
   }
   if (manifest.users) routes.push({ call: manifest.users.call, rows: () => users })
@@ -392,17 +423,39 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     return { status, body: { message } }
   }
 
+  /** A page's size and place are the engine's to set: a live list asks for its own, whatever the template says. */
+  const paging = (operation: string, where: "query" | "body", key: string) => {
+    const pagination = operations.get(operation)?.pagination
+    if (!pagination) return false
+    const parameters = [pageParameter(pagination), "limit" in pagination ? pagination.limit : undefined]
+    return parameters.some((one) => one?.in === where && one.name === key)
+  }
+
   const matches = (route: Route, call: FakeCall) =>
     route.call.operation === call.operation &&
     fixedOf(route.call.path).every(([key, value]) => call.path[key] === String(value)) &&
-    fixedOf(route.call.query).every(([key, value]) => readPlace(call, { in: "query", path: key }) === String(value)) &&
-    fixedOf(route.call.body).every(([key, value]) => at(call.body, key) === value)
+    fixedOf(route.call.query).every(
+      ([key, value]) =>
+        paging(route.call.operation, "query", key) || readPlace(call, { in: "query", path: key }) === String(value),
+    ) &&
+    fixedOf(route.call.body).every(
+      ([key, value]) => paging(route.call.operation, "body", key) || at(call.body, key) === value,
+    )
 
-  /** The route whose template the call matches most closely; a list wins a tie with a change read. */
+  /**
+   * The route whose template the call matches most closely; a list wins a tie with a change read, and a search a tie
+   * with a list only when its words were sent.
+   */
   const routeOf = (call: FakeCall) =>
     routes
-      .filter((route) => matches(route, call))
-      .sort((a, b) => fixedCount(b.call) - fixedCount(a.call) || Number(!!a.since) - Number(!!b.since))[0]
+      .filter((route) => matches(route, call) && (!route.query || readPlace(call, route.query) !== undefined))
+      .sort(
+        (a, b) =>
+          fixedCount(b.call, (where, key) => paging(b.call.operation, where, key)) -
+            fixedCount(a.call, (where, key) => paging(a.call.operation, where, key)) ||
+          Number(!!b.query) - Number(!!a.query) ||
+          Number(!!a.since) - Number(!!b.since),
+      )[0]
 
   const page = (route: Route, call: FakeCall, listed: CrmRaw[]): FakeAnswer => {
     const operation = operations.get(route.call.operation)
@@ -484,6 +537,14 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
         .filter((row) => (timeAt(row) ?? Number.NEGATIVE_INFINITY) >= from)
         .sort((a, b) => (timeAt(a) ?? 0) - (timeAt(b) ?? 0))
       return page(changes, call, listed)
+    }
+    if (route.query) {
+      const words = String(readPlace(call, route.query)).toLowerCase()
+      return page(
+        route,
+        call,
+        route.rows().filter((row) => JSON.stringify(row).toLowerCase().includes(words)),
+      )
     }
     return page(route, call, route.rows())
   }

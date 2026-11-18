@@ -242,8 +242,17 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   changes mid-round moves nothing under the next page (a service's own page token is an offset into a moving list).
   Past `cap` rows at one time the round answers `reset`.
 - What a manifest cannot say is a hook: `after` per kind for one record (async, with the metered `call`),
-  `extend(base)` for whole methods (`self`, `activities`, a live `list`). Bitrix24's `mine` scope is that kind of
-  policy, and stays code.
+  `extend(base, { call })` for whole methods (`self`, `activities`), `pipelines.<kind>.outcome(stage, pipeline,
+  found)` for a stage's outcome the data cannot say (Attio names a lost stage only by its title). Bitrix24's `mine`
+  scope is that kind of policy, and stays code.
+- A pipeline call that answers the stages themselves (Attio's statuses, Pipedrive's `/stages`) sets `stages.each` to
+  `.`: the stages group by `stages.pipeline`, or are one pipeline, and the pipeline's map reads its first stage.
+- `custom.typed` reads values kept as a list of typed entries with their history (Attio's `values.<slug>`): the
+  entry's type (`by`) picks the path of its value from `TYPED_VALUE_PATHS` or `typed.paths`, an entry with a time at
+  `current` is history, and several current entries are a list. `fields.keep` takes `{ path, is }` as data.
+- `entities.<person|organization>.search` names a call with `"{query}"`: the source then has a live `list` for
+  `people list` and `organizations list`, words through `search` and none through `list`, paged by the operation's
+  offset. A condition it cannot send is refused (`query.unsupported-field`), never dropped.
 - `crmManifestProblems(manifest, api, definitions)` checks every mapped path against the schema each operation
   answers; a CLI runs it in a test, so a wrong path fails before any sync.
 - `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind a gap;
@@ -254,7 +263,7 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   sends the one operation, refuses a token the answer does not call `active`, and keeps the id and name the answer
   holds. `hostsFetch(hosts, environment.fetch)` is the fetch for it and the source: only the CLI's hosts, over a test's
   fake when there is one. A CLI made from the config holds no check of its own.
-- Not yet: deletions named in the answer, a live `list`.
+- Not yet: deletions named in the answer.
 - `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
   `crmSourceContract`, faults included, against a strict fake of HubSpot's API.
 

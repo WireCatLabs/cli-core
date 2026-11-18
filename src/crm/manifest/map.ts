@@ -1,7 +1,7 @@
 import type { CrmField, CrmKind, CrmRecords } from "../../domain/crm.js"
 import { DEAL_STATUSES } from "../../domain/deals.js"
 import { amountOf, type CrmRaw, crmValuesOf, epoch, fullName, id, isRaw, number, text } from "../values.js"
-import type { CrmRule } from "./manifest.js"
+import type { CrmRule, CrmTypedValues } from "./manifest.js"
 
 /** The service sent nothing at this path: the field is left out, so the stored copy keeps what it held. */
 export const MISSING = Symbol("missing")
@@ -211,13 +211,55 @@ export const mapFields = (
   return out
 }
 
+/** Where a typed entry keeps its value, by its type, as Attio names them; a manifest's `typed.paths` adds or replaces. */
+export const TYPED_VALUE_PATHS: Readonly<Record<string, string>> = {
+  text: "value",
+  number: "value",
+  checkbox: "value",
+  date: "value",
+  timestamp: "value",
+  rating: "value",
+  currency: "currency_value",
+  status: "status.title",
+  select: "option.title",
+  "record-reference": "target_record_id",
+  "actor-reference": "referenced_actor_id",
+  domain: "domain",
+  "email-address": "email_address",
+  "phone-number": "phone_number",
+  "personal-name": "full_name",
+  interaction: "interacted_at",
+}
+
+/** The current entries' values: one alone is the value, several a list, none no value. */
+const typedOf = (entries: unknown, typed: CrmTypedValues): unknown => {
+  const values = listOf(entries).flatMap((entry) => {
+    if (!isRaw(entry)) return []
+    if (typed.current !== undefined && at(entry, typed.current) != null) return []
+    const type = text(at(entry, typed.by))
+    const path = type === null ? undefined : (typed.paths?.[type] ?? TYPED_VALUE_PATHS[type])
+    const value = path === undefined ? null : at(entry, path)
+    return value === null || value === undefined || value === "" ? [] : [value]
+  })
+  return values.length > 1 ? values : (values[0] ?? null)
+}
+
 /** The account's own fields' values under `from`, labelled by their definitions. */
-const customOf = (raw: CrmRaw, custom: { from: string; split?: string }, defined: readonly CrmField[]) => {
+const customOf = (
+  raw: CrmRaw,
+  custom: { from: string; split?: string; typed?: CrmTypedValues },
+  defined: readonly CrmField[],
+) => {
   const under = at(raw, custom.from)
   if (!isRaw(under)) return undefined
   const values: CrmRaw = {}
   for (const field of defined) {
-    const value = under[field.code]
+    const typed = custom.typed ? typedOf(under[field.code], custom.typed) : undefined
+    const value = !custom.typed
+      ? under[field.code]
+      : field.multiple && typed !== null && !Array.isArray(typed)
+        ? [typed]
+        : typed
     if (value === null || value === undefined || value === "") continue
     values[field.code] = field.multiple && custom.split && typeof value === "string" ? value.split(custom.split) : value
   }
@@ -226,7 +268,7 @@ const customOf = (raw: CrmRaw, custom: { from: string; split?: string }, defined
 
 export interface RecordRules {
   map: Readonly<Record<string, CrmRule | undefined>>
-  custom?: { from: string; split?: string }
+  custom?: { from: string; split?: string; typed?: CrmTypedValues }
 }
 
 /** One row as our record of the kind, or null for a row without an id. */
