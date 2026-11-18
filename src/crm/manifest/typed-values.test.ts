@@ -176,6 +176,30 @@ describe("crmManifestContract over Attio's shapes", () => {
   for (const { name, run } of crmManifestContract(MANIFEST, { api, definitions, hooks })) it(name, run)
 })
 
+const deal = MANIFEST.entities.deal as NonNullable<CrmManifest["entities"]["deal"]>
+const LINKED: CrmManifest = {
+  ...MANIFEST,
+  entities: {
+    organization: {
+      ...(MANIFEST.entities.organization as object),
+      linked: true,
+    } as CrmManifest["entities"]["organization"],
+    person: { ...(MANIFEST.entities.person as object), linked: true } as CrmManifest["entities"]["person"],
+    deal: {
+      ...deal,
+      map: {
+        ...deal.map,
+        organization: "values.associated_company.0.target_record_id",
+        people: { each: "values.associated_people", id: "target_record_id" },
+      },
+    },
+  },
+}
+
+describe("crmManifestContract over Attio's shapes, contacts and companies copied as a deal names them", () => {
+  for (const { name, run } of crmManifestContract(LINKED, { api, definitions, hooks })) it(name, run)
+})
+
 const current = { active_until: null }
 const replaced = { active_until: "2026-01-01T00:00:00Z" }
 

@@ -339,6 +339,20 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     pipelines.set(kind, { rows: [row], id, stages: ids })
   }
 
+  const idAt = (kind: CrmKind, n: number) => {
+    const index = manifest.kinds.indexOf(kind)
+    return index < 0 ? undefined : String((index + 1) * 1000 + n + 1)
+  }
+  /** A deal's people walk a list: its one entry names the contact the deal's row number holds. */
+  const linkPeople = (row: CrmRaw, rule: CrmRule | undefined, node: SchemaNode | undefined, person: string) => {
+    if (typeof rule !== "object" || !("each" in rule) || !("id" in rule)) return
+    const entry = itemOf(nodeAt(node, rule.each), definitions)
+    const made = sample(entry && narrowed(entry, rule.id.split("."), person))
+    const item = isRaw(made) ? made : {}
+    put(item, rule.id, person, entry)
+    putList(row, rule.each, [item], node)
+  }
+
   const rows: Partial<Record<CrmKind, CrmRaw[]>> = {}
   const changeAt: Partial<Record<CrmKind, (string | undefined)[]>> = {}
   for (const [index, kind] of manifest.kinds.entries()) {
@@ -357,7 +371,10 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
         assignee: "7001",
         ...(pipeline ? { pipeline: pipeline.id, stage: pipeline.stages[n % pipeline.stages.length] } : {}),
         ...(money ? { amount: "100.50", currency: "EUR" } : { amount: undefined, currency: undefined }),
+        ...(pipeline && idAt("organization", n) ? { organization: idAt("organization", n) } : {}),
       })
+      const person = idAt("person", n)
+      if (pipeline && person) linkPeople(row, map.people, node, person)
       if (keyset) put(row, keyset, time, node)
       return row
     })

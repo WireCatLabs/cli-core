@@ -348,13 +348,19 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       annotate(program.command("sync"), { effects: FETCH, offline: false, cooperative: true, partial: true }),
       "crm_sync",
       crmSync,
-    ).description(
-      "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
-        "changed since the last sync, or everything with --rescan; a run stops before its deadline or --max-pages " +
-        "and the next one goes on from there. With the activities setting on, also the activities and tasks on the " +
-        "deals and leads it keeps. Then each deal or lead that moved into a stage the stage-tasks setting names " +
-        "opens a local task, once per move",
-    ),
+    )
+      .description(
+        "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
+          "changed since the last sync, or everything with --rescan; a run stops before its deadline or " +
+          "--max-pages and the next one goes on from there",
+      )
+      // WireCat Desktop takes a summary of 300 characters at most; the settings' part is help only.
+      .addHelpText(
+        "after",
+        "\nWith the activities setting on, it also copies the activities and tasks on the deals and leads it keeps. " +
+          "Then each deal or lead that moved into a stage the stage-tasks setting names opens a local task, once " +
+          "per move.",
+      ),
     "sync",
     "sync --rescan",
     "sync --max-pages 20",
