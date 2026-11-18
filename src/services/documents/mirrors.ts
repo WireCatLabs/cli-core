@@ -137,7 +137,9 @@ interface MirrorLock {
  * Runs `sync` for each mirror under one lock. A mirror with conflicts, missing remote files or errors does not stop
  * the others; it gets one `mirror.partial` issue, so the caller can answer `complete: false` and fail after printing.
  */
-export const eachMirror = async <R extends { conflicts: PushConflict[]; errors: unknown[]; missing?: unknown[] }>(
+export const eachMirror = async <
+  R extends { conflicts: PushConflict[]; errors: unknown[]; missing?: unknown[]; unknown?: unknown[] },
+>(
   mirrors: Mirror[],
   lock: () => Promise<MirrorLock>,
   remote: string,
@@ -152,7 +154,9 @@ export const eachMirror = async <R extends { conflicts: PushConflict[]; errors: 
     await held.release()
   }
   const issues = results
-    .filter((result) => result.errors.length || result.conflicts.length || result.missing?.length)
+    .filter(
+      (result) => result.errors.length || result.conflicts.length || result.missing?.length || result.unknown?.length,
+    )
     .map((result) => ({ code: "provider_error" as const, reason: "mirror.partial", source: `mirror ${result.id}` }))
   return {
     items: results.map(({ conflicts, ...result }) => ({

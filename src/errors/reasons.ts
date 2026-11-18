@@ -240,7 +240,6 @@ const OTHERS: Entry[] = [
   ["mirror.none", "not_found", "the profile has no mirrors; add one with mirrors add"],
   ["mirror.not-found", "not_found", "no such mirror in this profile; see mirrors list"],
   validation("mirror.not-folder", "the path to mirror is not a folder"),
-  ["mirror.root-moved", "not_found", "the mirror's remote folder was moved, replaced or deleted; nothing was synced"],
   [
     "mirror.too-many-deletions",
     "confirmation_required",

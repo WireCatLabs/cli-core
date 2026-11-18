@@ -49,6 +49,14 @@ export {
   syncFileMirror,
   syncFileMirrors,
 } from "../services/files/mirror.js"
+export {
+  type FileVersion,
+  type FileVersions,
+  fileVersions,
+  restoreFileVersion,
+  type VersionDirection,
+  type VersionEvent,
+} from "../services/files/versions.js"
 export { type Block, blockKey, blockShape, type Inline, type ListKind, normalizeInlines } from "./blocks.js"
 export { catalogFiles } from "./catalog.js"
 export type {

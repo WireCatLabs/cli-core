@@ -23,6 +23,7 @@ import {
   scanLocal,
   skippedName,
 } from "../documents/push.js"
+import type { FileVersions } from "./versions.js"
 
 type Local = LocalDocument & { size: number; mtimeMs: number }
 type Side = "local" | "remote"
@@ -34,6 +35,8 @@ export interface FileMirrorOptions {
   folder: string
   target: FileTarget
   state: FileMirrorStatePort
+  /** Keeps every local file's content before the sync overwrites or deletes it, and logs each change. */
+  versions: FileVersions
   principal: string
   /** Settles conflicts; without it they are reported and left. */
   keep?: Keep
@@ -71,6 +74,11 @@ export interface FileMirrorResult {
   unchanged: number
   conflicts: PushConflict[]
   errors: { path: string; code: string; message: string }[]
+  /**
+   * Files of the last sync missing from a side that cannot prove a deletion: its listing was incomplete, or its root
+   * is gone or is another folder. Nothing is deleted for them.
+   */
+  unknown: { path: string; side: Side; reason: string }[]
   /** Every step but the unchanged files, on a dry run. */
   plan?: FileStep[]
   /** On a dry run, the deletions that would stop the real run without `allowDeletions`. */
@@ -100,7 +108,14 @@ const sameFile = (local: Local, remote: RemoteFile) => local.hash === remote.sha
  * The three-way comparison of one path: the local file now, the remote file now and the last sync. A side is
  * "same" when its content still has the last sync's hash.
  */
-const decide = (path: string, local?: Local, remote?: RemoteFile, base?: FileEntry, keep?: Keep): Step | undefined => {
+const decide = (
+  path: string,
+  sure: Record<Side, boolean>,
+  local?: Local,
+  remote?: RemoteFile,
+  base?: FileEntry,
+  keep?: Keep,
+): Step | undefined => {
   const step = (kind: FileStepKind, reason?: string): Step => ({
     kind,
     path,
@@ -109,6 +124,9 @@ const decide = (path: string, local?: Local, remote?: RemoteFile, base?: FileEnt
     ...(base ? { base } : {}),
     ...(reason ? { reason } : {}),
   })
+  // Only a file the last sync saw, missing from a complete listing of the same root, counts as deleted.
+  if (base && !local && !sure.local) return step("unknown", "local")
+  if (base && !remote && !sure.remote) return step("unknown", "remote")
   if (!local && !remote) return base ? step("forget") : undefined
   if (local && remote && sameFile(local, remote))
     return base?.sha256 === local.hash && base.id === remote.id ? undefined : step("adopt")
@@ -201,7 +219,7 @@ const mirrored = (files: RemoteFile[]) => files.filter((file) => !file.path.spli
  * Every write is conditional on what the listing saw, so a crash at any point is settled by the next run.
  */
 export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMirrorResult> => {
-  const { root, folder, target, principal, keep, signal } = options
+  const { root, folder, target, principal, keep, signal, versions } = options
   const now = options.now ?? Date.now
   if (signal?.aborted) throw new CliError("cancelled", "sync was cancelled")
   if ((await target.identity()) !== principal)
@@ -211,13 +229,32 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const state = options.state.read()
   if (state.principal !== principal || state.root !== root || state.target !== folder)
     throw new CliError("configuration_error", "mirror state belongs to another account or mirror")
+  const synced = Object.keys(state.entries).length > 0
   const listed = await target.list(folder, signal)
-  if (!listed || (state.rootId !== undefined && listed.rootId !== state.rootId))
-    throw new CliError("not_found", `the remote folder ${folder} was moved, replaced or deleted`, {
-      reason: "mirror.root-moved",
-    })
-  const remote = new Map(mirrored(listed.files).map((file) => [file.path, file]))
-  const local = new Map((await scan(root, state.entries, options.maxFiles)).map((file) => [file.path, file]))
+  const localRoot = await stat(root).catch(() => undefined)
+  const local = new Map(
+    (localRoot?.isDirectory() ? await scan(root, state.entries, options.maxFiles) : []).map((file) => [
+      file.path,
+      file,
+    ]),
+  )
+  // A folder that is gone, replaced, or empty where the state had files (an unmounted drive) is not this mirror.
+  const rootProblem = !listed
+    ? ["remote", `the ${options.remote} folder is gone`]
+    : state.rootId !== undefined && listed.rootId !== state.rootId
+      ? ["remote", `the ${options.remote} folder was replaced by another one`]
+      : !localRoot?.isDirectory()
+        ? ["local", "the local folder is gone"]
+        : state.localRoot && (state.localRoot.dev !== localRoot.dev || state.localRoot.ino !== localRoot.ino)
+          ? ["local", "the local folder was replaced by another one"]
+          : synced && !local.size
+            ? ["local", "the local folder is empty; it may be an unmounted drive"]
+            : undefined
+  const remote = new Map(rootProblem ? [] : mirrored(listed?.files ?? []).map((file) => [file.path, file]))
+  const sure = {
+    local: rootProblem?.[0] !== "local",
+    remote: rootProblem?.[0] !== "remote" && listed?.complete === true,
+  }
   const base = { ...state.entries }
 
   const steps: Step[] = []
@@ -245,6 +282,12 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     unchanged: 0,
     conflicts: [],
     errors: [],
+    unknown: [],
+  }
+  if (rootProblem) {
+    const [side, reason] = rootProblem as [Side, string]
+    result.unknown = Object.keys(state.entries).map((path) => ({ path, side, reason }))
+    return result
   }
   for (const path of paths) {
     const file = remote.get(path)
@@ -252,7 +295,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       result.errors.push({ path, code: "provider_error", message: `the ${options.remote} has no hash for it yet` })
       continue
     }
-    const step = decide(path, local.get(path), file, base[path], keep)
+    const step = decide(path, sure, local.get(path), file, base[path], keep)
     if (step) steps.push(step)
     else unchanged++
     const entry = base[path]
@@ -269,7 +312,15 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       ...(step.local ? { localChangedAt: new Date(step.local.mtimeMs).toISOString(), localSize: step.local.size } : {}),
       ...(step.remote ? { remoteChangedAt: step.remote.modifiedAt, remoteSize: step.remote.size } : {}),
     })
-  for (const step of steps) if (step.kind === "conflict") conflict(step, step.reason ?? "")
+  for (const step of steps) {
+    if (step.kind === "conflict") conflict(step, step.reason ?? "")
+    if (step.kind === "unknown")
+      result.unknown.push({
+        path: step.path,
+        side: step.reason as Side,
+        reason: `missing from an incomplete ${options.remote} listing`,
+      })
+  }
 
   const deletions = steps.filter((step) => step.kind === "trash-local" || step.kind === "trash-remote").length
   const tooMany = deletions > MAX_DELETIONS || deletions > Object.keys(state.entries).length * MAX_DELETED_SHARE
@@ -285,7 +336,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       { reason: "mirror.too-many-deletions", deletions },
     )
 
-  if (listed.rootId !== state.rootId) state.rootId = listed.rootId
+  state.rootId ??= listed?.rootId
+  if (localRoot) state.localRoot ??= { dev: localRoot.dev, ino: localRoot.ino }
   for (const [path, pending] of Object.entries(state.pending)) {
     if (pending.op === "download") await rm(localTemp(join(root, path), tagOf(pending.operationId)), { force: true })
     delete state.pending[path]
@@ -339,6 +391,14 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     if (sent.sha256 !== undefined && sent.sha256 !== from.hash)
       throw new CliError("conflict", "the local file changed during the upload", { reason: "upload.mismatch" })
     record(path, sent, from, from.hash)
+    versions.log({
+      path,
+      event: created ? "created" : "changed",
+      direction: "local-to-remote",
+      ...("sha256" in expect ? { old: expect.sha256 } : {}),
+      new: from.hash,
+      size: from.size,
+    })
     result.uploaded.push(path)
   }
   /** False when the local file changed (or appeared) during the sync, so nothing was written. */
@@ -348,6 +408,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     save(true)
     const absolute = join(root, path)
     await mkdir(dirname(absolute), { recursive: true })
+    const old = over ? await versions.keep(absolute) : undefined
     const written = await write(
       over ? "update" : "create",
       "local",
@@ -362,6 +423,14 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     delete state.pending[path]
     if (!written) return false
     record(path, file, await stat(absolute), written.sha256)
+    versions.log({
+      path,
+      event: old ? "changed" : "created",
+      direction: "remote-to-local",
+      ...(old ? { old } : {}),
+      new: written.sha256,
+      size: file.size,
+    })
     result.downloaded.push(path)
     return true
   }
@@ -399,16 +468,26 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         )
         delete state.entries[path]
         save()
+        versions.log({
+          path,
+          event: "deleted",
+          direction: "local-to-remote",
+          old: there.sha256 as string,
+          size: there.size,
+        })
         result.trashed.push({ path, side: "remote" })
         return
-      case "trash-local":
+      case "trash-local": {
         if (!here) return
+        const old = await versions.keep(here.absolute)
         if (!(await write("delete", "local", path, () => trashLocal(root, path, here.hash, date))))
           return changedHere(step)
         delete state.entries[path]
         save()
+        versions.log({ path, event: "deleted", direction: "remote-to-local", old, size: here.size })
         result.trashed.push({ path, side: "local" })
         return
+      }
       case "rename-local": {
         const to = step.to as string
         if (!last || !(await write("move", "local", to, () => renameLocal(root, path, to, last.sha256))))
@@ -417,6 +496,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         state.entries[to] = { ...last, localMtimeMs: placed.mtimeMs, localSize: placed.size }
         delete state.entries[path]
         save()
+        versions.log({ path, event: "renamed", direction: "remote-to-local", to, new: last.sha256, size: last.size })
         result.renamed.push({ from: path, to })
         return
       }
@@ -463,6 +543,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   } finally {
     save(true)
   }
+  await versions.prune()
   return result
 }
 
@@ -488,6 +569,7 @@ const stateSchema = v.object({
   root: v.string(),
   target: v.string(),
   rootId: v.optional(v.string()),
+  localRoot: v.optional(v.object({ dev: v.number(), ino: v.number() })),
   entries: v.record(v.string(), entrySchema),
   pending: v.record(v.string(), v.object({ op: v.string(), operationId: v.string() })),
 })
@@ -545,6 +627,7 @@ export interface FileMirrorSyncOptions
   > {
   mirrors: Mirror[]
   stateOf(mirror: Mirror): FileMirrorStatePort
+  versionsOf(mirror: Mirror): FileVersions
   lock(): Promise<{ assertHeld(): void; release(): Promise<void> | void }>
   /** How the app names the remote side in reports and conflict copies. */
   remote: string
@@ -558,6 +641,7 @@ export const syncFileMirrors = (options: FileMirrorSyncOptions) =>
       root: mirror.path,
       folder: mirror.folder,
       state: options.stateOf(mirror),
+      versions: options.versionsOf(mirror),
       assertHeld,
     }),
   )

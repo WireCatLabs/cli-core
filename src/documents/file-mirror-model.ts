@@ -23,8 +23,14 @@ export type Expect = { absent: true } | { sha256: string; md5?: string }
  */
 export interface FileTarget {
   identity(): Promise<string>
-  /** Every file under `root`, with the root folder's own id; undefined when the folder does not exist. */
-  list(root: string, signal?: AbortSignal): Promise<{ rootId: string; files: RemoteFile[] } | undefined>
+  /**
+   * Every file under `root`, with the root folder's own id; undefined when the folder does not exist. `complete` is
+   * false when any page was skipped or a cap was hit: a file missing from such a listing is not taken as deleted.
+   */
+  list(
+    root: string,
+    signal?: AbortSignal,
+  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
   /** Streams the file into `into`, a new local file. */
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   /** Streams the local file `from` to `path` and returns the file as the remote now has it. */
@@ -56,6 +62,8 @@ export interface FileMirrorState {
   target: string
   /** Set at the first sync; a later listing with another id means the remote folder was moved or replaced. */
   rootId?: string
+  /** The local folder's device and inode at the first sync: another folder at the same path is not this mirror. */
+  localRoot?: { dev: number; ino: number }
   entries: Record<string, FileEntry>
   /**
    * Saved before each write. After a crash the next listing settles the write (same content on both sides is
@@ -79,3 +87,4 @@ export type FileStepKind =
   | "keep-both"
   | "forget"
   | "conflict"
+  | "unknown"

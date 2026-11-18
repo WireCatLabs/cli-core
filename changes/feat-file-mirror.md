@@ -8,6 +8,13 @@
   mirror stops first. Every write is conditional on the last listing, so a crash at any step is settled by the next
   run. `syncFileMirrors`, `fileSyncState`, `fileMirrorStatus` and `fileRemoteChanges` (the watch lists only when the
   remote's revision moved) complete it ([DOCUMENTS.md](../docs/dev/DOCUMENTS.md#sync-plain-files-with-a-provider)).
+- **A file mirror deletes only what it can prove was deleted.** The last sync saw the file, the side's listing is
+  complete, and the side's root is the same folder (the remote root's id; the local folder's device and inode, and
+  not empty while the state has files, as an unmounted drive is). Anything else is reported as `unknown` and the run
+  is partial.
+- **`fileVersions`: a local version store for mirrors.** Before a sync overwrites or deletes a local file, its content
+  is kept by sha256 under the profile's state folder, with an append-only log of every change both ways; versions stay
+  30 days, and a deleted file's last version stays for good. `restoreFileVersion` puts one back.
 - **`watchMirrors` takes `localChanges` instead of `kindOf` and `stateOf`**, for an engine with its own state. A
   document mirror passes `kindOf` and `stateOf` as before.
 - **`scanLocal` reports each file's `size` and `mtimeMs`** and takes an optional lookup that reuses a known hash when

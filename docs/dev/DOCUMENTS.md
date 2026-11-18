@@ -321,7 +321,7 @@ listing per run instead of one read per file. The provider implements `FileTarge
 ```ts
 interface FileTarget {
   identity(): Promise<string>
-  list(root: string, signal?: AbortSignal): Promise<{ rootId: string; files: RemoteFile[] } | undefined>
+  list(root: string, signal?: AbortSignal): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
   trash(path: string, expect: { sha256: string; md5?: string }, signal?: AbortSignal): Promise<void>
@@ -332,7 +332,7 @@ type Expect = { absent: true } | { sha256: string; md5?: string }
 ```
 
 `list` returns each file's path relative to `root`, its `id` (kept across a move and an overwrite), `size`, `sha256`
-(the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id. The other calls take the
+(the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id and `complete`, false when a page was skipped or a cap was hit. The other calls take the
 remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
 size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
 `conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
@@ -359,9 +359,23 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    from both is forgotten, so nothing is written twice and nothing is lost. `pending` in the state only names a
    download's temporary file, removed at the next start, and a write that ended `outcome_unknown`, which is never
    retried within the run. The state is saved at most once a second and at the end.
-6. A remote folder that is gone, or has another id than at the first sync, is refused with `mirror.root-moved`, so a
-   moved folder never reads as "everything was deleted". Hidden remote files are skipped as local ones are.
+6. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
+   root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
+   with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
+   drive reads as empty). A file missing from an incomplete listing is reported in `unknown` and nothing is deleted
+   for it. When a root fails, the run does nothing and reports every file of the state in `unknown`. Either way the
+   run is partial. A file the last sync did not see is never a deletion. Hidden remote files are skipped as local
+   ones are.
 7. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
+
+`versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
+mirrored folder) keeps the content of every local file before the sync overwrites or deletes it (a pull, `keep:
+"remote"`, a crossed deletion) in `<dir>/objects/<sha256>`, and appends each change to `<dir>/log.jsonl`: path,
+event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash, size and time. An upload logs the
+remote version it replaced as `old`. Retention is one rule, applied after each sync: a content stays while a log
+event newer than 30 days names it, and the last content of a path whose newest event is a deletion stays for good.
+`versions.list(path)` lists a path's events with `available` (bytes still kept); `restoreFileVersion(root, path,
+sha256, versions)` puts one back, keeping the current file first, and the next sync sends it.
 
 `guard` wraps every write with its `action` (`create`, `update`, `folder`, `delete`, `move`) and `side` (`local` or
 `remote`), so the CLI maps overwrites and both trashes to its delete permission. `syncFileMirrors` runs the engine
