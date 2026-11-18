@@ -240,6 +240,7 @@ const OTHERS: Entry[] = [
   ["mirror.none", "not_found", "the profile has no mirrors; add one with mirrors add"],
   ["mirror.not-found", "not_found", "no such mirror in this profile; see mirrors list"],
   validation("mirror.not-folder", "the path to mirror is not a folder"),
+  validation("mirror.symlink", "the file is under a symbolic link, which the sync does not follow"),
   [
     "mirror.too-many-deletions",
     "confirmation_required",

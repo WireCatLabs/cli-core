@@ -344,38 +344,54 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    on one side against a change on the other, is a conflict: never overwritten, reported with each side's time and
    size, and the run ends with a `mirror.partial` issue. `keep` settles conflicts on a later run: `local` and
    `remote` pick a side; `both` downloads the remote version beside the local one as
-   `name (conflict YYYY-MM-DD <remote>).ext`, then sends both.
+   `name (conflict YYYY-MM-DD <remote>).ext`, then sends both. The copy enters the state only once its upload
+   returns, so a failed upload leaves it to send next time, never to delete.
 2. A deletion crosses sides into a trash: the remote's (`trash`, with the expected hashes) or
-   `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. A run that would delete more than 50
-   files, or more than a quarter of the mirror, stops before any write with `mirror.too-many-deletions` unless
-   `allowDeletions` covers the count.
+   `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. Up to 2 deletions always go through; a
+   run that would delete more than 2 files and also more than 50, or more than a quarter of the mirror, stops before
+   any write with `mirror.too-many-deletions` unless `allowDeletions` covers the count.
 3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
    file.
 4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local
    write goes through a hidden temporary file and lands only if the file still has the hash the run read, or is
    still absent for a new file; a download whose content does not match the listing's `sha256` never lands. An
-   upload that reads back with another hash is a conflict.
-5. A crash at any step is settled by the next run's listing: the same content on both sides is adopted, a file gone
+   upload that reads back with another hash is a conflict. A new file, a local rename and a local trash land with a
+   hard link, or, where the file system has none (exFAT, FAT, many FUSE and SMB mounts) or the link would cross
+   devices, with a copy that fails when the name is taken; either way nothing is overwritten.
+5. A symbolic link is never followed. Before every local write, rename or trash, each folder from the root down to
+   the file (and the trash folder) is checked; a link there fails that file with `mirror.symlink`. A file of the last
+   sync that sits under a link, such as a synced folder replaced by one, is `unknown`, never deleted. A remote path
+   with an empty, `.` or `..` segment, a backslash or a NUL is refused as an error, and while the listing holds one
+   no remote deletion is taken as proven.
+6. A crash at any step is settled by the next run's listing: the same content on both sides is adopted, a file gone
    from both is forgotten, so nothing is written twice and nothing is lost. `pending` in the state only names a
    download's temporary file, removed at the next start, and a write that ended `outcome_unknown`, which is never
    retried within the run. The state is saved at most once a second and at the end.
-6. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
+7. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
    root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
    with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
    drive reads as empty). A file missing from an incomplete listing is reported in `unknown` and nothing is deleted
-   for it. When a root fails, the run does nothing and reports every file of the state in `unknown`. Either way the
-   run is partial. A file the last sync did not see is never a deletion. Hidden remote files are skipped as local
-   ones are.
-7. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
+   for it. When a root fails, the run does nothing, reports every file of the state in `unknown` and the root
+   problem in `errors` (path `.`), even at a first sync. Either way the run is partial. A file the last sync did not
+   see is never a deletion. Hidden remote files are skipped as local ones are.
+8. A root that was replaced (the remote root has another id, or the local folder another device or inode) blocks
+   the mirror until the owner confirms it is the right folder: `repin: true` (a CLI's `--repin`, named in the
+   error) records the new identity and runs a first sync: identical files are adopted, one-sided files copied,
+   different ones reported as conflicts, and nothing is deleted in that run. A root that is gone, or a local folder
+   that is empty where the state had files, is not re-pinned.
+9. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps the content of every local file before the sync overwrites or deletes it (a pull, `keep:
 "remote"`, a crossed deletion) in `<dir>/objects/<sha256>`, and appends each change to `<dir>/log.jsonl`: path,
 event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash, size and time. An upload logs the
-remote version it replaced as `old`. Retention is one rule, applied after each sync: a content stays while a log
-event newer than 30 days names it, and the last content of a path whose newest event is a deletion stays for good.
+remote version it replaced as `old`. Retention is one rule, applied after each sync under its lock: a content stays
+while a log event newer than 30 days names it, and the last content of a path whose newest event is a deletion stays
+for good. A content no event names (a crash between keeping it and logging the change) stays 30 days after it was
+last kept. Call `versions.prune()` only under the sync lock.
 `versions.list(path)` lists a path's events with `available` (bytes still kept); `restoreFileVersion(root, path,
-sha256, versions)` puts one back, keeping the current file first, and the next sync sends it.
+sha256, versions, lock)` puts one back under the same lock as a sync, keeping the current file first, and the next
+sync sends it.
 
 `guard` wraps every write with its `action` (`create`, `update`, `folder`, `delete`, `move`) and `side` (`local` or
 `remote`), so the CLI maps overwrites and both trashes to its delete permission. `syncFileMirrors` runs the engine
