@@ -349,7 +349,9 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 2. A deletion crosses sides into a trash: the remote's (`trash`, with the expected hashes) or
    `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. Up to 2 deletions always go through; a
    run that would delete more than 2 files and also more than 50, or more than a quarter of the mirror, stops before
-   any write with `mirror.too-many-deletions` unless `allowDeletions` covers the count.
+   any write with `mirror.too-many-deletions` unless `allowDeletions` covers the count. `hints` (`preview`, `repin`,
+   `allowDeletions`) names the app's own commands in this message and the repin one; the defaults are `--dry-run`,
+   `--repin` and "explicitly".
 3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
    file.
 4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local
@@ -367,14 +369,17 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 6. A crash at any step is settled by the next run's listing: the same content on both sides is adopted, a file gone
    from both is forgotten, so nothing is written twice and nothing is lost. `pending` in the state only names a
    download's temporary file, removed at the next start, and a write that ended `outcome_unknown`, which is never
-   retried within the run. A download whose copy into place was cut off may leave a partial file under its name:
-   while that file has neither the remote's nor the last sync's content, its `pending` entry stays and the path is a
-   conflict whatever `keep` says; moving the file away lets the next run download it. The state is saved at most
-   once a second and at the end.
+   retried within the run. A download that fails while the process lives clears its entry. The leftover temporary
+   file is removed only after the same symbolic-link check as any write; one under a link is left. A download of a
+   new file whose copy into place was cut off may leave a partial file under its name (`pending` says `created`): while
+   that file has neither the remote's nor the last sync's content, its entry stays and the path is a conflict whatever
+   `keep` says; moving the file away lets the next run download it. A download that replaced a file renames it into
+   place whole, so it is never taken as cut off. The state is saved at most once a second and at the end.
 7. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
    root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
    with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
-   drive reads as empty). A file missing from an incomplete listing is reported in `unknown` and nothing is deleted
+   drive reads as empty; the error says to mount it, or to add a file or remove the mirror's state when the files
+   really were deleted). A file missing from an incomplete listing is reported in `unknown` and nothing is deleted
    for it. When a root fails, the run does nothing, reports every file of the state in `unknown` and the root
    problem in `errors` (path `.`), even at a first sync. Either way the run is partial. A file the last sync did not
    see is never a deletion. Hidden remote files are skipped as local ones are.
@@ -387,16 +392,25 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 9. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
-mirrored folder) keeps the content of every local file before the sync overwrites or deletes it (a pull, `keep:
-"remote"`, a crossed deletion) in `<dir>/objects/<sha256>`, and appends each change to `<dir>/log.jsonl`: path,
-event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash, size and time. An upload logs the
-remote version it replaced as `old`. Retention is one rule, applied after each sync under its lock: a content stays
-while a log event newer than 30 days names it, and the last content of a path whose newest event is a deletion stays
-for good. A content no event names (a crash between keeping it and logging the change) stays 30 days after it was
-last kept; one that vanishes while prune runs is skipped. Call `versions.prune()` only under the sync lock.
+mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
+`<dir>/objects/<sha256>`: the local file before a pull, `keep: "remote"` or a crossed deletion, and the remote file
+before an upload replaces it or a deletion trashes it. A remote content the store lacks is downloaded into the store
+first (`keep` takes a writer, such as the target's `download`); one whose hash no longer matches the listing fails
+the file with `mirror.remote-changed`, a conflict. `keep: "both"` keeps the remote side from its local copy. When the
+store cannot keep a content, the file fails with `mirror.version-not-kept` and nothing is replaced. Each change is
+appended to `<dir>/log.jsonl`: path, event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash,
+`from` (the side `old` was kept from), size and time. Retention is one rule, applied after each sync under its lock:
+a content stays while a log event newer than 30 days names it, and the last content of a path whose newest event is
+a deletion stays for good. A content no event names (a crash between keeping it and logging the change) stays 30
+days after it was last kept; one that vanishes while prune runs is skipped. Call `versions.prune()` only under the
+sync lock.
 `versions.list(path)` lists a path's events with `available` (bytes still kept); `restoreFileVersion(root, path,
 sha256, versions, lock)` puts one back under the same lock as a sync, keeping the current file first, and the next
 sync sends it.
+
+The lock is either what `acquireLock` returns (its `held()` is checked before every write; a lost lock fails with
+`profile.busy`) or any `{ assertHeld, release }`. `skippedName(name)` is the rule for hidden files, `node_modules` and
+editor leftovers, so a target can skip them while it lists.
 
 `guard` wraps every write with its `action` (`create`, `update`, `folder`, `delete`, `move`) and `side` (`local` or
 `remote`), so the CLI maps overwrites and both trashes to its delete permission. `syncFileMirrors` runs the engine

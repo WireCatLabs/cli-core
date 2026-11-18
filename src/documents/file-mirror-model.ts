@@ -67,9 +67,10 @@ export interface FileMirrorState {
   entries: Record<string, FileEntry>
   /**
    * Saved before each write. After a crash the next listing settles the write (same content on both sides is
-   * adopted); this only names the temporary file to remove and the operation to look up.
+   * adopted); this only names the temporary file to remove and the operation to look up. `created` is false for a
+   * download that replaces a file, which is renamed into place whole and so never left partial.
    */
-  pending: Record<string, { op: FileStepKind; operationId: string }>
+  pending: Record<string, { op: FileStepKind; operationId: string; created?: boolean }>
 }
 
 export interface FileMirrorStatePort {

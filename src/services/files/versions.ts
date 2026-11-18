@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto"
 import { appendFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs"
-import { readdir, rename, rm, stat, utimes } from "node:fs/promises"
+import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises"
 import { join } from "node:path"
 import { Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { CliError } from "@wirecat/cli-base"
-import { assertNoLink, replaceLocal, safePath } from "../documents/push.js"
+import { type HeldLock, heldCheck } from "../documents/mirrors.js"
+import { assertNoLink, hashFile, replaceLocal, safePath } from "../documents/push.js"
 
 /** Which way a sync moved a change. */
 export type VersionDirection = "local-to-remote" | "remote-to-local" | "restored"
@@ -18,6 +19,8 @@ export interface VersionEvent {
   direction: VersionDirection
   /** The content the change replaced: the local file kept before a pull or deletion, the remote version an upload replaced. */
   old?: string
+  /** The side `old` was kept from. */
+  from?: "local" | "remote"
   new?: string
   size?: number
   /** A rename's new path. */
@@ -30,8 +33,14 @@ export interface FileVersion extends VersionEvent {
 }
 
 export interface FileVersions {
-  /** Copies the file into the store before the sync overwrites or deletes it; returns the hash of what it copied. */
-  keep(absolute: string): Promise<string>
+  /**
+   * Copies a content into the store before the sync overwrites or deletes it; returns the hash of what it copied. The
+   * source is a local file, or a writer that creates the temporary file it is given, such as a target's `download`.
+   * A failure of the store itself is `mirror.version-not-kept`; the writer's own errors pass through.
+   */
+  keep(source: string | ((temp: string) => Promise<void>)): Promise<string>
+  /** Whether the store holds this content. */
+  has(sha256: string): boolean
   log(event: Omit<VersionEvent, "at">): void
   /** Every event of `path`, oldest first, including renames to or from it. */
   list(path: string): FileVersion[]
@@ -45,6 +54,34 @@ export interface FileVersions {
 }
 
 const RETAIN_MS = 30 * 24 * 60 * 60 * 1000
+
+const stored = async <T>(act: () => Promise<T>): Promise<T> => {
+  try {
+    return await act()
+  } catch (error) {
+    const why = (error as NodeJS.ErrnoException).code ?? String(error)
+    throw new CliError("provider_error", `the earlier content could not be kept (${why}); nothing was replaced`, {
+      reason: "mirror.version-not-kept",
+    })
+  }
+}
+
+/** Copies `from` into the new file `into` and returns the sha256 of the bytes it copied. */
+const copyHashed = async (from: string, into: string) => {
+  const hash = createHash("sha256")
+  // Hashed while copied: the file may change under the sync, and the store is keyed by what it really holds.
+  await pipeline(
+    createReadStream(from),
+    new Transform({
+      transform(chunk, _encoding, done) {
+        hash.update(chunk)
+        done(null, chunk)
+      },
+    }),
+    createWriteStream(into, { flags: "wx", mode: 0o600 }),
+  )
+  return hash.digest("hex")
+}
 
 /**
  * A mirror's local version store: `<dir>/objects/<sha256>` holds each kept content once, `<dir>/log.jsonl` is
@@ -69,32 +106,27 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
   }
   const has = (sha256: string) => existsSync(join(objects, sha256))
   return {
-    keep: async (absolute) => {
-      mkdirSync(objects, { recursive: true, mode: 0o700 })
+    keep: async (source) => {
+      await stored(() => mkdir(objects, { recursive: true, mode: 0o700 }))
       const temp = join(objects, `.${randomUUID()}.tmp`)
-      const hash = createHash("sha256")
       try {
-        // Hashed while copied: the file may change under the sync, and the store is keyed by what it really holds.
-        await pipeline(
-          createReadStream(absolute),
-          new Transform({
-            transform(chunk, _encoding, done) {
-              hash.update(chunk)
-              done(null, chunk)
-            },
-          }),
-          createWriteStream(temp, { flags: "wx", mode: 0o600 }),
-        )
-        const sha256 = hash.digest("hex")
-        const object = join(objects, sha256)
-        if (!has(sha256)) await rename(temp, object)
-        const at = now() / 1000
-        await utimes(object, at, at)
+        let sha256: string
+        if (typeof source === "function") {
+          await source(temp)
+          sha256 = await stored(async () => (await hashFile(temp)).sha256)
+        } else sha256 = await stored(() => copyHashed(source, temp))
+        await stored(async () => {
+          const object = join(objects, sha256)
+          if (!has(sha256)) await rename(temp, object)
+          const at = now() / 1000
+          await utimes(object, at, at)
+        })
         return sha256
       } finally {
         await rm(temp, { force: true })
       }
     },
+    has,
     log: (event) => {
       mkdirSync(dir, { recursive: true, mode: 0o700 })
       appendFileSync(logPath, `${JSON.stringify({ at: new Date(now()).toISOString(), ...event })}\n`, { mode: 0o600 })
@@ -144,14 +176,15 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
 /**
  * Puts a kept version of `path` back into the mirrored folder; the file there now is kept first. The next sync sends
  * it like any local change. False when the store no longer has the version or the file changed meanwhile. Runs under
- * the mirrors' sync lock, so a sync never reads the folder halfway through.
+ * the mirrors' sync lock (as `acquireLock` returns it, or any `assertHeld`), so a sync never reads the folder halfway
+ * through.
  */
 export const restoreFileVersion = async (
   root: string,
   path: string,
   sha256: string,
   versions: FileVersions,
-  lock: () => Promise<{ assertHeld(): void; release(): Promise<void> | void }>,
+  lock: () => Promise<HeldLock>,
 ) => {
   if (!safePath(path)) throw new CliError("validation_error", `${path} is not a path inside the mirror`)
   const held = await lock()
@@ -160,13 +193,13 @@ export const restoreFileVersion = async (
     const absolute = join(root, path)
     const current = existsSync(absolute) ? await versions.keep(absolute) : undefined
     if (current === sha256) return true
-    held.assertHeld()
+    await heldCheck(held)()
     if (!(await versions.write(sha256, absolute, current))) return false
     versions.log({
       path,
       event: current ? "changed" : "created",
       direction: "restored",
-      ...(current ? { old: current } : {}),
+      ...(current ? { old: current, from: "local" as const } : {}),
       new: sha256,
     })
     return true
