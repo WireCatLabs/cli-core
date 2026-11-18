@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
@@ -40,6 +40,7 @@ const serve = async (
     argv = ["mcp", "serve", "--profiles", "all"],
     profileState = undefined as Messenger["profileState"],
     extra = {} as Record<string, string>,
+    config = true,
   } = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "mcp-every-"))
@@ -49,14 +50,16 @@ const serve = async (
     MESSAGING_STORE: join(root, "m.db"),
     ...extra,
   }
-  mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
-  writeFileSync(
-    join(env.CHAT_CONFIG_DIR, "config.json"),
-    JSON.stringify({
-      profiles: Object.fromEntries(profiles.map((one) => [one, {}])),
-      bot: { profiles: Object.fromEntries(bots.map((one) => [one, {}])) },
-    }),
-  )
+  if (config) {
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({
+        profiles: Object.fromEntries(profiles.map((one) => [one, {}])),
+        bot: { profiles: Object.fromEntries(bots.map((one) => [one, {}])) },
+      }),
+    )
+  }
   const { script, log } = fakeProfileServer()
   const stdin = new PassThrough()
   const stdout = new PassThrough()
@@ -86,7 +89,7 @@ const serve = async (
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line) as { id: number; result: Record<string, unknown> })
-  return { answers, log: () => readFileSync(log, "utf8"), failure, stderr: streams.stderr }
+  return { answers, log: () => readFileSync(log, "utf8"), failure, stderr: streams.stderr, env }
 }
 
 const HANDSHAKE = [
@@ -239,8 +242,55 @@ describe("chat mcp serve --profiles", () => {
     expect(failure?.message).toContain("news is a bot profile")
   })
 
-  it("says so when there is no profile on this computer yet", async () => {
-    const { failure } = await serve(HANDSHAKE, { profiles: [] })
-    expect(failure?.message ?? "").toContain("no chat profile on this computer yet")
+  it.each([
+    ["an empty computer", { config: false }],
+    ["a config with no profile", { profiles: [] }],
+    ["only bot profiles", { profiles: [], bots: ["news"] }],
+  ])(
+    "--profiles all on %s still starts: it lists every tool, and each call says how to set up a profile",
+    async (_, given) => {
+      const { answers, failure, log, env } = await serve(
+        [
+          ...HANDSHAKE,
+          { id: 2, method: "tools/list" },
+          { id: 3, method: "tools/call", params: { name: "chat_read", arguments: { command: "inbox" } } },
+          { id: 4, method: "tools/call", params: { name: "chat_tools_search", arguments: { profile: "personal" } } },
+        ],
+        given,
+      )
+      expect(failure).toBeUndefined()
+      const [hello, listed, ...calls] = [1, 2, 3, 4].map((id) => answers.find((one) => one.id === id)?.result)
+      expect(String(hello?.instructions)).toMatch(/^No chat profile on this computer yet/)
+      const tools = (listed?.tools ?? []) as { name: string; inputSchema: { properties: object; required: string[] } }[]
+      expect(tools.map((one) => one.name)).toEqual(["chat_tools_search", "chat_read", "chat_write"])
+      for (const one of tools) {
+        expect(one.inputSchema.required[0]).toBe("profile")
+        expect(one.inputSchema.properties).toMatchObject({ profile: { type: "string" } })
+        expect(JSON.stringify(one.inputSchema)).not.toContain('"enum":[]')
+      }
+      for (const call of calls) {
+        expect(call).toMatchObject({ isError: true })
+        const text = JSON.stringify(call)
+        expect(text).toContain("configuration_error")
+        expect(text).toContain(
+          "no chat profile on this computer yet — set one up with `chat personal …` (any name in place of personal), then connect again",
+        )
+        expect(text).not.toContain("    at ")
+      }
+      expect(log()).toBe("")
+      const written = existsSync(join(env.CHAT_CONFIG_DIR, "config.json"))
+        ? readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")
+        : "{}"
+      expect(JSON.parse(written).profiles ?? {}).toEqual({})
+      expect(existsSync(env.CHAT_STATE_DIR)).toBe(false)
+      expect(existsSync(env.MESSAGING_STORE)).toBe(false)
+    },
+  )
+
+  it("still refuses --profiles naming a profile that does not exist, on a computer with none", async () => {
+    const { failure, answers } = await serve(HANDSHAKE, { config: false, argv: ["mcp", "serve", "--profiles", "work"] })
+    expect(failure).toMatchObject({ code: "validation_error" })
+    expect(failure?.message).toContain('no profile named "work" — profiles here: none')
+    expect(answers).toEqual([])
   })
 })

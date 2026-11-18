@@ -1,7 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
-import { type CallToolResult, McpServer, type Tool } from "@modelcontextprotocol/server"
+import { type CallToolResult, InMemoryTransport, McpServer, type Tool } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError, type ErrorCode, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { CALLER_META_KEY, callerOf, PROXY_CLIENT_NAME } from "./caller.js"
@@ -32,6 +32,10 @@ export interface AllProfilesOptions {
   /** How to sign a profile in, for the refusal of a call it cannot serve yet. */
   signIn?: (profile: string) => string
   child: (profile: string) => ChildSpec
+  /** The tools a profile's server would list, for a session that starts before any profile exists. */
+  catalogue?: () => Promise<readonly Tool[]>
+  /** How to set up the first profile: every call of a session with no profile is refused with it. */
+  setup?: string
   instructions: string
   idleMs?: number
   /** A child's stderr, line by line; never this process's stdout, which carries the protocol. */
@@ -195,15 +199,19 @@ export const withProfile = (
     inputSchema: {
       ...tool.inputSchema,
       properties: {
-        profile: {
-          type: "string",
-          enum: [...profiles],
-          oneOf: profiles.map((profile) => ({
-            const: profile,
-            title: signedIn(profile) ? profile : `${profile} — not signed in`,
-          })),
-          description: `Which ${name} account, by its profile. If the owner did not name one, ask which — never guess.${states}`,
-        },
+        profile:
+          profiles.length === 0
+            ? // An empty enum matches nothing, and a directory that checks the schema refuses the tool.
+              {
+                type: "string",
+                description: `Which ${name} account, by its profile. None is set up on this computer yet.`,
+              }
+            : {
+                type: "string",
+                enum: [...profiles],
+                oneOf: profiles.map((one) => ({ const: one, title: signedIn(one) ? one : `${one} — not signed in` })),
+                description: `Which ${name} account, by its profile. If the owner did not name one, ask which — never guess.${states}`,
+              },
         ...schema.properties,
       },
       required: ["profile", ...(schema.required ?? []).filter((field) => field !== "profile")],
@@ -242,13 +250,19 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
     const profiles = [...options.profiles()].sort()
     const server = new McpServer(
       { name: options.command, version: options.version },
-      { capabilities: { tools: {} }, instructions: options.instructions },
+      {
+        capabilities: { tools: {} },
+        // Read per session, as the profiles are: clients cut the instructions short, so this line comes first.
+        instructions:
+          profiles.length === 0 && options.setup
+            ? `${options.setup.charAt(0).toUpperCase()}${options.setup.slice(1)}.\n${options.instructions}`
+            : options.instructions,
+      },
     )
     server.server.setRequestHandler("tools/list", async () => ({
-      tools:
-        profiles.length === 0
-          ? []
-          : (await tools(profiles)).map((one) => withProfile(one, profiles, options.name, signedIn)),
+      tools: (profiles.length === 0 ? ((await options.catalogue?.()) ?? []) : await tools(profiles)).map((one) =>
+        withProfile(one, profiles, options.name, signedIn),
+      ),
     }))
     const callers = {
       env: options.env ?? process.env,
@@ -258,6 +272,8 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
     server.server.setRequestHandler("tools/call", async (request, ctx) => {
       const { name, arguments: given = {}, _meta } = request.params
       const { profile, ...rest } = given as Record<string, unknown>
+      if (profiles.length === 0)
+        return refusal("configuration_error", options.setup ?? `no ${options.command} profile on this computer yet.`)
       if (typeof profile !== "string" || !profiles.includes(profile))
         return refusal(
           "validation_error",
@@ -285,6 +301,44 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
     return server
   }
   return { build, close: () => children.close() }
+}
+
+/**
+ * What a server answers to `tools/list`, asked in this process: the list for a session with no profile, which has no
+ * profile's server to ask.
+ */
+export const listedTools = async (server: McpServer): Promise<Tool[]> => {
+  const [own, other] = InMemoryTransport.createLinkedPair()
+  const answers = new Map<number, (result?: Record<string, unknown>, error?: { message?: string }) => void>()
+  other.onmessage = (message) => {
+    const { id, result, error } = message as {
+      id?: number
+      result?: Record<string, unknown>
+      error?: { message?: string }
+    }
+    if (typeof id === "number") answers.get(id)?.(result, error)
+  }
+  const ask = (id: number, method: string, params: Record<string, unknown>) =>
+    new Promise<Record<string, unknown>>((resolve, reject) => {
+      answers.set(id, (result, error) =>
+        error || !result ? reject(new Error(error?.message ?? `${method} had no answer`)) : resolve(result),
+      )
+      void other.send({ jsonrpc: "2.0", id, method, params })
+    })
+  await server.connect(own)
+  try {
+    await ask(1, "initialize", {
+      protocolVersion: PROTOCOL,
+      capabilities: {},
+      clientInfo: { name: PROXY_CLIENT_NAME, version: "1" },
+    })
+    await other.send({ jsonrpc: "2.0", method: "notifications/initialized" })
+    const answer = await ask(2, "tools/list", {})
+    if (!Array.isArray(answer.tools)) throw new Error("the catalogue server listed no tools")
+    return answer.tools as Tool[]
+  } finally {
+    await server.close()
+  }
 }
 
 /** Over stdin and stdout until the client closes stdin or the process is told to stop; then the children close. */
