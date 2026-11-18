@@ -38,6 +38,7 @@ export {
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export { type Block, blockKey, blockShape, type Inline, type ListKind, normalizeInlines } from "./blocks.js"
 export { catalogFiles } from "./catalog.js"
+export { htmlToMarkdown, markdownToHtml } from "./html-markdown.js"
 export { markdownBlocks, type PlacedBlock, placedMarkdownBlocks } from "./markdown-blocks.js"
 export type {
   DocumentSource,

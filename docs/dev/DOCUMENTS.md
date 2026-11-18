@@ -328,6 +328,14 @@ differ change (a tick is flipped inside its line), so the rest keeps its markers
 byte-order mark. The result is parsed again and must read as `next`; otherwise it returns undefined and the caller
 reports a conflict instead of writing. `blocksMarkdown` writes blocks as Markdown that reads back as the same blocks.
 
+A service that keeps HTML, such as a blog (WordPress, Ghost), converts with `htmlToMarkdown` and `markdownToHtml`
+(async; loaded on first use). Both treat the body as untrusted: comments (WordPress's block comments, Ghost's card
+comments), scripts, styles, frames and event attributes go, Markdown's raw HTML is not written, and a link or image
+whose scheme is not http(s), mailto or tel keeps only its text. Markdown that went through HTML once comes back the
+same; the tests run on real WordPress and Ghost posts in `test/fixtures/posts/`. HTML that went through Markdown does not:
+embeds, frames, classes and block comments are lost, so a CLI that reads a post, edits it and writes it back
+flattens it. Such a CLI warns or refuses to write back a body that had them.
+
 ## Copy a document collection to another database
 
 Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core/store` to retain

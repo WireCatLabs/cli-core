@@ -11,6 +11,7 @@
       "!drizzle",
       "!src/store/sqlite/migrations.generated.ts",
       "!src/search/snowball",
+      "!test/fixtures/posts",
       "!.worktrees",
       "!.claude",
       "!config/wirecat",
