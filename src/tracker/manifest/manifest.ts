@@ -132,7 +132,7 @@ const selects = (tree: Selection, steps: readonly string[]): boolean => {
 }
 
 /** The selection of one row: under the operation's `items` (a connection's `nodes`) or the call's own. */
-const rowSelection = (tree: Selection, items: string | undefined): Selection | undefined => {
+export const rowSelection = (tree: Selection, items: string | undefined): Selection | undefined => {
   let inside: Selection | true | undefined = tree
   for (const step of items?.split(".") ?? []) inside = inside === true ? undefined : inside?.[step]
   return inside === true ? undefined : inside
