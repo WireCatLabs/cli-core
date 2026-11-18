@@ -5,6 +5,69 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.698.0 — 18.11.2026
+
+### Added
+
+- **`folders list` of a documents CLI names each chosen folder.** A row has `name`, the folder's name when `folders add`
+  kept it, and `path` when the CLI gives `folderPath` to `documentLibraryCommands`. A folder shown only by its id
+  (ydisk's `resource_id`) now has words. A CLI that lists its own folders still answers `{ id }`.
+- **ydisk joins `WIRECAT_TOOLS`.** Yandex Disk (`ydisk`, `@wirecat/yandex-disk-cli`) is on npm since 0.1.0, so every
+  CLI's first screen ("Works with") and first-run list of other WireCat tools now name it, and an upload refuses a file
+  from its folders (`yandex-disk-cli`, `YDISK_`) as it does for the other tools.
+- **`auth.verify.active` in `wirecat.config.ts`** names where the token check's answer says the token still works.
+  Attio's `GET /v2/self` answers 200 `{ "active": false }` to an unknown, revoked or deleted token; a CLI can now
+  refuse that sign-in instead of failing on a missing id.
+- **`valueAt` from `@wirecat/cli-core/manifest`** reads a dotted path into an answer as the source manifest does, so
+  a CLI's sign-in reads `auth.verify`'s paths the same way.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.117.0 or later**, whose command vocabulary has the tracker's nouns and whose
+  `signInPlace` and `fakeApi` know a Basic sign-in.
+- **The tracker's commands follow the command vocabulary**, so `cli-dev lint` passes a tracker CLI (with cli-base
+  0.117.0, which has `issues`, `teams`, `states` and `labels`). Each list narrows by its query, as `deals list` does:
+  `issues list team:<id> project:<id> assignee:none state:<id> type:started label:<id>`, and `archived:include` on
+  every list, in place of `--team`, `--project`, `--assignee`, `--state`, `--type`, `--label` and `--archived`.
+  `type:` repeats for any of several types. `issues task` is `issues assign`: it makes the issue the owner's task
+  and changes nothing in the tracker; its `--due` reads times as `tasks --due` does (a day is its end, `3d` works). `issues search --any` is gone.
+  See [Trackers](docs/dev/TRACKER.md#commands).
+
+### Fixed
+
+- **The `api` group tells a Basic scheme by its type, so a newer cli-base cannot change who signs.** cli-base #643
+  makes `signInPlace` sign Basic, and cli-core told Basic apart by `signInPlace` answering `undefined`. With that
+  cli-base, a call that offers Basic and a token would be signed with Basic, and a token without a user name would be
+  sent in base64, not refused with "run session start --login <name>". Both rules now hold with either cli-base.
+- **A conversation never mixes the topics of a forum group.** A message's parent is a message of its own topic or
+  thread, or the thread's first message when that has text, as a WhatsApp community post its comments answer. In a
+  Telegram forum every message of a topic replies to the topic's empty first message: taken as a reply, it chained a
+  whole topic, and through those first messages' sender every topic, into one conversation, and its chunks mixed
+  topics. A messenger reply into another topic, an agent's answer naming one, and the rules never link across. The
+  linking-rules version is 6, so every chat built before reads as outdated and is rebuilt; a chunk whose text is
+  unchanged keeps its vector. `conversations batches next` now asks the agent about a message whose only reply is
+  one the build does not link.
+- **A value the service cleared clears the stored copy.** A path past the end of a list, or under a `null` the
+  service sent, is now `null`, not "not sent": Attio's `values.job_title.0.value` on an empty list used to keep the
+  old position ([CRM.md](docs/dev/CRM.md#a-source-from-a-manifest)). Watch for: an `each` rule under such
+  a `null` now gives an empty list, so the record's links are cleared too.
+- **`crmManifestFake` takes its own answer when a value is one of several types.** It wrote a mapped value into a
+  sample of the union's first branch, and its strict fake refused the row: every contract case of an Attio CLI
+  failed. The row is now sampled from the branch each mapped path needs, through objects, lists and `allOf`.
+- **`<tool> mcp serve --profiles all` starts on a computer with no profile yet.** It answers the handshake and lists
+  the same tools a profile's own server lists (`<tool>_tools_search`, `<tool>_read`, and `<tool>_write` where a
+  command writes), each taking `profile`, and every call is refused with a `configuration_error` that names the
+  command to set up the first profile: `<tool> personal setup`, `<tool> personal session start` for a CLI that signs
+  in with a session, or `<tool> personal …` for one with neither. Before, it exited before the handshake, so
+  directories such as Glama, which start the server in an empty container to read its tools, marked WireCat servers
+  as not deployable. Nothing picks or makes a profile: which tools are listed never follows a profile's permissions,
+  so the list is built from the program itself. `mcp serve` with no profile named, and `--profiles` with a name that
+  does not exist, are still refused.
+- **`schedule command` and `schedule agent` help no longer shows a messenger's commands in a CLI that is not a
+  messenger.** b24 showed `-- messages list <chat> --limit 50` and `b24 personal search messages 'date>1d'`, which it
+  does not have. A CLI with `messenger: false` now shows `-- doctor` and `b24 doctor`: these CLIs share no search or
+  sync command, and every CLI has `doctor`.
+
 ## 0.697.0 — 17.11.2026
 
 ### Added
