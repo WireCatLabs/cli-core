@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.703.0 — 18.11.2026
+
+### Added
+
+- **`search conversations` shows the owner's own conversations nearest in meaning in a block of their own**, up to 5
+  that the hits left out: in JSON they follow the hits with `from_owner: true`, in text under «your own messages».
+  The hits keep their order. A question about what the owner said or advised is often answered by a message a busy
+  group ranks low; on a test store of 220,000 chunks the block showed the answer to 31 of 40 questions instead of
+  24, for about 0.24 s more per query. Only the owner's chunks are scored, found by their messages.
+
+### Fixed
+
+- **`crmManifestFake`'s deals name the fake's own contacts and companies**: deal n links organization n and person n,
+  so a source with `linked: true` copies them and `crmManifestContract` passes over it. A linked kind's read of changes
+  answers `reset` to a dead cursor, as every other kind does.
+- **`sync`'s summary fits WireCat Desktop's 300 characters again.** cli-base 0.119.0 checks the limit, and every CRM
+  CLI's `contracts/wirecat.json` failed to build on a 452-character summary; the activities and stage-tasks part moved
+  to `help sync`.
+
 ## 0.702.0 — 18.11.2026
 
 ### Added
