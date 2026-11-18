@@ -7,3 +7,8 @@
   count, because WordPress reads the same parameter from either. So a profile that denies publishing also stops an
   agent that publishes through the raw `api` group. `--dry-run` and discovery show the key with
   `with status publish or future`.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.118.0**, which carries the manifest's `values` and WordPress's
+  `wpJsonToOpenApi`. A CLI that pins an older cli-base raises it with this cli-core.
