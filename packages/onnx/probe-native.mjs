@@ -1,6 +1,6 @@
 // Runs the one-node model through the native binding of this system, beside the ONNX Runtime library
-// @wirecat/cli-core downloads — from Microsoft's release, or on Windows from onnxruntime-node's npm tarball, whose
-// DirectML build of onnxruntime.dll the binding needs: `node probe-native.mjs` and `bun probe-native.mjs`.
+// @wirecat/cli-core downloads from WireCat's @wirecat/onnxruntime-<platform> package on npm (bin/publish-onnxruntime):
+// `node probe-native.mjs` and `bun probe-native.mjs`.
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
@@ -8,49 +8,24 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { nativeBindingFor, ONNX_RUNTIME_VERSION, openNative } from "@wirecat/cli-core-onnx"
 
-const release = `https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_RUNTIME_VERSION}`
-const npm = "https://registry.npmjs.org/onnxruntime-node/-"
 const archives = {
-  "linux-x64": [
-    "onnxruntime-linux-x64-1.30.0.tgz",
-    "a5ed5a3cac51fbb2e90da632ae43d19212faaa20e76484e62bcb7c23ddb3b3fd",
-    "onnxruntime-linux-x64-1.30.0/lib/libonnxruntime.so.1.30.0",
-    "libonnxruntime.so.1",
-  ],
-  "linux-arm64": [
-    "onnxruntime-linux-aarch64-1.30.0.tgz",
-    "e16a27a8ed330bbc698df7330b0cf56e722f354e3bcc92118682c74ef3c3e3da",
-    "onnxruntime-linux-aarch64-1.30.0/lib/libonnxruntime.so.1.30.0",
-    "libonnxruntime.so.1",
-  ],
-  "darwin-arm64": [
-    "onnxruntime-osx-arm64-1.30.0.tgz",
-    "6ebb5062a934537c352937821f9fe9718e7de1a2db1122a93dd363ffd53a7012",
-    "./onnxruntime-osx-arm64-1.30.0/lib/libonnxruntime.1.30.0.dylib",
-    "libonnxruntime.1.dylib",
-  ],
-  "win32-x64": [
-    "onnxruntime-node-1.30.0.tgz",
-    "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
-    "package/bin/napi-v6/win32/x64/onnxruntime.dll",
-    "onnxruntime.dll",
-  ],
-  "win32-arm64": [
-    "onnxruntime-node-1.30.0.tgz",
-    "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
-    "package/bin/napi-v6/win32/arm64/onnxruntime.dll",
-    "onnxruntime.dll",
-  ],
+  "linux-x64": ["9c12e88ae495ae04e28802e52c2524a7a9c31aa715a67eeb636c85efcb08e5d9", "libonnxruntime.so.1"],
+  "linux-arm64": ["4ec23a63f0e7f49edb63590f4bc8b0e8526bff5b3a2b19d768112f37dc50d09c", "libonnxruntime.so.1"],
+  "darwin-arm64": ["0e543a584a048b301ff96b81af4b001288e048577ce0f0b4a5a9c2df97979615", "libonnxruntime.1.dylib"],
+  "win32-x64": ["55924c8e4c3f975d131e943712c5fac6e5423fb2b0c356c96230f2ad18dc2792", "onnxruntime.dll"],
+  "win32-arm64": ["77e43743e580d6641e49b7cdeed57fd11f21a8cf27a186dd33a3db817b3ff7f2", "onnxruntime.dll"],
 }
 const target = `${process.platform}-${process.arch}`
-const [name, sha256, member, library] = archives[target] ?? []
-if (!name) throw new Error(`no ONNX Runtime archive for ${target}`)
+const [sha256, library] = archives[target] ?? []
+if (!sha256) throw new Error(`no ONNX Runtime package for ${target}`)
+const name = `onnxruntime-${target}-${ONNX_RUNTIME_VERSION}.tgz`
+const member = `package/${library}`
 const binding = nativeBindingFor()
 if (!binding) throw new Error(`the package carries no binding for ${target}`)
 
 const work = mkdtempSync(join(tmpdir(), "onnx-native-"))
 const archive = Buffer.from(
-  await (await fetch(`${process.platform === "win32" ? npm : release}/${name}`)).arrayBuffer(),
+  await (await fetch(`https://registry.npmjs.org/@wirecat/onnxruntime-${target}/-/${name}`)).arrayBuffer(),
 )
 const actual = createHash("sha256").update(archive).digest("hex")
 if (actual !== sha256) throw new Error(`${name} is not the file expected (sha256 ${actual})`)

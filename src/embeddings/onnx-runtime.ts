@@ -25,83 +25,72 @@ export interface NativeRuntime {
   readonly library: { name: string; sha256: string; bytes: number }
 }
 
-const release = (name: string, sha256: string, bytes: number): ModelFile => ({
-  name,
-  url: `https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_RUNTIME_VERSION}/${name}`,
-  sha256,
-  bytes,
-})
+const REGISTRY = "https://registry.npmjs.org"
 
 /**
- * onnxruntime-node's own npm tarball, for Windows: its binding imports the DirectML build of onnxruntime.dll by
- * ordinal, which Microsoft's CPU release lacks; DirectML.dll is loaded only when used, so the DLL alone runs on CPU.
+ * WireCat's own package of this system's library, on npm: Microsoft's GitHub releases went away on 17.11.2026, so no
+ * download depends on Microsoft's hosting. `bin/publish-onnxruntime` builds them from Microsoft's NuGet package, and
+ * on Windows from onnxruntime-node's npm tarball: its binding imports the DirectML build of onnxruntime.dll by
+ * ordinal, which Microsoft's CPU build lacks; DirectML.dll is loaded only when used, so the DLL alone runs on CPU.
  */
-const npmTarball: ModelFile = {
-  name: `onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
-  url: `https://registry.npmjs.org/onnxruntime-node/-/onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
-  sha256: "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
-  bytes: 113_507_888,
-}
+const wirecat = (
+  target: string,
+  sha256: string,
+  bytes: number,
+  library: NativeRuntime["library"],
+): Omit<NativeRuntime, "target"> => ({
+  archive: {
+    name: `onnxruntime-${target}-${ONNX_RUNTIME_VERSION}.tgz`,
+    url: `${REGISTRY}/@wirecat/onnxruntime-${target}/-/onnxruntime-${target}-${ONNX_RUNTIME_VERSION}.tgz`,
+    sha256,
+    bytes,
+  },
+  member: `package/${library.name}`,
+  library,
+})
 
 /** The systems the native-runtime workflow runs natively; elsewhere, and on musl, the models run through WebAssembly. */
 const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
-  "linux-x64": {
-    archive: release(
-      "onnxruntime-linux-x64-1.30.0.tgz",
-      "a5ed5a3cac51fbb2e90da632ae43d19212faaa20e76484e62bcb7c23ddb3b3fd",
-      11_306_877,
-    ),
-    member: "onnxruntime-linux-x64-1.30.0/lib/libonnxruntime.so.1.30.0",
-    library: {
-      name: "libonnxruntime.so.1",
-      sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
-      bytes: 28_985_152,
-    },
-  },
-  "linux-arm64": {
-    archive: release(
-      "onnxruntime-linux-aarch64-1.30.0.tgz",
-      "e16a27a8ed330bbc698df7330b0cf56e722f354e3bcc92118682c74ef3c3e3da",
-      10_269_495,
-    ),
-    member: "onnxruntime-linux-aarch64-1.30.0/lib/libonnxruntime.so.1.30.0",
-    library: {
+  "linux-x64": wirecat("linux-x64", "9c12e88ae495ae04e28802e52c2524a7a9c31aa715a67eeb636c85efcb08e5d9", 11_305_384, {
+    name: "libonnxruntime.so.1",
+    sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
+    bytes: 28_985_152,
+  }),
+  "linux-arm64": wirecat(
+    "linux-arm64",
+    "4ec23a63f0e7f49edb63590f4bc8b0e8526bff5b3a2b19d768112f37dc50d09c",
+    10_386_392,
+    {
       name: "libonnxruntime.so.1",
       sha256: "64e903a43a041240fd6bcffe0ac6d4fea47ef87bf24b9d097801bd00a9612a4b",
       bytes: 25_135_496,
     },
-  },
-  "darwin-arm64": {
-    archive: release(
-      "onnxruntime-osx-arm64-1.30.0.tgz",
-      "6ebb5062a934537c352937821f9fe9718e7de1a2db1122a93dd363ffd53a7012",
-      42_373_116,
-    ),
-    member: "onnxruntime-osx-arm64-1.30.0/lib/libonnxruntime.1.30.0.dylib",
-    library: {
+  ),
+  "darwin-arm64": wirecat(
+    "darwin-arm64",
+    "0e543a584a048b301ff96b81af4b001288e048577ce0f0b4a5a9c2df97979615",
+    12_921_423,
+    {
       name: "libonnxruntime.1.dylib",
-      sha256: "bcc9110f9d638a119de2db7afb3ba9a1da8085f0cb3401e1c48ae1caf450b6fa",
+      sha256: "bffaa6ef856dba2c26f09c7c0e7018fd1562625f3485292c7ad28b83748c6879",
       bytes: 43_879_424,
     },
-  },
-  "win32-x64": {
-    archive: npmTarball,
-    member: "package/bin/napi-v6/win32/x64/onnxruntime.dll",
-    library: {
-      name: "onnxruntime.dll",
-      sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
-      bytes: 28_754_232,
-    },
-  },
-  "win32-arm64": {
-    archive: npmTarball,
-    member: "package/bin/napi-v6/win32/arm64/onnxruntime.dll",
-    library: {
+  ),
+  "win32-x64": wirecat("win32-x64", "55924c8e4c3f975d131e943712c5fac6e5423fb2b0c356c96230f2ad18dc2792", 10_652_326, {
+    name: "onnxruntime.dll",
+    sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
+    bytes: 28_754_232,
+  }),
+  "win32-arm64": wirecat(
+    "win32-arm64",
+    "77e43743e580d6641e49b7cdeed57fd11f21a8cf27a186dd33a3db817b3ff7f2",
+    10_778_591,
+    {
       name: "onnxruntime.dll",
       sha256: "6c3a2abf5c6aca11c48a0d338a91af309f2266f25ce2e4084e6a87bbcb0fbfd0",
       bytes: 29_815_136,
     },
-  },
+  ),
 }
 
 const onMusl = (): boolean => {
@@ -143,7 +132,7 @@ const isInstalled = (runtime: NativeRuntime, folder: string): boolean =>
   sizeOf(join(folder, runtime.library.name)) === runtime.library.bytes && sizeOf(join(folder, BINDING)) !== undefined
 
 /**
- * The library this system's binding links to, out of Microsoft's release archive, checked against its own sha256
+ * The library this system's binding links to, out of WireCat's npm package of it, checked against its own sha256
  * and placed beside a copy of the binding, which loads it from its own folder. Only from `models download`: a search
  * never downloads. `undefined` when this system runs models through WebAssembly only.
  */
@@ -166,9 +155,7 @@ export const installNativeRuntime = async ({
   const folder = runtimeFolder(runtime, env)
   if (isInstalled(runtime, folder)) return folder
 
-  progress(
-    `ONNX Runtime ${ONNX_RUNTIME_VERSION} for ${runtime.target}: ${megabytes(runtime.archive.bytes)} from Microsoft`,
-  )
+  progress(`ONNX Runtime ${ONNX_RUNTIME_VERSION} for ${runtime.target}: ${megabytes(runtime.archive.bytes)} from npm`)
   const parent = sharedModelsDirectory("runtime", env)
   mkdirSync(parent, { recursive: true, mode: 0o700 })
   const staging = mkdtempSync(join(parent, ".onnxruntime-"))
