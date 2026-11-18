@@ -129,6 +129,22 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**shows the owner's own conversations the hits left out in a block of their own**", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [message("1", "cat dog"), message("40", "fish"), { ...message("80", "cat"), outgoing: true }],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const fish = await embeddings.search("fish", { model: "tiny", limit: 3 })
+    expect(fish.hits.map(({ summary }) => summary.firstMessageId)).toEqual(["40"])
+    expect(fish.own?.map(({ summary, by }) => [summary.firstMessageId, by])).toEqual([["80", ["meaning"]]])
+
+    const cat = await embeddings.search("cat", { model: "tiny", limit: 3 })
+    expect(cat.hits.map(({ summary }) => summary.firstMessageId)).toContain("80")
+    expect(cat.own).toBeUndefined()
+    await store.close()
+  })
+
   it("names a chat embedded only with another model, which the search finds by words alone", async () => {
     const { store, embeddings } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
