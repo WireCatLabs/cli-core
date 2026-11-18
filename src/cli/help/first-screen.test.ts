@@ -62,6 +62,7 @@ describe("the first screen", () => {
         memo context <person>   one person across messengers, mail, notes and meetings
         mail                    IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data
         b24                     Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data
+        amo                     amoCRM and Kommo: deals, contacts and companies, searchable with your other WireCat data
         pbx                     Asterisk PBX calls and recordings, searchable with your other WireCat data
         notion                  Notion pages and databases as local text, searchable with your other WireCat data
         ydisk                   Yandex Disk folders as local text, searchable with your other WireCat data

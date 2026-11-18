@@ -128,7 +128,6 @@ const CREDENTIAL_RUNS: readonly (readonly string[])[] = [
  */
 const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
   ...WIRECAT_TOOLS.map(({ appName, envPrefix }) => ({ appName, prefix: envPrefix })),
-  { appName: "amo-cli", prefix: "AMO" },
   { appName: "beeline-cli", prefix: "BEELINE" },
   { appName: "zm", prefix: "ZM" },
   { appName: "cli-messaging", prefix: "MESSAGING" },

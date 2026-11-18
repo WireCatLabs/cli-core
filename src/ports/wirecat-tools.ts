@@ -76,6 +76,13 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     does: "Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data",
   },
   {
+    command: "amo",
+    appName: "amo-cli",
+    envPrefix: "AMO",
+    package: "@wirecat/amo-cli",
+    does: "amoCRM and Kommo: deals, contacts and companies, searchable with your other WireCat data",
+  },
+  {
     command: "pbx",
     appName: "asterisk-cli",
     envPrefix: "PBX",
