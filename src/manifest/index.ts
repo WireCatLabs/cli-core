@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import type { ContentManifest } from "../content/manifest/manifest.js"
 import type { CrmManifest } from "../crm/manifest/manifest.js"
 import type { OAuthProvider } from "../oauth/provider.js"
 import type { TrackerManifest } from "../tracker/manifest/manifest.js"
@@ -49,6 +50,7 @@ export const CLI_CATEGORIES = [
   "calendar",
   "crm",
   "tracker",
+  "content",
   "other",
 ] as const
 export type CliCategory = (typeof CLI_CATEGORIES)[number]
@@ -73,10 +75,10 @@ export interface CliConfig {
   /** cli-template's `--category`; `other` is any API outside them. */
   category: CliCategory
   /**
-   * A crm or tracker CLI's source; checked against the generated API by `parseCrmManifest` or `parseTrackerManifest`
-   * once the api group exists.
+   * A crm, tracker or content CLI's source; checked against the generated API by `parseCrmManifest`,
+   * `parseTrackerManifest` or `parseContentManifest` once the api group exists.
    */
-  source?: CrmManifest | TrackerManifest
+  source?: CrmManifest | TrackerManifest | ContentManifest
   /** The module of named hooks, relative to the config: `./src/hooks.ts`. */
   hooks?: string
 }
@@ -189,7 +191,7 @@ const schema = v.strictObject({
 })
 
 /**
- * The config checked against its shape; every error names where it is. A crm or tracker CLI needs its source. `source` comes back
+ * The config checked against its shape; every error names where it is. A crm, tracker or content CLI needs its source. `source` comes back
  * unchecked: `parseCrmManifest` checks it against the generated API.
  */
 export const parseCliConfig = (input: unknown): CliConfig => {
@@ -212,9 +214,9 @@ export const parseCliConfig = (input: unknown): CliConfig => {
   // Typed, not cast: a field CliConfig needs that the schema lacks or types otherwise fails to compile (not the reverse).
   const output: Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> } = parsed.output
   const config = output as CliConfig
-  const sourced = config.category === "crm" || config.category === "tracker"
+  const sourced = config.category === "crm" || config.category === "tracker" || config.category === "content"
   if (!sourced && config.source)
-    throw new CliError("configuration_error", "wirecat.config: source: only a crm or tracker CLI reads a source yet", {
+    throw new CliError("configuration_error", "wirecat.config: source: only a crm, tracker or content CLI reads a source yet", {
       reason: "manifest.invalid",
     })
   if (sourced && !config.source)

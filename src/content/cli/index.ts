@@ -41,7 +41,8 @@ export interface ContentRun {
   /** The source, built on first use: a command that only reads the store never reads the sign-in. */
   source: () => ContentSource
   /** The writer and the profile's levels, built on first use; absent, the profile cannot write. */
-  writes?: () => ContentWrites
+  /** The writes of the invoking command: a manifest writer sends through `serviceApiWriter` bound to it. */
+  writes?: (command: Command) => ContentWrites
   env?: NodeJS.ProcessEnv
   close?: () => Promise<void>
 }
@@ -411,7 +412,7 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     return {
       store: run.store,
       account: run.account,
-      writes: run.writes(),
+      writes: run.writes(command),
       ask: terminalAsker(command),
       source: run.source,
       now,

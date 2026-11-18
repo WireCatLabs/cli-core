@@ -1,0 +1,5656 @@
+{
+ "namespaces": [
+  "wp/v2"
+ ],
+ "routes": {
+  "/wp/v2/categories": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "exclude": {
+       "default": [],
+       "description": "Ensure result set excludes specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "hide_empty": {
+       "default": false,
+       "description": "Whether to hide terms not assigned to any posts.",
+       "required": false,
+       "type": "boolean"
+      },
+      "include": {
+       "default": [],
+       "description": "Limit result set to specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "order": {
+       "default": "asc",
+       "description": "Order sort attribute ascending or descending.",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "orderby": {
+       "default": "name",
+       "description": "Sort collection by term attribute.",
+       "enum": [
+        "id",
+        "include",
+        "name",
+        "slug",
+        "include_slugs",
+        "term_group",
+        "description",
+        "count"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "page": {
+       "default": 1,
+       "description": "Current page of the collection.",
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "parent": {
+       "description": "Limit result set to terms assigned to a specific parent.",
+       "required": false,
+       "type": "integer"
+      },
+      "per_page": {
+       "default": 10,
+       "description": "Maximum number of items to be returned in result set.",
+       "maximum": 100,
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "post": {
+       "default": null,
+       "description": "Limit result set to terms assigned to a specific post.",
+       "required": false,
+       "type": "integer"
+      },
+      "search": {
+       "description": "Limit results to those matching a string.",
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "Limit result set to terms with one or more specific slugs.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "HTML description of the term.",
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": [],
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "HTML title for the term.",
+       "required": true,
+       "type": "string"
+      },
+      "parent": {
+       "description": "The parent term ID.",
+       "required": false,
+       "type": "integer"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the term unique to its type.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "count": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Number of published posts for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "description": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "HTML description of the term.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Unique identifier for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "URL of the term.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": [],
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "HTML title for the term.",
+      "required": true,
+      "type": "string"
+     },
+     "parent": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The parent term ID.",
+      "type": "integer"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the term unique to its type.",
+      "type": "string"
+     },
+     "taxonomy": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Type attribution for the term.",
+      "enum": [
+       "category"
+      ],
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "category",
+    "type": "object"
+   }
+  },
+  "/wp/v2/categories/(?P<id>[\\d]+)": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "HTML description of the term.",
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": [],
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "HTML title for the term.",
+       "required": false,
+       "type": "string"
+      },
+      "parent": {
+       "description": "The parent term ID.",
+       "required": false,
+       "type": "integer"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the term unique to its type.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Required to be true, as terms do not support trashing.",
+       "required": false,
+       "type": "boolean"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "count": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Number of published posts for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "description": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "HTML description of the term.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Unique identifier for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "URL of the term.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": [],
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "HTML title for the term.",
+      "required": true,
+      "type": "string"
+     },
+     "parent": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The parent term ID.",
+      "type": "integer"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the term unique to its type.",
+      "type": "string"
+     },
+     "taxonomy": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Type attribution for the term.",
+      "enum": [
+       "category"
+      ],
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "category",
+    "type": "object"
+   }
+  },
+  "/wp/v2/pages": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "after": {
+       "description": "Limit response to posts published after a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "author": {
+       "default": [],
+       "description": "Limit result set to posts assigned to specific authors.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "author_exclude": {
+       "default": [],
+       "description": "Ensure result set excludes posts assigned to specific authors.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "before": {
+       "description": "Limit response to posts published before a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "exclude": {
+       "default": [],
+       "description": "Ensure result set excludes specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "include": {
+       "default": [],
+       "description": "Limit result set to specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "menu_order": {
+       "description": "Limit result set to posts with a specific menu_order value.",
+       "required": false,
+       "type": "integer"
+      },
+      "modified_after": {
+       "description": "Limit response to posts modified after a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "modified_before": {
+       "description": "Limit response to posts modified before a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "offset": {
+       "description": "Offset the result set by a specific number of items.",
+       "required": false,
+       "type": "integer"
+      },
+      "order": {
+       "default": "desc",
+       "description": "Order sort attribute ascending or descending.",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "orderby": {
+       "default": "date",
+       "description": "Sort collection by post attribute.",
+       "enum": [
+        "author",
+        "date",
+        "id",
+        "include",
+        "modified",
+        "parent",
+        "relevance",
+        "slug",
+        "include_slugs",
+        "title",
+        "menu_order"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "page": {
+       "default": 1,
+       "description": "Current page of the collection.",
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "parent": {
+       "default": [],
+       "description": "Limit result set to items with particular parent IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "parent_exclude": {
+       "default": [],
+       "description": "Limit result set to all items except those of a particular parent ID.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "per_page": {
+       "default": 10,
+       "description": "Maximum number of items to be returned in result set.",
+       "maximum": 100,
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "search": {
+       "description": "Limit results to those matching a string.",
+       "required": false,
+       "type": "string"
+      },
+      "search_columns": {
+       "default": [],
+       "description": "Array of column names to be searched.",
+       "items": {
+        "enum": [
+         "post_title",
+         "post_content",
+         "post_excerpt"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "search_semantics": {
+       "description": "How to interpret the search input.",
+       "enum": [
+        "exact"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "Limit result set to posts with one or more specific slugs.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "status": {
+       "default": "publish",
+       "description": "Limit result set to posts assigned one or more statuses.",
+       "items": {
+        "enum": [
+         "publish",
+         "future",
+         "draft",
+         "pending",
+         "private",
+         "trash",
+         "auto-draft",
+         "inherit",
+         "request-pending",
+         "request-confirmed",
+         "request-failed",
+         "request-completed",
+         "any"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "author": {
+       "description": "The ID for the author of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "comment_status": {
+       "description": "Whether or not comments are open on the post.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "content": {
+       "description": "The content for the post.",
+       "properties": {
+        "block_version": {
+         "context": [
+          "edit"
+         ],
+         "description": "Version of the content block format used by the post.",
+         "readonly": true,
+         "type": "integer"
+        },
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the content is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Content for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit"
+         ],
+         "description": "HTML content for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "date": {
+       "description": "The date the post was published, in the site's timezone.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "date_gmt": {
+       "description": "The date the post was published, as GMT.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "excerpt": {
+       "description": "The excerpt for the post.",
+       "properties": {
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the excerpt is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Excerpt for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML excerpt for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "featured_media": {
+       "description": "The ID of the featured media for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "menu_order": {
+       "description": "The order of the post in relation to other posts.",
+       "required": false,
+       "type": "integer"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "footnotes": {
+         "default": "",
+         "description": "",
+         "title": "",
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "parent": {
+       "description": "The ID for the parent of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "password": {
+       "description": "A password to protect access to the content and excerpt.",
+       "required": false,
+       "type": "string"
+      },
+      "ping_status": {
+       "description": "Whether or not the post can be pinged.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the post unique to its type.",
+       "required": false,
+       "type": "string"
+      },
+      "status": {
+       "description": "A named status for the post.",
+       "enum": [
+        "publish",
+        "future",
+        "draft",
+        "pending",
+        "private"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "template": {
+       "description": "The theme file to use to display the post.",
+       "required": false,
+       "type": "string"
+      },
+      "title": {
+       "description": "The title for the post.",
+       "properties": {
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Title for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML title for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      }
+     },
+     "methods": [
+      "POST"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "links": [
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-publish",
+      "targetSchema": {
+       "properties": {
+        "status": {
+         "enum": [
+          "publish",
+          "future"
+         ],
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can publish this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-unfiltered-html",
+      "targetSchema": {
+       "properties": {
+        "content": {
+         "raw": {
+          "type": "string"
+         }
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can post unfiltered HTML markup and JavaScript."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-assign-author",
+      "targetSchema": {
+       "properties": {
+        "author": {
+         "type": "integer"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can change the author on this post."
+     }
+    ],
+    "properties": {
+     "author": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID for the author of the post.",
+      "type": "integer"
+     },
+     "class_list": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "An array of the class names for the post container element.",
+      "items": {
+       "type": "string"
+      },
+      "readonly": true,
+      "type": "array"
+     },
+     "comment_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not comments are open on the post.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "content": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The content for the post.",
+      "properties": {
+       "block_version": {
+        "context": [
+         "edit"
+        ],
+        "description": "Version of the content block format used by the post.",
+        "readonly": true,
+        "type": "integer"
+       },
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the content is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Content for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "HTML content for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "date": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The date the post was published, in the site's timezone.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "date_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was published, as GMT.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "excerpt": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The excerpt for the post.",
+      "properties": {
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the excerpt is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Excerpt for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML excerpt for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "featured_media": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID of the featured media for the post.",
+      "type": "integer"
+     },
+     "generated_slug": {
+      "context": [
+       "edit"
+      ],
+      "description": "Slug automatically generated from the post title.",
+      "readonly": true,
+      "type": "string"
+     },
+     "guid": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The globally unique identifier for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "GUID for the post, as it exists in the database.",
+        "readonly": true,
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "GUID for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "id": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Unique identifier for the post.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "URL to the post.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "menu_order": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The order of the post in relation to other posts.",
+      "type": "integer"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "footnotes": {
+        "default": "",
+        "description": "",
+        "title": "",
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "modified": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, in the site's timezone.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "modified_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, as GMT.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "parent": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The ID for the parent of the post.",
+      "type": "integer"
+     },
+     "password": {
+      "context": [
+       "edit"
+      ],
+      "description": "A password to protect access to the content and excerpt.",
+      "type": "string"
+     },
+     "permalink_template": {
+      "context": [
+       "edit"
+      ],
+      "description": "Permalink template for the post.",
+      "readonly": true,
+      "type": "string"
+     },
+     "ping_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post can be pinged.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "An alphanumeric identifier for the post unique to its type.",
+      "type": "string"
+     },
+     "status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "A named status for the post.",
+      "enum": [
+       "publish",
+       "future",
+       "draft",
+       "pending",
+       "private"
+      ],
+      "type": "string"
+     },
+     "template": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The theme file to use to display the post.",
+      "type": "string"
+     },
+     "title": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The title for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Title for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML title for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Type of post.",
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "page",
+    "type": "object"
+   }
+  },
+  "/wp/v2/pages/(?P<id>[\\d]+)": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "excerpt_length": {
+       "description": "Override the default excerpt length.",
+       "required": false,
+       "type": "integer"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "password": {
+       "description": "The password for the post if it is password protected.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "author": {
+       "description": "The ID for the author of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "comment_status": {
+       "description": "Whether or not comments are open on the post.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "content": {
+       "description": "The content for the post.",
+       "properties": {
+        "block_version": {
+         "context": [
+          "edit"
+         ],
+         "description": "Version of the content block format used by the post.",
+         "readonly": true,
+         "type": "integer"
+        },
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the content is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Content for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit"
+         ],
+         "description": "HTML content for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "date": {
+       "description": "The date the post was published, in the site's timezone.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "date_gmt": {
+       "description": "The date the post was published, as GMT.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "excerpt": {
+       "description": "The excerpt for the post.",
+       "properties": {
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the excerpt is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Excerpt for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML excerpt for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "featured_media": {
+       "description": "The ID of the featured media for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "menu_order": {
+       "description": "The order of the post in relation to other posts.",
+       "required": false,
+       "type": "integer"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "footnotes": {
+         "default": "",
+         "description": "",
+         "title": "",
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "parent": {
+       "description": "The ID for the parent of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "password": {
+       "description": "A password to protect access to the content and excerpt.",
+       "required": false,
+       "type": "string"
+      },
+      "ping_status": {
+       "description": "Whether or not the post can be pinged.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the post unique to its type.",
+       "required": false,
+       "type": "string"
+      },
+      "status": {
+       "description": "A named status for the post.",
+       "enum": [
+        "publish",
+        "future",
+        "draft",
+        "pending",
+        "private"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "template": {
+       "description": "The theme file to use to display the post.",
+       "required": false,
+       "type": "string"
+      },
+      "title": {
+       "description": "The title for the post.",
+       "properties": {
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Title for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML title for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Whether to bypass Trash and force deletion.",
+       "required": false,
+       "type": "boolean"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "links": [
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-publish",
+      "targetSchema": {
+       "properties": {
+        "status": {
+         "enum": [
+          "publish",
+          "future"
+         ],
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can publish this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-unfiltered-html",
+      "targetSchema": {
+       "properties": {
+        "content": {
+         "raw": {
+          "type": "string"
+         }
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can post unfiltered HTML markup and JavaScript."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/pages/{id}",
+      "rel": "https://api.w.org/action-assign-author",
+      "targetSchema": {
+       "properties": {
+        "author": {
+         "type": "integer"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can change the author on this post."
+     }
+    ],
+    "properties": {
+     "author": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID for the author of the post.",
+      "type": "integer"
+     },
+     "class_list": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "An array of the class names for the post container element.",
+      "items": {
+       "type": "string"
+      },
+      "readonly": true,
+      "type": "array"
+     },
+     "comment_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not comments are open on the post.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "content": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The content for the post.",
+      "properties": {
+       "block_version": {
+        "context": [
+         "edit"
+        ],
+        "description": "Version of the content block format used by the post.",
+        "readonly": true,
+        "type": "integer"
+       },
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the content is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Content for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "HTML content for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "date": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The date the post was published, in the site's timezone.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "date_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was published, as GMT.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "excerpt": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The excerpt for the post.",
+      "properties": {
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the excerpt is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Excerpt for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML excerpt for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "featured_media": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID of the featured media for the post.",
+      "type": "integer"
+     },
+     "generated_slug": {
+      "context": [
+       "edit"
+      ],
+      "description": "Slug automatically generated from the post title.",
+      "readonly": true,
+      "type": "string"
+     },
+     "guid": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The globally unique identifier for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "GUID for the post, as it exists in the database.",
+        "readonly": true,
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "GUID for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "id": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Unique identifier for the post.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "URL to the post.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "menu_order": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The order of the post in relation to other posts.",
+      "type": "integer"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "footnotes": {
+        "default": "",
+        "description": "",
+        "title": "",
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "modified": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, in the site's timezone.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "modified_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, as GMT.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "parent": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The ID for the parent of the post.",
+      "type": "integer"
+     },
+     "password": {
+      "context": [
+       "edit"
+      ],
+      "description": "A password to protect access to the content and excerpt.",
+      "type": "string"
+     },
+     "permalink_template": {
+      "context": [
+       "edit"
+      ],
+      "description": "Permalink template for the post.",
+      "readonly": true,
+      "type": "string"
+     },
+     "ping_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post can be pinged.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "An alphanumeric identifier for the post unique to its type.",
+      "type": "string"
+     },
+     "status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "A named status for the post.",
+      "enum": [
+       "publish",
+       "future",
+       "draft",
+       "pending",
+       "private"
+      ],
+      "type": "string"
+     },
+     "template": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The theme file to use to display the post.",
+      "type": "string"
+     },
+     "title": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The title for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Title for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML title for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Type of post.",
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "page",
+    "type": "object"
+   }
+  },
+  "/wp/v2/posts": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "after": {
+       "description": "Limit response to posts published after a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "author": {
+       "default": [],
+       "description": "Limit result set to posts assigned to specific authors.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "author_exclude": {
+       "default": [],
+       "description": "Ensure result set excludes posts assigned to specific authors.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "before": {
+       "description": "Limit response to posts published before a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "categories": {
+       "description": "Limit result set to items with specific terms assigned in the categories taxonomy.",
+       "oneOf": [
+        {
+         "description": "Match terms with the listed IDs.",
+         "items": {
+          "type": "integer"
+         },
+         "title": "Term ID List",
+         "type": "array"
+        },
+        {
+         "additionalProperties": false,
+         "description": "Perform an advanced term query.",
+         "properties": {
+          "include_children": {
+           "default": false,
+           "description": "Whether to include child terms in the terms limiting the result set.",
+           "type": "boolean"
+          },
+          "operator": {
+           "default": "OR",
+           "description": "Whether items must be assigned all or any of the specified terms.",
+           "enum": [
+            "AND",
+            "OR"
+           ],
+           "type": "string"
+          },
+          "terms": {
+           "default": [],
+           "description": "Term IDs.",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          }
+         },
+         "title": "Term ID Taxonomy Query",
+         "type": "object"
+        }
+       ],
+       "required": false,
+       "type": [
+        "object",
+        "array"
+       ]
+      },
+      "categories_exclude": {
+       "description": "Limit result set to items except those with specific terms assigned in the categories taxonomy.",
+       "oneOf": [
+        {
+         "description": "Match terms with the listed IDs.",
+         "items": {
+          "type": "integer"
+         },
+         "title": "Term ID List",
+         "type": "array"
+        },
+        {
+         "additionalProperties": false,
+         "description": "Perform an advanced term query.",
+         "properties": {
+          "include_children": {
+           "default": false,
+           "description": "Whether to include child terms in the terms limiting the result set.",
+           "type": "boolean"
+          },
+          "terms": {
+           "default": [],
+           "description": "Term IDs.",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          }
+         },
+         "title": "Term ID Taxonomy Query",
+         "type": "object"
+        }
+       ],
+       "required": false,
+       "type": [
+        "object",
+        "array"
+       ]
+      },
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "exclude": {
+       "default": [],
+       "description": "Ensure result set excludes specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "format": {
+       "description": "Limit result set to items assigned one or more given formats.",
+       "items": {
+        "enum": [
+         "standard",
+         "aside",
+         "chat",
+         "gallery",
+         "link",
+         "image",
+         "quote",
+         "status",
+         "video",
+         "audio"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array",
+       "uniqueItems": true
+      },
+      "ignore_sticky": {
+       "default": true,
+       "description": "Whether to ignore sticky posts or not.",
+       "required": false,
+       "type": "boolean"
+      },
+      "include": {
+       "default": [],
+       "description": "Limit result set to specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "modified_after": {
+       "description": "Limit response to posts modified after a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "modified_before": {
+       "description": "Limit response to posts modified before a given ISO8601 compliant date.",
+       "format": "date-time",
+       "required": false,
+       "type": "string"
+      },
+      "offset": {
+       "description": "Offset the result set by a specific number of items.",
+       "required": false,
+       "type": "integer"
+      },
+      "order": {
+       "default": "desc",
+       "description": "Order sort attribute ascending or descending.",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "orderby": {
+       "default": "date",
+       "description": "Sort collection by post attribute.",
+       "enum": [
+        "author",
+        "date",
+        "id",
+        "include",
+        "modified",
+        "parent",
+        "relevance",
+        "slug",
+        "include_slugs",
+        "title"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "page": {
+       "default": 1,
+       "description": "Current page of the collection.",
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "per_page": {
+       "default": 10,
+       "description": "Maximum number of items to be returned in result set.",
+       "maximum": 100,
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "search": {
+       "description": "Limit results to those matching a string.",
+       "required": false,
+       "type": "string"
+      },
+      "search_columns": {
+       "default": [],
+       "description": "Array of column names to be searched.",
+       "items": {
+        "enum": [
+         "post_title",
+         "post_content",
+         "post_excerpt"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "search_semantics": {
+       "description": "How to interpret the search input.",
+       "enum": [
+        "exact"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "Limit result set to posts with one or more specific slugs.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "status": {
+       "default": "publish",
+       "description": "Limit result set to posts assigned one or more statuses.",
+       "items": {
+        "enum": [
+         "publish",
+         "future",
+         "draft",
+         "pending",
+         "private",
+         "trash",
+         "auto-draft",
+         "inherit",
+         "request-pending",
+         "request-confirmed",
+         "request-failed",
+         "request-completed",
+         "any"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "sticky": {
+       "description": "Limit result set to items that are sticky.",
+       "required": false,
+       "type": "boolean"
+      },
+      "tags": {
+       "description": "Limit result set to items with specific terms assigned in the tags taxonomy.",
+       "oneOf": [
+        {
+         "description": "Match terms with the listed IDs.",
+         "items": {
+          "type": "integer"
+         },
+         "title": "Term ID List",
+         "type": "array"
+        },
+        {
+         "additionalProperties": false,
+         "description": "Perform an advanced term query.",
+         "properties": {
+          "operator": {
+           "default": "OR",
+           "description": "Whether items must be assigned all or any of the specified terms.",
+           "enum": [
+            "AND",
+            "OR"
+           ],
+           "type": "string"
+          },
+          "terms": {
+           "default": [],
+           "description": "Term IDs.",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          }
+         },
+         "title": "Term ID Taxonomy Query",
+         "type": "object"
+        }
+       ],
+       "required": false,
+       "type": [
+        "object",
+        "array"
+       ]
+      },
+      "tags_exclude": {
+       "description": "Limit result set to items except those with specific terms assigned in the tags taxonomy.",
+       "oneOf": [
+        {
+         "description": "Match terms with the listed IDs.",
+         "items": {
+          "type": "integer"
+         },
+         "title": "Term ID List",
+         "type": "array"
+        },
+        {
+         "additionalProperties": false,
+         "description": "Perform an advanced term query.",
+         "properties": {
+          "terms": {
+           "default": [],
+           "description": "Term IDs.",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          }
+         },
+         "title": "Term ID Taxonomy Query",
+         "type": "object"
+        }
+       ],
+       "required": false,
+       "type": [
+        "object",
+        "array"
+       ]
+      },
+      "tax_relation": {
+       "description": "Limit result set based on relationship between multiple taxonomies.",
+       "enum": [
+        "AND",
+        "OR"
+       ],
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "author": {
+       "description": "The ID for the author of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "categories": {
+       "description": "The terms assigned to the post in the category taxonomy.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "comment_status": {
+       "description": "Whether or not comments are open on the post.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "content": {
+       "description": "The content for the post.",
+       "properties": {
+        "block_version": {
+         "context": [
+          "edit"
+         ],
+         "description": "Version of the content block format used by the post.",
+         "readonly": true,
+         "type": "integer"
+        },
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the content is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Content for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit"
+         ],
+         "description": "HTML content for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "date": {
+       "description": "The date the post was published, in the site's timezone.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "date_gmt": {
+       "description": "The date the post was published, as GMT.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "excerpt": {
+       "description": "The excerpt for the post.",
+       "properties": {
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the excerpt is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Excerpt for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML excerpt for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "featured_media": {
+       "description": "The ID of the featured media for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "format": {
+       "description": "The format for the post.",
+       "enum": [
+        "standard",
+        "aside",
+        "chat",
+        "gallery",
+        "link",
+        "image",
+        "quote",
+        "status",
+        "video",
+        "audio"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "footnotes": {
+         "default": "",
+         "description": "",
+         "title": "",
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "password": {
+       "description": "A password to protect access to the content and excerpt.",
+       "required": false,
+       "type": "string"
+      },
+      "ping_status": {
+       "description": "Whether or not the post can be pinged.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the post unique to its type.",
+       "required": false,
+       "type": "string"
+      },
+      "status": {
+       "description": "A named status for the post.",
+       "enum": [
+        "publish",
+        "future",
+        "draft",
+        "pending",
+        "private"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "sticky": {
+       "description": "Whether or not the post should be treated as sticky.",
+       "required": false,
+       "type": "boolean"
+      },
+      "tags": {
+       "description": "The terms assigned to the post in the post_tag taxonomy.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "template": {
+       "description": "The theme file to use to display the post.",
+       "required": false,
+       "type": "string"
+      },
+      "title": {
+       "description": "The title for the post.",
+       "properties": {
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Title for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML title for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      }
+     },
+     "methods": [
+      "POST"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "links": [
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-publish",
+      "targetSchema": {
+       "properties": {
+        "status": {
+         "enum": [
+          "publish",
+          "future"
+         ],
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can publish this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-unfiltered-html",
+      "targetSchema": {
+       "properties": {
+        "content": {
+         "raw": {
+          "type": "string"
+         }
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can post unfiltered HTML markup and JavaScript."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-sticky",
+      "targetSchema": {
+       "properties": {
+        "sticky": {
+         "type": "boolean"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can sticky this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-author",
+      "targetSchema": {
+       "properties": {
+        "author": {
+         "type": "integer"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can change the author on this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-categories",
+      "targetSchema": {
+       "properties": {
+        "categories": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can assign terms in the category taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-create-categories",
+      "targetSchema": {
+       "properties": {
+        "categories": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can create terms in the category taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-tags",
+      "targetSchema": {
+       "properties": {
+        "tags": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can assign terms in the post_tag taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-create-tags",
+      "targetSchema": {
+       "properties": {
+        "tags": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can create terms in the post_tag taxonomy."
+     }
+    ],
+    "properties": {
+     "author": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID for the author of the post.",
+      "type": "integer"
+     },
+     "categories": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The terms assigned to the post in the category taxonomy.",
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "class_list": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "An array of the class names for the post container element.",
+      "items": {
+       "type": "string"
+      },
+      "readonly": true,
+      "type": "array"
+     },
+     "comment_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not comments are open on the post.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "content": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The content for the post.",
+      "properties": {
+       "block_version": {
+        "context": [
+         "edit"
+        ],
+        "description": "Version of the content block format used by the post.",
+        "readonly": true,
+        "type": "integer"
+       },
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the content is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Content for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "HTML content for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "date": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The date the post was published, in the site's timezone.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "date_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was published, as GMT.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "excerpt": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The excerpt for the post.",
+      "properties": {
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the excerpt is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Excerpt for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML excerpt for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "featured_media": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID of the featured media for the post.",
+      "type": "integer"
+     },
+     "format": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The format for the post.",
+      "enum": [
+       "standard",
+       "aside",
+       "chat",
+       "gallery",
+       "link",
+       "image",
+       "quote",
+       "status",
+       "video",
+       "audio"
+      ],
+      "type": "string"
+     },
+     "generated_slug": {
+      "context": [
+       "edit"
+      ],
+      "description": "Slug automatically generated from the post title.",
+      "readonly": true,
+      "type": "string"
+     },
+     "guid": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The globally unique identifier for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "GUID for the post, as it exists in the database.",
+        "readonly": true,
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "GUID for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "id": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Unique identifier for the post.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "URL to the post.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "footnotes": {
+        "default": "",
+        "description": "",
+        "title": "",
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "modified": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, in the site's timezone.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "modified_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, as GMT.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "password": {
+      "context": [
+       "edit"
+      ],
+      "description": "A password to protect access to the content and excerpt.",
+      "type": "string"
+     },
+     "permalink_template": {
+      "context": [
+       "edit"
+      ],
+      "description": "Permalink template for the post.",
+      "readonly": true,
+      "type": "string"
+     },
+     "ping_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post can be pinged.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "An alphanumeric identifier for the post unique to its type.",
+      "type": "string"
+     },
+     "status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "A named status for the post.",
+      "enum": [
+       "publish",
+       "future",
+       "draft",
+       "pending",
+       "private"
+      ],
+      "type": "string"
+     },
+     "sticky": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post should be treated as sticky.",
+      "type": "boolean"
+     },
+     "tags": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The terms assigned to the post in the post_tag taxonomy.",
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "template": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The theme file to use to display the post.",
+      "type": "string"
+     },
+     "title": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The title for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Title for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML title for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Type of post.",
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "post",
+    "type": "object"
+   }
+  },
+  "/wp/v2/posts/(?P<id>[\\d]+)": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "excerpt_length": {
+       "description": "Override the default excerpt length.",
+       "required": false,
+       "type": "integer"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "password": {
+       "description": "The password for the post if it is password protected.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "author": {
+       "description": "The ID for the author of the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "categories": {
+       "description": "The terms assigned to the post in the category taxonomy.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "comment_status": {
+       "description": "Whether or not comments are open on the post.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "content": {
+       "description": "The content for the post.",
+       "properties": {
+        "block_version": {
+         "context": [
+          "edit"
+         ],
+         "description": "Version of the content block format used by the post.",
+         "readonly": true,
+         "type": "integer"
+        },
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the content is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Content for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit"
+         ],
+         "description": "HTML content for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "date": {
+       "description": "The date the post was published, in the site's timezone.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "date_gmt": {
+       "description": "The date the post was published, as GMT.",
+       "format": "date-time",
+       "required": false,
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "excerpt": {
+       "description": "The excerpt for the post.",
+       "properties": {
+        "protected": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "Whether the excerpt is protected with a password.",
+         "readonly": true,
+         "type": "boolean"
+        },
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Excerpt for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML excerpt for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "featured_media": {
+       "description": "The ID of the featured media for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "format": {
+       "description": "The format for the post.",
+       "enum": [
+        "standard",
+        "aside",
+        "chat",
+        "gallery",
+        "link",
+        "image",
+        "quote",
+        "status",
+        "video",
+        "audio"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "footnotes": {
+         "default": "",
+         "description": "",
+         "title": "",
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "password": {
+       "description": "A password to protect access to the content and excerpt.",
+       "required": false,
+       "type": "string"
+      },
+      "ping_status": {
+       "description": "Whether or not the post can be pinged.",
+       "enum": [
+        "open",
+        "closed"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the post unique to its type.",
+       "required": false,
+       "type": "string"
+      },
+      "status": {
+       "description": "A named status for the post.",
+       "enum": [
+        "publish",
+        "future",
+        "draft",
+        "pending",
+        "private"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "sticky": {
+       "description": "Whether or not the post should be treated as sticky.",
+       "required": false,
+       "type": "boolean"
+      },
+      "tags": {
+       "description": "The terms assigned to the post in the post_tag taxonomy.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "template": {
+       "description": "The theme file to use to display the post.",
+       "required": false,
+       "type": "string"
+      },
+      "title": {
+       "description": "The title for the post.",
+       "properties": {
+        "raw": {
+         "context": [
+          "edit"
+         ],
+         "description": "Title for the post, as it exists in the database.",
+         "type": "string"
+        },
+        "rendered": {
+         "context": [
+          "view",
+          "edit",
+          "embed"
+         ],
+         "description": "HTML title for the post, transformed for display.",
+         "readonly": true,
+         "type": "string"
+        }
+       },
+       "required": false,
+       "type": "object"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Whether to bypass Trash and force deletion.",
+       "required": false,
+       "type": "boolean"
+      },
+      "id": {
+       "description": "Unique identifier for the post.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "links": [
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-publish",
+      "targetSchema": {
+       "properties": {
+        "status": {
+         "enum": [
+          "publish",
+          "future"
+         ],
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can publish this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-unfiltered-html",
+      "targetSchema": {
+       "properties": {
+        "content": {
+         "raw": {
+          "type": "string"
+         }
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can post unfiltered HTML markup and JavaScript."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-sticky",
+      "targetSchema": {
+       "properties": {
+        "sticky": {
+         "type": "boolean"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can sticky this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-author",
+      "targetSchema": {
+       "properties": {
+        "author": {
+         "type": "integer"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can change the author on this post."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-categories",
+      "targetSchema": {
+       "properties": {
+        "categories": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can assign terms in the category taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-create-categories",
+      "targetSchema": {
+       "properties": {
+        "categories": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can create terms in the category taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-assign-tags",
+      "targetSchema": {
+       "properties": {
+        "tags": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can assign terms in the post_tag taxonomy."
+     },
+     {
+      "href": "https://example.com/wp-json/wp/v2/posts/{id}",
+      "rel": "https://api.w.org/action-create-tags",
+      "targetSchema": {
+       "properties": {
+        "tags": {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        }
+       },
+       "type": "object"
+      },
+      "title": "The current user can create terms in the post_tag taxonomy."
+     }
+    ],
+    "properties": {
+     "author": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID for the author of the post.",
+      "type": "integer"
+     },
+     "categories": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The terms assigned to the post in the category taxonomy.",
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "class_list": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "An array of the class names for the post container element.",
+      "items": {
+       "type": "string"
+      },
+      "readonly": true,
+      "type": "array"
+     },
+     "comment_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not comments are open on the post.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "content": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The content for the post.",
+      "properties": {
+       "block_version": {
+        "context": [
+         "edit"
+        ],
+        "description": "Version of the content block format used by the post.",
+        "readonly": true,
+        "type": "integer"
+       },
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the content is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Content for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "HTML content for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "date": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The date the post was published, in the site's timezone.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "date_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was published, as GMT.",
+      "format": "date-time",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "excerpt": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The excerpt for the post.",
+      "properties": {
+       "protected": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "Whether the excerpt is protected with a password.",
+        "readonly": true,
+        "type": "boolean"
+       },
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Excerpt for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML excerpt for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "featured_media": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The ID of the featured media for the post.",
+      "type": "integer"
+     },
+     "format": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The format for the post.",
+      "enum": [
+       "standard",
+       "aside",
+       "chat",
+       "gallery",
+       "link",
+       "image",
+       "quote",
+       "status",
+       "video",
+       "audio"
+      ],
+      "type": "string"
+     },
+     "generated_slug": {
+      "context": [
+       "edit"
+      ],
+      "description": "Slug automatically generated from the post title.",
+      "readonly": true,
+      "type": "string"
+     },
+     "guid": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The globally unique identifier for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "GUID for the post, as it exists in the database.",
+        "readonly": true,
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit"
+        ],
+        "description": "GUID for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "id": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Unique identifier for the post.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "URL to the post.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "footnotes": {
+        "default": "",
+        "description": "",
+        "title": "",
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "modified": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, in the site's timezone.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "modified_gmt": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The date the post was last modified, as GMT.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "password": {
+      "context": [
+       "edit"
+      ],
+      "description": "A password to protect access to the content and excerpt.",
+      "type": "string"
+     },
+     "permalink_template": {
+      "context": [
+       "edit"
+      ],
+      "description": "Permalink template for the post.",
+      "readonly": true,
+      "type": "string"
+     },
+     "ping_status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post can be pinged.",
+      "enum": [
+       "open",
+       "closed"
+      ],
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "An alphanumeric identifier for the post unique to its type.",
+      "type": "string"
+     },
+     "status": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "A named status for the post.",
+      "enum": [
+       "publish",
+       "future",
+       "draft",
+       "pending",
+       "private"
+      ],
+      "type": "string"
+     },
+     "sticky": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Whether or not the post should be treated as sticky.",
+      "type": "boolean"
+     },
+     "tags": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The terms assigned to the post in the post_tag taxonomy.",
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "template": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "The theme file to use to display the post.",
+      "type": "string"
+     },
+     "title": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "The title for the post.",
+      "properties": {
+       "raw": {
+        "context": [
+         "edit"
+        ],
+        "description": "Title for the post, as it exists in the database.",
+        "type": "string"
+       },
+       "rendered": {
+        "context": [
+         "view",
+         "edit",
+         "embed"
+        ],
+        "description": "HTML title for the post, transformed for display.",
+        "readonly": true,
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": {
+      "context": [
+       "view",
+       "edit",
+       "embed"
+      ],
+      "description": "Type of post.",
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "post",
+    "type": "object"
+   }
+  },
+  "/wp/v2/tags": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "exclude": {
+       "default": [],
+       "description": "Ensure result set excludes specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "hide_empty": {
+       "default": false,
+       "description": "Whether to hide terms not assigned to any posts.",
+       "required": false,
+       "type": "boolean"
+      },
+      "include": {
+       "default": [],
+       "description": "Limit result set to specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "offset": {
+       "description": "Offset the result set by a specific number of items.",
+       "required": false,
+       "type": "integer"
+      },
+      "order": {
+       "default": "asc",
+       "description": "Order sort attribute ascending or descending.",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "orderby": {
+       "default": "name",
+       "description": "Sort collection by term attribute.",
+       "enum": [
+        "id",
+        "include",
+        "name",
+        "slug",
+        "include_slugs",
+        "term_group",
+        "description",
+        "count"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "page": {
+       "default": 1,
+       "description": "Current page of the collection.",
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "per_page": {
+       "default": 10,
+       "description": "Maximum number of items to be returned in result set.",
+       "maximum": 100,
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "post": {
+       "default": null,
+       "description": "Limit result set to terms assigned to a specific post.",
+       "required": false,
+       "type": "integer"
+      },
+      "search": {
+       "description": "Limit results to those matching a string.",
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "Limit result set to terms with one or more specific slugs.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "HTML description of the term.",
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": [],
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "HTML title for the term.",
+       "required": true,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the term unique to its type.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "count": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Number of published posts for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "description": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "HTML description of the term.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Unique identifier for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "URL of the term.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": [],
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "HTML title for the term.",
+      "required": true,
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the term unique to its type.",
+      "type": "string"
+     },
+     "taxonomy": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Type attribution for the term.",
+      "enum": [
+       "post_tag"
+      ],
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "tag",
+    "type": "object"
+   }
+  },
+  "/wp/v2/tags/(?P<id>[\\d]+)": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "HTML description of the term.",
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": [],
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "HTML title for the term.",
+       "required": false,
+       "type": "string"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the term unique to its type.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Required to be true, as terms do not support trashing.",
+       "required": false,
+       "type": "boolean"
+      },
+      "id": {
+       "description": "Unique identifier for the term.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "count": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Number of published posts for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "description": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "HTML description of the term.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Unique identifier for the term.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "link": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "URL of the term.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": [],
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "HTML title for the term.",
+      "required": true,
+      "type": "string"
+     },
+     "slug": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the term unique to its type.",
+      "type": "string"
+     },
+     "taxonomy": {
+      "context": [
+       "view",
+       "embed",
+       "edit"
+      ],
+      "description": "Type attribution for the term.",
+      "enum": [
+       "post_tag"
+      ],
+      "readonly": true,
+      "type": "string"
+     }
+    },
+    "title": "tag",
+    "type": "object"
+   }
+  },
+  "/wp/v2/users": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "capabilities": {
+       "description": "Limit result set to users matching at least one specific capability provided. Accepts csv list or single capability.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "exclude": {
+       "default": [],
+       "description": "Ensure result set excludes specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "has_published_posts": {
+       "description": "Limit result set to users who have published posts.",
+       "items": {
+        "enum": {
+         "attachment": "attachment",
+         "nav_menu_item": "nav_menu_item",
+         "page": "page",
+         "post": "post",
+         "wp_block": "wp_block",
+         "wp_font_face": "wp_font_face",
+         "wp_font_family": "wp_font_family",
+         "wp_global_styles": "wp_global_styles",
+         "wp_navigation": "wp_navigation",
+         "wp_template": "wp_template",
+         "wp_template_part": "wp_template_part"
+        },
+        "type": "string"
+       },
+       "required": false,
+       "type": [
+        "boolean",
+        "array"
+       ]
+      },
+      "include": {
+       "default": [],
+       "description": "Limit result set to specific IDs.",
+       "items": {
+        "type": "integer"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "offset": {
+       "description": "Offset the result set by a specific number of items.",
+       "required": false,
+       "type": "integer"
+      },
+      "order": {
+       "default": "asc",
+       "description": "Order sort attribute ascending or descending.",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "orderby": {
+       "default": "name",
+       "description": "Sort collection by user attribute.",
+       "enum": [
+        "id",
+        "include",
+        "name",
+        "registered_date",
+        "slug",
+        "include_slugs",
+        "email",
+        "url"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "page": {
+       "default": 1,
+       "description": "Current page of the collection.",
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "per_page": {
+       "default": 10,
+       "description": "Maximum number of items to be returned in result set.",
+       "maximum": 100,
+       "minimum": 1,
+       "required": false,
+       "type": "integer"
+      },
+      "roles": {
+       "description": "Limit result set to users matching at least one specific role provided. Accepts csv list or single role.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "search": {
+       "description": "Limit results to those matching a string.",
+       "required": false,
+       "type": "string"
+      },
+      "search_columns": {
+       "default": [],
+       "description": "Array of column names to be searched.",
+       "items": {
+        "enum": [
+         "email",
+         "name",
+         "id",
+         "username",
+         "slug"
+        ],
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "slug": {
+       "description": "Limit result set to users with one or more specific slugs.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "who": {
+       "description": "Limit result set to users who are considered authors.",
+       "enum": [
+        "authors"
+       ],
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "Description of the user.",
+       "required": false,
+       "type": "string"
+      },
+      "email": {
+       "description": "The email address for the user.",
+       "format": "email",
+       "required": true,
+       "type": "string"
+      },
+      "first_name": {
+       "description": "First name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "last_name": {
+       "description": "Last name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "locale": {
+       "description": "Locale for the user.",
+       "enum": [
+        "",
+        "en_US"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "persisted_preferences": {
+         "additionalProperties": true,
+         "context": [
+          "edit"
+         ],
+         "default": [],
+         "description": "",
+         "properties": {
+          "_modified": {
+           "description": "The date and time the preferences were updated.",
+           "format": "date-time",
+           "readonly": false,
+           "type": "string"
+          }
+         },
+         "title": "",
+         "type": "object"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "Display name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "nickname": {
+       "description": "The nickname for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "password": {
+       "description": "Password for the user (never included).",
+       "required": true,
+       "type": "string"
+      },
+      "roles": {
+       "description": "Roles assigned to the user.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "url": {
+       "description": "URL of the user.",
+       "format": "uri",
+       "required": false,
+       "type": "string"
+      },
+      "username": {
+       "description": "Login name for the user.",
+       "required": true,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "avatar_urls": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Avatar URLs for the user.",
+      "properties": {
+       "24": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 24 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "48": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 48 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "96": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 96 pixels.",
+        "format": "uri",
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "All capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "description": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Description of the user.",
+      "type": "string"
+     },
+     "email": {
+      "context": [
+       "edit"
+      ],
+      "description": "The email address for the user.",
+      "format": "email",
+      "required": true,
+      "type": "string"
+     },
+     "extra_capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "Any extra capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "first_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "First name for the user.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Unique identifier for the user.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "last_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "Last name for the user.",
+      "type": "string"
+     },
+     "link": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Author URL of the user.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "locale": {
+      "context": [
+       "edit"
+      ],
+      "description": "Locale for the user.",
+      "enum": [
+       "",
+       "en_US"
+      ],
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "persisted_preferences": {
+        "additionalProperties": true,
+        "context": [
+         "edit"
+        ],
+        "default": [],
+        "description": "",
+        "properties": {
+         "_modified": {
+          "description": "The date and time the preferences were updated.",
+          "format": "date-time",
+          "readonly": false,
+          "type": "string"
+         }
+        },
+        "title": "",
+        "type": "object"
+       }
+      },
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Display name for the user.",
+      "type": "string"
+     },
+     "nickname": {
+      "context": [
+       "edit"
+      ],
+      "description": "The nickname for the user.",
+      "type": "string"
+     },
+     "password": {
+      "context": [],
+      "description": "Password for the user (never included).",
+      "required": true,
+      "type": "string"
+     },
+     "registered_date": {
+      "context": [
+       "edit"
+      ],
+      "description": "Registration date for the user.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "roles": {
+      "context": [
+       "edit"
+      ],
+      "description": "Roles assigned to the user.",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "slug": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the user.",
+      "type": "string"
+     },
+     "url": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "URL of the user.",
+      "format": "uri",
+      "type": "string"
+     },
+     "username": {
+      "context": [
+       "edit"
+      ],
+      "description": "Login name for the user.",
+      "required": true,
+      "type": "string"
+     }
+    },
+    "title": "user",
+    "type": "object"
+   }
+  },
+  "/wp/v2/users/(?P<id>[\\d]+)": {
+   "endpoints": [
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the user.",
+       "required": false,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "description": {
+       "description": "Description of the user.",
+       "required": false,
+       "type": "string"
+      },
+      "email": {
+       "description": "The email address for the user.",
+       "format": "email",
+       "required": false,
+       "type": "string"
+      },
+      "first_name": {
+       "description": "First name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "id": {
+       "description": "Unique identifier for the user.",
+       "required": false,
+       "type": "integer"
+      },
+      "last_name": {
+       "description": "Last name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "locale": {
+       "description": "Locale for the user.",
+       "enum": [
+        "",
+        "en_US"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "persisted_preferences": {
+         "additionalProperties": true,
+         "context": [
+          "edit"
+         ],
+         "default": [],
+         "description": "",
+         "properties": {
+          "_modified": {
+           "description": "The date and time the preferences were updated.",
+           "format": "date-time",
+           "readonly": false,
+           "type": "string"
+          }
+         },
+         "title": "",
+         "type": "object"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "Display name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "nickname": {
+       "description": "The nickname for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "password": {
+       "description": "Password for the user (never included).",
+       "required": false,
+       "type": "string"
+      },
+      "roles": {
+       "description": "Roles assigned to the user.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "url": {
+       "description": "URL of the user.",
+       "format": "uri",
+       "required": false,
+       "type": "string"
+      },
+      "username": {
+       "description": "Login name for the user.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "allow_batch": {
+      "v1": true
+     },
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Required to be true, as users do not support trashing.",
+       "required": false,
+       "type": "boolean"
+      },
+      "id": {
+       "description": "Unique identifier for the user.",
+       "required": false,
+       "type": "integer"
+      },
+      "reassign": {
+       "description": "Reassign the deleted user's posts and links to this user ID.",
+       "required": true,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "avatar_urls": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Avatar URLs for the user.",
+      "properties": {
+       "24": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 24 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "48": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 48 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "96": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 96 pixels.",
+        "format": "uri",
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "All capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "description": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Description of the user.",
+      "type": "string"
+     },
+     "email": {
+      "context": [
+       "edit"
+      ],
+      "description": "The email address for the user.",
+      "format": "email",
+      "required": true,
+      "type": "string"
+     },
+     "extra_capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "Any extra capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "first_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "First name for the user.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Unique identifier for the user.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "last_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "Last name for the user.",
+      "type": "string"
+     },
+     "link": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Author URL of the user.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "locale": {
+      "context": [
+       "edit"
+      ],
+      "description": "Locale for the user.",
+      "enum": [
+       "",
+       "en_US"
+      ],
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "persisted_preferences": {
+        "additionalProperties": true,
+        "context": [
+         "edit"
+        ],
+        "default": [],
+        "description": "",
+        "properties": {
+         "_modified": {
+          "description": "The date and time the preferences were updated.",
+          "format": "date-time",
+          "readonly": false,
+          "type": "string"
+         }
+        },
+        "title": "",
+        "type": "object"
+       }
+      },
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Display name for the user.",
+      "type": "string"
+     },
+     "nickname": {
+      "context": [
+       "edit"
+      ],
+      "description": "The nickname for the user.",
+      "type": "string"
+     },
+     "password": {
+      "context": [],
+      "description": "Password for the user (never included).",
+      "required": true,
+      "type": "string"
+     },
+     "registered_date": {
+      "context": [
+       "edit"
+      ],
+      "description": "Registration date for the user.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "roles": {
+      "context": [
+       "edit"
+      ],
+      "description": "Roles assigned to the user.",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "slug": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the user.",
+      "type": "string"
+     },
+     "url": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "URL of the user.",
+      "format": "uri",
+      "type": "string"
+     },
+     "username": {
+      "context": [
+       "edit"
+      ],
+      "description": "Login name for the user.",
+      "required": true,
+      "type": "string"
+     }
+    },
+    "title": "user",
+    "type": "object"
+   }
+  },
+  "/wp/v2/users/me": {
+   "endpoints": [
+    {
+     "args": {
+      "context": {
+       "default": "view",
+       "description": "Scope under which the request is made; determines fields present in response.",
+       "enum": [
+        "view",
+        "embed",
+        "edit"
+       ],
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "GET"
+     ]
+    },
+    {
+     "args": {
+      "description": {
+       "description": "Description of the user.",
+       "required": false,
+       "type": "string"
+      },
+      "email": {
+       "description": "The email address for the user.",
+       "format": "email",
+       "required": false,
+       "type": "string"
+      },
+      "first_name": {
+       "description": "First name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "last_name": {
+       "description": "Last name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "locale": {
+       "description": "Locale for the user.",
+       "enum": [
+        "",
+        "en_US"
+       ],
+       "required": false,
+       "type": "string"
+      },
+      "meta": {
+       "description": "Meta fields.",
+       "properties": {
+        "persisted_preferences": {
+         "additionalProperties": true,
+         "context": [
+          "edit"
+         ],
+         "default": [],
+         "description": "",
+         "properties": {
+          "_modified": {
+           "description": "The date and time the preferences were updated.",
+           "format": "date-time",
+           "readonly": false,
+           "type": "string"
+          }
+         },
+         "title": "",
+         "type": "object"
+        }
+       },
+       "required": false,
+       "type": "object"
+      },
+      "name": {
+       "description": "Display name for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "nickname": {
+       "description": "The nickname for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "password": {
+       "description": "Password for the user (never included).",
+       "required": false,
+       "type": "string"
+      },
+      "roles": {
+       "description": "Roles assigned to the user.",
+       "items": {
+        "type": "string"
+       },
+       "required": false,
+       "type": "array"
+      },
+      "slug": {
+       "description": "An alphanumeric identifier for the user.",
+       "required": false,
+       "type": "string"
+      },
+      "url": {
+       "description": "URL of the user.",
+       "format": "uri",
+       "required": false,
+       "type": "string"
+      },
+      "username": {
+       "description": "Login name for the user.",
+       "required": false,
+       "type": "string"
+      }
+     },
+     "methods": [
+      "POST",
+      "PUT",
+      "PATCH"
+     ]
+    },
+    {
+     "args": {
+      "force": {
+       "default": false,
+       "description": "Required to be true, as users do not support trashing.",
+       "required": false,
+       "type": "boolean"
+      },
+      "reassign": {
+       "description": "Reassign the deleted user's posts and links to this user ID.",
+       "required": true,
+       "type": "integer"
+      }
+     },
+     "methods": [
+      "DELETE"
+     ]
+    }
+   ],
+   "methods": [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+   ],
+   "namespace": "wp/v2",
+   "schema": {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "properties": {
+     "avatar_urls": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Avatar URLs for the user.",
+      "properties": {
+       "24": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 24 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "48": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 48 pixels.",
+        "format": "uri",
+        "type": "string"
+       },
+       "96": {
+        "context": [
+         "embed",
+         "view",
+         "edit"
+        ],
+        "description": "Avatar URL with image size of 96 pixels.",
+        "format": "uri",
+        "type": "string"
+       }
+      },
+      "readonly": true,
+      "type": "object"
+     },
+     "capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "All capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "description": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Description of the user.",
+      "type": "string"
+     },
+     "email": {
+      "context": [
+       "edit"
+      ],
+      "description": "The email address for the user.",
+      "format": "email",
+      "required": true,
+      "type": "string"
+     },
+     "extra_capabilities": {
+      "context": [
+       "edit"
+      ],
+      "description": "Any extra capabilities assigned to the user.",
+      "readonly": true,
+      "type": "object"
+     },
+     "first_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "First name for the user.",
+      "type": "string"
+     },
+     "id": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Unique identifier for the user.",
+      "readonly": true,
+      "type": "integer"
+     },
+     "last_name": {
+      "context": [
+       "edit"
+      ],
+      "description": "Last name for the user.",
+      "type": "string"
+     },
+     "link": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Author URL of the user.",
+      "format": "uri",
+      "readonly": true,
+      "type": "string"
+     },
+     "locale": {
+      "context": [
+       "edit"
+      ],
+      "description": "Locale for the user.",
+      "enum": [
+       "",
+       "en_US"
+      ],
+      "type": "string"
+     },
+     "meta": {
+      "context": [
+       "view",
+       "edit"
+      ],
+      "description": "Meta fields.",
+      "properties": {
+       "persisted_preferences": {
+        "additionalProperties": true,
+        "context": [
+         "edit"
+        ],
+        "default": [],
+        "description": "",
+        "properties": {
+         "_modified": {
+          "description": "The date and time the preferences were updated.",
+          "format": "date-time",
+          "readonly": false,
+          "type": "string"
+         }
+        },
+        "title": "",
+        "type": "object"
+       }
+      },
+      "type": "object"
+     },
+     "name": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "Display name for the user.",
+      "type": "string"
+     },
+     "nickname": {
+      "context": [
+       "edit"
+      ],
+      "description": "The nickname for the user.",
+      "type": "string"
+     },
+     "password": {
+      "context": [],
+      "description": "Password for the user (never included).",
+      "required": true,
+      "type": "string"
+     },
+     "registered_date": {
+      "context": [
+       "edit"
+      ],
+      "description": "Registration date for the user.",
+      "format": "date-time",
+      "readonly": true,
+      "type": "string"
+     },
+     "roles": {
+      "context": [
+       "edit"
+      ],
+      "description": "Roles assigned to the user.",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "slug": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "An alphanumeric identifier for the user.",
+      "type": "string"
+     },
+     "url": {
+      "context": [
+       "embed",
+       "view",
+       "edit"
+      ],
+      "description": "URL of the user.",
+      "format": "uri",
+      "type": "string"
+     },
+     "username": {
+      "context": [
+       "edit"
+      ],
+      "description": "Login name for the user.",
+      "required": true,
+      "type": "string"
+     }
+    },
+    "title": "user",
+    "type": "object"
+   }
+  }
+ }
+}

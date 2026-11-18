@@ -48,7 +48,7 @@ describe("parseCliConfig", () => {
     )
     expect(() => parseCliConfig({ ...config, category: "crm" })).toThrow("a crm CLI needs its source")
     expect(() => parseCliConfig({ ...config, category: "tracker" })).toThrow("a tracker CLI needs its source")
-    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm or tracker CLI")
+    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm, tracker or content CLI")
     for (const from of [
       "/etc/spec.json",
       "//evil.test/x",
@@ -64,7 +64,7 @@ describe("parseCliConfig", () => {
     expect(() => parseCliConfig({ ...config, identity: { ...config.identity, owner: "-owner" } })).toThrow(
       "identity.owner",
     )
-    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm or tracker CLI")
+    expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow("only a crm, tracker or content CLI")
     expect(() => parseCliConfig({ ...config, extra: true })).toThrow(
       "wirecat.config: extra: not a field of wirecat.config",
     )

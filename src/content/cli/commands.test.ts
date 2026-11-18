@@ -7,7 +7,12 @@ import { provide } from "../../cli/context.js"
 import type { AppIdentity } from "../../ports/app.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
+import { WORDPRESS_CONTENT, wordpressApi, wordpressFake } from "../../../test/fixtures/wordpress-content.js"
+import type { AccountKey } from "../../store/types.js"
+import { contentSourceFromManifest, contentWriterFromManifest } from "../manifest/index.js"
+import type { ContentSource } from "../source.js"
 import { exampleContentRows, fakeContentSource } from "../testing/index.js"
+import type { ContentWriter } from "../writer.js"
 import { addContentCommands } from "./index.js"
 
 const APP: AppIdentity = {
@@ -27,14 +32,17 @@ afterEach(async () => {
 
 type Answer = Record<string, unknown> & { items: Record<string, unknown>[]; item: Record<string, unknown> }
 
-const setup = async (permissions: Record<string, Level> = {}) => {
+const setup = async (
+  permissions: Record<string, Level> = {},
+  over?: { source: ContentSource; writer: ContentWriter; account: AccountKey },
+) => {
   const home = mkdtempSync(join(tmpdir(), "content-cli-"))
   const store = await openStore({ path: join(home, "store.db") })
   opened.push(store)
   const source = fakeContentSource({ rows: exampleContentRows(), clock: () => NOW })
   const env = { HOME: home, XDG_DATA_HOME: home, XDG_STATE_HOME: home, BLOG_STATE_DIR: home }
   const writes = () => ({
-    writer: source.writer,
+    writer: over?.writer ?? source.writer,
     app: APP,
     env,
     settings: () => ({ profile: "work", permissions, permissionSources: {} }),
@@ -49,7 +57,13 @@ const setup = async (permissions: Record<string, Level> = {}) => {
       .option("--dry-run")
     addContentCommands(root, {
       app: APP,
-      open: async () => ({ account: ACCOUNT, store, source: () => source, writes, env }),
+      open: async () => ({
+        account: over?.account ?? ACCOUNT,
+        store,
+        source: () => over?.source ?? source,
+        writes,
+        env,
+      }),
       writes: true,
       now: () => NOW,
     })
@@ -130,5 +144,28 @@ describe("content commands", () => {
     await store.content.save(ACCOUNT, "post", [{ externalId: "10", status: "published", lossy: true }], NOW)
     await expect(cli("posts", "update", "10", "--body-file", file, "--yes")).rejects.toThrow(/--replace-body/)
     expect(source.requests).toEqual([])
+  })
+
+  it("over WordPress from configuration: a publish or an edit of a public post without posts.publish sends nothing", async () => {
+    const api = wordpressApi()
+    const site = wordpressFake({ clock: () => NOW })
+    const source = contentSourceFromManifest(WORDPRESS_CONTENT, { api, call: site.call, site: "example.com", now: () => NOW })
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api,
+      write: site.write,
+      command: new Command("wp"),
+      source,
+      site: "example.com",
+    })
+    const { cli } = await setup(
+      { "posts.publish": "deny" },
+      { source, writer, account: { provider: "wordpress", account: "example.com" } },
+    )
+    await cli("sync")
+    await expect(cli("posts", "publish", "11", "--yes")).rejects.toThrow(/posts\.publish/)
+    // Scheduled on the site after the sync, its time already past: WordPress publishes it on any edit (RISK-9.b).
+    Object.assign(site.rows.find((one) => one.id === 11) ?? {}, { status: "future", date_gmt: "2026-11-17T00:00:00" })
+    await expect(cli("posts", "update", "11", "--title", "Missed schedule", "--yes")).rejects.toThrow(/posts\.publish/)
+    expect(site.writes).toEqual([])
   })
 })
