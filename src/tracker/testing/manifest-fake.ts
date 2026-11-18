@@ -134,8 +134,13 @@ const put = (row: crmValues.CrmRaw, path: string, value: unknown) => {
 interface Route {
   kind: TrackerKind
   call: TrackerOperationCall
-  since?: { place: string; format: TrackerChangesCall["since"] }
+  since?: { place: string; format: TrackerChangesCall["since"]; after: boolean }
+  /** Why the fake cannot answer this call as the tracker would; each call by it is refused with this. */
+  problem?: string
 }
+
+/** The only filter the fake applies: a since on the change time. Any other would pass rows the tracker drops. */
+const FILTER = "filter"
 
 /**
  * A GraphQL tracker in memory, built from a source manifest and the generated API it names: cli-base's strict
@@ -257,17 +262,39 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     })
   }
 
+  const filterProblem = (kind: TrackerKind, call: TrackerOperationCall, place?: string) => {
+    const filter = fixedOf(call.variables?.[FILTER] ?? {})
+    if (filter.length > 0)
+      return `${call.operation}: the fake cannot apply ${FILTER}.${filter[0]?.[0]}, so it would list rows the tracker drops`
+    if (place === undefined) return undefined
+    const time = timePath(kind, "updatedAt")
+    const ends = [`${time}.gte`, `${time}.gt`]
+    if (!ends.some((end) => place === end || place.endsWith(`.${end}`)))
+      return `${call.operation}: {since} at ${place} is not ${time}.gte or ${time}.gt, the change time the map reads`
+    return undefined
+  }
   const routes: Route[] = manifest.kinds.flatMap((kind) => {
     const entity = manifest.entities[kind] as NonNullable<TrackerManifest["entities"][TrackerKind]>
+    const plain = (call: TrackerOperationCall): Route => {
+      const problem =
+        call.variables && FILTER in call.variables
+          ? `${call.operation}: a list or id read with a ${FILTER} leaves rows out, and sync would mark them deleted`
+          : undefined
+      return { kind, call, ...(problem ? { problem } : {}) }
+    }
+    const changes = entity.changes
+    const place = changes && (placeOf(changes.variables, "{since}") as string)
+    const problem = changes && filterProblem(kind, changes, place)
     return [
-      { kind, call: entity.list },
-      ...(entity.ids ? [{ kind, call: entity.ids }] : []),
-      ...(entity.changes
+      plain(entity.list),
+      ...(entity.ids ? [plain(entity.ids)] : []),
+      ...(changes && place
         ? [
             {
               kind,
-              call: entity.changes,
-              since: { place: placeOf(entity.changes.variables, "{since}") as string, format: entity.changes.since },
+              call: changes,
+              since: { place, format: changes.since, after: place.endsWith(".gt") },
+              ...(problem ? { problem } : {}),
             },
           ]
         : []),
@@ -315,6 +342,7 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
   const answer = (call: GraphqlFakeCall): GraphqlFakeAnswer => {
     const route = routeOf(call)
     if (!route) return refuse(`${call.operation}: no call of the source manifest sends these variables`)
+    if (route.problem) return refuse(route.problem)
     const { kind } = route
     const operation = operationOf(route.call)
     const hidesArchived = operation.binding.kind === "graphql" && ARCHIVED in operation.binding.variables
@@ -327,7 +355,10 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
       const from = SINCE[route.since.format](sent)
       if (!Number.isFinite(from)) return refuse(`${call.operation}: since ${sent} is unreadable`)
       listed = listed
-        .filter((row) => (timeOf(kind, row, "updatedAt") ?? Number.NEGATIVE_INFINITY) >= from)
+        .filter((row) => {
+          const time = timeOf(kind, row, "updatedAt") ?? Number.NEGATIVE_INFINITY
+          return route.since?.after ? time > from : time >= from
+        })
         .sort((a, b) => (timeOf(kind, a, "updatedAt") ?? 0) - (timeOf(kind, b, "updatedAt") ?? 0))
     }
     const selection = call.selection ?? {}
@@ -500,9 +531,15 @@ export const trackerManifestContract = (manifest: unknown, options: TrackerManif
     name,
     async run() {
       fakes.length = 0
-      await run()
+      const failed = await run().then(
+        () => undefined,
+        (error: unknown) => error,
+      )
+      // A refused call fails the source too; the refusal says why, its error only that the tracker said no.
       const refused = fakes.flatMap((fake) => fake.refusals)
-      if (refused.length) throw new Error(`the fake refused calls the source made:\n${refused.join("\n")}`)
+      if (refused.length)
+        throw new Error(`the fake refused calls the source made:\n${refused.join("\n")}`, { cause: failed })
+      if (failed) throw failed
     },
   }))
 }
