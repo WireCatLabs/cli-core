@@ -131,7 +131,11 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
       for (const name of names) {
         if (name.startsWith(".") || keep.has(name)) continue
         const object = join(objects, name)
-        if ((await stat(object)).mtimeMs <= now() - RETAIN_MS) await rm(object, { force: true })
+        const kept = await stat(object).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined
+          throw error
+        })
+        if (kept && kept.mtimeMs <= now() - RETAIN_MS) await rm(object, { force: true })
       }
     },
   }

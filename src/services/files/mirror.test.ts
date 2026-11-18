@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import {
+  chmodSync,
   createReadStream,
   createWriteStream,
   existsSync,
@@ -22,7 +23,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { Expect, FileEntry, FileTarget, RemoteFile } from "../../documents/file-mirror-model.js"
 import type { Keep } from "../../documents/push-model.js"
 import { type Mirror, mirrorId } from "../documents/mirrors.js"
-import { hashFile, localTemp } from "../documents/push.js"
+import { hashFile, localTemp, placeNew, safePath } from "../documents/push.js"
 import {
   type FileMirrorOptions,
   fileMirrorStatus,
@@ -35,6 +36,7 @@ import { fileVersions, restoreFileVersion } from "./versions.js"
 
 const reads = vi.hoisted(() => [] as string[])
 const links = vi.hoisted(() => ({ refused: false }))
+const vanished = vi.hoisted(() => new Set<string>())
 vi.mock("node:fs/promises", async (original) => {
   const fs = await original<typeof import("node:fs/promises")>()
   return {
@@ -44,6 +46,10 @@ vi.mock("node:fs/promises", async (original) => {
       links.refused
         ? Promise.reject(Object.assign(new Error("operation not permitted"), { code: "EPERM" }))
         : fs.link(...args),
+    stat: (path: never, ...rest: never[]) =>
+      vanished.has(String(path))
+        ? Promise.reject(Object.assign(new Error("no such file"), { code: "ENOENT" }))
+        : fs.stat(path, ...rest),
     readFile: (path: never, ...rest: never[]) => {
       reads.push(String(path))
       return fs.readFile(path, ...rest)
@@ -1063,33 +1069,50 @@ describe("syncFileMirror, symbolic links and unusable paths", () => {
     expect(await context.local()).toMatchObject({ "c.md": "3" })
   })
 
-  it("refuses remote paths the mirror cannot use, and deletes nothing while the listing holds one", async () => {
+  const listing = (context: Awaited<ReturnType<typeof synced>>, change: (files: RemoteFile[]) => RemoteFile[]) => {
+    const list = context.disk.target.list
+    return {
+      ...context.disk.target,
+      list: async (...args: Parameters<FileTarget["list"]>) => {
+        const listed = await list(...args)
+        return listed && { ...listed, files: change(listed.files) }
+      },
+    } satisfies FileTarget
+  }
+
+  it("refuses remote paths the mirror cannot use, and still takes other deletions as proven", async () => {
     const context = await synced()
     context.disk.remove("c.md")
-    const bad = ["../evil.md", "a//b.md", "./x.md", "back\\slash.md", "nul\0.md", "/abs.md"]
-    const list = context.disk.target.list
-    const target: FileTarget = {
-      ...context.disk.target,
-      list: async (...args) => {
-        const listed = await list(...args)
-        return (
-          listed && {
-            ...listed,
-            files: [
-              ...listed.files,
-              ...bad.map((path, n) => ({ ...(listed.files[0] as RemoteFile), id: `bad-${n}`, path })),
-            ],
-          }
-        )
-      },
-    }
+    const bad = ["../evil.md", "a//b.md", "./x.md", "nul\0.md", "/abs.md"]
+    const target = listing(context, (listed) => [
+      ...listed,
+      ...bad.map((path, n) => ({ ...(listed[0] as RemoteFile), id: `bad-${n}`, path })),
+    ])
     const result = await context.sync(undefined, { target })
     expect(result.errors.map((error) => [error.path, error.code])).toEqual(
       bad.map((path) => [path, "invalid_response"]),
     )
-    expect(result.unknown).toEqual([expect.objectContaining({ path: "c.md", side: "remote" })])
-    expect(await context.local()).toMatchObject({ "c.md": "3" })
+    expect(result.trashed).toEqual([{ path: "c.md", side: "local" }])
     expect(existsSync(join(dirname(context.root), "evil.md"))).toBe(false)
+  })
+
+  it("takes a synced file moved to a refused path as unknown, never deleted", async () => {
+    const context = await synced()
+    const target = listing(context, (listed) =>
+      listed.map((file) => (file.path === "c.md" ? { ...file, path: "c\0.md" } : file)),
+    )
+    const result = await context.sync(undefined, { target })
+    expect(result.unknown).toEqual([{ path: "c.md", side: "remote", reason: "moved on the disk to a refused path" }])
+    expect(result.trashed).toEqual([])
+    expect(await context.local()).toMatchObject({ "c.md": "3" })
+  })
+
+  it("keeps a backslash in a name, refused only on Windows", async () => {
+    const context = await synced()
+    context.disk.write("back\\slash.md", "b")
+    expect((await context.sync()).downloaded).toEqual(["back\\slash.md"])
+    expect(safePath("back\\slash.md", "linux")).toBe(true)
+    expect(safePath("back\\slash.md", "win32")).toBe(false)
   })
 })
 
@@ -1137,6 +1160,51 @@ describe("syncFileMirror, a file system without hard links", () => {
 describe("syncFileMirror, repin", () => {
   const files = { "a.md": "1", "b.md": "2", "c.md": "3", "d.md": "4" }
 
+  it("ignores repin for a mirror whose roots were not replaced, and keeps its state and deletions", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    rmSync(join(context.root, "a.md"))
+    const result = await context.sync(undefined, { repin: true })
+    expect(result).toMatchObject({ trashed: [{ path: "a.md", side: "remote" }], errors: [] })
+    expect(context.disk.trash.map((item) => item.path)).toEqual(["a.md"])
+    expect(Object.keys(context.port.read().entries)).toEqual(["b.md", "c.md", "d.md"])
+    expect(context.port.read().rootId).toBe("root-1")
+  })
+
+  it("still blocks an empty local folder with repin, whether or not it is another folder", async () => {
+    for (const change of ["emptied", "replaced"] as const) {
+      const context = setup(files, files)
+      await context.sync()
+      if (change === "emptied") for (const name of Object.keys(files)) rmSync(join(context.root, name))
+      else {
+        renameSync(context.root, `${context.root}-old`)
+        mkdirSync(context.root)
+      }
+      const result = await context.sync(undefined, { repin: true })
+      expect(result.errors).toEqual([expect.objectContaining({ path: ".", code: "validation_error" })])
+      expect(context.disk.calls).toEqual([])
+      expect(await context.local()).toEqual({})
+      expect(Object.keys(context.port.read().entries)).toEqual(Object.keys(files))
+    }
+  })
+
+  it("settles nothing with keep in a repin run: different content stays a conflict", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    renameSync(context.root, `${context.root}-old`)
+    mkdirSync(context.root)
+    for (const [name, content] of Object.entries(files)) put(context.root, name, content)
+    put(context.root, "d.md", "4, other")
+    for (const keep of ["local", "remote", "both"] as const) {
+      const result = await context.sync(keep, { repin: true, dryRun: true })
+      expect(result.plan).toEqual(expect.arrayContaining([{ kind: "conflict", path: "d.md" }]))
+    }
+    const result = await context.sync("local", { repin: true })
+    expect(result.conflicts).toEqual([expect.objectContaining({ path: "d.md" })])
+    expect(await context.disk.files()).toEqual(files)
+    expect(await context.local()).toMatchObject({ "d.md": "4, other" })
+  })
+
   it("records a replaced remote folder again only when asked, deleting nothing in that run", async () => {
     const context = setup(files, files)
     await context.sync()
@@ -1179,5 +1247,67 @@ describe("syncFileMirror, repin", () => {
     expect(context.disk.writes().filter((call) => call.op !== "download")).toEqual([])
     expect(await context.disk.files()).toEqual(files)
     expect(await context.sync()).toMatchObject({ unchanged: 3, errors: [], unknown: [] })
+  })
+})
+
+describe("syncFileMirror, a download cut off by a crash", () => {
+  it("never sends or overwrites a partial file, and downloads again once it is moved away", async () => {
+    const context = setup({}, { "a.md": "full content" })
+    const state = context.port.read()
+    state.pending["a.md"] = { op: "download", operationId: "op-cut" }
+    context.port.save(state)
+    put(context.root, "a.md", "full")
+    for (const keep of [undefined, "local", "remote", "both"] as const) {
+      const result = await context.sync(keep)
+      expect(result.conflicts).toEqual([
+        expect.objectContaining({ path: "a.md", reason: expect.stringContaining("cut off") }),
+      ])
+    }
+    expect(context.disk.writes().filter((call) => call.op !== "download")).toEqual([])
+    expect(await context.local()).toEqual({ "a.md": "full" })
+    expect(context.port.read().pending["a.md"]).toBeDefined()
+    rmSync(join(context.root, "a.md"))
+    expect(await context.sync()).toMatchObject({ downloaded: ["a.md"], conflicts: [] })
+    expect(context.port.read().pending).toEqual({})
+  })
+})
+
+describe("placeNew without hard links", () => {
+  it("copies with the source's mode and never touches a file already there", async () => {
+    const dir = temp("file-mirror-place-")
+    const from = join(dir, "from")
+    writeFileSync(from, "new")
+    chmodSync(from, 0o640)
+    put(dir, "taken", "keep me")
+    links.refused = true
+    try {
+      await expect(placeNew(from, join(dir, "taken"))).rejects.toMatchObject({ code: "EEXIST" })
+      await placeNew(from, join(dir, "free"))
+    } finally {
+      links.refused = false
+    }
+    expect(readFileSync(join(dir, "taken"), "utf8")).toBe("keep me")
+    expect(readFileSync(join(dir, "free"), "utf8")).toBe("new")
+    expect(statSync(join(dir, "free")).mode & 0o777).toBe(0o640)
+  })
+})
+
+describe("fileVersions.prune", () => {
+  it("skips an object that vanished while it ran", async () => {
+    const dir = temp("file-mirror-versions-")
+    let clock = TODAY
+    const versions = fileVersions(dir, () => clock)
+    const file = join(temp("file-mirror-versions-src-"), "x")
+    writeFileSync(file, "x")
+    await versions.keep(file)
+    clock += 31 * 24 * 60 * 60 * 1000
+    const object = join(dir, "objects", hashes("x").sha256)
+    vanished.add(object)
+    try {
+      await expect(versions.prune()).resolves.toBeUndefined()
+    } finally {
+      vanished.delete(object)
+    }
+    expect(existsSync(object)).toBe(true)
   })
 })

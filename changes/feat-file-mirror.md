@@ -13,8 +13,10 @@
   complete, and the side's root is the same folder (the remote root's id; the local folder's device and inode, and
   not empty while the state has files, as an unmounted drive is). Anything else is reported as `unknown` and the run
   is partial, with a root problem reported as an error even at a first sync. Files under a symbolic link are
-  `unknown` too. When the owner confirms a replaced root is the right folder, `repin: true` records it again and
-  runs a first sync that deletes nothing.
+  `unknown` too, as is a file moved remotely to a path the mirror refuses. When the owner confirms a replaced root
+  is the right folder, `repin: true` records it again and runs a first sync that deletes nothing and settles no
+  conflict; a mirror whose root was not replaced ignores it. A download cut off midway stays a conflict until its
+  partial file is moved away.
 - **`fileVersions`: a local version store for mirrors.** Before a sync overwrites or deletes a local file, its content
   is kept by sha256 under the profile's state folder, with an append-only log of every change both ways; versions stay
   30 days, and a deleted file's last version stays for good; a version kept just before a crash stays 30 days too.

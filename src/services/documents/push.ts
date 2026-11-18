@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto"
-import { constants, createReadStream } from "node:fs"
-import { chmod, copyFile, link, lstat, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { createReadStream, createWriteStream } from "node:fs"
+import { chmod, link, lstat, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, posix } from "node:path"
+import { pipeline } from "node:stream/promises"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
   ConflictPart,
@@ -85,9 +86,9 @@ export const hashFile = (path: string): Promise<{ sha256: string; md5: string }>
   })
 
 /**
- * Puts `from` at `to` only while `to` is absent: a hard link, or a copy made with `COPYFILE_EXCL` where the file
- * system has no hard links (exFAT, FAT, many FUSE and SMB mounts) or `to` is on another device. Fails with `EEXIST`
- * when `to` exists; `from` stays for the caller to remove.
+ * Puts `from` at `to` only while `to` is absent: a hard link, or a copy into a file this call creates exclusively
+ * where the file system has no hard links (exFAT, FAT, many FUSE and SMB mounts) or `to` is on another device. Fails
+ * with `EEXIST` when `to` exists; `from` stays for the caller to remove.
  */
 export const placeNew = async (from: string, to: string) => {
   try {
@@ -97,18 +98,36 @@ export const placeNew = async (from: string, to: string) => {
     if (!["EPERM", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "ENOSYS"].includes((error as NodeJS.ErrnoException).code ?? ""))
       throw error
   }
+  const { mode } = await stat(from)
+  let created = false
+  // "wx" fails with EEXIST before anything exists, so only a file this call opened is ever removed.
+  const into = createWriteStream(to, { flags: "wx" }).once("open", () => {
+    created = true
+  })
   try {
-    await copyFile(from, to, constants.COPYFILE_EXCL)
+    await pipeline(createReadStream(from), into)
+    await chmod(to, mode & 0o777)
   } catch (error) {
-    // Only an exclusive create that succeeded can have left a partial copy behind.
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") await rm(to, { force: true })
+    if (created) await rm(to, { force: true })
     throw error
   }
 }
 
-/** A relative path whose every segment names one entry: none empty, `.` or `..`, none with a backslash or NUL. */
-export const safePath = (path: string): boolean =>
-  path.split("/").every((part) => part !== "" && part !== "." && part !== ".." && !/[\\\0]/.test(part))
+/**
+ * A relative path whose every segment names one entry: none empty, `.` or `..`, none with NUL, and on Windows,
+ * where it separates folders, none with a backslash.
+ */
+export const safePath = (path: string, platform: NodeJS.Platform = process.platform): boolean =>
+  path
+    .split("/")
+    .every(
+      (part) =>
+        part !== "" &&
+        part !== "." &&
+        part !== ".." &&
+        !part.includes("\0") &&
+        !(platform === "win32" && part.includes("\\")),
+    )
 
 /**
  * Refuses a write at `path` under `root` when a folder on the way, or the file itself, is a symbolic link: a write

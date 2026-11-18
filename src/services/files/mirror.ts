@@ -250,28 +250,34 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const state = options.state.read()
   if (state.principal !== principal || state.root !== root || state.target !== folder)
     throw new CliError("configuration_error", "mirror state belongs to another account or mirror")
-  const repin = options.repin === true
-  // A re-pinned mirror starts over: the last sync's entries describe the folder it replaced.
-  const entries = repin ? {} : state.entries
-  const synced = Object.keys(entries).length > 0
   const listed = await target.list(folder, signal)
   const localRoot = await stat(root).catch(() => undefined)
+  const remoteReplaced = listed !== undefined && state.rootId !== undefined && listed.rootId !== state.rootId
+  const localReplaced =
+    localRoot?.isDirectory() === true &&
+    state.localRoot !== undefined &&
+    (state.localRoot.dev !== localRoot.dev || state.localRoot.ino !== localRoot.ino)
+  // Only a mirror whose root really was replaced is re-pinned; `repin` on a sync of every mirror leaves the others be.
+  const repin = options.repin === true && (remoteReplaced || localReplaced)
+  // A re-pinned mirror starts over: the last sync's entries describe the folder it replaced.
+  const entries = repin ? {} : state.entries
   const scanned = localRoot?.isDirectory() ? await scan(root, entries, options.maxFiles) : { files: [], links: [] }
   const local = new Map(scanned.files.map((file) => [file.path, file]))
   const problem = (side: Side, code: string, reason: string, repinnable = false) => ({ side, code, reason, repinnable })
   // A folder that is gone, replaced, or empty where the state had files (an unmounted drive) is not this mirror.
   const rootProblem = !listed
     ? problem("remote", "not_found", `the ${options.remote} folder is gone`)
-    : !repin && state.rootId !== undefined && listed.rootId !== state.rootId
+    : remoteReplaced && !repin
       ? problem("remote", "confirmation_required", `the ${options.remote} folder was replaced by another one`, true)
       : !localRoot?.isDirectory()
         ? problem("local", "not_found", "the local folder is gone")
-        : !repin && state.localRoot && (state.localRoot.dev !== localRoot.dev || state.localRoot.ino !== localRoot.ino)
+        : localReplaced && !repin
           ? problem("local", "confirmation_required", "the local folder was replaced by another one", true)
-          : synced && !local.size
+          : Object.keys(state.entries).length > 0 && !local.size
             ? problem("local", "validation_error", "the local folder is empty; it may be an unmounted drive")
             : undefined
   const refused = rootProblem ? [] : (listed?.files ?? []).filter((file) => !safePath(file.path))
+  const refusedIds = new Set(refused.map((file) => file.id))
   const remote = new Map(
     rootProblem
       ? []
@@ -279,8 +285,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   )
   const sure = {
     local: rootProblem?.side !== "local",
-    // A listing with a path the mirror cannot use may hide where a file went.
-    remote: rootProblem?.side !== "remote" && listed?.complete === true && !refused.length,
+    remote: rootProblem?.side !== "remote" && listed?.complete === true,
   }
   const base = { ...entries }
 
@@ -329,8 +334,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       code: "invalid_response",
       message: `the ${options.remote} listed a path the mirror cannot use`,
     })
+  const cutOff = new Set<string>()
   for (const path of paths) {
-    if (base[path] && !local.has(path) && scanned.links.some((link) => under(path, link))) {
+    const entry = base[path]
+    if (entry && !local.has(path) && scanned.links.some((link) => under(path, link))) {
       steps.push({
         kind: "unknown",
         path,
@@ -339,16 +346,33 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       })
       continue
     }
+    if (entry && !remote.has(path) && refusedIds.has(entry.id)) {
+      steps.push({ kind: "unknown", path, reason: "remote", why: `moved on the ${options.remote} to a refused path` })
+      continue
+    }
     const file = remote.get(path)
     if (file && file.sha256 === undefined) {
       result.errors.push({ path, code: "provider_error", message: `the ${options.remote} has no hash for it yet` })
       continue
     }
-    const step = decide(path, sure, local.get(path), file, base[path], keep)
+    const here = local.get(path)
+    // Where links fail, a download is copied into place; a crash midway leaves a partial file under the real name,
+    // which must be neither sent nor overwritten.
+    if (state.pending[path]?.op === "download" && here && here.hash !== file?.sha256 && here.hash !== entry?.sha256) {
+      cutOff.add(path)
+      steps.push({
+        kind: "conflict",
+        path,
+        local: here,
+        ...(file ? { remote: file } : {}),
+        reason: "an earlier download was cut off and the local file may be incomplete; move it away to download again",
+      })
+      continue
+    }
+    // A re-pinned run settles nothing: whatever `keep` says, different content is a conflict.
+    const step = decide(path, sure, here, file, entry, repin ? undefined : keep)
     if (step) steps.push(step)
     else unchanged++
-    const entry = base[path]
-    const here = local.get(path)
     // Saved without a write, so the next scan does not read a file only touched since the last sync.
     if (!step && entry && here && (entry.localMtimeMs !== here.mtimeMs || entry.localSize !== here.size))
       touched.push(path)
@@ -397,7 +421,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   }
   for (const [path, pending] of Object.entries(state.pending)) {
     if (pending.op === "download") await rm(localTemp(join(root, path), tagOf(pending.operationId)), { force: true })
-    delete state.pending[path]
+    if (!cutOff.has(path)) delete state.pending[path]
   }
   let savedAt = now()
   const save = (force = false) => {
