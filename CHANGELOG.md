@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.705.0 — 19.11.2026
+
+### Added
+
+- **The first screen's "Works with" names `amo`** (amoCRM and Kommo, `@wirecat/amo-cli`), now that it is on npm.
+
+### Fixed
+
+- **A raw read that names its command's read key is sent as a read.** A CLI can put `people.list` on `api
+  contacts-list`, so `people: deny` stops the raw read too (WC-PERM-22). Before, any key beyond `api.*` sent the read
+  the way a write goes, with an `operation_id` in the answer, and refused `--all`. Now `deny` refuses it, `allow`
+  sends it as a read with `--all`, and only `ask` keeps the write's path. Found by the hubspot-cli review.
+
 ## 0.704.0 — 19.11.2026
 
 ### Added
