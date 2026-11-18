@@ -278,15 +278,9 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     return request
   }
 
-  const write = async (
-    command: Command,
-    operation: ManifestOperation,
-    extra: readonly PermissionKey[],
-    request: HttpApiRequest,
-  ) => {
-    const { settings, env, renderer, run } = baseContext(command, configuration.resolveSettings)
-    const operationId = newOperationId()
-    const guard = keyedGuard(
+  const guardOf = (command: Command, extra: readonly PermissionKey[]) => {
+    const { settings, env, renderer } = baseContext(command, configuration.resolveSettings)
+    return keyedGuard(
       (ask) =>
         guardFor(
           app,
@@ -299,6 +293,29 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       (key) => levelFor(settings.permissions, key, defaults).level,
       extra,
     )
+  }
+
+  /**
+   * A read whose keys all allow it is sent as a read, `--all` included; `deny` refuses it here, and `ask` makes it ask
+   * as a write does. So a CLI can put its CRM command's read key (`people.list`) on the raw read.
+   */
+  const readsFreely = (command: Command, operation: ManifestOperation, extra: readonly PermissionKey[]) => {
+    if (operation.effect !== "read") return false
+    if (extra.length === 0) return true
+    guardOf(command, extra).refuse({ chatId: null, kind: "edit", key: keyOf(operation), operationId: newOperationId() })
+    const { settings } = baseContext(command, configuration.resolveSettings)
+    return extra.every((key) => levelFor(settings.permissions, key, defaults).level !== "ask")
+  }
+
+  const write = async (
+    command: Command,
+    operation: ManifestOperation,
+    extra: readonly PermissionKey[],
+    request: HttpApiRequest,
+  ) => {
+    const { run } = baseContext(command, configuration.resolveSettings)
+    const operationId = newOperationId()
+    const guard = guardOf(command, extra)
     const guarded = { chatId: null, kind: "edit" as const, key: keyOf(operation), operationId }
     guard.refuse(guarded)
     try {
@@ -378,8 +395,9 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     },
     execute: async (command, operation, input) => {
       const extra = serviceApiKeys(options, operation, input)
+      const read = readsFreely(command, operation, extra)
       if (operation.pagination && command.opts<{ all?: unknown }>().all === true) {
-        if (operation.effect !== "read" || extra.length > 0)
+        if (!read)
           throw new CliError(
             "validation_error",
             `--all reads only; this call of ${operation.command} is guarded by ${extra.join(", ") || "its write"}`,
@@ -387,10 +405,9 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
         return allPages(command, operation, input)
       }
       const request = await signed(command, operation, httpApiRequest(operation, input, baseUrlOf(command)))
-      const answer =
-        operation.effect === "read" && extra.length === 0
-          ? await baseContext(command, configuration.resolveSettings).run(() => send(command, operation, request))
-          : await write(command, operation, extra, request)
+      const answer = read
+        ? await baseContext(command, configuration.resolveSettings).run(() => send(command, operation, request))
+        : await write(command, operation, extra, request)
       renderAnswer(command, outputFor(command), itemOf(answer))
     },
   })
