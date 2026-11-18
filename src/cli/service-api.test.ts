@@ -650,10 +650,19 @@ describe("the shared service api group", () => {
   })
 
   it("**--all never pages past a guard**, stops on a repeated page and follows a relative link from the request", async () => {
-    const guarded = fixture({ "documents.share": "allow" })
-    const refused = await guarded.cli("work", "api", "list-shared", "--all", "--json")
+    const asked = fixture({ "documents.share": "ask" })
+    const refused = await asked.cli("work", "api", "list-shared", "--all", "--json")
     expect(refused.error).toMatchObject({ code: "validation_error" })
-    expect(guarded.sent).toEqual([])
+    expect(asked.sent).toEqual([])
+    const denied = fixture({ "documents.share": "deny" })
+    expect((await denied.cli("work", "api", "list-shared", "--all", "--json")).error).toMatchObject({
+      code: "permission_error",
+    })
+    expect((await denied.cli("work", "api", "list-shared", "--json")).error).toMatchObject({ code: "permission_error" })
+    expect(denied.sent).toEqual([])
+    const allowed = fixture({ "documents.share": "allow" }, () => Response.json({ items: ["a"], next: null }))
+    expect((await allowed.cli("work", "api", "list-shared", "--all", "--json")).json.items).toEqual(["a"])
+    expect((await allowed.cli("work", "api", "list-shared", "--json")).json).not.toHaveProperty("operation_id")
 
     const stuck = fixture({}, () => Response.json({ results: [1], next_cursor: "same", has_more: true }))
     const looped = await stuck.cli("work", "api", "list-pages", "--all", "--json")
