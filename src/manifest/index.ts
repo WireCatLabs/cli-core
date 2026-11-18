@@ -78,7 +78,12 @@ export interface CliConfig {
    * `from`: the https URL the description is published at. For `wp-json`, a WordPress site's REST index
    * (`https://wp.example/wp-json/`), from a plain WordPress the CLI is made against, as it serves every site.
    */
-  spec: { kind: "openapi" | "swagger" | "graphql" | "wp-json"; from: string }
+  spec: {
+    kind: "openapi" | "swagger" | "graphql" | "wp-json"
+    from: string
+    /** The WordPress version `from` runs, for the snapshot's provenance: the index does not say it. */
+    version?: string
+  }
   auth: CliAuth
   /** cli-template's `--category`; `other` is any API outside them. */
   category: CliCategory
@@ -166,6 +171,7 @@ const schema = v.strictObject({
   spec: v.strictObject({
     kind: v.picklist(["openapi", "swagger", "graphql", "wp-json"]),
     from: httpsUrl,
+    version: v.optional(v.pipe(v.string(), v.regex(/^\d+\.\d+(\.\d+)?$/, "a version such as 6.9.4"))),
   }),
   auth: v.variant("preset", [
     v.strictObject({ preset: v.literal("none") }),
