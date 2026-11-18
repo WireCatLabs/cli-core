@@ -95,7 +95,6 @@ const merge = (a: Selection, b: Selection): Selection =>
     }),
   )
 
-/** Only the selected fields: what GraphQL answers. */
 const project = (value: unknown, selection: Selection | true): unknown => {
   if (selection === true || value === null || value === undefined) return value ?? null
   if (Array.isArray(value)) return value.map((one) => project(one, selection))
@@ -104,7 +103,6 @@ const project = (value: unknown, selection: Selection | true): unknown => {
   )
 }
 
-/** Every dotted path with a fixed value in a call's variables; a placeholder is not fixed. */
 const fixedOf = (value: unknown, trail: readonly string[] = []): [string, unknown][] =>
   crmValues.isRaw(value)
     ? Object.entries(value).flatMap(([key, inner]) => fixedOf(inner, [...trail, key]))
@@ -146,10 +144,7 @@ interface Route {
  * change read keeps the rows changed at or after its since, oldest first. A cursor the fake never gave, an unreadable
  * since and a call no route of the manifest makes are refused and recorded.
  */
-export const trackerManifestFake = (
-  input: TrackerManifest,
-  options: TrackerManifestFakeOptions,
-): TrackerManifestFake => {
+export const trackerManifestFake = (input: unknown, options: TrackerManifestFakeOptions): TrackerManifestFake => {
   const { api, definitions } = options
   const manifest = parseTrackerManifest(input, api)
   const operations = new Map(api.operations.map((one) => [one.id, one]))
@@ -173,7 +168,6 @@ export const trackerManifestFake = (
       return resolved?.type === "array" ? resolved.items : (found ?? undefined)
     }, node)
 
-  /** A value of the type with only the selected fields. */
   const sampled = (node: SchemaNode, selection: Selection | true): unknown => {
     if (selection === true) return sampleOf(node, definitions)
     const found = resolve(node, definitions)
@@ -430,7 +424,7 @@ export interface TrackerManifestFixtureOptions extends TrackerManifestFakeOption
  * empty.
  */
 export const trackerManifestFixture = (
-  manifest: TrackerManifest,
+  manifest: unknown,
   options: TrackerManifestFixtureOptions,
 ): TrackerSourceFixture & { fake: TrackerManifestFake } => {
   const fake = trackerManifestFake(manifest, options)
@@ -496,10 +490,7 @@ export const trackerManifestFixture = (
  * `trackerSourceContract` over `trackerManifestFixture`, each case failing too when the fake refused a call: what a
  * generated test runs, `for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions })) it(name, run)`.
  */
-export const trackerManifestContract = (
-  manifest: TrackerManifest,
-  options: TrackerManifestFixtureOptions,
-): ContractCase[] => {
+export const trackerManifestContract = (manifest: unknown, options: TrackerManifestFixtureOptions): ContractCase[] => {
   const fakes: TrackerManifestFake[] = []
   return trackerSourceContract(() => {
     const fixture = trackerManifestFixture(manifest, options)

@@ -41,10 +41,12 @@ export const definitions: Record<string, SchemaNode> = {
   User: node({ name: text, email: text, active: { type: "boolean", nullable: true } }),
   WorkflowState: node({ name: text, type: text, position: { type: "number", nullable: true }, team: ref("Team") }),
   IssueLabel: node({ name: text, team: ref("Team") }),
+  ProjectStatus: object({ type: { type: "string", enum: ["backlog", "planned", "started", "completed"] } }),
   Project: node({
     name: text,
     description: text,
     state: text,
+    status: ref("ProjectStatus", false),
     lead: ref("User"),
     teams: ref("TeamConnection", false),
     targetDate: text,

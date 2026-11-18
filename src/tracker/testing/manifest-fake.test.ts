@@ -109,6 +109,28 @@ describe("trackerManifestFake", () => {
     ])
   })
 
+  it("writes a text field the schema keeps as an enum as one of its values", async () => {
+    const project = MANIFEST.entities.project as NonNullable<TrackerManifest["entities"]["project"]>
+    const selection = project.list.selection?.replace(" state ", " status { type } ")
+    const manifest = {
+      ...MANIFEST,
+      kinds: ["project"],
+      entities: {
+        project: {
+          ...project,
+          list: { ...project.list, selection },
+          changes: { ...project.changes, selection },
+          map: { ...project.map, status: "status.type" },
+        },
+      },
+    } as unknown
+    const { fake, source } = trackerManifestFixture(manifest, { api, definitions })
+    expect(fake.rows.project?.[0]?.status).toEqual({ type: "backlog" })
+    const listed = await source.changes("project", null)
+    expect("items" in listed && listed.items[0]?.status).toBe("backlog")
+    expect(fake.refusals).toEqual([])
+  })
+
   it("fails to build for a kind with changes whose change time the map does not read", () => {
     const { updatedAt: _, ...map } = (MANIFEST.entities.issue as { map: Row }).map
     const manifest = { ...MANIFEST, entities: { ...MANIFEST.entities, issue: { ...MANIFEST.entities.issue, map } } }
