@@ -1,6 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
+import { at as valueAt } from "../crm/manifest/map.js"
+import type { CliVerify } from "../manifest/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { EventSink } from "../runs/events.js"
 import { readSecret } from "../terminal/prompt.js"
@@ -11,7 +14,8 @@ import { itemOf, listOf, renderAnswer } from "./envelope.js"
 import { profilesHere, rememberAccount } from "./messenger/accounts.js"
 import { commandWords, profileFree, refuseCommandName, rootOf } from "./profile.js"
 import { ProfileTokenStore, type TokenStorage } from "./profile-token.js"
-import { siteValue } from "./service-api-manifest.js"
+import { serviceApiCall } from "./service-api-call.js"
+import { type ServiceApiManifest, siteValue } from "./service-api-manifest.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
 export interface TokenSessionOptions {
@@ -52,6 +56,37 @@ export interface TokenSessionOptions {
   /** One sentence more for `session end --help`, such as what of the service's own tools it leaves alone. */
   endNote?: string
 }
+
+export interface ManifestVerifyOptions {
+  manifest: ServiceApiManifest
+  /** The service's name in messages: "Attio". */
+  service: string
+  /** The config's `auth.verify`: the operation, where its answer holds the id and a name, and whether it is live. */
+  verify: CliVerify
+  /** The command's host-checked fetch, such as `hostsFetch(hosts, environment.fetch)`. */
+  fetch: (command: Command) => FetchLike
+}
+
+/**
+ * `verify` for `tokenSessionCommand` from a config's `auth.verify`: the one operation is sent with the token, a token the
+ * answer does not call active is refused, and the account is the id and name the answer holds.
+ */
+export const manifestVerify =
+  ({ manifest, service, verify, fetch }: ManifestVerifyOptions): TokenSessionOptions["verify"] =>
+  async (command, token) => {
+    const call = serviceApiCall({ manifest, service, fetch: fetch(command), token: () => token })
+    const answer = await call(verify.operation, { path: {}, query: {}, headers: {}, fields: {} })
+    // A service such as Attio answers a revoked key with 200 and `active: false`, not with 401.
+    if (verify.active !== undefined && valueAt(answer, verify.active) !== true)
+      throw new CliError("authentication_error", `${service} does not accept this token; sign in again`)
+    const id = valueAt(answer, verify.id)
+    if (typeof id !== "string" && typeof id !== "number")
+      throw new CliError("provider_error", `${service} answered ${verify.operation} without ${verify.id}`, {
+        reason: "verify.no-id",
+      })
+    const name = verify.name === undefined ? undefined : valueAt(answer, verify.name)
+    return { id: String(id), account: { id: String(id), ...(typeof name === "string" ? { name } : {}) } }
+  }
 
 export const storageOf = (raw: string): TokenStorage => {
   if (raw === "keyring" || raw === "file") return raw

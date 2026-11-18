@@ -16,7 +16,7 @@ export type TokenStorage = "keyring" | "file"
 export interface ProfileTokenStoreOptions {
   app: AppIdentity
   env?: NodeJS.ProcessEnv
-  keyring?: KeyringStore
+  keyring?: KeyringStore | undefined
   /** Where the one warning about an unreachable keyring goes; stderr when left out. */
   warn?: (message: string) => void
 }
