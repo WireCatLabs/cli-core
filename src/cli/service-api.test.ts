@@ -576,7 +576,11 @@ describe("the shared service api group", () => {
 
   it("**a date change needs the publish key unless the call keeps the post a draft**, as WordPress publishes a past date", async () => {
     const { cli, bare } = fixture({ "posts.publish": "deny", api: "allow" })
-    for (const body of ['{"date":"2000-01-01T00:00:00"}', '{"date_gmt":"2000-01-01","status":"future"}'])
+    for (const body of [
+      '{"date":"2000-01-01T00:00:00"}',
+      '{"date_gmt":"2000-01-01","status":"future"}',
+      '{"date":null}',
+    ])
       expect((await cli("work", "api", "update-post", "--id", "5", "--body", body, "--json")).error).toMatchObject({
         code: "permission_error",
       })
@@ -643,6 +647,23 @@ describe("the shared service api group", () => {
     )
     expect(confirmed.code).toBe(0)
     expect(bare()).toHaveLength(1)
+    const forced = fixture({ "posts.delete": "ask", "posts.delete.force": "ask", api: "allow" })
+    const half = await forced.cli(
+      "work",
+      "write",
+      "delete-post",
+      "--id",
+      "5",
+      "--query",
+      '{"force":"true"}',
+      "--confirmed",
+      "posts.delete.force",
+      "--json",
+    )
+    expect(half.error?.code).toBe("confirmation_required")
+    expect(half.error?.message).toContain("posts.delete")
+    expect(half.error?.message).not.toContain("posts.delete.force")
+    expect(forced.sent).toEqual([])
   })
 
   it("**the writer reaches no further than the api group**: no undeclared query, no method override, no plain read", async () => {
@@ -650,6 +671,7 @@ describe("the shared service api group", () => {
     for (const call of [
       ["update-post", "--id", "5", "--query", '{"_method":"DELETE","force":"true"}'],
       ["update-post", "--id", "5", "--headers", '{"X-HTTP-Method-Override":"DELETE"}'],
+      ["update-post", "--id", "5", "--headers", '{"X-HTTP-Method":"DELETE"}'],
       ["retrieve-a-page"],
     ])
       expect((await cli("work", "write", ...call, "--json")).error).toMatchObject({ code: "configuration_error" })

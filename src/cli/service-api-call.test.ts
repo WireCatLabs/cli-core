@@ -59,6 +59,27 @@ describe("a source's read through the manifest", () => {
     await expect(call.withHeaders("create-post", input)).rejects.toMatchObject({ code: "configuration_error" })
   })
 
+  it("follows no redirect with a site's sign-in, as the host is shared with other sites", async () => {
+    const asked: { url: string; redirect: string | undefined }[] = []
+    const call = serviceApiCall({
+      manifest: {
+        operations: [listPosts],
+        servers: [{ url: "https://{site}/wp-json", variables: { site: {} } }],
+        securitySchemes: { applicationPassword: { type: "http", scheme: "basic" } },
+        security: [{ applicationPassword: [] }],
+      },
+      service: "WordPress",
+      serverVariables: { site: "host.test/blog" },
+      token: () => "editor:pw",
+      fetch: async (url, init) => {
+        asked.push({ url: String(url), redirect: init?.redirect })
+        return new Response(null, { status: 302, headers: { location: "/other/wp-json/wp/v2/posts" } })
+      },
+    })
+    await expect(call("list-posts", input)).rejects.toBeDefined()
+    expect(asked).toEqual([{ url: "https://host.test/blog/wp-json/wp/v2/posts", redirect: "manual" }])
+  })
+
   it("keeps a site's address by its path: host/blog never reaches host/other or host/blogx", () => {
     const base = "https://host.test/blog/wp-json"
     expect(underBase(new URL("https://host.test/blog/wp-json/wp/v2/posts?page=2"), base)).toBe(true)

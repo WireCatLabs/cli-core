@@ -69,8 +69,9 @@ export const serviceApiCall = (
     const extra = Object.entries(options.headers?.(operation) ?? {})
     for (const [name, value] of extra) request.headers.set(name, value)
     await signRequest(options.manifest, operation, request, options.token)
-    // A redirect to another host drops only the standard sign-in headers; a hook's header would go along.
-    if (extra.length) request.redirect = "manual"
+    // A redirect to another host drops only the standard sign-in headers; a hook's header would go along. A site
+    // shares its host with others, and only its path tells them apart, so its sign-in follows no redirect.
+    if (extra.length || options.serverVariables) request.redirect = "manual"
     const { answer, headers } = await exchange(NO_COMMAND, operation, request)
     return { body: answer, headers }
   }

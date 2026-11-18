@@ -142,8 +142,10 @@ const set = (value: unknown) => value !== undefined && value !== null && value !
 const applies = (permission: OperationPermission, body: unknown, input: ApiCommandInput): boolean => {
   const sends = ([field, listed]: [string, readonly string[]]) =>
     (isObject(body) && holds(body[field], listed)) || holds(input.query[field], listed)
-  // Either place, as WordPress merges the query with the body for every method.
-  const flagged = flagsOf(permission).some((name) => (isObject(body) && set(body[name])) || set(input.query[name]))
+  // Beside a value, a field is another door to the same change and counts once sent at all: WordPress resets a `date`
+  // sent as null to now, which publishes a scheduled post. Either place, as WordPress merges the query with the body.
+  const sent = permission.values === undefined ? set : (value: unknown) => value !== undefined
+  const flagged = flagsOf(permission).some((name) => (isObject(body) && sent(body[name])) || sent(input.query[name]))
   // `unless` lifts only the flags: WordPress keeps a draft a draft whatever its date, and a call that names no status
   // may move a scheduled post's date into the past, which publishes it.
   return (
@@ -290,6 +292,8 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     if (!underBase(request.url, baseUrl))
       throw new CliError("validation_error", `${operation.command} would leave ${baseUrl}`, { sent: false })
     await signRequest(manifest, operation, request, token && (() => token(command)))
+    // A site's sign-in follows no redirect: the host is shared with other sites, and only its path tells them apart.
+    if (options.serverVariables) request.redirect = "manual"
     for (const [name, value] of Object.entries(options.headers?.(command, operation) ?? {}))
       request.headers.set(name, value)
     return request
@@ -544,7 +548,12 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
     const undeclared = Object.keys(input.query).filter(
       (one) => !operation.parameters.some((parameter) => parameter.in === "query" && parameter.name === one),
     )
-    const overriding = Object.keys(input.headers ?? {}).filter((one) => /method-override/i.test(one))
+    const overriding = Object.keys(input.headers).filter(
+      (one) =>
+        !operation.parameters.some(
+          (parameter) => parameter.in === "header" && parameter.name.toLowerCase() === one.toLowerCase(),
+        ),
+    )
     if (undeclared.length > 0 || overriding.length > 0)
       throw new CliError(
         "configuration_error",
@@ -554,6 +563,17 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
     const extra = serviceApiKeys(options, operation, input)
     if (operation.effect === "read" && extra.length === 0)
       throw new CliError("configuration_error", `${operation.command} is a read; send it with serviceApiCall`)
+    // The checks the command runs on what a person typed, so code sends nothing a person could not.
+    const schemas = await options.schemas()
+    for (const parameter of operation.parameters) {
+      const raw =
+        parameter.in === "query" || parameter.in === "path" || parameter.in === "header"
+          ? input[parameter.in === "header" ? "headers" : parameter.in][parameter.name]
+          : undefined
+      const problem = raw === undefined ? undefined : checkApiParameter(parameter.name, parameter.schema, raw, schemas)
+      if (problem) throw new CliError("validation_error", problem)
+    }
+    checkApiBody(operation, input.body, schemas)
     const request = await signed(command, operation, httpApiRequest(operation, input, baseUrlOf(command)))
     return write(command, operation, extra, request, confirmed)
   }
