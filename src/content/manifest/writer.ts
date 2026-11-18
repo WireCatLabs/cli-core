@@ -58,11 +58,21 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
 
   const bodyOf = async (fields: ContentFields): Promise<Record<string, unknown>> => {
     const out: Record<string, unknown> = {}
+    const put = (path: string, value: unknown) => {
+      const keys = path.split(".")
+      const last = keys.pop() as string
+      let inner = out
+      for (const key of keys) {
+        if (!crmValues.isRaw(inner[key])) inner[key] = {}
+        inner = inner[key] as Record<string, unknown>
+      }
+      inner[last] = value
+    }
     const to = writes.fields
-    if (fields.title !== undefined && to.title) out[to.title] = fields.title ?? ""
-    if (fields.excerpt !== undefined && to.excerpt) out[to.excerpt] = fields.excerpt ?? ""
-    if (fields.slug !== undefined && to.slug) out[to.slug] = fields.slug ?? ""
-    if (fields.body !== undefined && to.body) out[to.body] = html ? await markdownToHtml(fields.body) : fields.body
+    if (fields.title !== undefined && to.title) put(to.title, fields.title ?? "")
+    if (fields.excerpt !== undefined && to.excerpt) put(to.excerpt, fields.excerpt ?? "")
+    if (fields.slug !== undefined && to.slug) put(to.slug, fields.slug ?? "")
+    if (fields.body !== undefined && to.body) put(to.body, html ? await markdownToHtml(fields.body) : fields.body)
     if (fields.terms !== undefined && to.terms) {
       const kinds = new Map<TermKind, string[]>()
       for (const term of fields.terms) {
@@ -72,7 +82,11 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
       }
       // A numeric id goes as a number: the API's body schema types WordPress's term lists as integers.
       for (const [kind, name] of Object.entries(to.terms))
-        if (name) out[name] = (kinds.get(kind as TermKind) ?? []).map((one) => (/^\d+$/.test(one) ? Number(one) : one))
+        if (name)
+          put(
+            name,
+            (kinds.get(kind as TermKind) ?? []).map((one) => (/^\d+$/.test(one) ? Number(one) : one)),
+          )
     }
     return out
   }

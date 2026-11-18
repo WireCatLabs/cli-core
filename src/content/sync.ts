@@ -285,9 +285,13 @@ const confirmGone = async (run: Run, kind: ContentKind, missing: readonly string
     try {
       found = await source.get(kind, id, run.context)
     } catch (error) {
-      // WordPress leaves others' drafts out of a contributor's list and refuses to read them: not proof of anything.
-      if (isCliError(error) && error.code === "permission_error") {
-        run.context.gap({ kind, message: `${source.provider} would not let this sign-in read every ${kind}` })
+      // WordPress leaves others' drafts out of a contributor's list and refuses to read them, and a row of a status we
+      // do not know reads as nothing: neither proves it gone.
+      if (isCliError(error) && (error.code === "permission_error" || error.code === "invalid_response")) {
+        run.context.gap({
+          kind,
+          message: `${source.provider} would not give this sign-in every ${kind}: ${error.message}`,
+        })
         continue
       }
       if (!isCliError(error) || error.details.reason !== GET_UNSUPPORTED) throw error

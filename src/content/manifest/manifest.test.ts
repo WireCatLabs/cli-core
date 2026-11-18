@@ -168,7 +168,7 @@ describe("WordPress from configuration", () => {
       source,
     })
     await writer.update("11", { terms: ["7", "1"], body: "Some *new* text." }, { operationId: "op-1" })
-    expect(sent).toEqual([{ tags: [7], categories: [1], content: expect.stringContaining("<em>new</em>") }])
+    expect(sent).toEqual([{ tags: [7], categories: [1], content: { raw: expect.stringContaining("<em>new</em>") } }])
   })
 
   it("names the place of a mistake in the manifest, with the nearest operation", () => {

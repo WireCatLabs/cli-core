@@ -72,9 +72,14 @@ command, source, site })` (`src/content/manifest/`) build both ports from config
   format (`markdown`, `html`, `wp-blocks`), and `optional`, the gap a refused call reports.
 - Times without an offset are UTC, as WordPress's `*_gmt` fields are.
 - Pages follow each operation's own `pagination`; a page style with `pagesHeader` stops at the page the header names,
-  read through the call's `withHeaders`. Without it, a list that ends on a full page asks one page past the last,
-  which WordPress refuses with 400.
+  read through the call's `withHeaders`. Without it, every list asks one page past the last, which WordPress refuses
+  with 400: syncing a real site needs the `api` group's paging change (the header, and pagination on its generated
+  operations, which the WordPress fixture sets by hand for now).
+- `optional.requires` names a read that says whether the sign-in sees every row (WordPress:
+  `capabilities.edit_others_posts` of `users/me`): a contributor's list leaves others' posts out with no error, so
+  the gap comes from its rights.
 - The one channel's id is `site`, whatever the address: a profile pointed at another address is a moved channel.
+- Write fields are dotted paths into the body: WordPress takes `title.raw`, `content.raw` and `excerpt.raw`.
 - The writer writes posts. Pages are read; a write to a page is refused as `content.write-unsupported`.
 - `writes` names the create, update, trash and delete calls, where each of our fields goes, and the values over the
   update call that publish, schedule at `"{at}"` and unpublish. A write goes only through `write`, the `api` group's

@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import {
   adaptOpenApi,
+  definitionsGenerator,
   generate,
   type ManifestOperation,
   manifestGenerator,
+  type SchemaNode,
+  schemaProblems,
   wpJsonToOpenApi,
 } from "@wirecat/cli-base/codegen"
 import type { ApiCommandInput } from "../../src/cli/bot/api.js"
@@ -15,17 +18,30 @@ const index = JSON.parse(readFileSync(new URL("./wp-json/wp-json-content.json", 
 
 const LISTS = new Set(["getWpV2Posts", "getWpV2Pages", "getWpV2Tags", "getWpV2Categories", "getWpV2Users"])
 
+const files = (() => {
+  const { document } = wpJsonToOpenApi(index, { namespaces: ["wp/v2"], site: "example.com", version: "6.9.4" })
+  return generate(
+    adaptOpenApi(document),
+    [manifestGenerator({ path: "manifest.ts" }), definitionsGenerator({ path: "definitions.ts" })],
+    { banner: [] },
+  )
+})()
+
+const generated = (name: "operations" | "definitions"): unknown => {
+  const content = files.find((one) => one.path === (name === "operations" ? "manifest.ts" : "definitions.ts"))?.content
+  const start = (content ?? "").indexOf("=", (content ?? "").indexOf(`export const ${name}`)) + 1
+  const end = (content ?? "").indexOf("\n\nexport const", start)
+  return JSON.parse((content ?? "").slice(start, end < 0 ? undefined : end))
+}
+
+const definitions = generated("definitions") as Record<string, SchemaNode>
+
 /**
  * The generated API manifest of those routes, as a WordPress CLI's `pnpm generate` writes it. Collections page by
  * `page` and `per_page`, the answer itself the list: what cli-base's wp-json overrides set on every collection read.
  */
 export const wordpressApi = (): ServiceApiManifest => {
-  const { document } = wpJsonToOpenApi(index, { namespaces: ["wp/v2"], site: "example.com", version: "6.9.4" })
-  const [file] = generate(adaptOpenApi(document), [manifestGenerator({ path: "manifest.ts" })], { banner: [] })
-  const content = file?.content ?? ""
-  const start = content.indexOf("=", content.indexOf("export const operations")) + 1
-  const end = content.indexOf("\n\nexport const", start)
-  const operations = (JSON.parse(content.slice(start, end < 0 ? undefined : end)) as ManifestOperation[]).map((one) =>
+  const operations = (generated("operations") as ManifestOperation[]).map((one) =>
     LISTS.has(one.id)
       ? {
           ...one,
@@ -91,6 +107,12 @@ const posts = (operation: string, type: string) => {
     optional: {
       message: "the sign-in may not read every post: a contributor sees its own",
       scope: "edit_others_posts",
+      // WordPress leaves others' posts out of a contributor's list without an error: only its rights tell.
+      requires: {
+        operation: "getWpV2UsersMe",
+        query: { context: "edit", _fields: "capabilities" },
+        check: "capabilities.edit_others_posts",
+      },
     },
   }
 }
@@ -129,9 +151,9 @@ export const WORDPRESS_CONTENT = {
     trash: { operation: "deleteWpV2PostsById", path: { id: "{id}" } },
     delete: { operation: "deleteWpV2PostsById", path: { id: "{id}" }, query: { force: true } },
     fields: {
-      title: "title",
-      body: "content",
-      excerpt: "excerpt",
+      title: "title.raw",
+      body: "content.raw",
+      excerpt: "excerpt.raw",
       slug: "slug",
       terms: { tag: "tags", category: "categories" },
     },
@@ -148,7 +170,10 @@ export interface WordpressFakeOptions {
   pageSize?: number
   /** The site's clock, in ms. */
   clock?: () => number
-  /** A contributor: others' drafts and the trash are refused with 403, as WordPress refuses `status=trash`. */
+  /**
+   * A contributor, as WordPress 6.9 answers one (checked on a local site): a list with `context=edit` leaves out every
+   * post of another author, with no error; reading one of them is refused with 403; the users list too.
+   */
   contributor?: number
 }
 
@@ -160,6 +185,7 @@ const gmt = (ms: number) => new Date(ms).toISOString().slice(0, 19)
  * many there are, 404 for a post deleted for good, the trash a status, and `force=true` deleting for good.
  */
 export const wordpressFake = (options: WordpressFakeOptions = {}) => {
+  const api = wordpressApi()
   let tick = 0
   const clock = options.clock ?? (() => Date.UTC(2026, 10, 17) + tick++ * 1000)
   const size = options.pageSize ?? 2
@@ -211,18 +237,35 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
     post(12, "page", "publish", "About", "<p>Who we are.</p>", T0 + 30_000, { categories: [] }),
   ]
   const typeOf = (operation: string) => (operation.includes("Pages") ? "page" : "post")
-  const visible = (row: Row) =>
-    options.contributor === undefined || row.author === options.contributor || row.status === "publish"
+  const visible = (row: Row) => options.contributor === undefined || row.author === options.contributor
   const notFound = () => new CliError("not_found", "Invalid post ID.", { reason: "rest_post_invalid_id" })
   const forbidden = () => new CliError("permission_error", "Sorry, you are not allowed to do that.")
   const page = (list: readonly Row[], input: ApiCommandInput) => {
     const at = Number(input.query.page ?? 1)
     const pages = Math.max(1, Math.ceil(list.length / size))
+    if (at > pages)
+      throw new CliError(
+        "validation_error",
+        "The page number requested is larger than the number of pages available.",
+        {
+          reason: "rest_post_invalid_page_number",
+        },
+      )
     const body = list.slice((at - 1) * size, at * size)
     return { body, headers: new Headers({ "x-wp-totalpages": String(pages), "x-wp-total": String(list.length) }) }
   }
   const read = (operation: string, input: ApiCommandInput): { body: unknown; headers: Headers } => {
-    if (operation === "getWpV2Users") return page(users, input)
+    if (operation === "getWpV2Users") {
+      if (options.contributor !== undefined) throw forbidden()
+      return page(users, input)
+    }
+    if (operation === "getWpV2UsersMe") {
+      const capabilities = {
+        edit_posts: true,
+        ...(options.contributor === undefined ? { edit_others_posts: true } : {}),
+      }
+      return { body: { capabilities }, headers: new Headers() }
+    }
     if (operation === "getWpV2Tags") return page(tags, input)
     if (operation === "getWpV2Categories") return page(categories, input)
     if (operation === "getWpV2UsersById" || operation === "getWpV2TagsById" || operation === "getWpV2CategoriesById") {
@@ -233,12 +276,12 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
     }
     if (operation === "getWpV2PostsById" || operation === "getWpV2PagesById") {
       const found = rows.find((one) => String(one.id) === input.path.id && one.type === typeOf(operation))
-      if (!found || !visible(found)) throw notFound()
+      if (!found) throw notFound()
+      if (!visible(found)) throw forbidden()
       return { body: structuredClone(found), headers: new Headers() }
     }
     if (operation === "getWpV2Posts" || operation === "getWpV2Pages") {
       const statuses = (input.query.status ?? "publish").split(",")
-      if (options.contributor !== undefined && statuses.includes("trash")) throw forbidden()
       const after = input.query.modified_after ? Date.parse(input.query.modified_after) : null
       if (after !== null && Number.isNaN(after)) throw new CliError("validation_error", "Invalid date.")
       const by = input.query.orderby === "modified" ? "modified_gmt" : "id"
@@ -257,10 +300,14 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
   const write = (operation: string, input: ApiCommandInput): unknown => {
     writes.push(operation)
     const body = input.body ? (JSON.parse(input.body) as Row) : {}
+    const request = api.operations.find((one) => one.id === operation)?.request?.schema
+    const node = request === undefined ? undefined : definitions[request]
+    const problems = node ? schemaProblems(body, node, definitions) : []
+    if (problems.length) throw new CliError("validation_error", `the API's body schema refuses: ${problems.join("; ")}`)
     const apply = (row: Row) => {
       for (const [field, value] of Object.entries(body)) {
-        if (field === "title" || field === "excerpt") row[field] = { raw: value, rendered: value }
-        else if (field === "content") row.content = { raw: value, rendered: value }
+        const text = (value as { raw?: unknown } | null)?.raw ?? value
+        if (field === "title" || field === "excerpt" || field === "content") row[field] = { raw: text, rendered: text }
         else if (field === "tags" || field === "categories") row[field] = (value as unknown[]).map(Number)
         else row[field] = value
       }

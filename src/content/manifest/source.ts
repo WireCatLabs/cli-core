@@ -205,6 +205,30 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     return records
   }
 
+  const rights = new Map<string, boolean>()
+  /** Whether the sign-in sees every row of the entity, by its `requires` read; asked once per source. */
+  const checkRights = async (
+    kind: ContentKind,
+    entity: ContentManifestEntity,
+    send: ContentReadCall,
+    context?: ContentCallContext,
+  ) => {
+    const requires = entity.optional?.requires
+    if (!requires) return
+    const key = JSON.stringify(requires)
+    let seen = rights.get(key)
+    if (seen === undefined) {
+      seen = at(await send(requires.operation, inputOf(requires, {})), requires.check) === true
+      rights.set(key, seen)
+    }
+    if (!seen)
+      context?.gap({
+        kind,
+        message: entity.optional?.message ?? "",
+        ...(entity.optional?.scope ? { scope: entity.optional.scope } : {}),
+      })
+  }
+
   const gapOf = (kind: ContentKind, entity: ContentManifestEntity, error: unknown, context?: ContentCallContext) => {
     if (!entity.optional || !refused(error)) return false
     context?.gap({
@@ -246,6 +270,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const changes = since === null ? undefined : entity.changes
     let read: { rows: crmValues.CrmRaw[]; next: string | undefined } | { reset: true }
     try {
+      await checkRights(kind, entity, send, context)
       read =
         changes?.keyset && since !== null
           ? await keysetPage(
@@ -277,8 +302,10 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const entity = calls[spot.call]
     if (!entity) throw new CliError("validation_error", `not a page of ${kind} ids: ${page}`)
     let read: { rows: crmValues.CrmRaw[]; next: string | undefined }
+    const send = metered(context)
     try {
-      read = await readPage(entity.ids ?? entity.list, {}, spot.token, metered(context))
+      await checkRights(kind, entity, send, context)
+      read = await readPage(entity.ids ?? entity.list, {}, spot.token, send)
     } catch (error) {
       // Refused, the ids read so far would mark every unread row deleted: the gap holds the pass.
       if (!gapOf(kind, entity, error, context)) throw error

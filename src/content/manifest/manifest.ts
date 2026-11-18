@@ -34,8 +34,12 @@ export interface ContentManifestEntity {
   map: Readonly<Record<string, CrmRule>>
   /** A post's text: where it is and in what format; `fallback` when the sign-in may not read the first. */
   body?: { path: string; format: BodyFormat; fallback?: { path: string; format: BodyFormat } }
-  /** The sign-in may be refused this call (a role without the right): a gap with this text, and the rest syncs. */
-  optional?: { message: string; scope?: string }
+  /**
+   * The sign-in may be refused this call (a role without the right): a gap with this text, and the rest syncs. A
+   * source that leaves rows out without an error names `requires`: a read whose value at `check` is true when the
+   * sign-in sees every row; false or missing is the same gap.
+   */
+  optional?: { message: string; scope?: string; requires?: CrmOperationCall & { check: string } }
 }
 
 /** A post's writes, as calls and values over the update call. `"{id}"` and `"{at}"` are filled by the engine. */
@@ -45,7 +49,7 @@ export interface ContentManifestWrites {
   trash: CrmOperationCall
   /** Deleting for good, past the trash; absent, the source has no such write. */
   delete?: CrmOperationCall
-  /** Where each of our fields goes in a write's body; `terms` by the term's kind. */
+  /** Where each of our fields goes in a write's body, a dotted path (`title.raw`); `terms` by the term's kind. */
   fields: {
     title?: string
     body?: string
@@ -98,7 +102,13 @@ const entity = v.strictObject({
   get: v.optional(call),
   map: v.record(v.string(), crmRuleSchema),
   body: v.optional(v.strictObject({ path, format, fallback: v.optional(v.strictObject({ path, format })) })),
-  optional: v.optional(v.strictObject({ message: v.pipe(v.string(), v.minLength(1)), scope: v.optional(v.string()) })),
+  optional: v.optional(
+    v.strictObject({
+      message: v.pipe(v.string(), v.minLength(1)),
+      scope: v.optional(v.string()),
+      requires: v.optional(v.strictObject({ ...call.entries, check: path })),
+    }),
+  ),
 })
 
 const schema = v.strictObject({
@@ -181,6 +191,7 @@ export const parseContentManifest = (input: unknown, api: ServiceApiManifest): C
           throw invalid(`${where}.changes`, 'no "{since}" in its path, query or body')
       }
       if (one.ids) checkCall(`${where}.ids`, one.ids, true)
+      if (one.optional?.requires) checkCall(`${where}.optional.requires`, one.optional.requires, true)
       if (one.get) {
         checkCall(`${where}.get`, one.get, true)
         if (!holds([one.get.path, one.get.query], "{id}"))
