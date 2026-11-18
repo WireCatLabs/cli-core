@@ -59,6 +59,11 @@ export interface CrmManifestEntity<K extends CrmKind = CrmKind> {
   /** One row by `{id}`, for a live read of a contact or company; a 403 or 404 is no row. */
   get?: CrmOperationCall
   /**
+   * Contacts or companies whose name holds `{query}`, for a live `people list` and `organizations list`; a list with no
+   * words reads `list`. Both page by the operation's own `pagination`. Absent, the source has no live list.
+   */
+  search?: CrmOperationCall
+  /**
    * The service names the fields a read returns (HubSpot `properties=`, Bitrix24 `select`): `{select}` becomes the
    * names under `from` that `map` reads, the custom field codes, and `also`.
    */
@@ -70,7 +75,7 @@ export interface CrmManifestEntity<K extends CrmKind = CrmKind> {
   }
   map: { readonly [F in keyof CrmRecords[K]]?: CrmRule } & { amount?: CrmRule; currency?: CrmRule }
   /** The account's own fields' values, by the codes `fields` lists, under this object of the row. */
-  custom?: { from: string; split?: string }
+  custom?: { from: string; split?: string; typed?: CrmTypedValues }
   /**
    * A kind the plan or the sign-in may not have (HubSpot's leads): the service refusing it is a gap with this text and
    * scope, and the other kinds still sync.
@@ -78,11 +83,28 @@ export interface CrmManifestEntity<K extends CrmKind = CrmKind> {
   optional?: { message: string; scope?: string }
 }
 
+/**
+ * Values kept as a list of typed entries, each naming its type (Attio's `values.<slug>`): the entry's type picks where
+ * its value is, and a replaced entry, one with a time at `current`, is skipped.
+ */
+export interface CrmTypedValues {
+  /** Where an entry names its type: `attribute_type`. */
+  by: string
+  /** A time an entry was replaced at; an entry with one is history, not the value. */
+  current?: string
+  /** Where the value is for each type, over `TYPED_VALUE_PATHS`. */
+  paths?: Readonly<Record<string, string>>
+}
+
 export interface CrmManifestPipelines {
   call: CrmOperationCall
+  /** Read from the pipeline's row, or from its first stage when the call answers stages (`stages.each` is `.`). */
   map: { externalId: CrmRule; name: CrmRule }
   stages: {
+    /** The stages in a pipeline's row; `.` when the call answers the stages themselves, one row each. */
     each: string
+    /** With `each` `.`: the stage's pipeline, by which the stages are grouped; absent, they are all one pipeline. */
+    pipeline?: string
     map: { externalId: CrmRule; name: CrmRule; position?: CrmRule }
     /** Which stages are won or lost by one field; any other is open. A rule a field cannot say is a function. */
     outcome:
@@ -105,7 +127,7 @@ export interface CrmManifestFields {
       | ((raw: CrmRaw) => { id: string; label: string }[] | undefined)
   }
   /** Which listed fields are the account's own, not the service's built-in ones the map already reads. */
-  keep?: (raw: CrmRaw) => boolean
+  keep?: { path: string; is: unknown } | ((raw: CrmRaw) => boolean)
 }
 
 /** A CRM account described as data: what to call for each kind and where each of our fields is in the answer. */
@@ -143,8 +165,14 @@ export interface CrmManifestHooks {
   enrich?: {
     readonly [K in CrmKind]?: (rows: CrmRaw[], service: { call: ServiceApiCall }) => Promise<CrmRaw[]>
   }
+  /** The outcome of a stage the data cannot say (Attio names a lost stage only by its title); `found` is the data's. */
+  pipelines?: {
+    readonly [K in DealKind]?: {
+      outcome?: (stage: CrmRaw, pipeline: CrmRaw, found: StageOutcome) => StageOutcome
+    }
+  }
   /** Adds or replaces source methods (`self`, `activities`, a live `list`); `base` is what the manifest built. */
-  extend?: (base: CrmSource) => Partial<CrmSource>
+  extend?: (base: CrmSource, service: { call: ServiceApiCall }) => Partial<CrmSource>
 }
 
 const path = v.pipe(v.string(), v.regex(/^[^.\s]+(\.[^.\s]+)*$/, "a dotted path such as properties.name"))
@@ -189,6 +217,7 @@ const entity = v.strictObject({
   ),
   ids: v.optional(call),
   get: v.optional(call),
+  search: v.optional(call),
   select: v.optional(
     v.strictObject({
       from: path,
@@ -197,7 +226,15 @@ const entity = v.strictObject({
     }),
   ),
   map: v.record(v.string(), rule),
-  custom: v.optional(v.strictObject({ from: path, split: v.optional(v.string()) })),
+  custom: v.optional(
+    v.strictObject({
+      from: path,
+      split: v.optional(v.string()),
+      typed: v.optional(
+        v.strictObject({ by: path, current: v.optional(path), paths: v.optional(v.record(v.string(), path)) }),
+      ),
+    }),
+  ),
   optional: v.optional(v.strictObject({ message: v.pipe(v.string(), v.minLength(1)), scope: v.optional(v.string()) })),
 })
 
@@ -205,7 +242,8 @@ const pipelines = v.strictObject({
   call,
   map: v.strictObject({ externalId: rule, name: rule }),
   stages: v.strictObject({
-    each: path,
+    each: v.union([v.literal("."), path]),
+    pipeline: v.optional(path),
     map: v.strictObject({ externalId: rule, name: rule, position: v.optional(rule) }),
     outcome: v.union([
       v.strictObject({ path, won: v.optional(v.array(v.string())), lost: v.optional(v.array(v.string())) }),
@@ -225,7 +263,7 @@ const fields = v.strictObject({
     filterable: v.optional(rule),
     options: v.optional(v.union([v.strictObject({ each: path, id: path, label: path }), v.function()])),
   }),
-  keep: v.optional(v.function()),
+  keep: v.optional(v.union([v.strictObject({ path, is: v.unknown() }), v.function()])),
 })
 
 const kind = v.picklist(CRM_KINDS)
@@ -308,6 +346,13 @@ export const parseCrmManifest = (input: unknown, api: ServiceApiManifest): CrmMa
       if (!hasPlaceholder([one.get.path, one.get.query, one.get.body], "{id}"))
         throw invalid(`entities.${kind}.get`, 'no "{id}" in its path, query or body')
     }
+    if (one.search) {
+      if (kind !== "person" && kind !== "organization")
+        throw invalid(`entities.${kind}.search`, "only contacts and companies are read live")
+      checkCall(`entities.${kind}.search`, one.search, true)
+      if (!hasPlaceholder([one.search.path, one.search.query, one.search.body], "{query}"))
+        throw invalid(`entities.${kind}.search`, 'no "{query}" in its path, query or body')
+    }
     if (one.map.externalId === undefined) throw invalid(`entities.${kind}.map.externalId`, "every kind maps its id")
     const fields = [...Object.keys(FIELDS[kind]), "amount", "currency"]
     for (const field of Object.keys(one.map))
@@ -323,6 +368,8 @@ export const parseCrmManifest = (input: unknown, api: ServiceApiManifest): CrmMa
     const one = manifest.pipelines?.[kind]
     if (!one) throw invalid(`pipelines.${kind}`, `${kind} is in kinds, and every deal or lead stands in a pipeline`)
     checkCall(`pipelines.${kind}.call`, one.call, true)
+    if (one.stages.pipeline !== undefined && one.stages.each !== ".")
+      throw invalid(`pipelines.${kind}.stages.pipeline`, 'groups stages only when the call answers them: each "."')
   }
   for (const [kind, one] of Object.entries(manifest.fields ?? {}))
     if (one) checkCall(`fields.${kind}.call`, one.call, true)

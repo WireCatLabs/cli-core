@@ -143,20 +143,24 @@ export const crmManifestProblems = (
       ...(entity.map as Record<string, CrmRule | undefined>),
       ...(entity.custom ? { "(custom)": entity.custom.from } : {}),
     }
-    for (const call of [entity.list, entity.changes, entity.get]) if (call) check(`entities.${kind}.map`, call, rules)
+    for (const call of [entity.list, entity.changes, entity.get, entity.search])
+      if (call) check(`entities.${kind}.map`, call, rules)
   }
   for (const [kind, pipelines] of Object.entries(manifest.pipelines ?? {})) {
     if (!pipelines) continue
-    check(`pipelines.${kind}.map`, pipelines.call, { ...pipelines.map, "(stages)": pipelines.stages.each })
-    const { outcome } = pipelines.stages
+    const { outcome, each, pipeline } = pipelines.stages
+    // A call that answers stages has one row per stage: the pipeline's map and the stage's read the same row.
+    const flat = each === "."
+    check(`pipelines.${kind}.map`, pipelines.call, flat ? pipelines.map : { ...pipelines.map, "(stages)": each })
     check(
       `pipelines.${kind}.stages.map`,
       pipelines.call,
       {
         ...pipelines.stages.map,
         ...(typeof outcome === "object" && "path" in outcome ? { outcome: outcome.path } : {}),
+        ...(pipeline ? { "(pipeline)": pipeline } : {}),
       },
-      pipelines.stages.each,
+      flat ? undefined : each,
     )
   }
   for (const [kind, fields] of Object.entries(manifest.fields ?? {})) {
