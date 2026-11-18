@@ -375,6 +375,25 @@ export const nearestChunks = (
       },
     )
   if (indexed) return plain(indexed)
+  if (fromOwner) {
+    // The owner's chunks are few: find them by the owner's messages, then score only those.
+    const ids = orm
+      .all<{ id: number }>(
+        sql`SELECT DISTINCT k.id FROM messages m
+          JOIN conversation_messages om ON om.message_id = m.id
+          JOIN conversations c ON c.id = om.conversation_id
+          JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
+          JOIN chats ch ON ch.id = c.chat_id
+          JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
+          JOIN chunk_messages r ON r.chunk_id = k.id AND m.id BETWEEN r.first_message_id AND r.last_message_id
+          WHERE m.outgoing = 1 AND ch.account_id = ${accountPk}
+            ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}`,
+      )
+      .map(({ id }) => id)
+    const best = new Map<number, NearestChunk & { id: number }>()
+    for (const row of rows({ ids })) keepBest(best, row)
+    return plain(ranked([...best.values()]))
+  }
   const best = new Map<number, NearestChunk & { id: number }>()
   let after = { conversation: 0, ordinal: -1 }
   for (;;) {
