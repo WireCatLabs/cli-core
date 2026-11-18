@@ -788,7 +788,8 @@ is [the adapter guide](ADAPTERS.md).
 
 `account remove` (`src/cli/account-remove.ts`) is opt-in: a tool hands it hooks for its own sign-out, keyring
 entries and files, and the command forgets the profile and keeps or purges its account in the store
-([guide](ACCOUNT-REMOVAL.md)).
+([guide](ACCOUNT-REMOVAL.md)). `account rename` reuses the same hooks, asked for both names, to move a profile to a new
+name.
 
 `<cli> commands --serve` (`src/cli/command-server.ts`, [protocol](../REFERENCE.md#the-command-server))
 is caught by `startCli` before the program loads (`command-server-entry.ts`), so it works for a tool on `run()` and for

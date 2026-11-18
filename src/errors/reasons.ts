@@ -67,6 +67,14 @@ const SIGN_IN: Entry[] = [
     "configuration_error",
     "the tool named a folder of its own outside the home folder",
   ],
+  ["account-rename.unknown-profile", "not_found", "no profile by this name on this computer"],
+  ["account-rename.taken", "conflict", "the new name, or a file or keyring entry under it, already exists"],
+  ["account-rename.busy", "conflict", "a serve, a background service, a schedule or a sync uses this profile"],
+  ["account-rename.bot", "conflict", "the profile is also a bot profile, which keeps its name"],
+  ["account-rename.unconfirmed", "confirmation_required", "renaming a profile asks first; add --yes"],
+  ["account-rename.moved-run", "permission_error", "a run with moved folders never renames a profile"],
+  ["account-rename.unpaired", "configuration_error", "the tool named different paths for the old and new name"],
+  ["account-rename.config", "configuration_error", "the config file cannot be read"],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */

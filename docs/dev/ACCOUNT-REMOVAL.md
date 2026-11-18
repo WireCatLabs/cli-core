@@ -101,6 +101,7 @@ at the provider ([WC-SECR-24](https://github.com/WireCatLabs/cli-base/blob/main/
 | `signOut(profile, context)` | yes | The tool's own sign-out: end the session at the provider, delete the token or device keys, revoke when `mayRevoke`. Answers `{ revoked, removed }`: `revoked` is `null` when the tool does not revoke, `removed` names what went in words the owner knows. A throw stops the removal. |
 | `account(profile, context)` | no | The profile's `AccountKey` in the store. Unset: what `rememberAccount` recorded, read with the `provider` option. Without either, `--delete-data` keeps the store and says why. |
 | `secrets(profile, context)` | no | Keyring entries the sign-out leaves, as `{ credentials, accounts }`: the `CredentialsOptions` the tool reads them with, and the account names. Removed through cli-base's `Credentials`, which never removes the owner's entry in a moved run. |
+| `signIn(profile, context)` | no | Where the sign-in itself lives, as `{ secrets?, files? }` in the shapes of `secrets` and `stateFiles`, for `account rename` to move it. Unset: the tool has no `account rename`. A tool whose sign-in is cli-core's `token:<profile>`, or already among `secrets` or `stateFiles`, answers `{}`. |
 | `stateFiles(profile, context)` | no | The tool's own per-profile files and folders that hold no messages: cursors, device ids, a recipient list. Always removed. |
 | `dataFiles(profile, context)` | no | Per-profile files and folders that hold the account's data outside the store: downloads, an archive. Removed only with `--delete-data`. |
 | `forgetConfig(profile, context)` | no | For a tool that keeps its own config file: removes the profile there and answers what it removed. Unset: cli-core removes `personal.profiles.<profile>` and `profiles.<profile>` from the file `settingsFor` reads, keeping `profiles.<profile>` while a bot section uses it. |
@@ -109,3 +110,35 @@ at the provider ([WC-SECR-24](https://github.com/WireCatLabs/cli-base/blob/main/
 
 Every path must lie inside the tool's config, state or cache folder (`resolvePaths`), or a folder `ownFolders` names. Media the owner moved to a folder
 of their own is not the tool's to delete.
+
+## Renaming a profile
+
+`<tool> <profile> account rename <new> [--dry-run] [--yes]` (`src/cli/account-rename.ts`) gives a profile another name
+and signs nothing out. It reuses the removal hooks: each one is asked for the old name and for the new one, and the
+answers are paired in order, so a tool writes no rename code of its own. A hook that answers a different number of
+paths or entries for the two names stops the command (`account-rename.unpaired`).
+
+It moves, writing every new keyring entry before the old one goes:
+
+- keyring entries: cli-core's `token:<profile>`, then the entries of `signIn` and `secrets`;
+- config: `profiles.<profile>` and `personal.profiles.<profile>`;
+- files: the ones of `signIn`, `stateFiles` and `dataFiles`, the account file, the sends journal and the files cli-core
+  keeps per profile (the list in step 5 above);
+- the store: which account the profile is (`store.accounts.saveProfile` / `forgetProfile`) and the profile's entry in
+  every account group. The account's messages are keyed by the account, not the profile, and stay where they are.
+
+It refuses (`conflict`) when the new name is taken, by a profile, a file or a keyring entry (`account-rename.taken`); while
+a serve, an `mcp serve --http`, the profile's serve unit, a schedule naming the profile or the tool's `busy` holds it
+(`account-rename.busy`); and for a profile that is also a bot (`account-rename.bot`). A run with moved folders never
+renames (`account-rename.moved-run`). Without `--yes` under `--json` it answers `account-rename.unconfirmed`.
+
+A messenger gets the command with `accountRemoval.signIn` set. Any other CLI mounts it beside `account remove`:
+
+```ts
+new Command("account")
+  .addCommand(accountRemoveCommand(app, removal, { provider: "google" }))
+  .addCommand(accountRenameCommand(app, removal))
+```
+
+`--json` answers the entity `account_rename`: `{ profile, renamed_to, dry_run, config_file, moved: [{ kind, from, to }] }`,
+`kind` one of `keyring`, `config`, `file`, `store`.
