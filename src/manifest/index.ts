@@ -28,6 +28,11 @@ export type CliAuth =
   | { preset: "none" }
   /** A token or key, sent where the spec's `securitySchemes` say: a bearer header, an API key header or query. */
   | { preset: "token"; verify?: CliVerify }
+  /**
+   * A WordPress application password: the profile's own site (`--site host/blog`), a user name and the password, sent
+   * by Basic to that site alone.
+   */
+  | { preset: "app-password"; verify?: CliVerify }
   /** The browser sign-in the spec's authorization code flow declares; the redirect is what the app registered. */
   | {
       preset: "oauth2-pkce"
@@ -69,8 +74,11 @@ export interface CliConfig {
     /** The GitHub owner of the repository. */
     owner: string
   }
-  /** `from`: the https URL the description is published at. */
-  spec: { kind: "openapi" | "swagger" | "graphql"; from: string }
+  /**
+   * `from`: the https URL the description is published at. For `wp-json`, a WordPress site's REST index
+   * (`https://wp.example/wp-json/`), from a plain WordPress the CLI is made against, as it serves every site.
+   */
+  spec: { kind: "openapi" | "swagger" | "graphql" | "wp-json"; from: string }
   auth: CliAuth
   /** cli-template's `--category`; `other` is any API outside them. */
   category: CliCategory
@@ -156,12 +164,13 @@ const schema = v.strictObject({
     owner: v.pipe(v.string(), v.regex(/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/, "a GitHub owner")),
   }),
   spec: v.strictObject({
-    kind: v.picklist(["openapi", "swagger", "graphql"]),
+    kind: v.picklist(["openapi", "swagger", "graphql", "wp-json"]),
     from: httpsUrl,
   }),
   auth: v.variant("preset", [
     v.strictObject({ preset: v.literal("none") }),
     v.strictObject({ preset: v.literal("token"), verify }),
+    v.strictObject({ preset: v.literal("app-password"), verify }),
     v.strictObject({
       preset: v.literal("oauth2-pkce"),
       verify,

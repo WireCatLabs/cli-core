@@ -13,7 +13,7 @@ import { levelFor } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { refusedPlace } from "../sends/upload.js"
 import { type ApiCommandInput, generatedApiCommand } from "./bot/api.js"
-import { type HttpApiRequest, httpApiRequest, httpApiSend, unsendableBody } from "./bot/api-http.js"
+import { type HttpApiRequest, httpApiExchange, httpApiRequest, unsendableBody } from "./bot/api-http.js"
 import { checkApiBody, checkApiParameter, parseApiJson, readApiBody, readApiBytes } from "./bot/api-input.js"
 import { baseContext, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
@@ -27,6 +27,7 @@ import {
   parameterValue,
   type ServiceApiManifest,
   signRequest,
+  underBase,
 } from "./service-api-manifest.js"
 import type { Configuration } from "./settings.js"
 
@@ -115,12 +116,20 @@ const flagsOf = ({ body = [], query = [] }: OperationPermission) => [...body, ..
 
 const valuesOf = ({ values = {} }: OperationPermission) => Object.entries(values)
 
-/** Always, unless its flags or values name when; `with status publish or future`, `with archived set`. */
+const unlessOf = ({ unless = {} }: OperationPermission) => Object.entries(unless)
+
+/**
+ * Always, unless its flags or values name when; `with status publish or future`, `with archived set`, `with status
+ * publish or future or date set, unless status draft or pending`.
+ */
 const whenOf = (permission: OperationPermission): string | undefined => {
   const flags = flagsOf(permission)
   const values = valuesOf(permission).map(([field, listed]) => `${field} ${listed.join(" or ")}`)
   if (flags.length === 0 && values.length === 0) return undefined
-  return `with ${[...(flags.length > 0 ? [`${flags.join(" or ")} set`] : []), ...values].join(" or ")}`
+  const unless = unlessOf(permission).map(([field, listed]) => `${field} ${listed.join(" or ")}`)
+  return `with ${[...values, ...(flags.length > 0 ? [`${flags.join(" or ")} set`] : [])].join(" or ")}${
+    unless.length > 0 && flags.length > 0 ? `, unless ${unless.join(" or ")}` : ""
+  }`
 }
 
 /** A body field or query parameter holding one of the values: WordPress publishes from either. */
@@ -130,13 +139,19 @@ const holds = (value: unknown, listed: readonly string[]) => typeof value === "s
 const set = (value: unknown) => value !== undefined && value !== null && value !== false && value !== "false"
 
 /** Whether a manifest key applies to this call: always, or when one of its flags is set or a field holds a value. */
-const applies = (permission: OperationPermission, body: unknown, input: ApiCommandInput): boolean =>
-  whenOf(permission) === undefined ||
-  (permission.body ?? []).some((field) => isObject(body) && set(body[field])) ||
-  (permission.query ?? []).some((name) => set(input.query[name])) ||
-  valuesOf(permission).some(
-    ([field, listed]) => (isObject(body) && holds(body[field], listed)) || holds(input.query[field], listed),
+const applies = (permission: OperationPermission, body: unknown, input: ApiCommandInput): boolean => {
+  const sends = ([field, listed]: [string, readonly string[]]) =>
+    (isObject(body) && holds(body[field], listed)) || holds(input.query[field], listed)
+  // Either place, as WordPress merges the query with the body for every method.
+  const flagged = flagsOf(permission).some((name) => (isObject(body) && set(body[name])) || set(input.query[name]))
+  // `unless` lifts only the flags: WordPress keeps a draft a draft whatever its date, and a call that names no status
+  // may move a scheduled post's date into the past, which publishes it.
+  return (
+    whenOf(permission) === undefined ||
+    valuesOf(permission).some(sends) ||
+    (flagged && !unlessOf(permission).some(sends))
   )
+}
 
 /** The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body. */
 export const serviceApiKeys = (
@@ -220,7 +235,11 @@ const API_QUERY = {
  * when `permanently` is true); the journal records that it ran, never its body. A read that pages takes `--all`. There
  * is no free-form `api call`: a request is always one operation of the spec, with its own key (SEC-196).
  */
-export const serviceApiCommand = (options: ServiceApiOptions): Command => {
+/**
+ * What the `api` group and `serviceApiWriter` share, so a write from code passes the very guard a command's does: the
+ * offered operations, the server, the sign-in, the levels, and the guarded send.
+ */
+const serviceApiCore = (options: ServiceApiOptions) => {
   const { app, configuration, manifest } = options
   const { offered: operations, left } = serviceApiOperations(manifest)
   // Without variables the server is known now, and a CLI built against a manifest it cannot reach fails at once.
@@ -246,12 +265,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       "configuration_error",
       `bodyPermissions name ${unnamed.map(({ key }) => key).join(", ")}, which the manifest does not: the keys come from \`permissions\``,
     )
-  let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
-  const loaded = () => {
-    if (!schemas) throw new CliError("configuration_error", "the api schemas were not loaded before the command ran")
-    return schemas
-  }
-  const send = httpApiSend({
+  const exchange = httpApiExchange({
     service: options.service,
     fetch: options.fetch,
     ...(options.failure ? { failure: options.failure } : {}),
@@ -272,14 +286,25 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
 
   const signed = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) => {
     const { token } = options
+    const baseUrl = baseUrlOf(command)
+    if (!underBase(request.url, baseUrl))
+      throw new CliError("validation_error", `${operation.command} would leave ${baseUrl}`, { sent: false })
     await signRequest(manifest, operation, request, token && (() => token(command)))
     for (const [name, value] of Object.entries(options.headers?.(command, operation) ?? {}))
       request.headers.set(name, value)
     return request
   }
 
-  const guardOf = (command: Command, extra: readonly PermissionKey[]) => {
+  // `own` is the call's own key (`api.<operation>`), asked with the others when the caller confirmed some.
+  const guardOf = (
+    command: Command,
+    extra: readonly PermissionKey[],
+    confirmed: readonly PermissionKey[] = [],
+    own?: PermissionKey,
+  ) => {
     const { settings, env, renderer } = baseContext(command, configuration.resolveSettings)
+    const levelOf = (key: PermissionKey) => levelFor(settings.permissions, key, defaults).level
+    const asker = terminalAsker(command)
     return keyedGuard(
       (ask) =>
         guardFor(
@@ -289,8 +314,17 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
           env,
           ask,
         ),
-      terminalAsker(command),
-      (key) => levelFor(settings.permissions, key, defaults).level,
+      confirmed.length === 0
+        ? asker
+        : async (_key, asked) => {
+            // A caller that already asked about a key in this run is not asked again; `deny` and `readonly` still
+            // stop it.
+            const asking = [...(own ? [own] : []), ...extra].filter(
+              (key) => levelOf(key) === "ask" && !confirmed.includes(key),
+            )
+            if (asking.length > 0) await asker(asking.join(" and "), asked)
+          },
+      levelOf,
       extra,
     )
   }
@@ -312,14 +346,17 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     operation: ManifestOperation,
     extra: readonly PermissionKey[],
     request: HttpApiRequest,
+    confirmed: readonly PermissionKey[] = [],
   ) => {
     const { run } = baseContext(command, configuration.resolveSettings)
     const operationId = newOperationId()
-    const guard = guardOf(command, extra)
+    const guard = guardOf(command, extra, confirmed, keyOf(operation))
     const guarded = { chatId: null, kind: "edit" as const, key: keyOf(operation), operationId }
     guard.refuse(guarded)
     try {
-      const result = await guardedWrite(guard, guarded, () => run(() => send(command, operation, request)))
+      const result = await guardedWrite(guard, guarded, () =>
+        run(async () => (await exchange(command, operation, request)).answer),
+      )
       return { operation_id: operationId, result }
     } catch (error) {
       if (isCliError(error) && error.code === "outcome_unknown")
@@ -328,11 +365,28 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     }
   }
 
-  /** Every page, in one run; a next page on another host is never sent the sign-in. */
+  return { operations, left, baseUrlOf, defaults, exchange, operationOf, signed, write }
+}
+
+export const serviceApiCommand = (options: ServiceApiOptions): Command => {
+  const { app, configuration } = options
+  const { operations, baseUrlOf, exchange, operationOf, signed, write } = serviceApiCore(options)
+  const send = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) =>
+    (await exchange(command, operation, request)).answer
+  let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
+  const loaded = () => {
+    if (!schemas) throw new CliError("configuration_error", "the api schemas were not loaded before the command ran")
+    return schemas
+  }
+  /** Every page, in one run; a next page outside the server's address is never sent the sign-in. */
   const allPages = async (command: Command, operation: ManifestOperation, input: ApiCommandInput) => {
     const pagination = operation.pagination as NonNullable<ManifestOperation["pagination"]>
-    // Services number pages from 0 or from 1, and the manifest does not say which.
-    if (pagination.style === "page" && parameterValue(input, pagination.page) === undefined)
+    // Services number pages from 0 or from 1, and the manifest says which only where the source did.
+    if (
+      pagination.style === "page" &&
+      pagination.start === undefined &&
+      parameterValue(input, pagination.page) === undefined
+    )
       throw new CliError(
         "validation_error",
         `--all on ${operation.command} needs the first page: give --${pagination.page.name} 0 or 1, as ${options.service} counts`,
@@ -357,13 +411,14 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
         if (asked.has(key))
           throw new CliError("invalid_response", `${options.service} gave the same next page twice; nothing more read`)
         asked.add(key)
-        const step = nextPage(pagination, call, await send(command, operation, request))
+        const { answer, headers } = await exchange(command, operation, request)
+        const step = nextPage(pagination, call, answer, headers)
         for (const item of step.items) items.push(item)
         if (!step.next) return
         if ("url" in step.next) {
           url = new URL(step.next.url, request.url)
-          if (url.origin !== new URL(baseUrl).origin)
-            throw new CliError("invalid_response", `${options.service} pointed the next page at another host`)
+          if (!underBase(url, baseUrl))
+            throw new CliError("invalid_response", `${options.service} pointed the next page outside ${baseUrl}`)
         } else call = step.next.input
       }
     })
@@ -461,4 +516,45 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     group.addCommand(child.hook("preAction", load))
   }
   return group
+}
+
+/** One write of a manifest's operation from code, such as a content command's publish. */
+export type ServiceApiWrite = (
+  command: Command,
+  operation: string,
+  input: ApiCommandInput,
+  options?: {
+    /** Keys the caller already asked about in this run: not asked again, but a `deny` or `readonly` still stops them. */
+    confirmed?: readonly PermissionKey[]
+  },
+) => Promise<{ operation_id: string; result: unknown }>
+
+/**
+ * The `api` group's write path for code that is not one of its commands: the same keys (`api.<operation>` and each
+ * manifest key the call sets off, as `posts.publish`), levels, question and journal line, so a writer is never a
+ * looser door than the command. `command` is the one running, which carries the profile and says whether a terminal
+ * can be asked. A read that no key guards goes through `serviceApiCall`.
+ */
+export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite => {
+  const { baseUrlOf, operationOf, signed, write } = serviceApiCore(options)
+  return async (command, name, input, { confirmed } = {}) => {
+    const operation = operationOf(name)
+    // The api group offers only declared parameters; code must not reach further, as WordPress's `_method` turns a
+    // write into a delete that no delete key guards.
+    const undeclared = Object.keys(input.query).filter(
+      (one) => !operation.parameters.some((parameter) => parameter.in === "query" && parameter.name === one),
+    )
+    const overriding = Object.keys(input.headers ?? {}).filter((one) => /method-override/i.test(one))
+    if (undeclared.length > 0 || overriding.length > 0)
+      throw new CliError(
+        "configuration_error",
+        `${operation.command} does not take ${[...undeclared, ...overriding].join(", ")}`,
+        { sent: false },
+      )
+    const extra = serviceApiKeys(options, operation, input)
+    if (operation.effect === "read" && extra.length === 0)
+      throw new CliError("configuration_error", `${operation.command} is a read; send it with serviceApiCall`)
+    const request = await signed(command, operation, httpApiRequest(operation, input, baseUrlOf(command)))
+    return write(command, operation, extra, request, confirmed)
+  }
 }

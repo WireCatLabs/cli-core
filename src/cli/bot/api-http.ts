@@ -194,12 +194,17 @@ const answerOf = async (response: Response, maxBytes: number): Promise<unknown> 
 export type HttpApiSendOptions = Pick<HttpApiExecutorOptions, "service" | "fetch" | "failure" | "maxBytes">
 
 /**
- * Sends one request, records it in the run by its path template, never an id, and gives the parsed answer. A write
- * that got no answer is `outcome_unknown` (WC-LIFE-9); the service's own error text is never repeated (WC-SECR-6).
+ * Sends one request, records it in the run by its path template, never an id, and gives the parsed answer with the
+ * response's headers, where a service may page (WordPress's `X-WP-TotalPages`). A write that got no answer is
+ * `outcome_unknown` (WC-LIFE-9); the service's own error text is never repeated (WC-SECR-6).
  */
-export const httpApiSend =
+export const httpApiExchange =
   (options: HttpApiSendOptions) =>
-  async (command: Command, operation: ManifestOperation, request: HttpApiRequest): Promise<unknown> => {
+  async (
+    command: Command,
+    operation: ManifestOperation,
+    request: HttpApiRequest,
+  ): Promise<{ answer: unknown; headers: Headers }> => {
     const writes = operation.effect !== "read"
     const template = endpointOf(operation)
     const end = providerRequest(`${request.method} ${template}`, undefined, {
@@ -241,12 +246,19 @@ export const httpApiSend =
     try {
       const result = graphqlAnswer(options, operation, answer)
       end({ status })
-      return result
+      return { answer: result, headers: response.headers }
     } catch (error) {
       end({ status, error })
       throw error
     }
   }
+
+/** `httpApiExchange`'s answer alone. */
+export const httpApiSend = (options: HttpApiSendOptions) => {
+  const exchange = httpApiExchange(options)
+  return async (command: Command, operation: ManifestOperation, request: HttpApiRequest): Promise<unknown> =>
+    (await exchange(command, operation, request)).answer
+}
 
 /**
  * The `execute` of `generatedApiCommand` for any OpenAPI CLI: fills the path, adds the query, sends the JSON body
