@@ -31,8 +31,11 @@
 - **A sign-in never leaves the server's path.** For a site under a path (`host/blog`, a WordPress multisite in
   subfolders), `--all` refuses a next page outside the base URL's path, not only outside its origin, and the `api`
   group, the writer and `serviceApiCall` refuse to sign a request outside it, and a signed request to a site (a server
-  with free variables) follows no redirect. `hostsFetch` takes a `credentialScope`
-  that refuses a signed request outside it and drops the sign-in on a redirect out of it (cli-base `hostFetch`).
+  with free variables) follows no redirect: its error names the address the site moved to, without its query.
+  `hostsFetch` takes a `credentialScope` that refuses a signed request outside it and drops the sign-in on a redirect
+  out of it (cli-base `hostFetch`).
+- **`<PREFIX>_TOKEN_SITE` is cleaned as `--site` is.** `host/blog/..` was the root site of the same host, and the
+  password went there.
 
 ### Changed — may break callers
 

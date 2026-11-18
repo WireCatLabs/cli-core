@@ -279,6 +279,7 @@ export const signedInSite = (
     const tokens = new ProfileTokenStore({ app, env, ...(keyring ? { keyring } : {}) })
     const site = tokens.readWith(settings.profile, SITE)?.secret
     if (site === undefined) throw noSite(app, settings.profile)
-    return { site }
+    // <PREFIX>_TOKEN_SITE skips session start's cleaning, and `host/blog/..` would be the root site.
+    return { site: siteValue(site) }
   }
 }

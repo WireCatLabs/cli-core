@@ -190,6 +190,9 @@ it("BLOG_TOKEN goes only to BLOG_TOKEN_SITE, never to a profile's stored site", 
   const paired = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test" })
   expect((await paired.cli(["two", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
   expect(paired.sent).toEqual([{ url: "https://a.blog.test/wp-json/posts", authorization: "Bearer token-a" }])
+  const climbing = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test/news/.." })
+  expect((await climbing.cli(["two", "api", "list-posts", "--json"])).error).toMatchObject({ code: "validation_error" })
+  expect(climbing.sent).toEqual([])
 })
 
 it("a free variable inside a host takes one name, not a host with a path", async () => {

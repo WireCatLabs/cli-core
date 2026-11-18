@@ -678,6 +678,27 @@ describe("the shared service api group", () => {
     expect(sent).toEqual([])
   })
 
+  it("**the writer reads a value code passes as a number or boolean** as the text a person types, and checks it", async () => {
+    const { cli, bare } = fixture({ api: "allow", "posts.delete": "allow", "posts.delete.force": "allow" })
+    const forced = await cli(
+      "work",
+      "write",
+      "delete-post",
+      "--id",
+      "5",
+      "--query",
+      '{"force":true}',
+      "--yes",
+      "--json",
+    )
+    expect(forced.error).toBeUndefined()
+    expect(bare().map(({ method, url }) => `${method} ${url}`)).toEqual([
+      "DELETE https://api.pages.test/v1/posts/5?force=true",
+    ])
+    const wrong = await cli("work", "write", "delete-post", "--id", "5", "--query", '{"force":[1,2]}', "--json")
+    expect(wrong.error).toMatchObject({ code: "validation_error" })
+  })
+
   it("**a read whose query flag deletes goes through the guard**, as an upload link that overwrites", async () => {
     const { cli, bare } = fixture({ "documents.delete": "deny" })
     const refused = await cli("work", "api", "upload-link", "--path", "/a.txt", "--overwrite", "true", "--json")

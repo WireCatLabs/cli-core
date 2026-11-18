@@ -73,10 +73,16 @@ describe("a source's read through the manifest", () => {
       token: () => "editor:pw",
       fetch: async (url, init) => {
         asked.push({ url: String(url), redirect: init?.redirect })
-        return new Response(null, { status: 302, headers: { location: "/other/wp-json/wp/v2/posts" } })
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://host.test/other/wp-json/wp/v2/posts?key=k" },
+        })
       },
     })
-    await expect(call("list-posts", input)).rejects.toBeDefined()
+    const refused = await call("list-posts", input).catch((error: Error) => error)
+    // The owner sees where the site went, to sign in there if it moved; a key in its query stays out.
+    expect(refused.message).toContain("moved list-posts to https://host.test/other/wp-json/wp/v2/posts (HTTP 302)")
+    expect(refused.message).not.toContain("key=k")
     expect(asked).toEqual([{ url: "https://host.test/blog/wp-json/wp/v2/posts", redirect: "manual" }])
   })
 

@@ -14,7 +14,16 @@ import { newOperationId } from "../sends/send-id.js"
 import { refusedPlace } from "../sends/upload.js"
 import { type ApiCommandInput, generatedApiCommand } from "./bot/api.js"
 import { type HttpApiRequest, httpApiExchange, httpApiRequest, unsendableBody } from "./bot/api-http.js"
-import { checkApiBody, checkApiParameter, parseApiJson, readApiBody, readApiBytes } from "./bot/api-input.js"
+import {
+  apiJson,
+  checkApiBody,
+  checkApiParameter,
+  graphqlVariables,
+  parseApiJson,
+  readApiBody,
+  readApiBytes,
+  sendsBytes,
+} from "./bot/api-input.js"
 import { baseContext, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
@@ -533,6 +542,22 @@ export type ServiceApiWrite = (
   },
 ) => Promise<{ operation_id: string; result: unknown }>
 
+// Code may pass a number, a boolean or a list where a person types text; the check reads the text it stands for.
+const flagText = (raw: unknown): string => (Array.isArray(raw) ? raw.join(",") : String(raw))
+
+/** The body as the command checks it: an upload and an rpc call as given, GraphQL's flags joined to its variables. */
+const writerBody = (
+  operation: ManifestOperation,
+  input: ApiCommandInput,
+  schemas: Readonly<Record<string, v.GenericSchema>>,
+): ApiCommandInput => {
+  if (sendsBytes(operation) || operation.binding.kind === "rpc") return input
+  const graphql = operation.binding.kind === "graphql"
+  const given = graphql ? apiJson(graphqlVariables(operation, input.body, input.fields ?? {})) : input.body
+  const body = checkApiBody(operation, given, schemas)
+  return { ...input, ...(graphql ? { fields: {} } : {}), ...(body === undefined ? {} : { body }) }
+}
+
 /**
  * The `api` group's write path for code that is not one of its commands: the same keys (`api.<operation>` and each
  * manifest key the call sets off, as `posts.publish`), levels, question and journal line, so a writer is never a
@@ -548,7 +573,7 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
     const undeclared = Object.keys(input.query).filter(
       (one) => !operation.parameters.some((parameter) => parameter.in === "query" && parameter.name === one),
     )
-    const overriding = Object.keys(input.headers).filter(
+    const overriding = Object.keys(input.headers ?? {}).filter(
       (one) =>
         !operation.parameters.some(
           (parameter) => parameter.in === "header" && parameter.name.toLowerCase() === one.toLowerCase(),
@@ -565,16 +590,23 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
       throw new CliError("configuration_error", `${operation.command} is a read; send it with serviceApiCall`)
     // The checks the command runs on what a person typed, so code sends nothing a person could not.
     const schemas = await options.schemas()
+    const headers = Object.entries(input.headers ?? {})
     for (const parameter of operation.parameters) {
       const raw =
-        parameter.in === "query" || parameter.in === "path" || parameter.in === "header"
-          ? input[parameter.in === "header" ? "headers" : parameter.in][parameter.name]
-          : undefined
-      const problem = raw === undefined ? undefined : checkApiParameter(parameter.name, parameter.schema, raw, schemas)
+        parameter.in === "header"
+          ? headers.find(([one]) => one.toLowerCase() === parameter.name.toLowerCase())?.[1]
+          : parameter.in === "query" || parameter.in === "path"
+            ? input[parameter.in][parameter.name]
+            : undefined
+      const problem =
+        raw === undefined ? undefined : checkApiParameter(parameter.name, parameter.schema, flagText(raw), schemas)
       if (problem) throw new CliError("validation_error", problem)
     }
-    checkApiBody(operation, input.body, schemas)
-    const request = await signed(command, operation, httpApiRequest(operation, input, baseUrlOf(command)))
+    const request = await signed(
+      command,
+      operation,
+      httpApiRequest(operation, writerBody(operation, input, schemas), baseUrlOf(command)),
+    )
     return write(command, operation, extra, request, confirmed)
   }
 }

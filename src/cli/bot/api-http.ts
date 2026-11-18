@@ -329,6 +329,20 @@ const refusal = (service: string, operation: ManifestOperation, response: Respon
       reason: "access.denied",
       status,
     })
+  const location = status >= 300 && status < 400 ? response.headers.get("location") : null
+  // A signed call follows no redirect, so it might take the sign-in elsewhere; the address shows where the site
+  // went. Its query is left out: it may carry a key.
+  if (location !== null) {
+    const to = URL.canParse(location, response.url || undefined)
+      ? new URL(location, response.url || undefined)
+      : undefined
+    const where = to ? `${to.origin}${to.pathname}` : "another address"
+    return new CliError(
+      statusToCode(status),
+      `${service} moved ${operation.command} to ${where} (HTTP ${status}); nothing was sent there`,
+      { status, retryable: false },
+    )
+  }
   return new CliError(statusToCode(status), `${service} refused ${operation.command} (HTTP ${status})`, {
     status,
     retryable: status >= 500,
