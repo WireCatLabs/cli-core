@@ -1,4 +1,4 @@
-import { isCliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { type FakeCall, fakeApi, type ManifestOperation, type SchemaNode } from "@wirecat/cli-base/codegen"
 import { describe, expect, it } from "vitest"
 import { serviceApiCall } from "../../cli/service-api-call.js"
@@ -876,6 +876,65 @@ describe("path checks, enrich, optional kinds and select.max", () => {
     expect(gaps).toEqual([{ kind: "deal", message: "deals need the deals scope", scope: "crm.objects.deals.read" }])
     await expect(source.ids?.("deal", "2")).rejects.toMatchObject({ code: "permission_error" })
     await expect(over(MANIFEST, hub).changes("deal", null)).rejects.toMatchObject({ code: "permission_error" })
+  })
+
+  it("copies only the contacts and companies a deal names, by get, and their ids are the deals' links", async () => {
+    const hub = fakeHubspot()
+    const linked = {
+      ...MANIFEST,
+      entities: {
+        ...MANIFEST.entities,
+        person: { ...MANIFEST.entities.person, linked: true },
+        organization: { ...MANIFEST.entities.organization, linked: true },
+      },
+    }
+    const source = over(linked, hub)
+    expect(((await all(source, "person")) as CrmPerson[]).map(({ externalId }) => externalId)).toEqual(["201"])
+    expect(((await all(source, "organization")) as CrmOrganization[]).map(({ externalId }) => externalId)).toEqual([
+      "101",
+    ])
+    expect(await source.ids?.("person", undefined)).toEqual({ items: ["201"], hasMore: false })
+    // A person no deal names any more leaves the copy at the next full round.
+    hub.rows["0-3"] = (hub.rows["0-3"] ?? []).filter(({ id }) => id !== "301")
+    expect(await source.ids?.("person", undefined)).toEqual({ items: [], hasMore: false })
+    expect(await all(source, "person")).toEqual([])
+  })
+
+  it("reads no linked contact when the deals are an optional kind the service says is not there", async () => {
+    const hub = fakeHubspot()
+    const missing = async (operation: string, request: Parameters<ReturnType<typeof serviceApiCall>>[1]) => {
+      if (operation === "deals_getPage") throw new CliError("not_found", "the deals object is off")
+      return serviceApiCall({ manifest: api, service: "HubSpot", fetch: hub.fetch, token: () => TOKEN })(
+        operation,
+        request,
+      )
+    }
+    const source = crmSourceFromManifest(
+      {
+        ...withDeal({ optional: { message: "the deals object is off in this account" } }),
+        entities: {
+          ...withDeal({ optional: { message: "the deals object is off in this account" } }).entities,
+          person: { ...MANIFEST.entities.person, linked: true },
+        },
+      },
+      { api, call: missing },
+    )
+    const { gaps, context } = recording()
+    expect(await source.changes("person", null, undefined, context)).toMatchObject({ items: [], hasMore: false })
+    expect(await source.changes("deal", null, undefined, context)).toEqual({ items: [], hasMore: false, cursor: null })
+    expect(gaps).toEqual([{ kind: "deal", message: "the deals object is off in this account" }])
+  })
+
+  it("refuses linked on a deal, without a get, or with no deal that names the kind", () => {
+    const person = MANIFEST.entities.person as NonNullable<CrmManifest["entities"]["person"]>
+    const refused = (entities: Record<string, unknown>) => () =>
+      parseCrmManifest({ ...MANIFEST, entities: { ...MANIFEST.entities, ...entities } }, api)
+    expect(refused({ deal: { ...deal, linked: true } })).toThrow(/only contacts and companies/)
+    expect(refused({ person: { ...person, get: undefined, linked: true } })).toThrow(/has none/)
+    const { people: _, ...unlinked } = deal.map
+    expect(refused({ person: { ...person, linked: true }, deal: { ...deal, map: unlinked } })).toThrow(
+      /no deal entity maps people/,
+    )
   })
 
   it("always asks for the mapped fields, then the account's own that fit select.max, and names the rest once", async () => {

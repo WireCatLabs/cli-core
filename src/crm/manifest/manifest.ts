@@ -77,10 +77,16 @@ export interface CrmManifestEntity<K extends CrmKind = CrmKind> {
   /** The account's own fields' values, by the codes `fields` lists, under this object of the row. */
   custom?: { from: string; split?: string; typed?: CrmTypedValues }
   /**
-   * A kind the plan or the sign-in may not have (HubSpot's leads): the service refusing it is a gap with this text and
-   * scope, and the other kinds still sync.
+   * A kind the plan or the sign-in may not have (HubSpot's leads, Attio's Deals object when it is off): the service
+   * refusing it, or answering that it is not there, is a gap with this text and scope, and the other kinds still sync.
    */
   optional?: { message: string; scope?: string }
+  /**
+   * Contacts or companies: the sync copies only the ones a deal names, each read by `get`, as Bitrix24's does; the
+   * rest stay in the service and are read live. For a service whose own contacts and companies grow from mail
+   * (Attio), where a full copy would hold thousands nobody sells to.
+   */
+  linked?: true
 }
 
 /**
@@ -236,6 +242,7 @@ const entity = v.strictObject({
     }),
   ),
   optional: v.optional(v.strictObject({ message: v.pipe(v.string(), v.minLength(1)), scope: v.optional(v.string()) })),
+  linked: v.optional(v.literal(true)),
 })
 
 const pipelines = v.strictObject({
@@ -360,6 +367,14 @@ export const parseCrmManifest = (input: unknown, api: ServiceApiManifest): CrmMa
       }
       if (!hasPlaceholder([one.search.path, one.search.query, one.search.body], "{query}"))
         throw invalid(`entities.${kind}.search`, 'no "{query}" in its path, query or body')
+    }
+    if (one.linked) {
+      if (kind !== "person" && kind !== "organization")
+        throw invalid(`entities.${kind}.linked`, "only contacts and companies are copied as a deal names them")
+      if (!one.get) throw invalid(`entities.${kind}.linked`, "each one is read by its get, and this kind has none")
+      const link = kind === "person" ? "people" : "organization"
+      if (!manifest.kinds.includes("deal") || manifest.entities.deal?.map[link] === undefined)
+        throw invalid(`entities.${kind}.linked`, `no deal entity maps ${link}`)
     }
     if (one.map.externalId === undefined) throw invalid(`entities.${kind}.map.externalId`, "every kind maps its id")
     const fields = [...Object.keys(FIELDS[kind]), "amount", "currency"]

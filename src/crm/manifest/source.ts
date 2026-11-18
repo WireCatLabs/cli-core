@@ -34,6 +34,8 @@ const OVERLAP_MS = 10 * 60_000
 const MOST_LIVE = 100
 /** How far one read of every page goes: a service that never stops paging must not hold a sync forever. */
 const MOST_PAGES = 500
+/** Contacts or companies a deal names, read one by one, per page of a sync round. */
+const LINKED_PAGE = 50
 
 interface Slots {
   since?: string
@@ -228,7 +230,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
   /** A refusal of a kind the manifest marks optional is a gap; the other kinds still sync. */
   const optionalRefused = (kind: CrmKind, error: unknown, context?: CrmCallContext) => {
     const optional = manifest.entities[kind]?.optional
-    if (!optional || !isCliError(error) || error.code !== "permission_error") return false
+    if (!optional || !unseen(error)) return false
     gap(context, { kind, message: optional.message, ...(optional.scope ? { scope: optional.scope } : {}) })
     return true
   }
@@ -288,6 +290,8 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     context?: CrmCallContext,
   ): Promise<CrmChanges<CrmRecords[K]>> => {
     const entity = entityOf(kind)
+    if (entity.linked && (kind === "person" || kind === "organization"))
+      return (await readLinked(kind, page, context)) as CrmChanges<CrmRecords[K]>
     const since = cursor === null ? null : Date.parse(cursor)
     if (since !== null && Number.isNaN(since)) return { reset: true }
     const { token, started } = pageOf(page, now())
@@ -312,8 +316,86 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
       : { items, hasMore: true, nextCursor: `${next}@${started}` }
   }
 
+  const readOne = async <K extends CrmLiveKind>(
+    kind: K,
+    externalId: string,
+    send: ServiceApiCall,
+    context?: CrmCallContext,
+  ): Promise<CrmRecords[K] | null> => {
+    const entity = entityOf(kind)
+    if (!entity.get) return null
+    const defined = entity.custom ? await fieldsOf(kind, send, context) : []
+    let answer: unknown
+    try {
+      answer = await send(
+        entity.get.operation,
+        inputOf(entity.get, { id: externalId, select: selectOf(kind, defined, context) }),
+      )
+    } catch (error) {
+      if (unseen(error)) return null
+      throw error
+    }
+    const raw = entity.get.items === undefined ? answer : at(answer, entity.get.items)
+    return isRaw(raw) ? ((await mapped(kind, [raw], defined, send))[0] ?? null) : null
+  }
+
+  /** The contacts and companies the deals name, from one pass over the deals; deals the service refuses name none. */
+  const linkedOf = async (send: ServiceApiCall, context?: CrmCallContext) => {
+    const deal = entityOf("deal")
+    const found = { person: new Set<string>(), organization: new Set<string>() }
+    let rows: CrmRaw[]
+    try {
+      rows = await readAll(deal.list, send)
+    } catch (error) {
+      if (!optionalRefused("deal", error, context)) throw error
+      rows = []
+    }
+    for (const raw of rows) {
+      const record = mapRecord("deal", deal, raw, [])
+      if (record?.organization) found.organization.add(record.organization)
+      for (const one of record?.people ?? []) found.person.add(one.externalId)
+    }
+    return { person: [...found.person].sort(), organization: [...found.organization].sort() }
+  }
+
+  /** One pass per round: every page of the round reads the same list, so no id is skipped or read twice. */
+  let round: { started: number; ids: ReturnType<typeof linkedOf> } | undefined
+  const linkedRound = (started: number, send: ServiceApiCall, context?: CrmCallContext) => {
+    if (round?.started !== started) {
+      const ids = linkedOf(send, context)
+      ids.catch(() => {
+        if (round?.ids === ids) round = undefined
+      })
+      round = { started, ids }
+    }
+    return round.ids
+  }
+
+  const readLinked = async <K extends CrmLiveKind>(
+    kind: K,
+    page: string | undefined,
+    context?: CrmCallContext,
+  ): Promise<CrmChanges<CrmRecords[K]>> => {
+    const { token, started } = pageOf(page, now())
+    const from = token === undefined ? 0 : Number(token)
+    if (!Number.isSafeInteger(from) || from < 0) return { reset: true }
+    const send = metered(context)
+    const ids = (await linkedRound(started, send, context))[kind]
+    const items: CrmRecords[K][] = []
+    for (const externalId of ids.slice(from, from + LINKED_PAGE)) {
+      const one = await readOne(kind, externalId, send, context)
+      if (one) items.push(one)
+    }
+    const next = from + LINKED_PAGE
+    return next < ids.length
+      ? { items, hasMore: true, nextCursor: `${next}@${started}` }
+      : { items, hasMore: false, cursor: new Date(started).toISOString() }
+  }
+
   const readIds = async (kind: CrmKind, page: string | undefined, context?: CrmCallContext): Promise<CrmIdPage> => {
     const entity = entityOf(kind)
+    if (entity.linked && (kind === "person" || kind === "organization"))
+      return { items: (await linkedOf(metered(context), context))[kind], hasMore: false }
     const { rows, next } = await readPage(entity.ids ?? entity.list, {}, page, metered(context))
     const items = rows.flatMap((raw) => {
       const found = evaluate(entity.map.externalId as NonNullable<typeof entity.map.externalId>, raw)
@@ -408,22 +490,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     ...(live.length ? { list: readLive } : {}),
 
     async get<K extends CrmLiveKind>(kind: K, externalId: string, context?: CrmCallContext) {
-      const entity = entityOf(kind)
-      if (!entity.get) return null
-      const send = metered(context)
-      const defined = entity.custom ? await fieldsOf(kind, send, context) : []
-      let answer: unknown
-      try {
-        answer = await send(
-          entity.get.operation,
-          inputOf(entity.get, { id: externalId, select: selectOf(kind, defined, context) }),
-        )
-      } catch (error) {
-        if (unseen(error)) return null
-        throw error
-      }
-      const raw = entity.get.items === undefined ? answer : at(answer, entity.get.items)
-      return isRaw(raw) ? ((await mapped(kind, [raw], defined, send))[0] ?? null) : null
+      return readOne(kind, externalId, metered(context), context)
     },
 
     ...(manifest.fields
