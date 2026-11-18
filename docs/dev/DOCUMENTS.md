@@ -310,6 +310,67 @@ for file events the system dropped; and all of them at the full run (`fullMs`, 3
 late. It yields one event per cycle with its triggers and mirrors, and a failed cycle as an error whose mirrors are
 tried again at the next poll. The CLI takes the lock inside `sync`, so a manual sync can run between cycles.
 
+<a id="sync-plain-files-with-a-provider"></a>
+
+### Plain files, both ways
+
+A remote folder that keeps files as they are (Yandex Disk, a WebDAV share) uses the whole-file engine,
+`syncFileMirror`, instead of `pushDocuments`: it copies bytes, never merges text, and reads the remote with one
+listing per run instead of one read per file. The provider implements `FileTarget`:
+
+```ts
+interface FileTarget {
+  identity(): Promise<string>
+  list(root: string, signal?: AbortSignal): Promise<{ rootId: string; files: RemoteFile[] } | undefined>
+  download(path: string, into: string, signal?: AbortSignal): Promise<void>
+  upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
+  trash(path: string, expect: { sha256: string; md5?: string }, signal?: AbortSignal): Promise<void>
+  ensureFolder(path: string, signal?: AbortSignal): Promise<void>
+  revision?(signal?: AbortSignal): Promise<string>
+}
+type Expect = { absent: true } | { sha256: string; md5?: string }
+```
+
+`list` returns each file's path relative to `root`, its `id` (kept across a move and an overwrite), `size`, `sha256`
+(the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id. The other calls take the
+remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
+size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
+`conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
+just before the write. An editing command reuses the same call, `upload(path, file, { sha256: whatWasDownloaded })`.
+
+1. Each path is compared three ways: the local file now, the remote file now and the last sync (`FileEntry` in the
+   state). A change on one side is copied to the other. The same content on both sides is adopted without a
+   transfer, so a first sync of two identical trees moves nothing. Different content on both sides, or a deletion
+   on one side against a change on the other, is a conflict: never overwritten, reported with each side's time and
+   size, and the run ends with a `mirror.partial` issue. `keep` settles conflicts on a later run: `local` and
+   `remote` pick a side; `both` downloads the remote version beside the local one as
+   `name (conflict YYYY-MM-DD <remote>).ext`, then sends both.
+2. A deletion crosses sides into a trash: the remote's (`trash`, with the expected hashes) or
+   `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. A run that would delete more than 50
+   files, or more than a quarter of the mirror, stops before any write with `mirror.too-many-deletions` unless
+   `allowDeletions` covers the count.
+3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
+   file.
+4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local
+   write goes through a hidden temporary file and lands only if the file still has the hash the run read, or is
+   still absent for a new file; a download whose content does not match the listing's `sha256` never lands. An
+   upload that reads back with another hash is a conflict.
+5. A crash at any step is settled by the next run's listing: the same content on both sides is adopted, a file gone
+   from both is forgotten, so nothing is written twice and nothing is lost. `pending` in the state only names a
+   download's temporary file, removed at the next start, and a write that ended `outcome_unknown`, which is never
+   retried within the run. The state is saved at most once a second and at the end.
+6. A remote folder that is gone, or has another id than at the first sync, is refused with `mirror.root-moved`, so a
+   moved folder never reads as "everything was deleted". Hidden remote files are skipped as local ones are.
+7. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
+
+`guard` wraps every write with its `action` (`create`, `update`, `folder`, `delete`, `move`) and `side` (`local` or
+`remote`), so the CLI maps overwrites and both trashes to its delete permission. `syncFileMirrors` runs the engine
+for each mirror under one lock, as `syncMirrors` does; `fileSyncState(dir, mirror, principal)` keeps the state in
+`<dir>/<id>.json`; `fileMirrorStatus` lists local changes and deletions without asking the remote. For
+`watchMirrors`, pass `localChanges` (the mirrors whose `fileMirrorStatus` lists anything) instead of `kindOf` and
+`stateOf`, and `remoteChanges: fileRemoteChanges(target)`: it reads the target's `revision` at each poll and lists
+only when it moved; a target without one is listed at every poll.
+
 For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s
 (headings, paragraphs, bullet, numbered and checklist items, code, quotes, tables, images, rules) with inline marks.
 The provider maps its own document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged

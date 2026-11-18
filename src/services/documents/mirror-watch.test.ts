@@ -20,7 +20,7 @@ const mirrorAt = (id: string, files: Record<string, string>): Mirror => {
  * A watch on a clock that jumps to each wake-up. `at(ms, act)` runs `act` once the clock passes `ms`; the watch stops
  * after `cycles` cycles. The sync records the local files as pushed, as a real sync leaves them.
  */
-const harness = (mirrors: Mirror[], cycles: number) => {
+const harness = (mirrors: Mirror[], cycles: number, localChanges?: (mirrors: Mirror[]) => Promise<string[]>) => {
   let clock = 0
   const stop = new AbortController()
   const stateDir = mkdtempSync(join(tmpdir(), "mirror-watch-state-"))
@@ -54,8 +54,7 @@ const harness = (mirrors: Mirror[], cycles: number) => {
   const options = {
     mirrors,
     signal: stop.signal,
-    kindOf,
-    stateOf,
+    ...(localChanges ? { localChanges } : { kindOf, stateOf }),
     remoteChanges: async () => {
       const found = remote
       remote = []
@@ -178,6 +177,23 @@ describe("watchMirrors", () => {
       { triggers: ["full"], mirrors: ["a"] },
     ])
     expect(watch.clock()).toBe(1_800_000)
+  })
+
+  it("asks the engine's own check, when given one, whether saved files differ", async () => {
+    const a = mirrorAt("a", { "one.md": "one" })
+    const b = mirrorAt("b", { "two.md": "two" })
+    const asked: string[][] = []
+    const watch = harness([a, b], 2, async (chosen) => {
+      asked.push(chosen.map((mirror) => mirror.id))
+      return chosen.filter((mirror) => mirror.id === "b").map((mirror) => mirror.id)
+    })
+    watch.at(1_000, () => watch.save(a, "one.md", "one, edited"))
+    watch.at(10_000, () => watch.save(b, "two.md", "two, edited"))
+    expect(await watch.run()).toEqual([
+      { triggers: ["start"], mirrors: ["a", "b"] },
+      { triggers: ["local"], mirrors: ["b"] },
+    ])
+    expect(asked).toEqual([["a"], ["b"]])
   })
 
   it("hears a saved file through the real file watcher", async () => {

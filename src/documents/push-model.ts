@@ -4,6 +4,9 @@ export interface LocalDocument {
   absolute: string
   hash: string
   kind: string
+  /** Set by `scanLocal`, so the next scan can skip hashing a file whose size and mtime did not change. */
+  size?: number
+  mtimeMs?: number
 }
 export interface Pushed<S> {
   id: string

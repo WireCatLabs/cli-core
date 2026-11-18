@@ -11,6 +11,7 @@ export { documentIngestion, type IngestionOptions } from "../services/documents/
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
 export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
 export {
+  type MirrorLocalCheck,
   type MirrorTrigger,
   type MirrorWatchEvent,
   type MirrorWatchOptions,
@@ -28,6 +29,7 @@ export {
 export type { SyncOptions } from "../services/documents/ports.js"
 export { extractDocumentMemories, type ImportedSource, type ProposalOptions } from "../services/documents/proposals.js"
 export {
+  type MirrorAction,
   type PushConflict,
   type PushOptions,
   type PushResult,
@@ -36,8 +38,28 @@ export {
   scanLocal,
 } from "../services/documents/push.js"
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
+export {
+  type FileMirrorOptions,
+  type FileMirrorResult,
+  type FileMirrorSyncOptions,
+  type FileStep,
+  fileMirrorStatus,
+  fileRemoteChanges,
+  fileSyncState,
+  syncFileMirror,
+  syncFileMirrors,
+} from "../services/files/mirror.js"
 export { type Block, blockKey, blockShape, type Inline, type ListKind, normalizeInlines } from "./blocks.js"
 export { catalogFiles } from "./catalog.js"
+export type {
+  Expect,
+  FileEntry,
+  FileMirrorState,
+  FileMirrorStatePort,
+  FileStepKind,
+  FileTarget,
+  RemoteFile,
+} from "./file-mirror-model.js"
 export { htmlToMarkdown, markdownToHtml } from "./html-markdown.js"
 export { markdownBlocks, type PlacedBlock, placedMarkdownBlocks } from "./markdown-blocks.js"
 export type {
