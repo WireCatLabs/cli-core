@@ -253,9 +253,12 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
 - `entities.<person|organization>.search` names a call with `"{query}"`: the source then has a live `list` for
   `people list` and `organizations list`, words through `search` and none through `list`, paged by the operation's
   offset. A condition it cannot send is refused (`query.unsupported-field`), never dropped.
+- `entities.<person|organization>.linked: true` copies only the contacts or companies a deal names, each read by its
+  `get`, as Bitrix24's sync does; their ids are the deals' links, so one no deal names leaves the copy at the next full
+  round. With `search`, every other one is read live. For a service whose contacts grow from mail (Attio).
 - `crmManifestProblems(manifest, api, definitions)` checks every mapped path against the schema each operation
   answers; a CLI runs it in a test, so a wrong path fails before any sync.
-- `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind a gap;
+- `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind, or one the service says is not there (404), a gap;
   `select.max` caps the account's own fields in `{select}`; mapped fields are always asked for.
 - `defineCli` and `parseCliConfig` (`@wirecat/cli-core/manifest`) give the whole CLI's `wirecat.config.ts`: identity,
   API description, sign-in preset, category and this source.
