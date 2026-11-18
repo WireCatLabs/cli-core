@@ -290,10 +290,10 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     context?: CrmCallContext,
   ): Promise<CrmChanges<CrmRecords[K]>> => {
     const entity = entityOf(kind)
-    if (entity.linked && (kind === "person" || kind === "organization"))
-      return (await readLinked(kind, page, context)) as CrmChanges<CrmRecords[K]>
     const since = cursor === null ? null : Date.parse(cursor)
     if (since !== null && Number.isNaN(since)) return { reset: true }
+    if (entity.linked && (kind === "person" || kind === "organization"))
+      return (await readLinked(kind, page, context)) as CrmChanges<CrmRecords[K]>
     const { token, started } = pageOf(page, now())
     const send = metered(context)
     const defined = entity.custom ? await fieldsOf(kind, send, context) : []
