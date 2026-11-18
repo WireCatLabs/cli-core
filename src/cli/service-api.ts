@@ -113,14 +113,30 @@ const destructive = (operation: ManifestOperation) =>
 
 const flagsOf = ({ body = [], query = [] }: OperationPermission) => [...body, ...query]
 
+const valuesOf = ({ values = {} }: OperationPermission) => Object.entries(values)
+
+/** Always, unless its flags or values name when; `with status publish or future`, `with archived set`. */
+const whenOf = (permission: OperationPermission): string | undefined => {
+  const flags = flagsOf(permission)
+  const values = valuesOf(permission).map(([field, listed]) => `${field} ${listed.join(" or ")}`)
+  if (flags.length === 0 && values.length === 0) return undefined
+  return `with ${[...(flags.length > 0 ? [`${flags.join(" or ")} set`] : []), ...values].join(" or ")}`
+}
+
+/** A body field or query parameter holding one of the values: WordPress publishes from either. */
+const holds = (value: unknown, listed: readonly string[]) => typeof value === "string" && listed.includes(value)
+
 /** A flag counts unless it is absent or plainly false: a service may read `1` or `True` as true. */
 const set = (value: unknown) => value !== undefined && value !== null && value !== false && value !== "false"
 
-/** Whether a manifest key applies to this call: always, or when one of its flags is set. */
+/** Whether a manifest key applies to this call: always, or when one of its flags is set or a field holds a value. */
 const applies = (permission: OperationPermission, body: unknown, input: ApiCommandInput): boolean =>
-  flagsOf(permission).length === 0 ||
+  whenOf(permission) === undefined ||
   (permission.body ?? []).some((field) => isObject(body) && set(body[field])) ||
-  (permission.query ?? []).some((name) => set(input.query[name]))
+  (permission.query ?? []).some((name) => set(input.query[name])) ||
+  valuesOf(permission).some(
+    ([field, listed]) => (isObject(body) && holds(body[field], listed)) || holds(input.query[field], listed),
+  )
 
 /** The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body. */
 export const serviceApiKeys = (
@@ -155,11 +171,10 @@ export const serviceApiPermissions = (
   const checks = new Map<string, (PermissionKey | ConditionalKey)[]>()
   for (const operation of input.manifest.operations)
     checks.set(operation.command, [
-      ...permissionsOf(operation).map((permission) =>
-        flagsOf(permission).length === 0
-          ? permission.key
-          : { key: permission.key, when: `with ${flagsOf(permission).join(" or ")} set` },
-      ),
+      ...permissionsOf(operation).map((permission) => {
+        const when = whenOf(permission)
+        return when === undefined ? permission.key : { key: permission.key, when }
+      }),
       ...(input.bodyPermissions?.[operation.command] ?? []).map(({ key, when }) => ({ key, when })),
     ])
   const keys = [...new Set([...checks.values()].flat().map((one) => (typeof one === "string" ? one : one.key)))]

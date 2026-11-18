@@ -66,6 +66,16 @@ const operations: Operation[] = [
     permissions: [{ key: "documents.delete" }],
   },
   {
+    id: "create-post",
+    command: "create-post",
+    binding: { kind: "http", method: "POST", path: "/posts" },
+    effect: "write",
+    tags: ["Posts"],
+    parameters: [query("status")],
+    request: { required: false, confidence: "contract", schema: "PatchPage" },
+    permissions: [{ key: "posts.publish", values: { status: ["publish", "future"] } }],
+  },
+  {
     id: "agent-batch",
     command: "agent-batch",
     binding: { kind: "http", method: "POST", path: "/agents/batch" },
@@ -477,6 +487,25 @@ describe("the shared service api group", () => {
     expect(bare()).toEqual([{ method: "PATCH", url: "https://api.pages.test/v1/pages/p1", body: '{"in_trash":false}' }])
   })
 
+  it("**a write whose field holds a publishing value checks its key**, in the body or the query, as WordPress", async () => {
+    const { cli, bare } = fixture({ "posts.publish": "deny", api: "allow" })
+    for (const call of [
+      ["--body", '{"status":"publish","title":"t"}'],
+      ["--body", '{"status":"future"}'],
+      ["--status", "publish", "--body", '{"title":"t"}'],
+    ]) {
+      const refused = await cli("work", "api", "create-post", ...call, "--json")
+      expect(refused.error).toMatchObject({ code: "permission_error" })
+      expect(refused.error?.message).toContain("posts.publish")
+    }
+    expect(bare()).toEqual([])
+    const draft = await cli("work", "api", "create-post", "--body", '{"status":"draft","title":"t"}', "--json")
+    expect(draft.code).toBe(0)
+    expect(bare()).toEqual([
+      { method: "POST", url: "https://api.pages.test/v1/posts", body: '{"status":"draft","title":"t"}' },
+    ])
+  })
+
   it("**a read whose query flag deletes goes through the guard**, as an upload link that overwrites", async () => {
     const { cli, bare } = fixture({ "documents.delete": "deny" })
     const refused = await cli("work", "api", "upload-link", "--path", "/a.txt", "--overwrite", "true", "--json")
@@ -510,12 +539,20 @@ describe("the shared service api group", () => {
       { key: "documents.delete", when: "with in_trash or archived set" },
     ])
     expect(alsoChecks(["api", "upload-link"])).toEqual([{ key: "documents.delete", when: "with overwrite set" }])
+    expect(alsoChecks(["api", "create-post"])).toEqual([
+      { key: "posts.publish", when: "with status publish or future" },
+    ])
     expect(alsoChecks(["api", "agent-batch"])).toEqual([
       { key: "documents.delete", when: "an operation's action is delete" },
     ])
     expect(alsoChecks(["api", "retrieve-a-page"])).toEqual([])
-    expect(defaults).toEqual({ "documents.delete": "ask", "documents.share": "ask", "api.delete-a-block": "ask" })
-    expect(extra).toEqual(["documents.delete", "documents.share"])
+    expect(defaults).toEqual({
+      "documents.delete": "ask",
+      "posts.publish": "ask",
+      "documents.share": "ask",
+      "api.delete-a-block": "ask",
+    })
+    expect(extra).toEqual(["documents.delete", "posts.publish", "documents.share"])
   })
 
   it("**--all reads every page** by the manifest's cursor, offset or link, in one run", async () => {
