@@ -1,11 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type {
-  ContentChannel,
-  ContentKind,
-  ContentMetric,
-  ContentPost,
-  ContentRecords,
-} from "../../domain/content.js"
+import type { ContentChannel, ContentKind, ContentMetric, ContentPost, ContentRecords } from "../../domain/content.js"
 import type { ContentCallContext, ContentChanges, ContentIdPage, ContentSource } from "../source.js"
 import { type ContentWriter, contentConflict } from "../writer.js"
 

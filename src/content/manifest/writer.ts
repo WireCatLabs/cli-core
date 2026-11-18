@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
-import { isRaw } from "../../crm/values.js"
+import { crmValues } from "../../crm/index.js"
 import { markdownToHtml } from "../../documents/html-markdown.js"
 import type { ContentPost, TermKind } from "../../domain/content.js"
 import type { ContentSource } from "../source.js"
@@ -47,8 +47,8 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   const html = entity.body !== undefined && entity.body.format !== "markdown"
 
   const postOf = async (answer: unknown): Promise<ContentPost | null> => {
-    const raw = isRaw(answer) && isRaw(answer.previous) && answer.deleted === true ? null : answer
-    if (!isRaw(raw)) return null
+    const raw = crmValues.isRaw(answer) && crmValues.isRaw(answer.previous) && answer.deleted === true ? null : answer
+    if (!crmValues.isRaw(raw)) return null
     const post = mapContentRecord("post", entity.map, raw)
     if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a write with no post`)
     return Object.assign(post, { channel: options.site }, await postBodyOf(entity, raw))
@@ -68,8 +68,9 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
         if (!found) throw new CliError("not_found", `no tag or category ${term} at ${manifest.provider}`)
         kinds.set(found.kind, [...(kinds.get(found.kind) ?? []), term])
       }
+      // A numeric id goes as a number: the API's body schema types WordPress's term lists as integers.
       for (const [kind, name] of Object.entries(to.terms))
-        if (name) out[name] = kinds.get(kind as TermKind) ?? []
+        if (name) out[name] = (kinds.get(kind as TermKind) ?? []).map((one) => (/^\d+$/.test(one) ? Number(one) : one))
     }
     return out
   }
@@ -82,7 +83,11 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
     return found
   }
 
-  const send = async (call: typeof writes.update, slots: { id?: string; at?: string }, body?: Record<string, unknown>) => {
+  const send = async (
+    call: typeof writes.update,
+    slots: { id?: string; at?: string },
+    body?: Record<string, unknown>,
+  ) => {
     const base = call.body === undefined ? {} : (fill(call.body, slots) as Record<string, unknown>)
     const { result } = await options.write(
       options.command,

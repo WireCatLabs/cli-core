@@ -88,7 +88,10 @@ const posts = (operation: string, type: string) => {
       terms: { all: ["tags", "categories"] },
     },
     body: { path: "content.raw", format: "wp-blocks", fallback: { path: "content.rendered", format: "html" } },
-    optional: { message: "the sign-in may not read every post: a contributor sees its own", scope: "edit_others_posts" },
+    optional: {
+      message: "the sign-in may not read every post: a contributor sees its own",
+      scope: "edit_others_posts",
+    },
   }
 }
 
@@ -170,7 +173,15 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
   const tags: Row[] = [{ id: 7, name: "Releases", slug: "releases", taxonomy: "post_tag" }]
   const categories: Row[] = [{ id: 1, name: "News", slug: "news", parent: 0, taxonomy: "category" }]
   const T0 = Date.UTC(2026, 10, 1)
-  const post = (id: number, type: string, status: string, title: string, html: string, at: number, extra: Row = {}) => ({
+  const post = (
+    id: number,
+    type: string,
+    status: string,
+    title: string,
+    html: string,
+    at: number,
+    extra: Row = {},
+  ) => ({
     id,
     type,
     status,
@@ -187,7 +198,15 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
     ...extra,
   })
   const rows: Row[] = [
-    post(10, "post", "publish", "Version 2 is out", "<!-- wp:paragraph --><p>We shipped <strong>version 2</strong>.</p><!-- /wp:paragraph -->", T0 + 10_000, { tags: [7] }),
+    post(
+      10,
+      "post",
+      "publish",
+      "Version 2 is out",
+      "<!-- wp:paragraph --><p>We shipped <strong>version 2</strong>.</p><!-- /wp:paragraph -->",
+      T0 + 10_000,
+      { tags: [7] },
+    ),
     post(11, "post", "draft", "Draft about pricing", "<p>Prices change in December.</p>", T0 + 20_000, { author: 2 }),
     post(12, "page", "publish", "About", "<p>Who we are.</p>", T0 + 30_000, { categories: [] }),
   ]
@@ -246,7 +265,8 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
         else row[field] = value
       }
       // WordPress publishes a future post whose date has passed, and dates a published post now.
-      if (row.status === "future" && Date.parse(`${String(row.date_gmt).replace(/Z$/, "")}Z`) <= clock()) row.status = "publish"
+      if (row.status === "future" && Date.parse(`${String(row.date_gmt).replace(/Z$/, "")}Z`) <= clock())
+        row.status = "publish"
       if (row.status === "publish" && !row.date_gmt) row.date_gmt = gmt(clock())
       if (typeof row.date_gmt === "string") row.date_gmt = row.date_gmt.replace(/Z$/, "")
       stamp(row)
@@ -284,7 +304,10 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
   })
   return {
     call,
-    write: async (_command: unknown, operation: string, input: ApiCommandInput) => ({ operation_id: `op-${writes.length}`, result: write(operation, input) }),
+    write: async (_command: unknown, operation: string, input: ApiCommandInput) => ({
+      operation_id: `op-${writes.length}`,
+      result: write(operation, input),
+    }),
     writes,
     rows,
     touch(id: number) {

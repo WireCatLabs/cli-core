@@ -3,7 +3,7 @@ import * as v from "valibot"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmOperationCall, CrmRule } from "../../crm/manifest/manifest.js"
 import { crmRuleSchema } from "../../crm/manifest/manifest.js"
-import { CHANNEL_KINDS, CONTENT_KINDS, type ChannelKind, type ContentKind, TERM_KINDS } from "../../domain/content.js"
+import { CHANNEL_KINDS, type ChannelKind, CONTENT_KINDS, type ContentKind, TERM_KINDS } from "../../domain/content.js"
 import { editDistance } from "../../search/correct.js"
 import { CONTENT_FIELDS } from "./map.js"
 
@@ -97,9 +97,7 @@ const entity = v.strictObject({
   ids: v.optional(call),
   get: v.optional(call),
   map: v.record(v.string(), crmRuleSchema),
-  body: v.optional(
-    v.strictObject({ path, format, fallback: v.optional(v.strictObject({ path, format })) }),
-  ),
+  body: v.optional(v.strictObject({ path, format, fallback: v.optional(v.strictObject({ path, format })) })),
   optional: v.optional(v.strictObject({ message: v.pipe(v.string(), v.minLength(1)), scope: v.optional(v.string()) })),
 })
 
@@ -160,10 +158,16 @@ export const parseContentManifest = (input: unknown, api: ServiceApiManifest): C
     const operation = operations.get(one.operation)
     if (!operation) {
       const near = nearest(one.operation, known)
-      throw invalid(`${where}.operation`, `no operation ${one.operation} in the API${near ? `; did you mean ${near}?` : ""}`)
+      throw invalid(
+        `${where}.operation`,
+        `no operation ${one.operation} in the API${near ? `; did you mean ${near}?` : ""}`,
+      )
     }
     if (reads !== (operation.effect === "read"))
-      throw invalid(`${where}.operation`, `${one.operation} is a ${operation.effect}, and this place ${reads ? "reads" : "writes"}`)
+      throw invalid(
+        `${where}.operation`,
+        `${one.operation} is a ${operation.effect}, and this place ${reads ? "reads" : "writes"}`,
+      )
   }
   for (const kind of manifest.kinds) {
     const calls = manifest.entities[kind]
@@ -179,7 +183,8 @@ export const parseContentManifest = (input: unknown, api: ServiceApiManifest): C
       if (one.ids) checkCall(`${where}.ids`, one.ids, true)
       if (one.get) {
         checkCall(`${where}.get`, one.get, true)
-        if (!holds([one.get.path, one.get.query], "{id}")) throw invalid(`${where}.get`, 'no "{id}" in its path or query')
+        if (!holds([one.get.path, one.get.query], "{id}"))
+          throw invalid(`${where}.get`, 'no "{id}" in its path or query')
       }
       if (one.map.externalId === undefined) throw invalid(`${where}.map.externalId`, "every kind maps its id")
       const fields = Object.keys(CONTENT_FIELDS[kind])

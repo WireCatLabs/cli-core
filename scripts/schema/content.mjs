@@ -92,11 +92,7 @@ export const contentTables = [
       deleted(),
       synced(),
     ],
-    keys: [
-      "UNIQUE (account_id, external_id)",
-      "INDEX (account_id, status)",
-      "INDEX (account_id, published_at)",
-    ],
+    keys: ["UNIQUE (account_id, external_id)", "INDEX (account_id, status)", "INDEX (account_id, published_at)"],
   },
   {
     name: "content_post_revisions",

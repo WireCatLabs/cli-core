@@ -27,7 +27,13 @@ const wordpress = (options: Parameters<typeof wordpressFake>[0] = {}) => {
     site: SITE,
     now: () => siteNow,
   })
-  const writer = contentWriterFromManifest(WORDPRESS_CONTENT, { api, write: fake.write, command: new Command("wp"), source, site: SITE })
+  const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+    api,
+    write: fake.write,
+    command: new Command("wp"),
+    source,
+    site: SITE,
+  })
   const skewed = (skew: number) =>
     contentSourceFromManifest(WORDPRESS_CONTENT, { api, call: fake.call, site: SITE, now: () => siteNow + skew })
   return { fake, source, writer, skewed, later: (ms: number) => (siteNow += ms) }
@@ -133,9 +139,27 @@ describe("WordPress from configuration", () => {
     expect(await store.content.count(account, "post")).toBe(3)
   })
 
+  it("writes terms by their kind as WordPress's integer ids, and a body as HTML", async () => {
+    const { fake, source } = wordpress()
+    const sent: unknown[] = []
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api,
+      write: (command, operation, input) => {
+        sent.push(JSON.parse(input.body ?? "{}"))
+        return fake.write(command, operation, input)
+      },
+      command: new Command("wp"),
+      source,
+      site: SITE,
+    })
+    await writer.update("11", { terms: ["7", "1"], body: "Some *new* text." }, { operationId: "op-1" })
+    expect(sent).toEqual([{ tags: [7], categories: [1], content: expect.stringContaining("<em>new</em>") }])
+  })
+
   it("names the place of a mistake in the manifest, with the nearest operation", () => {
     const wrong = structuredClone(WORDPRESS_CONTENT)
-    wrong.entities.post[0].list.operation = "getWpV2Post"
+    const [posts] = wrong.entities.post
+    if (posts) posts.list.operation = "getWpV2Post"
     expect(() => parseContentManifest(wrong, api)).toThrow(/entities\.post\.0\.list\.operation.*getWpV2Posts/)
     const writing = structuredClone(WORDPRESS_CONTENT)
     writing.writes.update.operation = "getWpV2PostsById"

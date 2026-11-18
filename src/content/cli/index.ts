@@ -12,8 +12,8 @@ import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.j
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
 import { listQuery, nativeTermLists, termField, typedQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
-import { aheadOf } from "../../domain/moment.js"
 import { CONTENT_KINDS, type ContentPost, POST_STATUSES, POST_TYPES, type PostStatus } from "../../domain/content.js"
+import { aheadOf } from "../../domain/moment.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { refusedPlace } from "../../sends/upload.js"
@@ -69,7 +69,10 @@ const POSTS_QUERY = {
   entity: "content_post",
   backend: "native",
   fields: [
-    termField("status", "enum", "status:published", { values: [...POST_STATUSES], relation: "repeat for any of several" }),
+    termField("status", "enum", "status:published", {
+      values: [...POST_STATUSES],
+      relation: "repeat for any of several",
+    }),
     termField("type", "enum", "type:page", { values: [...POST_TYPES] }),
     termField("channel", "kw", "channel:site", { relation: "the channel's id, as channels list shows it" }),
     termField("term", "kw", "term:12", { relation: "a tag's or category's id, as terms list shows it" }),
@@ -221,8 +224,11 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     "the sites and social accounts this profile publishes on",
   )
   example(
-    answerEntity(annotate(channels.command("list"), { effects: LOCAL_READ }), "content_channel", channelView)
-      .description("the channels copied by the last sync"),
+    answerEntity(
+      annotate(channels.command("list"), { effects: LOCAL_READ }),
+      "content_channel",
+      channelView,
+    ).description("the channels copied by the last sync"),
     "channels list",
   ).action(async (_opts: unknown, command: Command) => {
     await within(command, true, async (run) => {
@@ -250,7 +256,11 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     "posts list status:draft",
     "posts list type:page --since 2026-01-01",
   ).action(
-    async (words: string[], opts: { limit: number; page: number; since?: number; until?: number }, command: Command) => {
+    async (
+      words: string[],
+      opts: { limit: number; page: number; since?: number; until?: number },
+      command: Command,
+    ) => {
       const lists = nativeTermLists(listQuery(typedQuery(words), POSTS_QUERY, "posts list"), "posts list", ["status"])
       if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
         throw new InvalidArgumentError("posts list takes field:value terms, each one whole value")
@@ -440,7 +450,12 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
       .option("--body-file <path>", "the text as Markdown, from a file, or - for stdin")
       .option("--excerpt <text>", "the short text lists show")
       .option("--slug <slug>", "the address's last part")
-      .option("--term <id>", "a tag's or category's id, as terms list shows it; repeat it; replaces the list", collect, [])
+      .option(
+        "--term <id>",
+        "a tag's or category's id, as terms list shows it; repeat it; replaces the list",
+        collect,
+        [],
+      )
   type Typed = { title?: string; bodyFile?: string; excerpt?: string; slug?: string; term: string[] }
   const fieldsOf = (run: ContentRun, typed: Typed): ContentFields => {
     const body = bodyOf(run, typed.bodyFile)
@@ -454,8 +469,10 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
   }
 
   example(
-    fields(write("create", "write a new draft; publishing is its own step, posts publish"))
-      .option("--type <type>", `${POST_TYPES.join(" or ")}; post when left out`),
+    fields(write("create", "write a new draft; publishing is its own step, posts publish")).option(
+      "--type <type>",
+      `${POST_TYPES.join(" or ")}; post when left out`,
+    ),
     "posts create --title 'Version 3' --body-file notes.md",
   ).action(async (typed: Typed & { type?: string }, command: Command) => {
     if (typed.type !== undefined && !(POST_TYPES as readonly string[]).includes(typed.type))

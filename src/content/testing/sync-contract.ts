@@ -43,8 +43,7 @@ export const contentSyncContract = (make: () => ContentSyncFixture | Promise<Con
         syncContent(other, fixture.store, fixture.account, { now, ...options })
       const posts = async () =>
         (await fixture.store.content.list(fixture.account, "post")).items.map((one) => one.record.externalId).sort()
-      const status = async (id: string) =>
-        (await fixture.store.content.get(fixture.account, "post", id))?.record.status
+      const status = async (id: string) => (await fixture.store.content.get(fixture.account, "post", id))?.record.status
       await check({ ...fixture, source, sync, posts, status })
     },
   })
@@ -151,16 +150,16 @@ export const contentSyncContract = (make: () => ContentSyncFixture | Promise<Con
     }),
     test("an author whose e-mail a read leaves out keeps the stored one; nothing is erased by omission", async (c) => {
       await c.sync()
-      const rows = c.source.rows
-      delete (rows.author?.[0] as { email?: string | null }).email
+      const [author] = c.source.rows.author ?? []
+      assert.ok(author, "the fake holds an author")
+      delete (author as { email?: string | null }).email
       c.source.touch("author", "1")
       await c.sync()
       assert.equal((await c.store.content.get(c.account, "author", "1"))?.record.email, "ada@example.com")
     }),
     test("a renamed term keeps its id; a post that loses a term loses its tag", async (c) => {
       await c.sync()
-      const tags = async () =>
-        (await c.store.content.get(c.account, "post", "10"))?.record.terms ?? []
+      const tags = async () => (await c.store.content.get(c.account, "post", "10"))?.record.terms ?? []
       assert.deepEqual(await tags(), ["tag-7", "cat-1"])
       const rows = c.source.rows
       const term = rows.term?.find((one) => one.externalId === "tag-7")

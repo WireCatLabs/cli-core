@@ -342,11 +342,9 @@ export const contentStoreOver = (context: StoreContext): ContentStore => {
         .prepare("DELETE FROM taggings WHERE taggable_type = 'post' AND taggable_id = ? AND source = 'file'")
         .run(Number(row.id))
     }
-    database.prepare(`UPDATE ${TABLE[kind]} SET deleted_at = ? WHERE id = ? AND account_id = ?`).run(
-      now,
-      Number(row.id),
-      accountId,
-    )
+    database
+      .prepare(`UPDATE ${TABLE[kind]} SET deleted_at = ? WHERE id = ? AND account_id = ?`)
+      .run(now, Number(row.id), accountId)
   }
 
   const removeUnlisted = (

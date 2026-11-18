@@ -2,8 +2,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { openStore } from "../store/store.js"
 import type { MessageStore } from "../store/store.js"
+import { openStore } from "../store/store.js"
 import {
   contentSourceContract,
   contentSyncContract,

@@ -20,7 +20,10 @@ const operation = (version?: string | null) => {
   return { operationId: `contract-${Date.now()}-${operations}`, ...(version === undefined ? {} : { version }) }
 }
 
-const refusedWith = async (check: (error: { code: string; details: Record<string, unknown> }) => void, act: () => Promise<unknown>) => {
+const refusedWith = async (
+  check: (error: { code: string; details: Record<string, unknown> }) => void,
+  act: () => Promise<unknown>,
+) => {
   try {
     await act()
   } catch (error) {
@@ -32,7 +35,9 @@ const refusedWith = async (check: (error: { code: string; details: Record<string
 }
 
 /** What every content writer does, whatever the source: run each case in the adapter's tests. */
-export const contentWriteContract = (make: () => ContentWriteFixture | Promise<ContentWriteFixture>): ContractCase[] => {
+export const contentWriteContract = (
+  make: () => ContentWriteFixture | Promise<ContentWriteFixture>,
+): ContractCase[] => {
   const drafted = async () => {
     const fixture = await make()
     const made = await fixture.writer.createDraft(

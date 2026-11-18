@@ -216,9 +216,13 @@ export const parseCliConfig = (input: unknown): CliConfig => {
   const config = output as CliConfig
   const sourced = config.category === "crm" || config.category === "tracker" || config.category === "content"
   if (!sourced && config.source)
-    throw new CliError("configuration_error", "wirecat.config: source: only a crm, tracker or content CLI reads a source yet", {
-      reason: "manifest.invalid",
-    })
+    throw new CliError(
+      "configuration_error",
+      "wirecat.config: source: only a crm, tracker or content CLI reads a source yet",
+      {
+        reason: "manifest.invalid",
+      },
+    )
   if (sourced && !config.source)
     throw new CliError("configuration_error", `wirecat.config: source: a ${config.category} CLI needs its source`, {
       reason: "manifest.invalid",

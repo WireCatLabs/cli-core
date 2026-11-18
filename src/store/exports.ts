@@ -44,6 +44,18 @@ export {
   fetchedKey,
   historyStartKey,
 } from "./sqlite/completeness.js"
+export {
+  type ContentFilter,
+  type ContentHit,
+  type ContentItem,
+  type ContentPerson,
+  type ContentRevision,
+  type ContentSearch,
+  type ContentStore,
+  contentHashOf,
+  type RevisionReason,
+  resetContentPostWords,
+} from "./sqlite/content.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export { type CopyViewer, seenBy } from "./sqlite/copy-viewer.js"
 export type { CounterTarget } from "./sqlite/counters.js"
@@ -161,18 +173,6 @@ export {
   type TrackerSearch,
   type TrackerStore,
 } from "./sqlite/tracker.js"
-export {
-  type ContentFilter,
-  type ContentHit,
-  type ContentItem,
-  type ContentPerson,
-  type ContentRevision,
-  type ContentSearch,
-  type ContentStore,
-  contentHashOf,
-  resetContentPostWords,
-  type RevisionReason,
-} from "./sqlite/content.js"
 export { dropAllUnusedVectors, vectorIndexCounts } from "./sqlite/vector-index.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

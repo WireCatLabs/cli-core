@@ -144,7 +144,8 @@ export const updatePost = async (
   fields: ContentFields,
   options: { replaceBody?: boolean } = {},
 ): Promise<ContentWritten> => {
-  if (blank(fields)) throw new CliError("validation_error", "nothing to change: name a field", { reason: "content.empty" })
+  if (blank(fields))
+    throw new CliError("validation_error", "nothing to change: name a field", { reason: "content.empty" })
   const copy = await copyOf(context, externalId)
   if (fields.body !== undefined && copy.record.lossy && !options.replaceBody)
     throw new CliError(
@@ -215,17 +216,12 @@ export const deletePost = async (
 ): Promise<{ operationId: string; post: ContentPost | null; deleted: boolean }> => {
   const copy = await copyOf(context, externalId)
   const operationId = newOperationId()
-  const post = await written(
-    context,
-    "posts.delete",
-    options.force ? [POSTS_DELETE_FORCE_KEY] : [],
-    operationId,
-    () =>
-      context.writes.writer.trash(externalId, {
-        operationId,
-        version: copy.record.version ?? null,
-        ...(options.force ? { force: true } : {}),
-      }),
+  const post = await written(context, "posts.delete", options.force ? [POSTS_DELETE_FORCE_KEY] : [], operationId, () =>
+    context.writes.writer.trash(externalId, {
+      operationId,
+      version: copy.record.version ?? null,
+      ...(options.force ? { force: true } : {}),
+    }),
   )
   if (post && !options.force) return { ...(await kept(context, post, operationId)), deleted: false }
   await context.store.content.markDeleted(context.account, "post", externalId, context.now?.() ?? Date.now())

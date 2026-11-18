@@ -3,17 +3,12 @@ import type { PageParameter, Pagination } from "@wirecat/cli-base/codegen"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import { nextPage, parameterValue, type ServiceApiManifest, withValue } from "../../cli/service-api-manifest.js"
+import { crmValues } from "../../crm/index.js"
 import type { CrmOperationCall } from "../../crm/manifest/manifest.js"
 import { at, evaluate, MISSING } from "../../crm/manifest/map.js"
-import { type CrmRaw, id, isRaw, rawsOf } from "../../crm/values.js"
 import type { ContentKind, ContentRecords } from "../../domain/content.js"
 import type { ContentCallContext, ContentChanges, ContentIdPage, ContentSource } from "../source.js"
-import {
-  type ContentChangesCall,
-  type ContentManifest,
-  type ContentManifestEntity,
-  parseContentManifest,
-} from "./manifest.js"
+import { type ContentChangesCall, type ContentManifestEntity, parseContentManifest } from "./manifest.js"
 import { mapContentRecord, postBodyOf, utcEpoch } from "./map.js"
 
 /**
@@ -35,7 +30,6 @@ export interface ContentManifestSourceOptions {
 }
 
 const OVERLAP_MS = 10 * 60_000
-const MOST_PAGES = 500
 const KEYSET_STEP = 1000
 
 export interface Slots {
@@ -51,7 +45,7 @@ export const fill = (value: unknown, slots: Slots): unknown => {
   if (value === "{id}") return slots.id ?? DROP
   if (value === "{at}") return slots.at ?? DROP
   if (Array.isArray(value)) return value.map((one) => fill(one, slots)).filter((one) => one !== DROP)
-  if (isRaw(value))
+  if (crmValues.isRaw(value))
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, one]) => {
         const filled = fill(one, slots)
@@ -95,7 +89,8 @@ const pageParameter = (pagination: Pagination) =>
 const pageOf = (page: string | undefined, now: number) => {
   const cut = page?.lastIndexOf("@") ?? -1
   const started = Number(page?.slice(cut + 1))
-  if (page === undefined || cut < 0 || !Number.isSafeInteger(started)) return { call: 0, token: undefined, started: now }
+  if (page === undefined || cut < 0 || !Number.isSafeInteger(started))
+    return { call: 0, token: undefined, started: now }
   const head = page.slice(0, cut)
   const dot = head.indexOf(".")
   const call = Number(dot < 0 ? head : head.slice(0, dot))
@@ -115,8 +110,8 @@ const lastPage = (pagination: Pagination, request: ApiCommandInput, parameter: P
 }
 
 const gone = (error: unknown) => isCliError(error) && error.code === "not_found"
-const refused = (error: unknown) => isCliError(error) && (error.code === "permission_error" || error.code === "not_found")
-
+const refused = (error: unknown) =>
+  isCliError(error) && (error.code === "permission_error" || error.code === "not_found")
 
 /**
  * A `ContentSource` read from a manifest: each kind by the calls it names, paged by each operation's own
@@ -160,13 +155,17 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const answer = read.body
     if (!pagination || !parameter) {
       const listed = call.items === undefined ? answer : at(answer, call.items)
-      return { rows: rawsOf(listed), next: undefined }
+      return { rows: crmValues.rawsOf(listed), next: undefined }
     }
     // `items: ""` is the answer itself, a list, which nextPage reads only under a name. WordPress answers 400 for a
     // page past the last: the page count is in a header, once nextPage reads it.
     const whole = pagination.style === "page" && pagination.items === ""
-    const step = nextPage(whole ? { ...pagination, items: "items" } : pagination, request, whole ? { items: answer } : answer)
-    const rows = rawsOf(call.items === undefined ? step.items : at(answer, call.items))
+    const step = nextPage(
+      whole ? { ...pagination, items: "items" } : pagination,
+      request,
+      whole ? { items: answer } : answer,
+    )
+    const rows = crmValues.rawsOf(call.items === undefined ? step.items : at(answer, call.items))
     const value = step.next && "input" in step.next ? parameterValue(step.next.input, parameter) : undefined
     if (value === undefined || value === null || lastPage(pagination, request, parameter, read.headers))
       return { rows, next: undefined }
@@ -179,7 +178,11 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     return found
   }
 
-  const mapped = async <K extends ContentKind>(kind: K, entity: ContentManifestEntity, rows: readonly CrmRaw[]) => {
+  const mapped = async <K extends ContentKind>(
+    kind: K,
+    entity: ContentManifestEntity,
+    rows: readonly crmValues.CrmRaw[],
+  ) => {
     const records: ContentRecords[K][] = []
     for (const raw of rows) {
       const record = mapContentRecord(kind, entity.map, raw)
@@ -192,7 +195,11 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
 
   const gapOf = (kind: ContentKind, entity: ContentManifestEntity, error: unknown, context?: ContentCallContext) => {
     if (!entity.optional || !refused(error)) return false
-    context?.gap({ kind, message: entity.optional.message, ...(entity.optional.scope ? { scope: entity.optional.scope } : {}) })
+    context?.gap({
+      kind,
+      message: entity.optional.message,
+      ...(entity.optional.scope ? { scope: entity.optional.scope } : {}),
+    })
     return true
   }
 
@@ -225,7 +232,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     if (!entity) return { reset: true }
     const send = metered(context)
     const changes = since === null ? undefined : entity.changes
-    let read: { rows: CrmRaw[]; next: string | undefined } | { reset: true }
+    let read: { rows: crmValues.CrmRaw[]; next: string | undefined } | { reset: true }
     try {
       read =
         changes?.keyset && since !== null
@@ -246,7 +253,8 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     }
     if ("reset" in read) return { reset: true }
     const items = await mapped(kind, entity, read.rows)
-    if (read.next !== undefined) return { items, hasMore: true, nextCursor: `${spot.call}.${read.next}@${spot.started}` }
+    if (read.next !== undefined)
+      return { items, hasMore: true, nextCursor: `${spot.call}.${read.next}@${spot.started}` }
     if (spot.call + 1 < calls.length) return { items, hasMore: true, nextCursor: `${spot.call + 1}.@${spot.started}` }
     return { items, hasMore: false, cursor: new Date(spot.started).toISOString() }
   }
@@ -256,7 +264,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const spot = pageOf(page, 0)
     const entity = calls[spot.call]
     if (!entity) throw new CliError("validation_error", `not a page of ${kind} ids: ${page}`)
-    let read: { rows: CrmRaw[]; next: string | undefined }
+    let read: { rows: crmValues.CrmRaw[]; next: string | undefined }
     try {
       read = await readPage(entity.ids ?? entity.list, {}, spot.token, metered(context))
     } catch (error) {
@@ -266,11 +274,15 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     }
     const items = read.rows.flatMap((raw) => {
       const found = evaluate(entity.map.externalId as NonNullable<(typeof entity.map)["externalId"]>, raw)
-      const externalId = found === MISSING ? null : id(found)
+      const externalId = found === MISSING ? null : crmValues.id(found)
       return externalId === null ? [] : [externalId]
     })
     const next =
-      read.next !== undefined ? `${spot.call}.${read.next}@0` : spot.call + 1 < calls.length ? `${spot.call + 1}.@0` : undefined
+      read.next !== undefined
+        ? `${spot.call}.${read.next}@0`
+        : spot.call + 1 < calls.length
+          ? `${spot.call + 1}.@0`
+          : undefined
     return next === undefined ? { items, hasMore: false } : { items, hasMore: true, nextCursor: next }
   }
 
@@ -287,7 +299,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
         throw error
       }
       const raw = entity.get.items === undefined ? answer : at(answer, entity.get.items)
-      if (isRaw(raw)) return (await mapped(kind, entity, [raw]))[0] ?? null
+      if (crmValues.isRaw(raw)) return (await mapped(kind, entity, [raw]))[0] ?? null
     }
     return null
   }

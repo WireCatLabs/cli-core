@@ -3,11 +3,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
+import { WORDPRESS_CONTENT, wordpressApi, wordpressFake } from "../../../test/fixtures/wordpress-content.js"
 import { provide } from "../../cli/context.js"
 import type { AppIdentity } from "../../ports/app.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
-import { WORDPRESS_CONTENT, wordpressApi, wordpressFake } from "../../../test/fixtures/wordpress-content.js"
 import type { AccountKey } from "../../store/types.js"
 import { contentSourceFromManifest, contentWriterFromManifest } from "../manifest/index.js"
 import type { ContentSource } from "../source.js"
@@ -149,7 +149,12 @@ describe("content commands", () => {
   it("over WordPress from configuration: a publish or an edit of a public post without posts.publish sends nothing", async () => {
     const api = wordpressApi()
     const site = wordpressFake({ clock: () => NOW })
-    const source = contentSourceFromManifest(WORDPRESS_CONTENT, { api, call: site.call, site: "example.com", now: () => NOW })
+    const source = contentSourceFromManifest(WORDPRESS_CONTENT, {
+      api,
+      call: site.call,
+      site: "example.com",
+      now: () => NOW,
+    })
     const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
       api,
       write: site.write,

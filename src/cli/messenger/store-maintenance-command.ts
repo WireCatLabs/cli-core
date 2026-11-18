@@ -43,11 +43,11 @@ import {
   orphanPointers,
   pendingNormalization,
   resetAttachmentWords,
+  resetContentPostWords,
   resetCrmFileWords,
   resetNoteIndex,
   resetSearchIndex,
   resetStems,
-  resetContentPostWords,
   resetTrackerItemWords,
   rollBack,
   searchIndexState,
@@ -633,7 +633,10 @@ const reindexCommand = (owner: StoreOwner): Command =>
           )
         }
         resetSearchIndex(database)
-        const fileTexts = resetAttachmentWords(database) + resetCrmFileWords(database) + resetTrackerItemWords(database) +
+        const fileTexts =
+          resetAttachmentWords(database) +
+          resetCrmFileWords(database) +
+          resetTrackerItemWords(database) +
           resetContentPostWords(database)
         const words = buildWordIndex(database, (note) => renderer.note(note))
         return {
