@@ -959,7 +959,9 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         this,
         context,
         foundConversations("search conversations", found, limit, messenger, chat, window.meta),
-        () => found.hits.map((hit) => `${hitLine(hit)}\n`).join(""),
+        () =>
+          found.hits.map((hit) => `${hitLine(hit)}\n`).join("") +
+          (found.own?.length ? `your own messages:\n${found.own.map((hit) => `${hitLine(hit)}\n`).join("")}` : ""),
       )
       if (found.hits.length === 0 && context.format === "pretty")
         context.renderer.note(

@@ -27,6 +27,8 @@ import { refreshSearch } from "./search-refresh.js"
 const CANDIDATES = 50
 /** Conversations the meaning half reads across chats before it gives each chat its share. */
 const ACROSS_CHATS = 500
+/** The owner's own chunks shown beside the hits: a result list ranks them low, and a question is often about them. */
+const OWN_BLOCK = 5
 /**
  * What one chat brings to each list when several are searched, so a large chat cannot fill them. Its meaning hits
  * count by how far they lead its 20th best: a large chat holds some text near any question, and a small chat's
@@ -231,6 +233,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       },
     )
     const meaning: { hit: ConversationHit; lead: number }[] = []
+    const own: ConversationHit[] = []
     const sources = words.sources
     if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
       await withEmbedder(deps, target, choice, {}, async (embedder) => {
@@ -259,7 +262,17 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
             ...hits,
             ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
           ].sort((a, b) => b.score - a.score)
-          for (const hit of found) sources.set(hit.summary.id, one)
+          const mine = await store.vectors.nearestConversations(one, {
+            ...scope,
+            ...(since === undefined ? {} : { since }),
+            model: target.key,
+            limit: OWN_BLOCK,
+            query: vector as Float32Array,
+            fromOwner: true,
+            ...(eligibility ? { conversations: eligibility.conversations } : {}),
+          })
+          for (const hit of [...found, ...mine]) sources.set(hit.summary.id, one)
+          own.push(...mine)
           meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
         }
       })
@@ -308,26 +321,35 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         ),
       ].sort()
     if (scoped.length > 1) readiness.scopes = scoped
+    const located = <T extends Pick<FoundConversation, "summary" | "chunk">>(hit: T) => {
+      const source = sources.get(hit.summary.id) as AccountKey
+      return {
+        ...hit,
+        source,
+        locator: formatLocator({ ...source, chat: hit.summary.chatId, message: hit.chunk.firstMessageId }),
+      }
+    }
+    const hits = fused(
+      meaning.map(({ hit }) => hit),
+      words.hits,
+      meaningFloor(target.key),
+    )
+      .slice(0, limit)
+      .map(located)
+    const shown = new Set(hits.map((hit) => hit.summary.id))
+    const ownHits = own
+      .filter((hit) => !shown.has(hit.summary.id))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, OWN_BLOCK)
+      .map((hit) => located({ ...hit, by: ["meaning" as const] }))
     return {
       accounts: prepared.scopeAccounts,
       model: target.id,
       meaning: target.installed ? "searched" : "unavailable",
       ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
       ...(words.respellings.size ? { respelled: Object.fromEntries(words.respellings) } : {}),
-      hits: fused(
-        meaning.map(({ hit }) => hit),
-        words.hits,
-        meaningFloor(target.key),
-      )
-        .slice(0, limit)
-        .map((hit) => {
-          const source = sources.get(hit.summary.id) as AccountKey
-          return {
-            ...hit,
-            source,
-            locator: formatLocator({ ...source, chat: hit.summary.chatId, message: hit.chunk.firstMessageId }),
-          }
-        }),
+      hits,
+      ...(ownHits.length ? { own: ownHits } : {}),
       readiness,
       ...(locallyRefreshed ? { prepared: locallyRefreshed } : {}),
       ...(refreshed
