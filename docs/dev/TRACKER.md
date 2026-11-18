@@ -92,3 +92,36 @@ result.
 read again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an
 archived row still listed, a deleted row leaving `ids()`, a list cut after its first page, and a spent budget ending a
 call that pages inside. `fakeTrackerSource` and `exampleTrackerRows` are an in-memory tracker for tests.
+
+A source built from a manifest runs the contract with no code for the service, as a CLI made from `wirecat.config.ts`
+does in its generated test:
+
+```ts
+for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions })) it(name, run)
+```
+
+- `trackerManifestFake(manifest, { api, definitions })` is cli-base's strict `graphqlFake` with a tracker behind it:
+  three rows of each kind, sampled within every selection the kind's calls send. The values the map reads are written
+  where it reads them: ids `issue-1`, a fixed seeded time, a state type from `STATE_TYPES`, an enum's own value. A
+  field that points at another kind (`state.id`, `assignee.id`, `labels.nodes` with `each`) holds that kind's first
+  row.
+- It answers each call within its selection, two rows a page by the operation's cursor. A change read keeps the rows
+  whose `updatedAt` is at or after the value at its `"{since}"` (after it, for `gt`), oldest first. An operation that
+  takes `includeArchived` hides archived rows unless the call sets it.
+- The only filter it applies is that since, and it must sit at `<the map's updatedAt path>.gte` or `.gt` inside
+  `filter`. Every call is refused when the since sits elsewhere (`createdAt.gte`, `updatedAt.lt`), when a list or id
+  call sends a `filter` (sync would mark the rows it leaves out deleted), and when a change call's `filter` holds
+  anything beside the since. Any other variable the fake cannot interpret, such as users' `includeDisabled: true`,
+  is trusted: it only picks which call of the manifest is answered, and the fake answers as if the tracker applied it.
+- A call whose fixed variables match no call of the manifest, a cursor the fake never gave and an unreadable since are
+  refused and listed in `fake.refusals`, beside `graphqlFake`'s own (an unknown variable, a field the type lacks).
+  `touch`, `archive` and `remove` change a row on the tracker's side. Building the fake fails for a kind with
+  `changes` whose `updatedAt` the map does not read from a path.
+- `trackerManifestFixture` adds the source over it, the ids it holds per kind (`held`), a dead cursor (`"not a
+  time"`, which the source answers with `reset` itself, without a call: the case checks the source, never the fake or
+  the tracker's own refusal of a stale cursor), and the faults
+  on the issue kind, else the last kind with `changes`: `skewed` and `change`, `archive` when the map reads
+  `archivedAt`, and `remove`. `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose
+  calls the fake refused, with the refusals as its message.
+- It answers GraphQL operations paged by a cursor only. `self` is not part of the contract, so the fake leaves its call
+  to `graphqlFake`'s sample.

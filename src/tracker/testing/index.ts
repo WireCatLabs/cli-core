@@ -1,4 +1,12 @@
 export {
+  type TrackerManifestFake,
+  type TrackerManifestFakeOptions,
+  type TrackerManifestFixtureOptions,
+  trackerManifestContract,
+  trackerManifestFake,
+  trackerManifestFixture,
+} from "./manifest-fake.js"
+export {
   exampleTrackerRows,
   type FakeTrackerRows,
   type FakeTrackerSource,
