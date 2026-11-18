@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.701.0 — 18.11.2026
+
+### Added
+
+- **`trackerManifestContract`, `trackerManifestFixture` and `trackerManifestFake` in `@wirecat/cli-core/tracker/testing`
+  run `trackerSourceContract` over a tracker source built from a manifest**, with no code for the service: a CLI made
+  from `wirecat.config.ts` (linear-cli first) checks its tracker in one line,
+  `for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions })) it(name, run)`. The fake is
+  cli-base's strict `graphqlFake` with three rows of each kind behind it, written where the map reads them and linked
+  across kinds, paged by the Relay cursor, read for changes by the since, archived rows hidden unless asked for. The
+  fixture brings the held ids, a dead cursor and the faults `skewed`, `change`, `archive` and `remove`
+  ([TRACKER.md](docs/dev/TRACKER.md#the-contract-kit)).
+
+### Fixed
+
+- **A conversation rebuild no longer spends minutes dropping the old build's vectors.** For each old chunk text the
+  check for a current chunk with the same text read every conversation chunk in the store, and the delete that follows
+  read the whole vector key; both now use their index. A rebuild of a forum of about 112,000 messages took 889 s and now
+  takes 52 s, on the same store and load.
+
 ## 0.700.0 — 18.11.2026
 
 ### Added
