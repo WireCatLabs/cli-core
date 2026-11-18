@@ -18,10 +18,13 @@
 - **`manifestVerify` checks a sign-in on the owner's own site.** For a service on the owner's site (WordPress), the
   check goes to the site `session start --site` names, and its `fetch` gets that site, as its host is not among the
   CLI's own. A `fetch` that takes one argument still works.
-- **`session start --login` names where to make the password only at a terminal.** Piped in, as an agent or a test
-  signs in, the note stood before the JSON error on stderr.
 - **`wirecat.config.ts` takes `spec.kind: "wp-json"` (with the `spec.version` the index runs) and `auth.preset: "app-password"`** for a WordPress CLI made with
   `new --from-config`.
+
+### Fixed
+
+- **`session start --login` names where to make the password only at a terminal.** Piped in, as an agent or a test
+  signs in, the note stood before the JSON error on stderr.
 
 ### Security
 
