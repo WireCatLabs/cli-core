@@ -13,6 +13,9 @@
 - **A manifest key can lift itself with `unless`.** WordPress publishes a scheduled post whose `date` moves into the
   past; the generated key on `date` and `date_gmt` applies unless the call itself sets `status` to draft, pending or
   private. A flag now counts in the body or the query, as WordPress reads both.
+- **`manifestVerify` checks a sign-in on the owner's own site.** For a service on the owner's site (WordPress), the
+  check goes to the site `session start --site` names, and its `fetch` gets that site, as its host is not among the
+  CLI's own. A `fetch` that takes one argument still works.
 - **`wirecat.config.ts` takes `spec.kind: "wp-json"` and `auth.preset: "app-password"`** for a WordPress CLI made with
   `new --from-config`.
 

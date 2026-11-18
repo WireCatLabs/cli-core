@@ -63,8 +63,11 @@ export interface ManifestVerifyOptions {
   service: string
   /** The config's `auth.verify`: the operation, where its answer holds the id and a name, and whether it is live. */
   verify: CliVerify
-  /** The command's host-checked fetch, such as `hostsFetch(hosts, environment.fetch)`. */
-  fetch: (command: Command) => FetchLike
+  /**
+   * The command's host-checked fetch, such as `hostsFetch(hosts, environment.fetch)`. `site` is the one `session start
+   * --site` names, for a service on the owner's own site: its host is not among the CLI's own.
+   */
+  fetch: (command: Command, site: string | undefined) => FetchLike
 }
 
 /**
@@ -73,8 +76,14 @@ export interface ManifestVerifyOptions {
  */
 export const manifestVerify =
   ({ manifest, service, verify, fetch }: ManifestVerifyOptions): TokenSessionOptions["verify"] =>
-  async (command, token) => {
-    const call = serviceApiCall({ manifest, service, fetch: fetch(command), token: () => token })
+  async (command, token, _events, site) => {
+    const call = serviceApiCall({
+      manifest,
+      service,
+      fetch: fetch(command, site),
+      token: () => token,
+      ...(site === undefined ? {} : { serverVariables: { site } }),
+    })
     const answer = await call(verify.operation, { path: {}, query: {}, headers: {}, fields: {} })
     // A service such as Attio answers a revoked key with 200 and `active: false`, not with 401.
     if (verify.active !== undefined && valueAt(answer, verify.active) !== true)
