@@ -15,8 +15,6 @@ export interface ModelFile {
   url: string
   sha256: string
   bytes: number
-  /** Where the file starts inside the one at `url`, fetched alone by an HTTP Range request. */
-  offset?: number
 }
 
 export interface SpeechModel {

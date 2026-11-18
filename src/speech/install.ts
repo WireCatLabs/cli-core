@@ -66,10 +66,7 @@ const sizeOf = (path: string): number | undefined => {
 
 export const installedBytes = (model: SpeechModel): number => model.files.reduce((sum, file) => sum + file.bytes, 0)
 
-export type Fetch = (
-  url: string,
-  init?: { signal?: AbortSignal; headers?: Record<string, string> },
-) => Promise<Response>
+export type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
 
 export interface InstallOptions {
   fetch?: Fetch
@@ -145,9 +142,7 @@ const fetchInto = async (
   stalled: Watchdog,
   received: (bytes: number) => void,
 ): Promise<void> => {
-  const range =
-    file.offset === undefined ? {} : { headers: { Range: `bytes=${file.offset}-${file.offset + file.bytes - 1}` } }
-  const response = await get(file.url, { signal: stalled.signal, ...range })
+  const response = await get(file.url, { signal: stalled.signal })
   if (!response.ok || !response.body) {
     await response.body?.cancel()
     throw new CliError("network_error", `${file.name} could not be downloaded: HTTP ${response.status}`)

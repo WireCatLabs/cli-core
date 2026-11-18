@@ -11,7 +11,7 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
-import { gunzipSync, inflateSync } from "fflate"
+import { gunzipSync } from "fflate"
 import { type Fetch, installFiles, megabytes, sharedModelsDirectory } from "../speech/install.js"
 import type { ModelFile } from "../speech/models.js"
 
@@ -21,96 +21,76 @@ export const ONNX_RUNTIME_VERSION = "1.30.0"
 export interface NativeRuntime {
   readonly target: string
   readonly archive: ModelFile
-  /** The library's path in a tar archive; absent when `archive` is the library alone, deflated, out of a zip. */
-  readonly member?: string
+  readonly member: string
   readonly library: { name: string; sha256: string; bytes: number }
 }
 
-const NUGET = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime"
+const REGISTRY = "https://registry.npmjs.org"
 
 /**
- * One library out of Microsoft's NuGet package, fetched alone by where its deflated bytes sit in the 157 MB zip: a
- * version on nuget.org never changes, and the package signature, which nuget.org may replace, is its last file.
- * Microsoft's GitHub releases went away on 17.11.2026.
+ * WireCat's own package of this system's library, on npm: Microsoft's GitHub releases went away on 17.11.2026, so no
+ * download depends on Microsoft's hosting. `bin/publish-onnxruntime` builds them from Microsoft's NuGet package, and
+ * on Windows from onnxruntime-node's npm tarball: its binding imports the DirectML build of onnxruntime.dll by
+ * ordinal, which Microsoft's CPU build lacks; DirectML.dll is loaded only when used, so the DLL alone runs on CPU.
  */
-const nuget = (target: string, offset: number, sha256: string, bytes: number): ModelFile => ({
-  name: `onnxruntime-${ONNX_RUNTIME_VERSION}-${target}.deflate`,
-  url: `${NUGET}/${ONNX_RUNTIME_VERSION}/microsoft.ml.onnxruntime.${ONNX_RUNTIME_VERSION}.nupkg`,
-  offset,
-  sha256,
-  bytes,
+const wirecat = (
+  target: string,
+  sha256: string,
+  bytes: number,
+  library: NativeRuntime["library"],
+): Omit<NativeRuntime, "target"> => ({
+  archive: {
+    name: `onnxruntime-${target}-${ONNX_RUNTIME_VERSION}.tgz`,
+    url: `${REGISTRY}/@wirecat/onnxruntime-${target}/-/onnxruntime-${target}-${ONNX_RUNTIME_VERSION}.tgz`,
+    sha256,
+    bytes,
+  },
+  member: `package/${library.name}`,
+  library,
 })
-
-/**
- * onnxruntime-node's own npm tarball, for Windows: its binding imports the DirectML build of onnxruntime.dll by
- * ordinal, which Microsoft's CPU release lacks; DirectML.dll is loaded only when used, so the DLL alone runs on CPU.
- */
-const npmTarball: ModelFile = {
-  name: `onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
-  url: `https://registry.npmjs.org/onnxruntime-node/-/onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
-  sha256: "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
-  bytes: 113_507_888,
-}
 
 /** The systems the native-runtime workflow runs natively; elsewhere, and on musl, the models run through WebAssembly. */
 const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
-  "linux-x64": {
-    archive: nuget(
-      "linux-x64",
-      121_160_280,
-      "6f7d1ee67f9c7d3e5d1b009492aef02d2833ba16a4a896b71438b20abfe4293a",
-      11_061_061,
-    ),
-    library: {
-      name: "libonnxruntime.so.1",
-      sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
-      bytes: 28_985_152,
-    },
-  },
-  "linux-arm64": {
-    archive: nuget(
-      "linux-arm64",
-      111_131_974,
-      "4e8adcdf8582ff74925989b0e009efa808723b23ec297eae4acaababe0ffad8f",
-      10_026_119,
-    ),
-    library: {
+  "linux-x64": wirecat("linux-x64", "9c12e88ae495ae04e28802e52c2524a7a9c31aa715a67eeb636c85efcb08e5d9", 11_305_384, {
+    name: "libonnxruntime.so.1",
+    sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
+    bytes: 28_985_152,
+  }),
+  "linux-arm64": wirecat(
+    "linux-arm64",
+    "4ec23a63f0e7f49edb63590f4bc8b0e8526bff5b3a2b19d768112f37dc50d09c",
+    10_386_392,
+    {
       name: "libonnxruntime.so.1",
       sha256: "64e903a43a041240fd6bcffe0ac6d4fea47ef87bf24b9d097801bd00a9612a4b",
       bytes: 25_135_496,
     },
-  },
-  "darwin-arm64": {
-    archive: nuget(
-      "osx-arm64",
-      132_223_187,
-      "d9f60cc9c7af596e5114a0dbb3afdc62eaa93de0236ce6e6aa4500ace7b39c0a",
-      12_536_089,
-    ),
-    library: {
+  ),
+  "darwin-arm64": wirecat(
+    "darwin-arm64",
+    "0e543a584a048b301ff96b81af4b001288e048577ce0f0b4a5a9c2df97979615",
+    12_921_423,
+    {
       name: "libonnxruntime.1.dylib",
       sha256: "bffaa6ef856dba2c26f09c7c0e7018fd1562625f3485292c7ad28b83748c6879",
       bytes: 43_879_424,
     },
-  },
-  "win32-x64": {
-    archive: npmTarball,
-    member: "package/bin/napi-v6/win32/x64/onnxruntime.dll",
-    library: {
-      name: "onnxruntime.dll",
-      sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
-      bytes: 28_754_232,
-    },
-  },
-  "win32-arm64": {
-    archive: npmTarball,
-    member: "package/bin/napi-v6/win32/arm64/onnxruntime.dll",
-    library: {
+  ),
+  "win32-x64": wirecat("win32-x64", "55924c8e4c3f975d131e943712c5fac6e5423fb2b0c356c96230f2ad18dc2792", 10_652_326, {
+    name: "onnxruntime.dll",
+    sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
+    bytes: 28_754_232,
+  }),
+  "win32-arm64": wirecat(
+    "win32-arm64",
+    "77e43743e580d6641e49b7cdeed57fd11f21a8cf27a186dd33a3db817b3ff7f2",
+    10_778_591,
+    {
       name: "onnxruntime.dll",
       sha256: "6c3a2abf5c6aca11c48a0d338a91af309f2266f25ce2e4084e6a87bbcb0fbfd0",
       bytes: 29_815_136,
     },
-  },
+  ),
 }
 
 const onMusl = (): boolean => {
@@ -152,9 +132,9 @@ const isInstalled = (runtime: NativeRuntime, folder: string): boolean =>
   sizeOf(join(folder, runtime.library.name)) === runtime.library.bytes && sizeOf(join(folder, BINDING)) !== undefined
 
 /**
- * The library this system's binding links to, out of Microsoft's NuGet package or onnxruntime-node's npm tarball,
- * checked against its own sha256 and placed beside a copy of the binding, which loads it from its own folder. Only
- * from `models download`: a search never downloads. `undefined` when this system runs models through WebAssembly only.
+ * The library this system's binding links to, out of WireCat's npm package of it, checked against its own sha256
+ * and placed beside a copy of the binding, which loads it from its own folder. Only from `models download`: a search
+ * never downloads. `undefined` when this system runs models through WebAssembly only.
  */
 export const installNativeRuntime = async ({
   env = process.env,
@@ -175,17 +155,14 @@ export const installNativeRuntime = async ({
   const folder = runtimeFolder(runtime, env)
   if (isInstalled(runtime, folder)) return folder
 
-  progress(
-    `ONNX Runtime ${ONNX_RUNTIME_VERSION} for ${runtime.target}: ${megabytes(runtime.archive.bytes)} from Microsoft`,
-  )
+  progress(`ONNX Runtime ${ONNX_RUNTIME_VERSION} for ${runtime.target}: ${megabytes(runtime.archive.bytes)} from npm`)
   const parent = sharedModelsDirectory("runtime", env)
   mkdirSync(parent, { recursive: true, mode: 0o700 })
   const staging = mkdtempSync(join(parent, ".onnxruntime-"))
   try {
     const archive = join(staging, runtime.archive.name)
     await installFiles([[runtime.archive, archive]], { ...(fetch ? { fetch } : {}), progress })
-    const bytes = readFileSync(archive)
-    const library = runtime.member ? tarMember(gunzipSync(bytes), runtime.member) : inflateSync(bytes)
+    const library = tarMember(gunzipSync(readFileSync(archive)), runtime.member)
     rmSync(archive)
     const sha256 = library && createHash("sha256").update(library).digest("hex")
     if (!library || library.length !== runtime.library.bytes || sha256 !== runtime.library.sha256)

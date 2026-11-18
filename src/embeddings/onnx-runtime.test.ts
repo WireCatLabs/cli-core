@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ONNX_RUNTIME_VERSION as PACKAGE_VERSION } from "@wirecat/cli-core-onnx"
-import { deflateSync, gzipSync } from "fflate"
+import { gzipSync } from "fflate"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   installNativeRuntime,
@@ -92,33 +92,6 @@ describe("the native ONNX Runtime", () => {
     expect(readFileSync(join(folder as string, "onnxruntime_binding.node"), "utf8")).toBe("not a binding")
     expect(existsSync(join(folder as string, "onnxruntime-osx-arm64-1.30.0.tgz"))).toBe(false)
     expect(fetch).toHaveBeenCalledTimes(1)
-  })
-
-  it("is installed out of one ranged slice of a zip, the library alone, deflated", async () => {
-    const slice = deflateSync(library)
-    const runtime: NativeRuntime = {
-      target: "test-x64",
-      archive: {
-        name: "library.deflate",
-        url: "https://example.test/p.nupkg",
-        offset: 1000,
-        sha256: sha256(slice),
-        bytes: slice.length,
-      },
-      library: { name: "libonnxruntime.test", sha256: sha256(library), bytes: library.length },
-    }
-    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "runtime-")) }
-    const fetch = fetchOf(slice)
-
-    const folder = await installNativeRuntime({ env, fetch, runtime, binding: binding() })
-
-    expect(readFileSync(join(folder as string, "libonnxruntime.test"))).toEqual(Buffer.from(library))
-    expect(fetch).toHaveBeenCalledWith(
-      "https://example.test/p.nupkg",
-      expect.objectContaining({
-        headers: { Range: `bytes=1000-${1000 + slice.length - 1}` },
-      }),
-    )
   })
 
   it("installs nothing when the archive holds another library", async () => {

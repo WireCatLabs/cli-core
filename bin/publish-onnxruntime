@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+// Builds the five @wirecat/onnxruntime-<platform> packages that `models download` takes the native ONNX Runtime from,
+// and with --publish publishes the ones npm does not have yet. Microsoft's GitHub releases went away on 17.11.2026,
+// so cli-core depends on no Microsoft hosting at run time: the libraries are taken once, here, from Microsoft's NuGet
+// package (Linux, macOS) and onnxruntime-node's npm tarball (Windows: its binding needs the DirectML build of
+// onnxruntime.dll, export ordinal 4, which the NuGet CPU build lacks). Every input and every packed tarball is
+// checked against the sha256 below, which src/embeddings/onnx-runtime.ts pins too: a packed tarball that differs
+// (another npm version packs differently) is not published.
+//
+//   bin/publish-onnxruntime            build and pack into packages/onnxruntime/
+//   bin/publish-onnxruntime --publish  the same, then publish; the npm token comes from the keyring
+//                                      (secret-tool lookup service npm account leemour) or NPM_TOKEN
+import { execFileSync } from "node:child_process"
+import { createHash } from "node:crypto"
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { unzipSync } from "fflate"
+
+const VERSION = "1.30.0"
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
+const OUT = join(ROOT, "packages", "onnxruntime")
+const SOURCES = join(OUT, "sources")
+
+const NUGET = {
+  url:
+    `https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${VERSION}` +
+    `/microsoft.ml.onnxruntime.${VERSION}.nupkg`,
+  file: join(SOURCES, `microsoft.ml.onnxruntime.${VERSION}.nupkg`),
+  sha256: "30df119bd9164eaa187666d93147448fdd4a9a1a3caf83f1505daf7af2d1c5d2",
+}
+const NPM = {
+  url: `https://registry.npmjs.org/onnxruntime-node/-/onnxruntime-node-${VERSION}.tgz`,
+  file: join(SOURCES, `onnxruntime-node-${VERSION}.tgz`),
+  sha256: "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
+}
+
+const TARGETS = [
+  {
+    target: "linux-x64",
+    os: "linux",
+    cpu: "x64",
+    from: NUGET,
+    member: "runtimes/linux-x64/native/libonnxruntime.so",
+    library: "libonnxruntime.so.1",
+    sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
+    tarball: "9c12e88ae495ae04e28802e52c2524a7a9c31aa715a67eeb636c85efcb08e5d9",
+  },
+  {
+    target: "linux-arm64",
+    os: "linux",
+    cpu: "arm64",
+    from: NUGET,
+    member: "runtimes/linux-arm64/native/libonnxruntime.so",
+    library: "libonnxruntime.so.1",
+    sha256: "64e903a43a041240fd6bcffe0ac6d4fea47ef87bf24b9d097801bd00a9612a4b",
+    tarball: "4ec23a63f0e7f49edb63590f4bc8b0e8526bff5b3a2b19d768112f37dc50d09c",
+  },
+  {
+    target: "darwin-arm64",
+    os: "darwin",
+    cpu: "arm64",
+    from: NUGET,
+    member: "runtimes/osx-arm64/native/libonnxruntime.dylib",
+    library: "libonnxruntime.1.dylib",
+    sha256: "bffaa6ef856dba2c26f09c7c0e7018fd1562625f3485292c7ad28b83748c6879",
+    tarball: "0e543a584a048b301ff96b81af4b001288e048577ce0f0b4a5a9c2df97979615",
+  },
+  {
+    target: "win32-x64",
+    os: "win32",
+    cpu: "x64",
+    from: NPM,
+    member: "package/bin/napi-v6/win32/x64/onnxruntime.dll",
+    library: "onnxruntime.dll",
+    sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
+    tarball: "55924c8e4c3f975d131e943712c5fac6e5423fb2b0c356c96230f2ad18dc2792",
+  },
+  {
+    target: "win32-arm64",
+    os: "win32",
+    cpu: "arm64",
+    from: NPM,
+    member: "package/bin/napi-v6/win32/arm64/onnxruntime.dll",
+    library: "onnxruntime.dll",
+    sha256: "6c3a2abf5c6aca11c48a0d338a91af309f2266f25ce2e4084e6a87bbcb0fbfd0",
+    tarball: "77e43743e580d6641e49b7cdeed57fd11f21a8cf27a186dd33a3db817b3ff7f2",
+  },
+]
+
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex")
+const fail = (message) => {
+  console.error(message)
+  process.exit(1)
+}
+
+const fetched = async ({ url, file, sha256: expected }) => {
+  if (!existsSync(file)) {
+    console.log(`downloading ${url}`)
+    const response = await fetch(url)
+    if (!response.ok) fail(`${url}: HTTP ${response.status}`)
+    writeFileSync(file, Buffer.from(await response.arrayBuffer()))
+  }
+  const bytes = readFileSync(file)
+  if (sha256(bytes) !== expected) fail(`${file} is not the file expected (sha256 ${sha256(bytes)}); delete it to retry`)
+  return bytes
+}
+
+const tarMember = (archive, member) =>
+  execFileSync("tar", ["-xzOf", archive, member], { maxBuffer: 256 * 1024 * 1024 })
+
+const readme = ({ target, from, member, library, sha256: expected }) => `# @wirecat/onnxruntime-${target}
+
+ONNX Runtime ${VERSION}'s native library for ${target}, as \`${library}\`, for
+[@wirecat/cli-core](https://www.npmjs.com/package/@wirecat/cli-core): \`models download\` fetches this package's
+tarball and checks the library's sha256 before it uses it. Not meant to be installed on its own.
+
+- Source: ${from.url}
+- Source sha256: \`${from.sha256}\`
+- Member: \`${member}\`
+- Library sha256: \`${expected}\`
+
+ONNX Runtime is © Microsoft Corporation, under the MIT licence in \`LICENSE\`; \`ThirdPartyNotices.txt\` lists the
+code it includes. Both are copied from the NuGet package \`Microsoft.ML.OnnxRuntime\` ${VERSION}.
+`
+
+mkdirSync(SOURCES, { recursive: true })
+const nuget = unzipSync(await fetched(NUGET), {
+  filter: ({ name }) => name === "LICENSE" || name === "ThirdPartyNotices.txt" || name.startsWith("runtimes/"),
+})
+await fetched(NPM)
+
+const packed = []
+for (const spec of TARGETS) {
+  const name = `@wirecat/onnxruntime-${spec.target}`
+  const folder = join(OUT, spec.target)
+  rmSync(folder, { recursive: true, force: true })
+  mkdirSync(folder, { recursive: true })
+  const library = spec.from === NUGET ? nuget[spec.member] : tarMember(NPM.file, spec.member)
+  if (!library || sha256(library) !== spec.sha256) fail(`${spec.member} is not the library expected`)
+  writeFileSync(join(folder, spec.library), library, { mode: 0o755 })
+  writeFileSync(join(folder, "LICENSE"), nuget.LICENSE)
+  writeFileSync(join(folder, "ThirdPartyNotices.txt"), nuget["ThirdPartyNotices.txt"])
+  writeFileSync(join(folder, "README.md"), readme(spec))
+  const manifest = {
+    name,
+    version: VERSION,
+    description: `ONNX Runtime ${VERSION}'s native library for ${spec.target}, for @wirecat/cli-core`,
+    license: "MIT",
+    repository: { type: "git", url: "git+https://github.com/WireCatLabs/cli-core.git", directory: "bin" },
+    os: [spec.os],
+    cpu: [spec.cpu],
+    files: [spec.library, "LICENSE", "ThirdPartyNotices.txt", "README.md"],
+  }
+  writeFileSync(join(folder, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`)
+  const [{ filename }] = JSON.parse(
+    execFileSync("npm", ["pack", "--json", "--pack-destination", OUT], { cwd: folder, encoding: "utf8" }),
+  )
+  const tarball = join(OUT, filename)
+  const actual = sha256(readFileSync(tarball))
+  console.log(`${name}@${VERSION}: ${tarball}, ${readFileSync(tarball).length} bytes, sha256 ${actual}`)
+  if (spec.tarball && actual !== spec.tarball) fail(`${filename} packed differently from the pinned ${spec.tarball}`)
+  packed.push({ name, tarball, pinned: Boolean(spec.tarball) })
+}
+
+if (!process.argv.includes("--publish")) process.exit(0)
+if (packed.some(({ pinned }) => !pinned)) fail("pin every tarball's sha256 above before publishing")
+
+let token = process.env.NPM_TOKEN
+if (!token) {
+  try {
+    token = execFileSync("secret-tool", ["lookup", "service", "npm", "account", "leemour"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {}
+}
+if (!token) fail("no npm token: export NPM_TOKEN, or: secret-tool store --label=npm service npm account leemour")
+const npmrc = join(OUT, ".npmrc")
+// The config names the variable, not the value: the token stays in this process's environment.
+writeFileSync(npmrc, "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n", { mode: 0o600 })
+try {
+  for (const { name, tarball } of packed) {
+    let published = false
+    try {
+      execFileSync("npm", ["view", `${name}@${VERSION}`, "version"], { stdio: "ignore" })
+      published = true
+    } catch {}
+    if (published) {
+      console.log(`${name}@${VERSION} is already on npm`)
+      continue
+    }
+    execFileSync("npm", ["publish", tarball, "--access", "public", "--userconfig", npmrc], {
+      stdio: "inherit",
+      env: { ...process.env, NPM_TOKEN: token },
+    })
+  }
+} finally {
+  rmSync(npmrc, { force: true })
+}
