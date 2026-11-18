@@ -139,6 +139,18 @@ describe("account rename", () => {
     }
   })
 
+  it("moves a path once when a hook repeats it or names a folder holding it", async () => {
+    const given = await setup()
+    const sessions = (profile: string) => join(given.root, "state", "sessions", `${profile}.session`)
+    const { code } = await call(["personal", "account", "rename", "home", "--yes", "--json"], given, {
+      ...renamingOf(given),
+      stateFiles: (profile) => [sessions(profile), join(given.root, "state", "media", profile, "photo.jpg")],
+    })
+    expect(code).toBe(0)
+    expect(existsSync(sessions("home"))).toBe(true)
+    expect(existsSync(join(given.root, "state", "media", "home", "photo.jpg"))).toBe(true)
+  })
+
   it("refuses a name another profile has", async () => {
     const given = await setup()
     const { error } = await call(["personal", "account", "rename", "work", "--yes", "--json"], given, renamingOf(given))

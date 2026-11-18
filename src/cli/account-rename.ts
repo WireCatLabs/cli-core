@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, renameSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { dirname, join, sep } from "node:path"
 import { CliError, Credentials, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
@@ -157,7 +157,14 @@ export const accountRenameCommand = (
           ...(renaming.dataFiles?.(name, hooks) ?? []),
         ].map(own)
       }
-      const files = paired(app, filesOf(profile), filesOf(next)).filter(([from]) => existsSync(from))
+      // A hook may repeat a path cli-core keeps, or name a folder holding another entry: that one moves with it.
+      const files = [
+        ...new Map(
+          paired(app, filesOf(profile), filesOf(next))
+            .filter(([from]) => existsSync(from))
+            .map(([from, to]) => [from, to] as const),
+        ),
+      ].filter(([from], _, all) => !all.some(([outer]) => outer !== from && from.startsWith(`${outer}${sep}`)))
       const clash = files.find(([, to]) => existsSync(to))
       if (clash) throw refuse("taken", `${clash[1]} already exists — nothing was renamed`)
 
@@ -182,7 +189,7 @@ export const accountRenameCommand = (
           return found && found.source !== "environment" ? [{ store, from: old, to: now }] : []
         })
       })
-      const taken = entries.find(({ store, to }) => store.read(to) !== undefined)
+      const taken = entries.find(({ store, to }) => (store.read(to)?.source ?? "environment") !== "environment")
       if (taken) throw refuse("taken", `the keyring already holds ${taken.to} — nothing was renamed`)
 
       const read = readConfigFile(settings.configPath)
