@@ -96,6 +96,8 @@ export interface AccountVectors {
       projectId?: string
       personId?: string
       before?: string
+      /** Only chunks that hold one of the owner's own messages. */
+      fromOwner?: boolean
     },
   ): Promise<ConversationHit[]>
   /**
@@ -300,7 +302,7 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
 
     nearestConversations: async (
       key,
-      { chatId, model, since, limit, query, exclude, conversations, scope, projectId, personId, before },
+      { chatId, model, since, limit, query, exclude, conversations, scope, projectId, personId, before, fromOwner },
     ) => {
       const accountPk = findAccountPk(key)
       if (accountPk === undefined) return []
@@ -311,7 +313,8 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
         scope === undefined &&
         projectId === undefined &&
         personId === undefined &&
-        before === undefined
+        before === undefined &&
+        !fromOwner
       const mailHits = async (): Promise<ConversationHit[]> =>
         mailToo
           ? (
@@ -341,6 +344,7 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
         ...(projectId === undefined ? {} : { projectId: Number(projectId) }),
         ...(personId === undefined ? {} : { personId: Number(personId) }),
         ...(before === undefined ? {} : { before: Date.parse(before) }),
+        ...(fromOwner ? { fromOwner } : {}),
       })
       const found = conversationQueries.summariesOf(
         context,

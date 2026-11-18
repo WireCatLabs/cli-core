@@ -282,10 +282,12 @@ export const nearestChunks = (
     projectId?: number
     before?: number
     personId?: number
+    fromOwner?: boolean
   },
 ): NearestChunk[] => {
   const { orm } = context
-  const { chatKey, model, since, limit, query, exclude, conversations, scope, projectId, before, personId } = filter
+  const { chatKey, model, since, limit, query, exclude, conversations, scope, projectId, before, personId, fromOwner } =
+    filter
   const rows = (page: { after: { conversation: number; ordinal: number } } | { ids: number[] }) =>
     orm.all<{
       id: number
@@ -312,6 +314,7 @@ export const nearestChunks = (
           ${projectId === undefined ? sql`` : sql`AND k.project_id=${projectId}`}
           ${before === undefined ? sql`` : sql`AND k.occurred_at < ${before}`}
           ${personId === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM conversation_messages pcm JOIN messages pm ON pm.id=pcm.message_id JOIN identity_links pil ON pil.identity_id=pm.sender_identity_id WHERE pcm.conversation_id=c.id AND pil.person_id=${personId})`}
+          ${fromOwner ? sql`AND EXISTS (SELECT 1 FROM conversation_messages om JOIN messages m ON m.id = om.message_id WHERE om.conversation_id = c.id AND m.outgoing = 1 AND m.id BETWEEN r.first_message_id AND r.last_message_id)` : sql``}
           ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}
           ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
           ${exclude === undefined ? sql`` : sql`AND c.id <> ${exclude}`}
@@ -344,7 +347,11 @@ export const nearestChunks = (
   const plain = (found: (NearestChunk & { id: number })[]) => found.map(({ id: _, ...chunk }) => chunk)
   // The index has no person, project, scope or conversation list; with one of those the scan stays.
   const indexable =
-    personId === undefined && projectId === undefined && scope === undefined && conversations === undefined
+    personId === undefined &&
+    projectId === undefined &&
+    scope === undefined &&
+    conversations === undefined &&
+    !fromOwner
   const indexed =
     indexable &&
     searchIndex(
@@ -368,6 +375,25 @@ export const nearestChunks = (
       },
     )
   if (indexed) return plain(indexed)
+  if (fromOwner) {
+    // The owner's chunks are few: find them by the owner's messages, then score only those.
+    const ids = orm
+      .all<{ id: number }>(
+        sql`SELECT DISTINCT k.id FROM messages m
+          JOIN conversation_messages om ON om.message_id = m.id
+          JOIN conversations c ON c.id = om.conversation_id
+          JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
+          JOIN chats ch ON ch.id = c.chat_id
+          JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
+          JOIN chunk_messages r ON r.chunk_id = k.id AND m.id BETWEEN r.first_message_id AND r.last_message_id
+          WHERE m.outgoing = 1 AND ch.account_id = ${accountPk}
+            ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}`,
+      )
+      .map(({ id }) => id)
+    const best = new Map<number, NearestChunk & { id: number }>()
+    for (const row of rows({ ids })) keepBest(best, row)
+    return plain(ranked([...best.values()]))
+  }
   const best = new Map<number, NearestChunk & { id: number }>()
   let after = { conversation: 0, ordinal: -1 }
   for (;;) {

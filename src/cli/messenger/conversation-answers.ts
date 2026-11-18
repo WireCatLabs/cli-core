@@ -68,14 +68,17 @@ export const readinessGaps = (
 /** `search conversations` and `conversations related`, CLI and MCP alike. */
 export const foundConversations = (
   command: string,
-  found: Readiness & Pick<FoundConversations, "hits" | "accounts" | "words">,
+  found: Readiness & Pick<FoundConversations, "hits" | "accounts" | "words" | "own">,
   limit: number,
   messenger: Syncing,
   chat?: string,
   meta: Partial<Meta> = {},
 ) =>
   listOf(command, {
-    items: found.hits.map((hit) => snakeKeys(hit)),
+    items: [
+      ...found.hits.map((hit) => snakeKeys(hit)),
+      ...(found.own ?? []).map((hit) => ({ ...(snakeKeys(hit) as object), from_owner: true })),
+    ],
     limit,
     has_more: false,
     ...readinessGaps(found, messenger, chat),
