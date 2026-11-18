@@ -3011,6 +3011,136 @@ export const trackerItems = sqliteTable(
   ],
 )
 
+/** A site or a social account a content account publishes on. */
+export const contentChannels = sqliteTable(
+  "content_channels",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    kind: text("kind").notNull(),
+    network: text("network").notNull(),
+    name: text("name").notNull(),
+    url: text("url"),
+    handle: text("handle"),
+    deletedAt: integer("deleted_at"),
+    syncedAt: integer("synced_at").notNull(),
+  },
+  (table) => [unique().on(table.accountId, table.externalId)],
+)
+
+export const contentAuthors = sqliteTable(
+  "content_authors",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    name: text("name").notNull(),
+    email: text("email"),
+    data: text("data").notNull(),
+    sourceUpdatedAt: integer("source_updated_at"),
+    deletedAt: integer("deleted_at"),
+    syncedAt: integer("synced_at").notNull(),
+  },
+  (table) => [unique().on(table.accountId, table.externalId)],
+)
+
+export const contentTerms = sqliteTable(
+  "content_terms",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    slug: text("slug"),
+    parentId: text("parent_id"),
+    tagId: integer("tag_id").references(() => canonicalTags.id),
+    data: text("data").notNull(),
+    sourceUpdatedAt: integer("source_updated_at"),
+    deletedAt: integer("deleted_at"),
+    syncedAt: integer("synced_at").notNull(),
+  },
+  (table) => [unique().on(table.accountId, table.externalId), index("content_terms_by_tag_id").on(table.tagId)],
+)
+
+/** A post or page of a blog, or a social post, with its text as Markdown; the rest of the record is `data`. */
+export const contentPosts = sqliteTable(
+  "content_posts",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    channelId: text("channel_id"),
+    type: text("type").notNull(),
+    title: text("title"),
+    titleFolded: text("title_folded").notNull(),
+    body: text("body"),
+    contentHash: text("content_hash").notNull(),
+    status: text("status").notNull(),
+    publishedAt: integer("published_at"),
+    scheduledFor: integer("scheduled_for"),
+    sourceCreatedAt: integer("source_created_at"),
+    sourceUpdatedAt: integer("source_updated_at"),
+    version: text("version"),
+    normalizedText: text("normalized_text").notNull(),
+    data: text("data").notNull(),
+    deletedAt: integer("deleted_at"),
+    syncedAt: integer("synced_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("content_posts_by_account_id_status").on(table.accountId, table.status),
+    index("content_posts_by_account_id_published_at").on(table.accountId, table.publishedAt),
+  ],
+)
+
+/** What a sync or a write replaced in a post, and a post the source deleted, kept before the change. */
+export const contentPostRevisions = sqliteTable(
+  "content_post_revisions",
+  {
+    id: integer("id").primaryKey(),
+    postId: integer("post_id")
+      .notNull()
+      .references(() => contentPosts.id),
+    title: text("title"),
+    body: text("body"),
+    status: text("status").notNull(),
+    contentHash: text("content_hash").notNull(),
+    version: text("version"),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("content_post_revisions_by_post_id_created_at").on(table.postId, table.createdAt)],
+)
+
+/** One reading of a post's numbers; each reading is a new row. */
+export const contentMetrics = sqliteTable(
+  "content_metrics",
+  {
+    id: integer("id").primaryKey(),
+    postId: integer("post_id")
+      .notNull()
+      .references(() => contentPosts.id),
+    at: integer("at").notNull(),
+    views: integer("views"),
+    reactions: integer("reactions"),
+    comments: integer("comments"),
+    shares: integer("shares"),
+    clicks: integer("clicks"),
+    raw: text("raw"),
+  },
+  (table) => [index("content_metrics_by_post_id_at").on(table.postId, table.at)],
+)
+
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */
 export const storeSettings = sqliteTable("store_settings", {
   key: text("key").primaryKey(),

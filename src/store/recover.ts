@@ -28,6 +28,7 @@ import { rebuildMentions } from "./sqlite/mentions.js"
 import { CORPORA, drainCorpus, fillTrigrams, resetNoteIndex } from "./sqlite/note-index.js"
 import { openSqlite } from "./sqlite/open.js"
 import { isDerivedTable } from "./sqlite/rollback-copy.js"
+import { resetContentPostWords } from "./sqlite/content.js"
 import { fillSearchIndex, resetSearchIndex } from "./sqlite/search-index.js"
 import { stemmerCache } from "./sqlite/stems.js"
 import { fillStems, resetStems } from "./sqlite/stems-fill.js"
@@ -432,6 +433,7 @@ const FILLERS: Record<string, (database: CacheDatabase, now: () => number) => vo
   attachment_words: (database) => void resetAttachmentWords(database),
   crm_file_words: (database) => void resetCrmFileWords(database),
   tracker_item_words: (database) => void resetTrackerItemWords(database),
+  content_post_words: (database) => void resetContentPostWords(database),
   attachment_name_words: (database) =>
     // As migration 20 filled it: й and ё fold as the triggers fold them.
     database.exec(

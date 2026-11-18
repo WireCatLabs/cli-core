@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-138 tables, 27 full-text indexes.
+144 tables, 28 full-text indexes.
 
 ## Conventions
 
@@ -2688,7 +2688,7 @@ One tag on one thing.
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `tag_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
-| `taggable_type` | text | not null |  | `chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, … |
+| `taggable_type` | text | not null |  | `chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, `post`, … |
 | `taggable_id` | integer | not null |  | the row in the `taggable_type` table |
 | `main` | integer | not null |  | 1 on the thing's main topic; at most one per thing |
 | `source` | text | not null |  | where it came from: owner, agent, auto, an import |
@@ -3041,6 +3041,141 @@ Word index over a tracker item's title and text, rowid = `tracker_items.id`.
 ```sql
 CREATE VIRTUAL TABLE tracker_item_words USING fts5(normalized_text, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
 CREATE VIRTUAL TABLE tracker_item_words_vocab USING fts5vocab(tracker_item_words, 'col')
+```
+
+## Content
+
+What a blog or social account publishes, as last synced or written: channels, authors, tags and categories, posts with their text as Markdown, the versions a change replaced, and readings of their numbers. An author joins a person only by exact e-mail, when read.
+
+### `content_channels`
+
+A site or a social account a content account publishes on.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `external_id` | text | not null |  | its id at the source |
+| `kind` | text | not null |  | blog, social or newsletter |
+| `network` | text | not null |  | wordpress, ghost, linkedin, x… |
+| `name` | text | not null |  |  |
+| `url` | text |  |  | the site's address; a sync holds its deletions when it changes, as a moved root would empty the copy |
+| `handle` | text |  |  |  |
+| `deleted_at` | integer |  |  | gone from a complete list of the source's ids; trash is a status, never this. Sync never hard-deletes |
+| `synced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `content_authors`
+
+A user of a content source who writes posts. Joined to a person by exact e-mail when read; nothing here writes to the people graph.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `external_id` | text | not null |  | the source's own id for it |
+| `name` | text | not null |  |  |
+| `email` | text |  |  | only when the sign-in may read it |
+| `data` | text | not null |  | JSON: the record in the content domain's field names; a field the source did not send keeps its stored value |
+| `source_updated_at` | integer |  |  |  |
+| `deleted_at` | integer |  |  | gone from a complete list of the source's ids; trash is a status, never this. Sync never hard-deletes |
+| `synced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `content_terms`
+
+A tag or category of a content source, kept with its own id for writes; a post is tagged with the shared tag of its slug or name.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `external_id` | text | not null |  | the source's own id for it |
+| `kind` | text | not null |  | tag or category |
+| `name` | text | not null |  |  |
+| `slug` | text |  |  |  |
+| `parent_id` | text |  |  | the source's id of the parent category |
+| `tag_id` | integer |  | → `canonical_tags.id` | the shared tag a post with this term gets; none when neither slug nor name is a valid tag |
+| `data` | text | not null |  | JSON: the record in the content domain's field names; a field the source did not send keeps its stored value |
+| `source_updated_at` | integer |  |  |  |
+| `deleted_at` | integer |  |  | gone from a complete list of the source's ids; trash is a status, never this. Sync never hard-deletes |
+| `synced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (tag_id)`
+
+### `content_posts`
+
+A post or page of a blog, or a social post, as last synced or written, with its text as Markdown.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `external_id` | text | not null |  | the source's own id for it |
+| `channel_id` | text |  |  | the channel's id at the source |
+| `type` | text | not null |  | post or page |
+| `title` | text |  |  | a social post has none |
+| `title_folded` | text | not null |  | the title in one letter case; empty without one |
+| `body` | text |  |  | Markdown |
+| `content_hash` | text | not null |  | sha256 of title and body: a change keeps the old text |
+| `status` | text | not null |  | draft, pending, scheduled, published, private or trashed |
+| `published_at` | integer |  |  |  |
+| `scheduled_for` | integer |  |  | when a scheduled post goes out |
+| `source_created_at` | integer |  |  |  |
+| `source_updated_at` | integer |  |  |  |
+| `version` | text |  |  | the source's mark of this version, checked before a write |
+| `normalized_text` | text | not null |  | title and body normalized for the word index |
+| `data` | text | not null |  | JSON: the record in the content domain's field names; a field the source did not send keeps its stored value |
+| `deleted_at` | integer |  |  | gone from a complete list of the source's ids; trash is a status, never this. Sync never hard-deletes |
+| `synced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, status)`, `INDEX (account_id, published_at)`
+
+### `content_post_revisions`
+
+What a sync or a write replaced in a post, and a post the source deleted, kept before the change: the local versions of a post.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `post_id` | integer | not null | → `content_posts.id` | the `content_post` it belongs to |
+| `title` | text |  |  |  |
+| `body` | text |  |  |  |
+| `status` | text | not null |  |  |
+| `content_hash` | text | not null |  |  |
+| `version` | text |  |  |  |
+| `reason` | text | not null |  | sync, write or deleted: what replaced it |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (post_id, created_at)`
+
+### `content_metrics`
+
+One reading of a post's numbers; each reading is a new row, never an overwrite.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `post_id` | integer | not null | → `content_posts.id` | the `content_post` it belongs to |
+| `at` | integer | not null |  |  |
+| `views` | integer |  |  |  |
+| `reactions` | integer |  |  |  |
+| `comments` | integer |  |  |  |
+| `shares` | integer |  |  |  |
+| `clicks` | integer |  |  |  |
+| `raw` | text |  |  | JSON: the source's own numbers |
+
+*Keys and indexes:* `INDEX (post_id, at)`
+
+### `content_post_words`
+
+Word index over a post's title and text, rowid = `content_posts.id`.
+
+```sql
+CREATE VIRTUAL TABLE content_post_words USING fts5(normalized_text, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE content_post_words_vocab USING fts5vocab(content_post_words, 'col')
 ```
 
 ## Store

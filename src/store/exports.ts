@@ -161,6 +161,18 @@ export {
   type TrackerSearch,
   type TrackerStore,
 } from "./sqlite/tracker.js"
+export {
+  type ContentFilter,
+  type ContentHit,
+  type ContentItem,
+  type ContentPerson,
+  type ContentRevision,
+  type ContentSearch,
+  type ContentStore,
+  contentHashOf,
+  resetContentPostWords,
+  type RevisionReason,
+} from "./sqlite/content.js"
 export { dropAllUnusedVectors, vectorIndexCounts } from "./sqlite/vector-index.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

@@ -1398,5 +1398,31 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER tracker_item_words_au AFTER UPDATE OF normalized_text ON tracker_items\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM tracker_item_words WHERE rowid = old.id;\n  INSERT INTO tracker_item_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
       "CREATE TRIGGER tracker_item_words_ad AFTER DELETE ON tracker_items BEGIN\n  DELETE FROM tracker_item_words WHERE rowid = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261118230213_version-71-content",
+    "statements": [
+      "CREATE TABLE `content_authors` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`name` text NOT NULL,\n\t`email` text,\n\t`data` text NOT NULL,\n\t`source_updated_at` integer,\n\t`deleted_at` integer,\n\t`synced_at` integer NOT NULL,\n\tCONSTRAINT `fk_content_authors_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `content_authors_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `content_channels` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`network` text NOT NULL,\n\t`name` text NOT NULL,\n\t`url` text,\n\t`handle` text,\n\t`deleted_at` integer,\n\t`synced_at` integer NOT NULL,\n\tCONSTRAINT `fk_content_channels_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `content_channels_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `content_metrics` (\n\t`id` integer PRIMARY KEY,\n\t`post_id` integer NOT NULL,\n\t`at` integer NOT NULL,\n\t`views` integer,\n\t`reactions` integer,\n\t`comments` integer,\n\t`shares` integer,\n\t`clicks` integer,\n\t`raw` text,\n\tCONSTRAINT `fk_content_metrics_post_id_content_posts_id_fk` FOREIGN KEY (`post_id`) REFERENCES `content_posts`(`id`)\n);",
+      "CREATE TABLE `content_post_revisions` (\n\t`id` integer PRIMARY KEY,\n\t`post_id` integer NOT NULL,\n\t`title` text,\n\t`body` text,\n\t`status` text NOT NULL,\n\t`content_hash` text NOT NULL,\n\t`version` text,\n\t`reason` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_content_post_revisions_post_id_content_posts_id_fk` FOREIGN KEY (`post_id`) REFERENCES `content_posts`(`id`)\n);",
+      "CREATE TABLE `content_posts` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`channel_id` text,\n\t`type` text NOT NULL,\n\t`title` text,\n\t`title_folded` text NOT NULL,\n\t`body` text,\n\t`content_hash` text NOT NULL,\n\t`status` text NOT NULL,\n\t`published_at` integer,\n\t`scheduled_for` integer,\n\t`source_created_at` integer,\n\t`source_updated_at` integer,\n\t`version` text,\n\t`normalized_text` text NOT NULL,\n\t`data` text NOT NULL,\n\t`deleted_at` integer,\n\t`synced_at` integer NOT NULL,\n\tCONSTRAINT `fk_content_posts_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `content_posts_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `content_terms` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`name` text NOT NULL,\n\t`slug` text,\n\t`parent_id` text,\n\t`tag_id` integer,\n\t`data` text NOT NULL,\n\t`source_updated_at` integer,\n\t`deleted_at` integer,\n\t`synced_at` integer NOT NULL,\n\tCONSTRAINT `fk_content_terms_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `fk_content_terms_tag_id_canonical_tags_id_fk` FOREIGN KEY (`tag_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `content_terms_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE INDEX `content_metrics_by_post_id_at` ON `content_metrics` (`post_id`,`at`);",
+      "CREATE INDEX `content_post_revisions_by_post_id_created_at` ON `content_post_revisions` (`post_id`,`created_at`);",
+      "CREATE INDEX `content_posts_by_account_id_status` ON `content_posts` (`account_id`,`status`);",
+      "CREATE INDEX `content_posts_by_account_id_published_at` ON `content_posts` (`account_id`,`published_at`);",
+      "CREATE INDEX `content_terms_by_tag_id` ON `content_terms` (`tag_id`);"
+    ]
+  },
+  {
+    "name": "20261118230214_version-71-content-words",
+    "statements": [
+      "-- Words of a post's title and text, rowid = content_posts.id.\nCREATE VIRTUAL TABLE content_post_words USING fts5(\n  normalized_text,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE content_post_words_vocab USING fts5vocab(content_post_words, 'col');",
+      "CREATE TRIGGER content_post_words_ai AFTER INSERT ON content_posts WHEN new.normalized_text <> '' BEGIN\n  INSERT INTO content_post_words (rowid, normalized_text) VALUES (new.id, new.normalized_text);\nEND;",
+      "CREATE TRIGGER content_post_words_au AFTER UPDATE OF normalized_text ON content_posts\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM content_post_words WHERE rowid = old.id;\n  INSERT INTO content_post_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
+      "-- Taggings are polymorphic, with no foreign key: a post row that goes takes its tags along.\nCREATE TRIGGER content_post_words_ad AFTER DELETE ON content_posts BEGIN\n  DELETE FROM content_post_words WHERE rowid = old.id;\n  DELETE FROM taggings WHERE taggable_type = 'post' AND taggable_id = old.id;\nEND;"
+    ]
   }
 ]

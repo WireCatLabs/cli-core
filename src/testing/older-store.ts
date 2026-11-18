@@ -2,6 +2,10 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  71:
+    "DROP TABLE content_post_words_vocab; DROP TABLE content_post_words; DROP TABLE content_metrics; " +
+    "DROP TABLE content_post_revisions; DROP TABLE content_posts; DROP TABLE content_terms; DROP TABLE content_authors; " +
+    "DROP TABLE content_channels;",
   70: "DROP TABLE tracker_item_words_vocab; DROP TABLE tracker_item_words; DROP TABLE tracker_items;",
   69: `${[
     "message_ai",
