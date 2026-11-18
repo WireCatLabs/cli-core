@@ -93,10 +93,14 @@ export const chunkFreshness = (
  */
 export const purgeVectorHashes = (context: StoreContext, hashes: readonly string[]): void => {
   const { orm } = context
-  for (const hash of new Set(hashes)) {
+  const unique = new Set(hashes)
+  if (unique.size === 0) return
+  const models = orm.all<{ model: string }>(sql`SELECT DISTINCT model FROM embeddings`).map(({ model }) => model)
+  for (const hash of unique) {
     let offset = 0
     let valid = false
     for (;;) {
+      // `+` keeps SQLite on the hash index: by chunk type it read every conversation chunk for each hash.
       const candidates = orm.all<{
         conversation: number
         first: number
@@ -106,7 +110,7 @@ export const purgeVectorHashes = (context: StoreContext, hashes: readonly string
       }>(sql`SELECT k.chunkable_id AS conversation, r.first_message_id AS first,
         r.last_message_id AS last, r.text_start AS start, r.text_end AS end
         FROM chunks k JOIN chunk_messages r ON r.chunk_id = k.id
-        JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
+        JOIN conversations c ON +k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
         JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
         WHERE k.content_hash = ${hash} ORDER BY k.chunkable_id, k.position LIMIT 100 OFFSET ${offset}`)
       valid = candidates.some(({ conversation, first, last, start, end }) => {
@@ -120,9 +124,11 @@ export const purgeVectorHashes = (context: StoreContext, hashes: readonly string
         break
       }
     }
+    // By the full key, model first: by hash alone each delete read the whole key.
     if (!valid)
-      orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-        AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash} AND chunkable_type <> 'conversation')`)
+      for (const model of models)
+        orm.run(sql`DELETE FROM embeddings WHERE model = ${model} AND content_hash = ${hash}
+          AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash} AND chunkable_type <> 'conversation')`)
   }
 }
 
