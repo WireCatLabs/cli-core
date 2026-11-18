@@ -171,7 +171,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
   const typed = (node: SchemaNode | undefined, value: Value): unknown => {
     const found = scalarOf(node)
     const type = found?.type ?? "string"
-    if (typeof value === "boolean") return type === "boolean" ? value : undefined
+    // A place whose schema the walk cannot name keeps a flag a flag: the strict fake still checks it.
+    if (typeof value === "boolean") return type === "boolean" || found === undefined ? value : undefined
     if (typeof value === "object")
       return type === "integer" || type === "number" ? value.ms : new Date(value.ms).toISOString()
     if (type === "integer" || type === "number") return Number.isFinite(Number(value)) ? Number(value) : undefined
@@ -183,23 +184,28 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
    * The schema with each union on the way to `keys` cut to the branch that has the rest of the path: a sample of the
    * first branch of Attio's seventeen value types would carry another type's fields, and the strict fake refuses it.
    */
-  const narrowed = (node: SchemaNode, keys: readonly string[]): SchemaNode => {
+  const narrowed = (node: SchemaNode, keys: readonly string[], value?: Value): SchemaNode => {
     if (keys.length === 0) return node
     const found = resolve(node, definitions)
     const [key, ...rest] = keys as [string, ...string[]]
-    const fits = (one: SchemaNode) => "node" in walk(one, keys.join("."), definitions)
+    // A branch fits when it has the path, and, with a value to write, takes it there: Attio's `value` is text in one
+    // branch and a flag in another.
+    const fits = (one: SchemaNode) => {
+      const leaf = walk(one, keys.join("."), definitions)
+      return "node" in leaf && (value === undefined || typed(leaf.node, value) !== undefined)
+    }
     switch (found.type) {
       case "union": {
-        const branch = found.of.find(fits)
-        return branch ? narrowed(branch, keys) : node
+        const branch = found.of.find(fits) ?? found.of.find((one) => "node" in walk(one, keys.join("."), definitions))
+        return branch ? narrowed(branch, keys, value) : node
       }
       case "allOf":
-        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys) : one)) }
+        return { ...found, of: found.of.map((one) => (fits(one) ? narrowed(one, keys, value) : one)) }
       case "array":
-        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest) } : node
+        return /^\d+$/.test(key) ? { ...found, items: narrowed(found.items, rest, value) } : node
       case "object": {
         const inner = found.properties[key] ?? found.additionalProperties
-        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest) } } : node
+        return inner ? { ...found, properties: { ...found.properties, [key]: narrowed(inner, rest, value) } } : node
       }
       default:
         return node
@@ -262,34 +268,29 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     n: number,
     given: Readonly<Record<string, Value | undefined>>,
   ): CrmRaw => {
-    // Sampled already cut to the branches the rules write into, so a list the first sample holds has the right type.
-    const paths = Object.values(rules).flatMap((rule) => pathOf(rule) ?? [])
-    const made = sample(node && paths.reduce((cut, path) => narrowed(cut, path.split(".")), node))
-    const row = isRaw(made) ? made : {}
-    for (const [field, rule] of Object.entries(rules)) {
-      const path = pathOf(rule)
-      if (path === undefined) continue
+    const sampledValue = (field: string, rule: CrmRule | undefined): Value | undefined => {
       const mapped = typeof rule === "object" && "map" in rule ? Object.keys(rule.map)[0] : undefined
       const reverse =
         typeof rule === "object" && "map" in rule && field in given
           ? Object.keys(rule.map).find((key) => String(rule.map[key]) === String(given[field]))
           : undefined
-      const value =
-        reverse !== undefined
-          ? reverse
-          : field in given
-            ? given[field]
-            : mapped !== undefined
-              ? mapped
-              : types[field] === "text"
-                ? `${field} ${n + 1}`
-                : types[field] === "epoch"
-                  ? { ms: SEEDED + (n + 1) * 60_000 }
-                  : types[field] === "day"
-                    ? `2026-11-0${n + 1}`
-                    : undefined
-      if (value !== undefined) put(row, path, value, node)
+      if (reverse !== undefined) return reverse
+      if (field in given) return given[field]
+      if (mapped !== undefined) return mapped
+      if (types[field] === "text") return `${field} ${n + 1}`
+      if (types[field] === "epoch") return { ms: SEEDED + (n + 1) * 60_000 }
+      return types[field] === "day" ? `2026-11-0${n + 1}` : undefined
     }
+    const writes = Object.entries(rules).flatMap(([field, rule]) => {
+      const path = pathOf(rule)
+      return path === undefined ? [] : [{ path, value: sampledValue(field, rule) }]
+    })
+    // Sampled from the schema cut to the branches the rules write into, each one that takes its value: Attio's
+    // `value` is text in one branch and a flag in another, and a list the first sample holds must have the right type.
+    const cut = node && writes.reduce((one, { path, value }) => narrowed(one, path.split("."), value), node)
+    const made = sample(cut)
+    const row = isRaw(made) ? made : {}
+    for (const { path, value } of writes) if (value !== undefined) put(row, path, value, cut)
     return row
   }
 
