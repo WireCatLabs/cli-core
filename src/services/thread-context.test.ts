@@ -252,11 +252,11 @@ describe("graph context around a hit", () => {
     expect(found.stopped).toContain("time")
   })
 
-  it("does not cross native topics", async () => {
+  it("does not cross native topics: a reply into another topic is no link", async () => {
     const one = await setup(true, [message(1), { ...message(2, 1), threadId: "topic" }])
     const found = await one.services.messages.thread("7", "2")
     expect(ids(found)).toEqual(["2"])
-    expect(found.stopped).toContain("thread")
+    expect(found.links).toEqual([])
   })
 
   it("keeps other accounts and chats isolated even with the same message ids", async () => {

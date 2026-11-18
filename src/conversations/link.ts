@@ -1,7 +1,10 @@
 import type { Id, Message } from "../domain/models.js"
 
-/** 5: a message longer than a chunk is split into overlapping pieces, so builds before it are outdated. */
-export const RULES_VERSION = 5
+/**
+ * 5: a message longer than a chunk is split into overlapping pieces. 6: a message's parent is always in its own
+ * topic or thread, so a forum's topics are no longer one conversation. Builds before the current version are outdated.
+ */
+export const RULES_VERSION = 6
 
 /** How far back a rule looks, in messages: 97% of reply parents sat within 50 in a measured group. */
 export const LOOK_BACK = 50
@@ -55,24 +58,26 @@ export const linkMessages = (
   const links: Link[] = []
   const parents = new Map<Id, Id | null>()
   const conversationOf = new Map<Id, number>()
+  const held = new Map<Id, Held>()
   const conversations: Id[][] = []
   const window: LinkInput[] = []
 
   for (const message of messages) {
     check?.()
     const found = [
-      ...replyLink(message, conversationOf),
+      ...replyLink(message, held),
       ...mentionLinks(message, window, handles),
       ...sameSenderLink(message, window),
     ]
     links.push(...found)
-    const parent = choose(found, answers, message.id, conversationOf)
+    const parent = choose(found, answers, message, held)
     parents.set(message.id, parent)
 
     const conversation = parent === null ? conversations.length : (conversationOf.get(parent) as number)
     if (conversation === conversations.length) conversations.push([])
     conversations[conversation]?.push(message.id)
     conversationOf.set(message.id, conversation)
+    held.set(message.id, { threadId: message.threadId, text: message.text.trim() !== "" })
 
     window.push(message)
     if (window.length > LOOK_BACK) window.shift()
@@ -80,10 +85,27 @@ export const linkMessages = (
   return { links, parents, conversations }
 }
 
-const replyLink = (message: LinkInput, held: ReadonlyMap<Id, number>): Link[] =>
-  message.replyToId !== undefined && held.has(message.replyToId)
+interface Held {
+  threadId: Id | undefined
+  text: boolean
+}
+
+const replyLink = (message: LinkInput, held: ReadonlyMap<Id, Held>): Link[] =>
+  message.replyToId !== undefined && inThread(held, message.replyToId, message)
     ? [link(message, message.replyToId, "provider", "reply", 1, "reply")]
     : []
+
+/**
+ * Whether `id` may be the message's parent: a message of the same topic or thread, or the thread's own first
+ * message when it says something, as a WhatsApp community post its comments answer. A Telegram forum topic starts
+ * with an empty service message every message of the topic replies to: linked, it chained the whole topic, and
+ * through those first messages' sender every topic, into one conversation.
+ */
+const inThread = (held: ReadonlyMap<Id, Held>, id: Id, message: LinkInput) => {
+  const parent = held.get(id)
+  if (!parent) return false
+  return parent.threadId === message.threadId || (id === message.threadId && parent.text)
+}
 
 const mentionLinks = (message: LinkInput, window: LinkInput[], handles: ReadonlyMap<string, Id>): Link[] => {
   const links: Link[] = []
@@ -123,15 +145,16 @@ const mentioned = (text: string, handles: ReadonlyMap<string, Id>): Set<string> 
 const choose = (
   links: Link[],
   answers: ReadonlyMap<Id, Id | null>,
-  id: Id,
-  held: ReadonlyMap<Id, number>,
+  message: LinkInput,
+  held: ReadonlyMap<Id, Held>,
 ): Id | null => {
   const provider = links.find((one) => one.source === "provider")
   if (provider) return provider.parentId
-  // An answer naming a message this chat no longer holds, or a later one, leaves the choice to the rules.
-  const answer = answers.get(id)
+  // An answer naming a message this chat no longer holds, a later one or one in another topic leaves the choice
+  // to the rules.
+  const answer = answers.get(message.id)
   if (answer === null) return null
-  if (answer !== undefined && held.has(answer)) return answer
+  if (answer !== undefined && inThread(held, answer, message)) return answer
   let best: Link | undefined
   for (const one of links) if (!best || one.confidence > best.confidence) best = one
   return best?.parentId ?? null
