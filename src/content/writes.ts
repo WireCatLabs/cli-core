@@ -16,6 +16,7 @@ import {
   type ContentDraft,
   type ContentFields,
   type ContentWriter,
+  contentConflict,
   POSTS_DELETE_FORCE_KEY,
   POSTS_PUBLISH_KEY,
 } from "./writer.js"
@@ -91,12 +92,19 @@ const written = async <T>(
   }
 }
 
+/**
+ * The post as the copy holds it, read again from the source first when it can be: the keys then follow its status
+ * there. A post changed at the source since the copy's version is refused, its new state kept for the owner to look at.
+ */
 const copyOf = async (context: ContentWriteContext, externalId: string): Promise<ContentItem<"post">> => {
-  if (context.source) {
+  const stored = await context.store.content.get(context.account, "post", externalId)
+  if (context.source && stored?.deletedAt === null) {
     const now = context.now?.() ?? Date.now()
     const live = await context.source().get("post", externalId)
     if (live) await context.store.content.save(context.account, "post", [live], now)
     else await context.store.content.markDeleted(context.account, "post", externalId, now)
+    const was = stored.record.version
+    if (live && was != null && live.version != null && live.version !== was) throw contentConflict()
   }
   const found = await context.store.content.get(context.account, "post", externalId)
   if (!found || found.deletedAt !== null)

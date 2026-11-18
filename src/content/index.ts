@@ -28,6 +28,7 @@ export type {
   ContentSource,
   ContentSourceTraits,
 } from "./source.js"
+export { GET_UNSUPPORTED } from "./source.js"
 export {
   type ContentSyncOptions,
   type ContentSyncReport,

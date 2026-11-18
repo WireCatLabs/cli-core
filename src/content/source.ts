@@ -62,7 +62,10 @@ export interface ContentSource {
   ): Promise<ContentChanges<ContentRecords[K]>>
   /** Every id the source holds of the kind, trashed ones too, a page at a time: how deletions are found. */
   ids(kind: ContentKind, page?: string, context?: ContentCallContext): Promise<ContentIdPage>
-  /** One record by its id; `null` when the source has none, which proves it deleted. */
+  /**
+   * One record by its id; `null` only when the source said it has none, which proves it deleted. A source that cannot
+   * read the kind one by one throws with the reason `GET_UNSUPPORTED`.
+   */
   get<K extends ContentKind>(
     kind: K,
     externalId: string,
@@ -71,3 +74,6 @@ export interface ContentSource {
   /** A reading of each post's numbers now; a source without metrics answers none. */
   metrics?(posts: readonly string[], context?: ContentCallContext): Promise<ContentMetric[]>
 }
+
+/** A source that cannot read one row by its id throws a CliError with this reason; it never answers null for it. */
+export const GET_UNSUPPORTED = "content.get-unsupported"

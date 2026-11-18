@@ -33,12 +33,18 @@ is where posts go out: for WordPress, the site the profile signed in to, its add
 
 ## `syncContent(source, store, account, options)`
 
-Channels first: a channel whose address changed is reported in `moved`, and holds the id pass until `sync --rescan`.
-Then each kind's changes since its cursor, with an overlap, page by page. Then the scheduled posts whose time has
-passed are read again one by one (up to 50), so a post that went out is published in the copy, and one deleted is
-marked so. Once a day an id pass marks deleted what the source no longer lists; it is held, marking nothing, when the
-list is empty, when it would mark most of a kind, when the sign-in could not read all of it (a contributor), or when
-the site moved. A budget stops a run between requests; the next run goes on from the page it reached.
+Channels first: a channel whose address changed is reported in `moved` and holds every id pass, in this run and the
+next ones, until `sync --rescan`. Then each kind's changes since its cursor, with an overlap, page by page; a round in
+which a read was refused (a gap) keeps the cursor it started from, so what changed meanwhile is read once access
+returns. Then the scheduled posts whose time has passed are read again one by one (up to 50, the longest unread
+first), so a post that went out is published in the copy, and one deleted is marked so.
+
+Once a day an id pass lists every id. It is held, marking nothing, when the list is empty, when it would mark more than
+half of a kind of ten rows or more, when a page of it was refused (in this run or the run it resumes), or when the site
+moved. Otherwise each stored row the list lacks is read once more with `get`, and only a row the source says is gone
+is marked deleted: a list paged by number skips a row when an earlier one is deleted between pages. A source that
+cannot read one row by id throws `content.get-unsupported`, and then absence from a complete list marks it. A budget
+stops a run between requests; the next run goes on from the page it reached.
 
 ## Writes and permissions
 
@@ -65,7 +71,11 @@ command, source, site })` (`src/content/manifest/`) build both ports from config
   (with `"{id}"`), the `map` onto our fields (the CRM rules: paths, `value`, `map`, `all`), the post's `body` path and
   format (`markdown`, `html`, `wp-blocks`), and `optional`, the gap a refused call reports.
 - Times without an offset are UTC, as WordPress's `*_gmt` fields are.
-- Pages follow each operation's own `pagination`; a page style with `pagesHeader` stops at the page the header names.
+- Pages follow each operation's own `pagination`; a page style with `pagesHeader` stops at the page the header names,
+  read through the call's `withHeaders`. Without it, a list that ends on a full page asks one page past the last,
+  which WordPress refuses with 400.
+- The one channel's id is `site`, whatever the address: a profile pointed at another address is a moved channel.
+- The writer writes posts. Pages are read; a write to a page is refused as `content.write-unsupported`.
 - `writes` names the create, update, trash and delete calls, where each of our fields goes, and the values over the
   update call that publish, schedule at `"{at}"` and unpublish. A write goes only through `write`, the `api` group's
   `serviceApiWriter` bound to the invoking command, which checks the profile's keys as a raw call would.

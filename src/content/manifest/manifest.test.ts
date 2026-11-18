@@ -32,7 +32,6 @@ const wordpress = (options: Parameters<typeof wordpressFake>[0] = {}) => {
     write: fake.write,
     command: new Command("wp"),
     source,
-    site: SITE,
   })
   const skewed = (skew: number) =>
     contentSourceFromManifest(WORDPRESS_CONTENT, { api, call: fake.call, site: SITE, now: () => siteNow + skew })
@@ -94,7 +93,7 @@ describe("WordPress from configuration", () => {
       type: "post",
       status: "published",
       title: "Version 2 is out",
-      channel: SITE,
+      channel: "site",
       publishedAt: Date.UTC(2026, 10, 1, 0, 0, 10),
       terms: ["7", "1"],
       authors: ["1"],
@@ -127,6 +126,23 @@ describe("WordPress from configuration", () => {
     ])
   })
 
+  it("marks deleted only a post a read says is gone, not one a list of ids skipped", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "wp-content-")), "wirecat.db") })
+    opened.push(store)
+    const { fake, source } = wordpress()
+    await syncContent(source, store, account, { now: Date.UTC(2026, 10, 17) })
+    const listed = fake.call.withHeaders
+    // A post deleted between two pages moves the next one onto the page already read: a list misses it.
+    fake.call.withHeaders = async (operation, input) => {
+      const answer = await listed(operation, input)
+      if (input.query._fields !== "id") return answer
+      return { ...answer, body: (answer.body as { id: number }[]).filter((one) => one.id !== 11) }
+    }
+    const report = await syncContent(source, store, account, { now: Date.UTC(2026, 10, 18, 1) })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ pass: "complete", unlisted: 0 })
+    expect(await store.content.count(account, "post")).toBe(3)
+  })
+
   it("holds the deletions when a contributor is refused the trash, and says why", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "wp-content-")), "wirecat.db") })
     opened.push(store)
@@ -150,7 +166,6 @@ describe("WordPress from configuration", () => {
       },
       command: new Command("wp"),
       source,
-      site: SITE,
     })
     await writer.update("11", { terms: ["7", "1"], body: "Some *new* text." }, { operationId: "op-1" })
     expect(sent).toEqual([{ tags: [7], categories: [1], content: expect.stringContaining("<em>new</em>") }])

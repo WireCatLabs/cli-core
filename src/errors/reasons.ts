@@ -544,6 +544,7 @@ const OTHERS: Entry[] = [
   validation("content.schedule-past", "a post is scheduled for a time to come, not one that passed"),
   validation("content.already-published", "a published post cannot be scheduled; unpublish it first"),
   validation("content.empty", "a write names no field to set"),
+  ["content.get-unsupported", "configuration_error", "the source cannot read one post, author or term by its id"],
   validation("content.write-unsupported", "the source does not take this write, such as a deletion past the trash"),
   validation(
     "crm.narrowing-held",

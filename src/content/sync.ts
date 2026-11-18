@@ -3,7 +3,7 @@ import { type BudgetStop, type RunBudget, runBudget } from "../background/budget
 import { CONTENT_KINDS, type ContentChannel, type ContentKind } from "../domain/content.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
-import type { ContentCallContext, ContentGap, ContentSource } from "./source.js"
+import { type ContentCallContext, type ContentGap, type ContentSource, GET_UNSUPPORTED } from "./source.js"
 
 const DAY = 86_400_000
 /** An id pass that would mark more than this share of a kind deleted is held: a source that lost rights lists none. */
@@ -20,7 +20,8 @@ interface Mode {
 interface ContentCursor {
   v: 1
   token: string | null
-  round: { from: string | null; page: string | null } | null
+  /** `gapped`: a read of this round was refused, so its end keeps the cursor it started from. */
+  round: { from: string | null; page: string | null; gapped?: true } | null
   passAt: number
 }
 
@@ -29,6 +30,8 @@ interface ContentPass {
   started: number
   page: string | null
   ids: string[]
+  /** A page of this pass was refused, in this run or an earlier one: its absences prove nothing. */
+  gapped?: true
 }
 
 const fresh = (): ContentCursor => ({ v: 1, token: null, round: null, passAt: 0 })
@@ -46,6 +49,7 @@ export const contentCursorName = (kind: ContentKind): string => `content:${kind}
 const passName = (kind: ContentKind) => `content:${kind}:pass`
 const GAPS = "content:gaps"
 const RESUME = "content:resume"
+const MOVED = "content:moved"
 
 export interface ContentSyncOptions {
   now?: number
@@ -110,9 +114,10 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
   const { source, store, account, budget } = run
   const name = contentCursorName(kind)
   let cursor = parsed<ContentCursor>((await store.sync.syncState(account, name))?.value) ?? fresh()
-  let round = mode.drop
+  let round: NonNullable<ContentCursor["round"]> = mode.drop
     ? { from: null, page: null }
     : (cursor.round ?? { from: mode.full ? null : cursor.token, page: null })
+  const gapped = () => run.report.gaps.some((gap) => gap.kind === kind)
   const save = (patch: Partial<ContentCursor>) => {
     cursor = { ...cursor, ...patch }
     return store.sync.setSyncState(account, name, JSON.stringify(cursor))
@@ -127,6 +132,7 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
     }
     run.report.progress.requests += 1
     const page = await source.changes(kind, round.from, round.page ?? undefined, run.context)
+    if (gapped()) round = { ...round, gapped: true }
     if (run.signal?.aborted) {
       await save({ round })
       return "cancelled" as const
@@ -145,7 +151,8 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
     }
     run.report.progress.steps += 1
     if (!page.hasMore) {
-      await save({ token: page.cursor ?? null, round: null })
+      // Changes made while a read was refused would be past a new cursor: the next run reads from the old one again.
+      await save({ token: round.gapped ? round.from : (page.cursor ?? null), round: null })
       return null
     }
     if (page.nextCursor === undefined)
@@ -183,6 +190,7 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
       return "cancelled" as const
     }
     pass = { ...pass, ids: [...pass.ids, ...page.items] }
+    if (run.report.gaps.some((gap) => gap.kind === kind)) pass = { ...pass, gapped: true }
     if (page.hasMore) {
       if (page.nextCursor === undefined || page.nextCursor === pass.page)
         throw new CliError("invalid_response", `${source.provider} gave no new page of ${kind} ids`)
@@ -191,10 +199,9 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
       continue
     }
     const stored = await store.content.count(account, kind)
-    const unlisted = await store.content.removeUnlisted(account, kind, pass.ids, pass.started, run.now, {
-      dryRun: true,
-    })
-    const unread = run.report.gaps.some((gap) => gap.kind === kind)
+    const missing = await store.content.unlisted(account, kind, pass.ids, pass.started)
+    const unlisted = missing.length
+    const unread = pass.gapped === true || run.report.gaps.some((gap) => gap.kind === kind)
     const moved = (run.report.moved?.length ?? 0) > 0
     const emptied = pass.ids.length === 0 && unlisted > 0
     const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
@@ -209,7 +216,12 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
           : `${source.provider} listed ${pass.ids.length} ${kind} ids, so ${unlisted} of the ${stored} stored ` +
             "would be marked deleted; nothing was. Check the sign-in's rights, then run sync --rescan to let it through"
     } else {
-      result.unlisted += await store.content.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
+      const why = await confirmGone(run, kind, missing, result)
+      if (why) {
+        await store.sync.setSyncState(account, name, JSON.stringify(pass))
+        result.pass = "partial"
+        return why
+      }
       result.pass = "complete"
     }
     await store.sync.setSyncState(account, name, "null")
@@ -230,7 +242,13 @@ const readDue = async (run: Run, result: ContentSyncResult) => {
     const why = budget.take()
     if (why) return why
     run.report.progress.requests += 1
-    const post = await source.get("post", id, run.context)
+    let post: Awaited<ReturnType<ContentSource["get"]>>
+    try {
+      post = await source.get("post", id, run.context)
+    } catch (error) {
+      if (isCliError(error) && error.details.reason === GET_UNSUPPORTED) return null
+      throw error
+    }
     if (post) result.saved += await store.content.save(account, "post", [post], run.now)
     else if (await store.content.markDeleted(account, "post", id, run.now)) result.unlisted += 1
     run.report.due += 1
@@ -252,8 +270,40 @@ const readMetrics = async (run: Run) => {
   return null
 }
 
-/** Channels first: a site whose address changed holds every deletion of this run. */
-const readChannels = async (run: Run) => {
+/**
+ * Each id a list lacked, read once more: a list paged by number skips a row when an earlier one goes, so only a read
+ * that answers "gone" marks a row deleted. A row read back is saved; one the source cannot read alone is marked by its
+ * absence from a complete list, as before.
+ */
+const confirmGone = async (run: Run, kind: ContentKind, missing: readonly string[], result: ContentSyncResult) => {
+  const { source, store, account, budget } = run
+  for (const id of missing) {
+    const why = budget.take()
+    if (why) return why
+    run.report.progress.requests += 1
+    let found: Awaited<ReturnType<ContentSource["get"]>>
+    try {
+      found = await source.get(kind, id, run.context)
+    } catch (error) {
+      // WordPress leaves others' drafts out of a contributor's list and refuses to read them: not proof of anything.
+      if (isCliError(error) && error.code === "permission_error") {
+        run.context.gap({ kind, message: `${source.provider} would not let this sign-in read every ${kind}` })
+        continue
+      }
+      if (!isCliError(error) || error.details.reason !== GET_UNSUPPORTED) throw error
+      found = null
+    }
+    if (found) result.saved += await store.content.save(account, kind, [found], run.now)
+    else if (await store.content.markDeleted(account, kind, id, run.now)) result.unlisted += 1
+  }
+  return null
+}
+
+/**
+ * Channels first: a site whose address changed holds every deletion until `sync --rescan`, whichever run comes next. A
+ * plain run would otherwise take the new address as the known one and mark the old site's posts deleted.
+ */
+const readChannels = async (run: Run, rescan: boolean) => {
   const { source, store, account } = run
   const before = new Map((await store.content.channels(account)).map((one) => [one.externalId, one]))
   run.report.progress.requests += 1
@@ -262,7 +312,12 @@ const readChannels = async (run: Run) => {
     const was = before.get(one.externalId)?.url
     return was && one.url && was !== one.url ? [{ channel: one.externalId, from: was, to: one.url }] : []
   })
-  if (moved.length) run.report.moved = moved
+  type Moved = { v: 1; moved: typeof moved }
+  const held = rescan ? [] : (parsed<Moved>((await store.sync.syncState(account, MOVED))?.value)?.moved ?? [])
+  const all = [...held, ...moved]
+  if (all.length) run.report.moved = all
+  const kept: Moved = { v: 1, moved: all }
+  await store.sync.setSyncState(account, MOVED, rescan || !all.length ? "null" : JSON.stringify(kept))
   run.report.channels = await store.content.saveChannels(account, channels, run.now)
 }
 
@@ -337,13 +392,13 @@ export const syncContent = async (
     stop("requests")
     return report
   }
-  await readChannels(run)
   const kinds = CONTENT_KINDS.filter((one) => source.traits.kinds.includes(one))
   const resumed = options.rescan
     ? null
     : parsed<{ v: 1; done: ContentKind[]; rescan?: true }>((await store.sync.syncState(account, RESUME))?.value)
   const done = new Set(resumed?.done ?? [])
   const mode: Mode = { drop: options.rescan === true, full: options.rescan === true || resumed?.rescan === true }
+  await readChannels(run, mode.full)
   if (resumed)
     for (const gap of await contentGapsOf(store, account))
       if (done.has(gap.kind)) {

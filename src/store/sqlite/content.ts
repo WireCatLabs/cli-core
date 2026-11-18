@@ -96,17 +96,10 @@ export interface ContentStore {
     options?: { reason?: Exclude<RevisionReason, "deleted"> },
   ): Promise<number>
   /**
-   * After a complete list of the kind's ids: marks deleted every stored one the list lacks that was not synced since
-   * `before`. A post keeps its last text as a revision. Answers how many.
+   * After a complete list of the kind's ids: the stored ones the list lacks that were not synced since `before`. Absence
+   * alone is no deletion: the sync reads each again, and `markDeleted` marks the ones the source says are gone.
    */
-  removeUnlisted(
-    key: AccountKey,
-    kind: ContentKind,
-    listed: readonly string[],
-    before: number,
-    now: number,
-    options?: { dryRun?: boolean },
-  ): Promise<number>
+  unlisted(key: AccountKey, kind: ContentKind, listed: readonly string[], before: number): Promise<string[]>
   /** Marks one record deleted, as a read that answered "no such post" proves. */
   markDeleted(key: AccountKey, kind: ContentKind, externalId: string, now: number): Promise<boolean>
   get<K extends ContentKind>(key: AccountKey, kind: K, externalId: string): Promise<ContentItem<K> | undefined>
@@ -118,7 +111,7 @@ export interface ContentStore {
   ): Promise<{ items: ContentItem<K>[]; hasMore: boolean }>
   find(search: ContentSearch): Promise<{ items: ContentHit[]; hasMore: boolean }>
   count(key: AccountKey, kind: ContentKind): Promise<number>
-  /** Scheduled posts whose time has passed: the source may have published them without changing their mark. */
+  /** Scheduled posts whose time has passed, the longest unread first: the source may have published them unmarked. */
   due(key: AccountKey, now: number): Promise<string[]>
   revisions(key: AccountKey, post: string): Promise<ContentRevision[]>
   saveMetrics(key: AccountKey, metrics: readonly ContentMetric[]): Promise<number>
@@ -347,28 +340,15 @@ export const contentStoreOver = (context: StoreContext): ContentStore => {
       .run(now, Number(row.id), accountId)
   }
 
-  const removeUnlisted = (
-    key: AccountKey,
-    kind: ContentKind,
-    listed: readonly string[],
-    before: number,
-    now: number,
-    { dryRun = false }: { dryRun?: boolean } = {},
-  ) => {
+  const unlisted = (key: AccountKey, kind: ContentKind, listed: readonly string[], before: number) => {
     const accountId = findAccountPk(context, key)
-    if (accountId === undefined) return 0
+    if (accountId === undefined) return []
     const keep = new Set(listed)
-    return write(database, () => {
-      let removed = 0
-      for (const row of database
-        .prepare(`SELECT * FROM ${TABLE[kind]} WHERE account_id = ? AND deleted_at IS NULL AND synced_at < ?`)
-        .all(accountId, before)) {
-        if (keep.has(String(row.external_id))) continue
-        if (!dryRun) mark(accountId, kind, row, now)
-        removed += 1
-      }
-      return removed
-    })
+    return database
+      .prepare(`SELECT external_id FROM ${TABLE[kind]} WHERE account_id = ? AND deleted_at IS NULL AND synced_at < ?`)
+      .all(accountId, before)
+      .map((row) => String(row.external_id))
+      .filter((id) => !keep.has(id))
   }
 
   const list = <K extends ContentKind>(key: AccountKey, kind: K, filter: ContentFilter = {}) => {
@@ -491,8 +471,7 @@ export const contentStoreOver = (context: StoreContext): ContentStore => {
         }))
     },
     save: async (key, kind, records, now, options) => save(key, kind, records, now, options?.reason ?? "sync"),
-    removeUnlisted: async (key, kind, listed, before, now, options) =>
-      removeUnlisted(key, kind, listed, before, now, options),
+    unlisted: async (key, kind, listed, before) => unlisted(key, kind, listed, before),
     markDeleted: async (key, kind, externalId, now) => {
       const accountId = findAccountPk(context, key)
       if (accountId === undefined) return false
@@ -530,7 +509,7 @@ export const contentStoreOver = (context: StoreContext): ContentStore => {
       return database
         .prepare(
           "SELECT external_id FROM content_posts WHERE account_id = ? AND deleted_at IS NULL AND status = 'scheduled' " +
-            "AND scheduled_for IS NOT NULL AND scheduled_for <= ? ORDER BY scheduled_for, id",
+            "AND scheduled_for IS NOT NULL AND scheduled_for <= ? ORDER BY synced_at, scheduled_for, id",
         )
         .all(accountId, now)
         .map((row) => String(row.external_id))

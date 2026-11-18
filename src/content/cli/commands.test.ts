@@ -129,8 +129,9 @@ describe("content commands", () => {
     await expect(cli("posts", "update", "10", "--title", "Public edit", "--yes")).rejects.toThrow(/posts\.publish/)
     expect(source.requests).toEqual([])
     // A scheduled post whose time passed is published by WordPress on any edit (RISK-9.b); the copy may still say
-    // draft, so the write reads the post again first.
+    // draft, so the write reads the post again first: a conflict, then the keys of its status at the source.
     await source.writer.schedule("11", NOW - 60_000, { operationId: "elsewhere" })
+    await expect(cli("posts", "update", "11", "--title", "Missed schedule", "--yes")).rejects.toThrow(/changed/)
     await expect(cli("posts", "update", "11", "--title", "Missed schedule", "--yes")).rejects.toThrow(/posts\.publish/)
     expect(source.requests).toEqual(["schedule"])
   })
@@ -160,7 +161,6 @@ describe("content commands", () => {
       write: site.write,
       command: new Command("wp"),
       source,
-      site: "example.com",
     })
     const { cli } = await setup(
       { "posts.publish": "deny" },

@@ -7,7 +7,13 @@ import { crmValues } from "../../crm/index.js"
 import type { CrmOperationCall } from "../../crm/manifest/manifest.js"
 import { at, evaluate, MISSING } from "../../crm/manifest/map.js"
 import type { ContentKind, ContentRecords } from "../../domain/content.js"
-import type { ContentCallContext, ContentChanges, ContentIdPage, ContentSource } from "../source.js"
+import {
+  type ContentCallContext,
+  type ContentChanges,
+  type ContentIdPage,
+  type ContentSource,
+  GET_UNSUPPORTED,
+} from "../source.js"
 import { type ContentChangesCall, type ContentManifestEntity, parseContentManifest } from "./manifest.js"
 import { mapContentRecord, postBodyOf, utcEpoch } from "./map.js"
 
@@ -22,12 +28,18 @@ export type ContentReadCall = ServiceApiCall & {
 export interface ContentManifestSourceOptions {
   api: ServiceApiManifest
   call: ContentReadCall
-  /** The site the profile signed in to, as it keeps it: `blog.example.com/news`. The channel's id and address. */
+  /** The site the profile signed in to, as it keeps it: `blog.example.com/news`. The channel's address. */
   site: string
   /** The site's name; the address when absent. */
   name?: string
   now?: () => number
 }
+
+/**
+ * The one channel's id, the same whatever the site's address: a profile pointed at another address is then a moved
+ * channel, which holds deletions until `sync --rescan`, and never a second channel whose posts share the first's ids.
+ */
+export const SITE_CHANNEL = "site"
 
 const OVERLAP_MS = 10 * 60_000
 const KEYSET_STEP = 1000
@@ -187,7 +199,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     for (const raw of rows) {
       const record = mapContentRecord(kind, entity.map, raw)
       if (record === null) continue
-      if (kind === "post") Object.assign(record, { channel: options.site }, await postBodyOf(entity, raw))
+      if (kind === "post") Object.assign(record, { channel: SITE_CHANNEL }, await postBodyOf(entity, raw))
       records.push(record)
     }
     return records
@@ -299,8 +311,19 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
         throw error
       }
       const raw = entity.get.items === undefined ? answer : at(answer, entity.get.items)
-      if (crmValues.isRaw(raw)) return (await mapped(kind, entity, [raw]))[0] ?? null
+      const [record] = crmValues.isRaw(raw) ? await mapped(kind, entity, [raw]) : []
+      // Only a 404 proves a row gone: an answer we cannot read must not mark it deleted.
+      if (!record)
+        throw new CliError(
+          "invalid_response",
+          `${manifest.provider} answered ${kind} ${externalId} with no row we read`,
+        )
+      return record
     }
+    if (!callsOf(kind).some((entity) => entity.get))
+      throw new CliError("configuration_error", `the source manifest reads no single ${kind}`, {
+        reason: GET_UNSUPPORTED,
+      })
     return null
   }
 
@@ -310,7 +333,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     async channels() {
       return [
         {
-          externalId: options.site,
+          externalId: SITE_CHANNEL,
           kind: manifest.channel.kind,
           network: manifest.channel.network,
           name: options.name ?? options.site,

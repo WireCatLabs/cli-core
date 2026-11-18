@@ -9,7 +9,7 @@ import type { ContentSource } from "../source.js"
 import { type ContentFields, type ContentWriteOptions, type ContentWriter, contentConflict } from "../writer.js"
 import { parseContentManifest } from "./manifest.js"
 import { mapContentRecord, postBodyOf } from "./map.js"
-import { fill, inputOf } from "./source.js"
+import { fill, inputOf, SITE_CHANNEL } from "./source.js"
 
 /**
  * Sends one write the way the `api` group does: `serviceApiWriter` bound to the invoking command, which checks the
@@ -28,9 +28,11 @@ export interface ContentManifestWriterOptions {
   command: Command
   /** The source built from the same manifest: a write reads the post first, for its version and its status. */
   source: ContentSource
-  /** As the source's: the channel's id. */
-  site: string
 }
+
+// The manifest's writes name the post calls; a page is read, and written in the source's own editor for now.
+const pagesUnwritten = () =>
+  new CliError("validation_error", "this CLI writes posts, not pages", { reason: "content.write-unsupported" })
 
 const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`
 
@@ -51,7 +53,7 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
     if (!crmValues.isRaw(raw)) return null
     const post = mapContentRecord("post", entity.map, raw)
     if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a write with no post`)
-    return Object.assign(post, { channel: options.site }, await postBodyOf(entity, raw))
+    return Object.assign(post, { channel: SITE_CHANNEL }, await postBodyOf(entity, raw))
   }
 
   const bodyOf = async (fields: ContentFields): Promise<Record<string, unknown>> => {
@@ -80,6 +82,7 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
     const found = await options.source.get("post", externalId)
     if (!found) throw new CliError("not_found", `${manifest.provider} has no post ${externalId}; sync, then try again`)
     if (version != null && found.version != null && found.version !== version) throw contentConflict()
+    if (found.type === "page") throw pagesUnwritten()
     return found
   }
 
@@ -106,6 +109,7 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   return {
     provider: manifest.provider,
     async createDraft(draft) {
+      if (draft.type === "page") throw pagesUnwritten()
       const post = await postOf(await send(writes.create, {}, await bodyOf(draft)))
       if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a create with no post`)
       return post

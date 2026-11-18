@@ -145,8 +145,14 @@ export const contentSyncContract = (make: () => ContentSyncFixture | Promise<Con
       ])
       assert.equal(report.synced.find((one) => one.kind === "post")?.pass, "held")
       assert.deepEqual(await c.posts(), ["10", "11", "12"])
+      later()
+      const next = await c.sync()
+      assert.equal(next.synced.find((one) => one.kind === "post")?.pass, "held", "a plain run after it still holds")
+      assert.deepEqual(await c.posts(), ["10", "11", "12"])
       await c.sync({ rescan: true })
       assert.deepEqual(await c.posts(), ["10", "12"])
+      later()
+      assert.equal((await c.sync()).moved, undefined, "a rescan takes the new address as the site's")
     }),
     test("an author whose e-mail a read leaves out keeps the stored one; nothing is erased by omission", async (c) => {
       await c.sync()
