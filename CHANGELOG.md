@@ -5,6 +5,43 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.700.0 — 18.11.2026
+
+### Added
+
+- **`htmlToMarkdown` and `markdownToHtml` in `@wirecat/cli-core/documents`**, for the content category: a blog keeps
+  HTML (WordPress, Ghost), and a CLI shows and takes Markdown. WordPress block comments and Ghost card comments go,
+  and so do scripts, styles, frames, event attributes, raw HTML from Markdown, and links and images whose scheme is
+  not http(s), mailto or tel: a post body is untrusted. Tested on one post as WordPress 6.9 stores and renders it and
+  as Ghost 6.78 renders it; Markdown that went through HTML once comes back the same. The converters are unified's
+  `hast-util-from-html`, `hast-util-to-mdast`, `mdast-util-to-hast` and `hast-util-to-html`, loaded on first use.
+- **A CRM source from a manifest reads a pipeline answered as a flat list of stages** (`stages.each: "."`, grouped by
+  `stages.pipeline` or one pipeline), and a hook `pipelines.<kind>.outcome` decides a stage's outcome the data cannot
+  say. Attio's deal stages and Pipedrive's `/stages` answer this way.
+- **`custom.typed` reads the account's own fields from typed entries with their history**, as Attio keeps them: the
+  current entry's value by its type (`TYPED_VALUE_PATHS`, overridable), a multiple field or several current entries as a list.
+  `fields.keep` takes `{ path, is }`, so a config file can say which fields are the account's own.
+- **`entities.person.search` and `entities.organization.search` give a manifest source a live `list`**, for `people
+  list` and `organizations list`: words through the search call's `"{query}"`, none through `list`. A condition it
+  cannot send is refused, not dropped; a live list pages by offset, so a cursor-paged search is refused.
+- `hooks.extend` gets the service's `call` as its second argument.
+- **The `api` group checks a key by a field's value, as WordPress publishes by `status: "publish"`.** A manifest
+  permission with `values` (cli-base's `permissions.valueKeys`) applies when the call's JSON body or its query holds
+  one of those values: `{ key: "posts.publish", values: { status: ["publish", "future"] } }` asks for
+  `posts.publish` before `api post-wp-v2-posts --body '{"status":"publish"}'` and lets a draft through. Both places
+  count, because WordPress reads the same parameter from either. So a profile that denies publishing also stops an
+  agent that publishes through the raw `api` group. `--dry-run` and discovery show the key with
+  `with status publish or future`.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.118.0**, which carries the manifest's `values` and WordPress's
+  `wpJsonToOpenApi`. A CLI that pins an older cli-base raises it with this cli-core.
+
+### Fixed
+
+- `crmManifestFake` matches a call whatever page size and offset the source asked for, a live list setting its own, and writes a stage's won or lost flag as a boolean or a word, as its schema takes it.
+
 ## 0.699.0 — 18.11.2026
 
 ### Added
