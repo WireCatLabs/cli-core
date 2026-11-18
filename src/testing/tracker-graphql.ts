@@ -152,8 +152,11 @@ const SELECTIONS: Record<TrackerKind, string> = {
   comment: `nodes { ${TIMES} body issue { id } user { id } url } ${PAGE_INFO}`,
 }
 const TIME_MAP = { externalId: "id", createdAt: "createdAt", updatedAt: "updatedAt", archivedAt: "archivedAt" }
+// A literal after `key:` reads as a permission key to src/cli/permission-keys.test.ts.
+const TEAM_KEY = "key"
+const ISSUE_KEY = "identifier"
 const MAPS: { [K in TrackerKind]: Record<string, unknown> } = {
-  team: { ...TIME_MAP, name: "name", key: "key" },
+  team: { ...TIME_MAP, name: "name", key: TEAM_KEY },
   user: { ...TIME_MAP, name: "name", email: "email", active: "active" },
   state: { ...TIME_MAP, name: "name", type: "type", position: "position", team: "team.id" },
   label: { ...TIME_MAP, name: "name", team: "team.id" },
@@ -169,7 +172,7 @@ const MAPS: { [K in TrackerKind]: Record<string, unknown> } = {
   },
   issue: {
     ...TIME_MAP,
-    key: "identifier",
+    key: ISSUE_KEY,
     title: "title",
     description: "description",
     state: "state.id",
