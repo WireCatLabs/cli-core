@@ -378,12 +378,12 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     }
   }
 
-  return { operations, left, baseUrlOf, defaults, exchange, operationOf, signed, write }
+  return { operations, left, baseUrlOf, defaults, exchange, operationOf, readsFreely, signed, write }
 }
 
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const { app, configuration } = options
-  const { operations, baseUrlOf, exchange, operationOf, signed, write } = serviceApiCore(options)
+  const { operations, baseUrlOf, exchange, operationOf, readsFreely, signed, write } = serviceApiCore(options)
   const send = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) =>
     (await exchange(command, operation, request)).answer
   let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
