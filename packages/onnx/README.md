@@ -6,9 +6,10 @@
   about 15 MB instead of the 145 MB package that also carries every browser build.
 - **Native**, 2–3× faster, on Linux x64 and arm64 (glibc), macOS arm64 and Windows x64 and arm64:
   `onnxruntime-node`'s JavaScript and the 0.3–0.4 MB binding of each of those systems, without its libraries.
-  `@wirecat/cli-core` downloads the library beside a copy of the binding, which loads it from its own folder: from Microsoft's release of
-  the same version, and on Windows from `onnxruntime-node`'s own npm tarball, because the Windows binding needs the
-  DirectML build of `onnxruntime.dll` (export ordinal 4) that Microsoft's CPU release does not carry.
+  `@wirecat/cli-core` downloads the library beside a copy of the binding, which loads it from its own folder: from
+  Microsoft's NuGet package of the same version, and on Windows from `onnxruntime-node`'s own npm tarball, because the
+  Windows binding needs the DirectML build of `onnxruntime.dll` (export ordinal 4) that Microsoft's CPU release does
+  not carry.
 
 ```js
 import { env, InferenceSession, Tensor } from "@wirecat/cli-core-onnx" // WebAssembly

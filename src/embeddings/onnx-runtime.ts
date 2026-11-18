@@ -11,7 +11,7 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
-import { gunzipSync } from "fflate"
+import { gunzipSync, inflateSync } from "fflate"
 import { type Fetch, installFiles, megabytes, sharedModelsDirectory } from "../speech/install.js"
 import type { ModelFile } from "../speech/models.js"
 
@@ -21,13 +21,22 @@ export const ONNX_RUNTIME_VERSION = "1.30.0"
 export interface NativeRuntime {
   readonly target: string
   readonly archive: ModelFile
-  readonly member: string
+  /** The library's path in a tar archive; absent when `archive` is the library alone, deflated, out of a zip. */
+  readonly member?: string
   readonly library: { name: string; sha256: string; bytes: number }
 }
 
-const release = (name: string, sha256: string, bytes: number): ModelFile => ({
-  name,
-  url: `https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_RUNTIME_VERSION}/${name}`,
+const NUGET = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime"
+
+/**
+ * One library out of Microsoft's NuGet package, fetched alone by where its deflated bytes sit in the 157 MB zip: a
+ * version on nuget.org never changes, and the package signature, which nuget.org may replace, is its last file.
+ * Microsoft's GitHub releases went away on 17.11.2026.
+ */
+const nuget = (target: string, offset: number, sha256: string, bytes: number): ModelFile => ({
+  name: `onnxruntime-${ONNX_RUNTIME_VERSION}-${target}.deflate`,
+  url: `${NUGET}/${ONNX_RUNTIME_VERSION}/microsoft.ml.onnxruntime.${ONNX_RUNTIME_VERSION}.nupkg`,
+  offset,
   sha256,
   bytes,
 })
@@ -46,12 +55,12 @@ const npmTarball: ModelFile = {
 /** The systems the native-runtime workflow runs natively; elsewhere, and on musl, the models run through WebAssembly. */
 const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
   "linux-x64": {
-    archive: release(
-      "onnxruntime-linux-x64-1.30.0.tgz",
-      "a5ed5a3cac51fbb2e90da632ae43d19212faaa20e76484e62bcb7c23ddb3b3fd",
-      11_306_877,
+    archive: nuget(
+      "linux-x64",
+      121_160_280,
+      "6f7d1ee67f9c7d3e5d1b009492aef02d2833ba16a4a896b71438b20abfe4293a",
+      11_061_061,
     ),
-    member: "onnxruntime-linux-x64-1.30.0/lib/libonnxruntime.so.1.30.0",
     library: {
       name: "libonnxruntime.so.1",
       sha256: "245a6f8c38127551057a1cd1ffd59f0a186a227ade4f3492dea2494eb565542e",
@@ -59,12 +68,12 @@ const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
     },
   },
   "linux-arm64": {
-    archive: release(
-      "onnxruntime-linux-aarch64-1.30.0.tgz",
-      "e16a27a8ed330bbc698df7330b0cf56e722f354e3bcc92118682c74ef3c3e3da",
-      10_269_495,
+    archive: nuget(
+      "linux-arm64",
+      111_131_974,
+      "4e8adcdf8582ff74925989b0e009efa808723b23ec297eae4acaababe0ffad8f",
+      10_026_119,
     ),
-    member: "onnxruntime-linux-aarch64-1.30.0/lib/libonnxruntime.so.1.30.0",
     library: {
       name: "libonnxruntime.so.1",
       sha256: "64e903a43a041240fd6bcffe0ac6d4fea47ef87bf24b9d097801bd00a9612a4b",
@@ -72,15 +81,15 @@ const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
     },
   },
   "darwin-arm64": {
-    archive: release(
-      "onnxruntime-osx-arm64-1.30.0.tgz",
-      "6ebb5062a934537c352937821f9fe9718e7de1a2db1122a93dd363ffd53a7012",
-      42_373_116,
+    archive: nuget(
+      "osx-arm64",
+      132_223_187,
+      "d9f60cc9c7af596e5114a0dbb3afdc62eaa93de0236ce6e6aa4500ace7b39c0a",
+      12_536_089,
     ),
-    member: "onnxruntime-osx-arm64-1.30.0/lib/libonnxruntime.1.30.0.dylib",
     library: {
       name: "libonnxruntime.1.dylib",
-      sha256: "bcc9110f9d638a119de2db7afb3ba9a1da8085f0cb3401e1c48ae1caf450b6fa",
+      sha256: "bffaa6ef856dba2c26f09c7c0e7018fd1562625f3485292c7ad28b83748c6879",
       bytes: 43_879_424,
     },
   },
@@ -143,9 +152,9 @@ const isInstalled = (runtime: NativeRuntime, folder: string): boolean =>
   sizeOf(join(folder, runtime.library.name)) === runtime.library.bytes && sizeOf(join(folder, BINDING)) !== undefined
 
 /**
- * The library this system's binding links to, out of Microsoft's release archive, checked against its own sha256
- * and placed beside a copy of the binding, which loads it from its own folder. Only from `models download`: a search
- * never downloads. `undefined` when this system runs models through WebAssembly only.
+ * The library this system's binding links to, out of Microsoft's NuGet package or onnxruntime-node's npm tarball,
+ * checked against its own sha256 and placed beside a copy of the binding, which loads it from its own folder. Only
+ * from `models download`: a search never downloads. `undefined` when this system runs models through WebAssembly only.
  */
 export const installNativeRuntime = async ({
   env = process.env,
@@ -175,7 +184,8 @@ export const installNativeRuntime = async ({
   try {
     const archive = join(staging, runtime.archive.name)
     await installFiles([[runtime.archive, archive]], { ...(fetch ? { fetch } : {}), progress })
-    const library = tarMember(gunzipSync(readFileSync(archive)), runtime.member)
+    const bytes = readFileSync(archive)
+    const library = runtime.member ? tarMember(gunzipSync(bytes), runtime.member) : inflateSync(bytes)
     rmSync(archive)
     const sha256 = library && createHash("sha256").update(library).digest("hex")
     if (!library || library.length !== runtime.library.bytes || sha256 !== runtime.library.sha256)
