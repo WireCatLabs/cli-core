@@ -9,7 +9,8 @@
 //
 //   bin/publish-onnxruntime            build and pack into packages/onnxruntime/
 //   bin/publish-onnxruntime --publish  the same, then publish; the npm token comes from the keyring
-//                                      (secret-tool lookup service npm account leemour) or NPM_TOKEN
+//                                      (secret-tool lookup service npm account leemour) or NPM_TOKEN, else
+//                                      your own npm login, confirmed in the browser for each package
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
@@ -175,10 +176,10 @@ if (!token) {
     }).trim()
   } catch {}
 }
-if (!token) fail("no npm token: export NPM_TOKEN, or: secret-tool store --label=npm service npm account leemour")
-const npmrc = join(OUT, ".npmrc")
+// Without a token, npm uses your own `npm login` and asks you to confirm each publish in the browser.
+const npmrc = token ? join(OUT, ".npmrc") : undefined
 // The config names the variable, not the value: the token stays in this process's environment.
-writeFileSync(npmrc, "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n", { mode: 0o600 })
+if (npmrc) writeFileSync(npmrc, "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n", { mode: 0o600 })
 try {
   for (const { name, tarball } of packed) {
     let published = false
@@ -190,11 +191,11 @@ try {
       console.log(`${name}@${VERSION} is already on npm`)
       continue
     }
-    execFileSync("npm", ["publish", tarball, "--access", "public", "--userconfig", npmrc], {
+    execFileSync("npm", ["publish", tarball, "--access", "public", ...(npmrc ? ["--userconfig", npmrc] : [])], {
       stdio: "inherit",
-      env: { ...process.env, NPM_TOKEN: token },
+      env: token ? { ...process.env, NPM_TOKEN: token } : process.env,
     })
   }
 } finally {
-  rmSync(npmrc, { force: true })
+  if (npmrc) rmSync(npmrc, { force: true })
 }
