@@ -11,11 +11,17 @@ export type MirrorWatchEvent<T> =
   | { triggers: MirrorTrigger[]; mirrors: string[]; result: T }
   | { triggers: MirrorTrigger[]; mirrors: string[]; error: CliError }
 
-export interface MirrorWatchOptions<S> {
+/**
+ * How a watch tells which mirrors' local files differ from their state: a document push's kinds and state, or the
+ * engine's own check.
+ */
+export type MirrorLocalCheck<S> =
+  | { kindOf(path: string): string | undefined; stateOf(mirror: Mirror): PushStatePort<S> }
+  | { localChanges(mirrors: Mirror[]): Promise<string[]> }
+
+export type MirrorWatchOptions<S> = MirrorLocalCheck<S> & {
   mirrors: Mirror[]
   signal: AbortSignal
-  kindOf(path: string): string | undefined
-  stateOf(mirror: Mirror): PushStatePort<S>
   /** Ids of the mirrors whose remote files changed since the last call, or `all` when the provider cannot tell. */
   remoteChanges?(signal: AbortSignal): Promise<string[] | "all">
   pollMs?: number
@@ -87,6 +93,7 @@ export async function* watchMirrors<S, T>(
   const differs = async (ids: Iterable<string>) => {
     const chosen = [...ids].flatMap((id) => byId.get(id) ?? [])
     try {
+      if ("localChanges" in options) return await options.localChanges(chosen)
       const items = await mirrorStatus(chosen, options.kindOf, options.stateOf)
       return items.filter((item) => item.create.length || item.update.length).map((item) => item.id)
     } catch {

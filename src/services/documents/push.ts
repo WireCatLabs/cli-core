@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto"
-import { createReadStream } from "node:fs"
-import { chmod, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { createReadStream, createWriteStream } from "node:fs"
+import { chmod, link, lstat, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, posix } from "node:path"
+import { pipeline } from "node:stream/promises"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
   ConflictPart,
@@ -28,10 +29,7 @@ export interface PushOptions<S> {
   recreate?: boolean
   dryRun?: boolean
   /** Runs one remote write behind the provider's permission checks and write journal. */
-  guard<T>(
-    attempt: { action: "create" | "update" | "folder"; path: string; operationId: string },
-    act: () => Promise<T>,
-  ): Promise<T>
+  guard<T>(attempt: { action: MirrorAction; path: string; operationId: string }, act: () => Promise<T>): Promise<T>
   operationId(): string
   errorOf(error: unknown): CliError
   assertHeld(): void
@@ -39,14 +37,19 @@ export interface PushOptions<S> {
   maxFiles?: number
   now?(): number
 }
+/** What a mirror's write does; the guard maps it to the app's permission keys. */
+export type MirrorAction = "create" | "update" | "folder" | "delete" | "move"
 export interface PushConflict {
   path: string
-  url: string
+  /** The remote file's address, when the provider has one. */
+  url?: string
   reason: string
   parts?: ConflictPart[]
   localChangedAt?: string
   remoteChangedAt?: string
   remoteChangedBy?: string
+  localSize?: number
+  remoteSize?: number
 }
 export interface PushResult {
   created: string[]
@@ -68,49 +71,154 @@ const SKIPPED = /^(\.|node_modules$|~\$)|(~|\.swp|\.tmp)$/
 /** Hidden files, `node_modules` and editor leftovers: never mirrored, and never a reason to sync. */
 export const skippedName = (name: string): boolean => SKIPPED.test(name)
 
-const hashFile = (path: string): Promise<string> =>
+/** The sha256 and md5 of a file, read as a stream: a file of any size takes the same memory. */
+export const hashFile = (path: string): Promise<{ sha256: string; md5: string }> =>
   new Promise((done, fail) => {
-    const hash = createHash("sha256")
+    const sha256 = createHash("sha256")
+    const md5 = createHash("md5")
     createReadStream(path)
-      .on("data", (chunk) => hash.update(chunk))
+      .on("data", (chunk) => {
+        sha256.update(chunk)
+        md5.update(chunk)
+      })
       .on("error", fail)
-      .on("end", () => done(hash.digest("hex")))
+      .on("end", () => done({ sha256: sha256.digest("hex"), md5: md5.digest("hex") }))
   })
 
-const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
+/**
+ * Puts `from` at `to` only while `to` is absent: a hard link, or a copy into a file this call creates exclusively
+ * where the file system has no hard links (exFAT, FAT, many FUSE and SMB mounts) or `to` is on another device. Fails
+ * with `EEXIST` when `to` exists; `from` stays for the caller to remove.
+ */
+export const placeNew = async (from: string, to: string) => {
+  try {
+    await link(from, to)
+    return
+  } catch (error) {
+    if (!["EPERM", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "ENOSYS"].includes((error as NodeJS.ErrnoException).code ?? ""))
+      throw error
+  }
+  const { mode } = await stat(from)
+  let created = false
+  // "wx" fails with EEXIST before anything exists, so only a file this call opened is ever removed.
+  const into = createWriteStream(to, { flags: "wx" }).once("open", () => {
+    created = true
+  })
+  try {
+    await pipeline(createReadStream(from), into)
+    await chmod(to, mode & 0o777)
+  } catch (error) {
+    if (created) await rm(to, { force: true })
+    throw error
+  }
+}
 
 /**
- * Replaces the file through a temporary file beside it, keeping its mode. Undefined, and nothing written, when
- * the file no longer has `hash`: someone saved it during the sync.
+ * A relative path whose every segment names one entry: none empty, `.` or `..`, none with NUL, and on Windows,
+ * where it separates folders, none with a backslash.
  */
-const replaceLocal = async (file: LocalDocument, content: string): Promise<string | undefined> => {
-  const temp = join(dirname(file.absolute), `.${basename(file.absolute)}.${randomUUID().slice(0, 8)}.tmp`)
-  const { mode } = await stat(file.absolute)
-  await writeFile(temp, content, { flag: "wx" })
+export const safePath = (path: string, platform: NodeJS.Platform = process.platform): boolean =>
+  path
+    .split("/")
+    .every(
+      (part) =>
+        part !== "" &&
+        part !== "." &&
+        part !== ".." &&
+        !part.includes("\0") &&
+        !(platform === "win32" && part.includes("\\")),
+    )
+
+/**
+ * Refuses a write at `path` under `root` when a folder on the way, or the file itself, is a symbolic link: a write
+ * would follow it out of the mirrored folder. A part that does not exist yet ends the check.
+ */
+export const assertNoLink = async (root: string, path: string) => {
+  let at = root
+  for (const part of path.split("/")) {
+    at = join(at, part)
+    try {
+      if ((await lstat(at)).isSymbolicLink())
+        throw new CliError("validation_error", `${path} is under a symbolic link; the sync does not follow links`, {
+          reason: "mirror.symlink",
+        })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return
+      throw error
+    }
+  }
+}
+
+/** A hidden temporary file beside `absolute`; `tag` lets a caller find a crash's leftover again. */
+export const localTemp = (absolute: string, tag: string) => join(dirname(absolute), `.${basename(absolute)}.${tag}.tmp`)
+
+/**
+ * Writes `absolute` through a temporary file beside it. With `hash`, the file is replaced only while it still has
+ * that sha256 (someone may have saved it during the sync) and keeps its mode; without, it is created only while
+ * absent. `content` is text, bytes, or a writer that fills the temporary file, for a stream of any size; with
+ * `sha256`, content with another hash is refused before it takes the file's place. `tag` names the temporary file, so
+ * a crash's leftover can be found. Returns the new file's hashes, or undefined, with nothing written, when the file
+ * was not as `hash` said.
+ */
+export const replaceLocal = async (
+  absolute: string,
+  hash: string | undefined,
+  content: string | Uint8Array | ((temp: string) => Promise<void>),
+  { tag = randomUUID().slice(0, 8), sha256 }: { tag?: string; sha256?: string } = {},
+): Promise<{ sha256: string; md5: string } | undefined> => {
+  const temp = localTemp(absolute, tag)
+  const mode = hash === undefined ? undefined : (await stat(absolute)).mode
   try {
+    if (typeof content === "function") await content(temp)
+    else await writeFile(temp, content, { flag: "wx" })
     // A mode passed to the write goes through the umask; set it after, so a group-writable file stays one.
-    await chmod(temp, mode & 0o777)
-    if ((await hashFile(file.absolute)) !== file.hash) return undefined
-    await rename(temp, file.absolute)
+    if (mode !== undefined) await chmod(temp, mode & 0o777)
+    const written = await hashFile(temp)
+    if (sha256 !== undefined && written.sha256 !== sha256)
+      throw new CliError("invalid_response", "the downloaded file has other content than the listing said", {
+        reason: "download.mismatch",
+      })
+    if (hash === undefined) {
+      // A link fails when the name exists, where a rename would replace a file created during the sync.
+      try {
+        await placeNew(temp, absolute)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined
+        throw error
+      }
+      return written
+    }
+    if ((await hashFile(absolute)).sha256 !== hash) return undefined
+    await rename(temp, absolute)
+    return written
   } finally {
     await rm(temp, { force: true })
   }
-  return hashText(content)
 }
 
-/** Files under `root` the target pushes. Hidden files, editor leftovers and symbolic links are never followed. */
+/**
+ * Files under `root` the target pushes. Hidden files, editor leftovers and symbolic links are never followed; the
+ * links' paths are returned in `links`, so a mirror does not take the files behind one as deleted. A file whose size
+ * and mtime match what `known` returns keeps that hash instead of being read again.
+ */
 export const scanLocal = async (
   root: string,
   kindOf: (path: string) => string | undefined,
   maxFiles = 10_000,
-): Promise<{ files: LocalDocument[]; unsupported: number }> => {
+  known?: (path: string) => { size: number; mtimeMs: number; hash: string } | undefined,
+): Promise<{ files: LocalDocument[]; unsupported: number; links: string[] }> => {
   const files: LocalDocument[] = []
+  const links: string[] = []
   let unsupported = 0
   const walk = async (relative: string) => {
     const entries = await readdir(join(root, relative), { withFileTypes: true })
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (SKIPPED.test(entry.name) || entry.isSymbolicLink()) continue
+      if (SKIPPED.test(entry.name)) continue
       const path = relative ? posix.join(relative, entry.name) : entry.name
+      if (entry.isSymbolicLink()) {
+        links.push(path)
+        continue
+      }
       if (entry.isDirectory()) await walk(path)
       else if (entry.isFile()) {
         const kind = kindOf(path)
@@ -123,7 +231,11 @@ export const scanLocal = async (
             reason: "push.too-many-files",
           })
         const absolute = join(root, path)
-        files.push({ path, absolute, kind, hash: await hashFile(absolute) })
+        const { size, mtimeMs } = await stat(absolute)
+        const before = known?.(path)
+        const hash =
+          before && before.size === size && before.mtimeMs === mtimeMs ? before.hash : (await hashFile(absolute)).sha256
+        files.push({ path, absolute, kind, hash, size, mtimeMs })
       }
     }
   }
@@ -133,7 +245,7 @@ export const scanLocal = async (
     if (isCliError(error)) throw error
     throw new CliError("validation_error", "the folder to push could not be read", { reason: "push.unreadable" })
   }
-  return { files, unsupported }
+  return { files, unsupported, links }
 }
 
 /** What a push would do, from the local files and the last push alone: no remote read. */
@@ -298,12 +410,13 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
         // both sides and merges it once.
         if (prepared.local !== undefined) {
           options.assertHeld()
-          const written = await replaceLocal(file, prepared.local)
+          await assertNoLink(root, file.path)
+          const written = await replaceLocal(file.absolute, file.hash, prepared.local)
           if (!written) {
             result.conflicts.push({ path: file.path, url: entry.url, reason: "the local file changed during the sync" })
             continue
           }
-          hash = written
+          hash = written.sha256
           result.pulled.push(file.path)
           if (prepared.remote && prepared.afterLocal !== undefined) {
             state.entries[file.path] = { ...entry, snapshot: prepared.afterLocal, hash }
