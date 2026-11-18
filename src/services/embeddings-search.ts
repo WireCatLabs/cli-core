@@ -271,8 +271,11 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
             fromOwner: true,
             ...(eligibility ? { conversations: eligibility.conversations } : {}),
           })
-          for (const hit of [...found, ...mine]) sources.set(hit.summary.id, one)
-          own.push(...mine)
+          for (const hit of found) sources.set(hit.summary.id, one)
+          for (const hit of mine) {
+            sources.set(hit.summary.id, one)
+            own.push(hit)
+          }
           meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
         }
       })
