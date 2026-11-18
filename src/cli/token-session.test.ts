@@ -4,11 +4,14 @@ import { join } from "node:path"
 import { Readable } from "node:stream"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
-import { afterEach, expect, it } from "vitest"
+import { Command } from "commander"
+import { afterEach, describe, expect, it } from "vitest"
 import { accountFileFor } from "./messenger/accounts.js"
 import { run } from "./program.js"
+import { hostsFetch } from "./service-api-call.js"
+import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
-import { type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
+import { manifestVerify, type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
 
 const app = { command: "pages", appName: "pages-cli", envPrefix: "PAGES", description: "synthetic", version: "1.0.0" }
 const roots: string[] = []
@@ -114,4 +117,68 @@ it("session status --check checks a token from the environment variable, and nev
   expect(status.json.item).toMatchObject({ state: "saved", token_from: "environment", verified: true })
   expect(checked).toEqual(["good-token"])
   expect(JSON.stringify(status.json)).not.toContain("good-token")
+})
+
+describe("manifestVerify", () => {
+  const manifest = {
+    servers: [{ url: "https://api.acme.test/v1" }],
+    securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+    security: [{ bearer: [] }],
+    operations: [
+      { id: "getSelf", command: "get-self", effect: "read", binding: { kind: "http", method: "GET", path: "/self" } },
+    ],
+  } as unknown as ServiceApiManifest
+  const verifying = (answer: unknown, verify: Parameters<typeof manifestVerify>[0]["verify"]) => {
+    const sent: { url: string; authorization: string | null }[] = []
+    const fake = async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init)
+      sent.push({ url: request.url, authorization: request.headers.get("authorization") })
+      return Response.json(answer)
+    }
+    const check = manifestVerify({
+      manifest,
+      service: "Acme",
+      verify,
+      fetch: () => hostsFetch(["api.acme.test"], fake),
+    })
+    return { sent, check: () => check(new Command("start"), "tok-1", () => undefined, undefined) }
+  }
+
+  it("sends the one operation with the token and keeps the id and name the answer holds", async () => {
+    const { sent, check } = verifying(
+      { data: { workspace: 42, title: "Acme Inc" }, active: true },
+      { operation: "getSelf", id: "data.workspace", name: "data.title", active: "active" },
+    )
+    expect(await check()).toEqual({ id: "42", account: { id: "42", name: "Acme Inc" } })
+    expect(sent).toEqual([{ url: "https://api.acme.test/v1/self", authorization: "Bearer tok-1" }])
+  })
+
+  it("leaves out a name that is not text, and asks nothing about activity when the config names no field", async () => {
+    const { check } = verifying({ id: "w1", name: { first: "A" } }, { operation: "getSelf", id: "id", name: "name" })
+    expect(await check()).toEqual({ id: "w1", account: { id: "w1" } })
+    expect(await verifying({ id: "w2" }, { operation: "getSelf", id: "id" }).check()).toEqual({
+      id: "w2",
+      account: { id: "w2" },
+    })
+  })
+
+  it("refuses a token the answer does not call active, as Attio answers a revoked key with 200", async () => {
+    for (const active of [false, null, "yes"])
+      await expect(
+        verifying({ id: "w1", active }, { operation: "getSelf", id: "id", active: "active" }).check(),
+      ).rejects.toMatchObject({ code: "authentication_error" })
+  })
+
+  it("is the service's error when the answer holds no id", async () => {
+    await expect(verifying({ id: null }, { operation: "getSelf", id: "id" }).check()).rejects.toMatchObject({
+      code: "provider_error",
+      details: { reason: "verify.no-id" },
+    })
+  })
+})
+
+it("hostsFetch reaches only its hosts, over the network when no fetch is given", async () => {
+  await expect(hostsFetch(["api.acme.test"], undefined)("https://elsewhere.test/x")).rejects.toThrow(/elsewhere\.test/)
+  const fake = async () => new Response("ok")
+  expect(await (await hostsFetch(["api.acme.test"], fake)("https://api.acme.test/x")).text()).toBe("ok")
 })

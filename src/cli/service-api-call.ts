@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ManifestOperation } from "@wirecat/cli-base/codegen"
-import type { FetchLike } from "@wirecat/cli-base/http"
+import { type FetchLike, hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"
 import type { ApiCommandInput } from "./bot/api.js"
 import { type HttpApiSendOptions, httpApiRequest, httpApiSend } from "./bot/api-http.js"
@@ -25,6 +25,13 @@ export interface ServiceApiCallOptions {
   headers?: (operation: ManifestOperation) => Record<string, string>
   failure?: HttpApiSendOptions["failure"]
 }
+
+/**
+ * A fetch that reaches only `hosts` (WC-CMD-32), over the fetch a test gives in its environment, or the network when
+ * none: a CLI passes `environment.fetch` as it is.
+ */
+export const hostsFetch = (hosts: readonly string[], fetch: FetchLike | undefined): FetchLike =>
+  hostFetch({ hosts, ...(fetch ? { fetch } : {}) })
 
 // The run record and the fetch are the only things httpApiSend asks a command for, and a sync has no command of its own.
 const NO_COMMAND = new Command("source")

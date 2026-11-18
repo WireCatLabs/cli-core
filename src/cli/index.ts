@@ -691,7 +691,7 @@ export {
   serviceApiOperations,
   serviceApiPermissions,
 } from "./service-api.js"
-export { type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
+export { hostsFetch, type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
 export { manifestBaseUrl, type ServiceApiManifest, signRequest, siteValue } from "./service-api-manifest.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
@@ -807,5 +807,11 @@ export {
 } from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export type { TemplatesOptions } from "./templates-command.js"
-export { signedInSite, type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
+export {
+  type ManifestVerifyOptions,
+  manifestVerify,
+  signedInSite,
+  type TokenSessionOptions,
+  tokenSessionCommand,
+} from "./token-session.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

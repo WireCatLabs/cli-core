@@ -74,6 +74,7 @@ const PROVIDER_API: Entry[] = [
   validation("api.unknown-method", "the provider has no method by this name"),
   ["api.disabled", "configuration_error", "the provider's API is turned off for this OAuth project"],
   ["manifest.invalid", "configuration_error", "the source manifest does not match its shape or the generated API"],
+  ["verify.no-id", "provider_error", "the answer to the sign-in check holds no account id where auth.verify says"],
   ["provider.usage-limit", "rate_limited", "the account's usage limit at the provider is reached; wait, do not retry"],
   ["access.denied", "permission_error", "the provider refused this account access to the item"],
   ["item.not-found", "not_found", "the provider has no item by this id, or this account cannot see it"],

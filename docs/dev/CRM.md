@@ -250,6 +250,10 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   `select.max` caps the account's own fields in `{select}`; mapped fields are always asked for.
 - `defineCli` and `parseCliConfig` (`@wirecat/cli-core/manifest`) give the whole CLI's `wirecat.config.ts`: identity,
   API description, sign-in preset, category and this source.
+- `manifestVerify` (`@wirecat/cli-core/cli`) is `tokenSessionCommand`'s `verify` from the config's `auth.verify`: it
+  sends the one operation, refuses a token the answer does not call `active`, and keeps the id and name the answer
+  holds. `hostsFetch(hosts, environment.fetch)` is the fetch for it and the source: only the CLI's hosts, over a test's
+  fake when there is one. A CLI made from the config holds no check of its own.
 - Not yet: deletions named in the answer, a live `list`.
 - `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
   `crmSourceContract`, faults included, against a strict fake of HubSpot's API.
