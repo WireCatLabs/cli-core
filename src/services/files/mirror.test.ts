@@ -578,6 +578,22 @@ describe("syncFileMirror, crash and resume", () => {
     ])
   })
 
+  it("keeps a download's pending entry when a failed copy left a partial file behind", async () => {
+    const context = setup({}, { "a.md": "full content" })
+    const result = await context.sync(undefined, {
+      guard: async () => {
+        put(context.root, "a.md", "full")
+        throw new CliError("provider_error", "the copy failed and its removal too")
+      },
+    })
+    expect(result.errors).toEqual([expect.objectContaining({ path: "a.md" })])
+    expect(context.port.read().pending["a.md"]).toMatchObject({ op: "download", created: true })
+    expect((await context.sync("local")).conflicts).toEqual([
+      expect.objectContaining({ path: "a.md", reason: expect.stringContaining("cut off") }),
+    ])
+    expect(await context.disk.files()).toEqual({ "a.md": "full content" })
+  })
+
   it("clears a download's pending entry when it fails cleanly, an unknown outcome included", async () => {
     for (const code of ["network_error", "outcome_unknown"] as const) {
       const context = setup({}, { "a.md": "a" })
@@ -1001,29 +1017,68 @@ describe("syncFileMirror, local versions", () => {
     expect(versions.list("y")[0]?.available).toBe(true)
   })
 
-  it("keeps the remote content an upload or a trash replaces, downloading only what the store lacks", async () => {
+  it("keeps the remote content an upload replaces, downloading only what the store lacks", async () => {
     const context = await synced()
     put(context.root, "a.md", "1, edited")
-    rmSync(join(context.root, "b.md"))
     await context.versions.keep(join(context.root, "c.md"))
     put(context.root, "c.md", "3, edited")
     context.disk.calls.length = 0
-    expect(await context.sync()).toMatchObject({
-      uploaded: ["a.md", "c.md"],
-      trashed: [{ path: "b.md", side: "remote" }],
-    })
-    expect(context.disk.calls.filter((call) => call.op === "download").map((call) => call.path)).toEqual([
-      "a.md",
-      "b.md",
-    ])
+    expect(await context.sync()).toMatchObject({ uploaded: ["a.md", "c.md"] })
+    expect(context.disk.calls.filter((call) => call.op === "download").map((call) => call.path)).toEqual(["a.md"])
     for (const [path, old] of [
       ["a.md", "1"],
-      ["b.md", "2"],
       ["c.md", "3"],
     ])
       expect(context.versions.list(path as string)).toEqual([
         expect.objectContaining({ old: hashes(old as string).sha256, from: "remote", available: true }),
       ])
+  })
+
+  it("downloads nothing before a remote deletion: the provider's trash holds the content", async () => {
+    const context = await synced()
+    await context.versions.keep(join(context.root, "b.md"))
+    rmSync(join(context.root, "a.md"))
+    rmSync(join(context.root, "b.md"))
+    context.disk.calls.length = 0
+    expect((await context.sync()).trashed).toHaveLength(2)
+    expect(context.disk.calls.filter((call) => call.op === "download")).toEqual([])
+    expect(context.versions.list("a.md")).toEqual([
+      expect.objectContaining({ event: "deleted", from: "remote", oldIn: "remote-trash", available: false }),
+    ])
+    expect(context.versions.list("b.md")[0]).toMatchObject({ old: hashes("2").sha256, available: true })
+    expect(context.versions.list("b.md")[0]).not.toHaveProperty("oldIn")
+  })
+
+  it("keeps the remote side of --keep both from the server when the copy was edited before it was kept", async () => {
+    const context = await synced()
+    put(context.root, "a.md", "mine")
+    context.disk.write("a.md", "theirs")
+    const keep = context.versions.keep
+    const versions = {
+      ...context.versions,
+      keep: (source: string | ((temp: string) => Promise<void>)) => {
+        if (typeof source === "string" && source.includes("(conflict")) writeFileSync(source, "edited copy")
+        return keep(source)
+      },
+    }
+    context.disk.calls.length = 0
+    await context.sync("both", { versions })
+    expect(context.disk.calls.filter((call) => call.op === "download")).toHaveLength(2)
+    expect(context.versions.has(hashes("theirs").sha256)).toBe(true)
+  })
+
+  it("reports a full disk while a remote version is downloaded as mirror.version-not-kept", async () => {
+    const versions = fileVersions(temp("file-mirror-full-"), () => TODAY)
+    await expect(
+      versions.keep(async () => {
+        throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" })
+      }),
+    ).rejects.toMatchObject({ code: "provider_error", details: { reason: "mirror.version-not-kept" } })
+    await expect(
+      versions.keep(async () => {
+        throw new CliError("network_error", "the connection dropped")
+      }),
+    ).rejects.toMatchObject({ code: "network_error" })
   })
 
   it("keeps the remote side of --keep both from its local copy, with no second download", async () => {

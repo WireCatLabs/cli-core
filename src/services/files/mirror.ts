@@ -39,8 +39,8 @@ export interface FileMirrorOptions {
   target: FileTarget
   state: FileMirrorStatePort
   /**
-   * Keeps every content before the sync overwrites or deletes it, on either side (a remote one is downloaded first
-   * unless the store has it), and logs each change.
+   * Keeps every content before the sync overwrites or deletes it (a remote one an upload replaces is downloaded first
+   * unless the store has it; a remote deletion leaves it in the provider's trash), and logs each change.
    */
   versions: FileVersions
   principal: string
@@ -255,6 +255,15 @@ const linkFree = (root: string, path: string) =>
       throw error
     },
   )
+
+/** True when the file at `absolute` is missing or has one of `hashes`: no partial copy is left there. */
+const whole = async (absolute: string, hashes: (string | undefined)[]) => {
+  try {
+    return hashes.includes((await hashFile(absolute)).sha256)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+  }
+}
 
 /** True when `path` is `link` or lies under it. */
 const under = (path: string, link: string) => path === link || path.startsWith(`${link}/`)
@@ -507,7 +516,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   }
 
   /**
-   * Keeps the remote content a write will replace or trash, downloaded through the store unless it holds it already.
+   * Keeps the remote content an upload will replace, downloaded through the store unless it holds it already.
    * Refused as `mirror.remote-changed` when the remote no longer has the listed content.
    */
   const keepRemote = async (path: string, file: RemoteFile) => {
@@ -553,7 +562,6 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     const absolute = join(root, path)
     let written: { sha256: string } | undefined
     let old: string | undefined
-    // Any failure the process lives through leaves no partial file: the temporary file is removed on the way out.
     try {
       await assertNoLink(root, path)
       await mkdir(dirname(absolute), { recursive: true })
@@ -569,9 +577,13 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           }),
         operationId,
       )
-    } finally {
-      delete state.pending[path]
+    } catch (error) {
+      // A failed copy into place removes what it wrote; should that removal fail too, the marker keeps the partial
+      // file from being sent or overwritten.
+      if (await whole(absolute, [file.sha256, over?.hash])) delete state.pending[path]
+      throw error
     }
+    delete state.pending[path]
     if (!written) return false
     if (recorded) record(path, file, await stat(absolute), written.sha256)
     versions.log({
@@ -610,7 +622,6 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         return
       case "trash-remote":
         if (!there) return
-        await keepRemote(path, there)
         await write("delete", "remote", path, () =>
           target.trash(
             remotePath(path),
@@ -626,6 +637,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           direction: "local-to-remote",
           old: there.sha256 as string,
           from: "remote",
+          // Not downloaded to be kept: the provider's trash holds it, and a deleted folder may be large.
+          ...(versions.has(there.sha256 as string) ? {} : { oldIn: "remote-trash" as const }),
           size: there.size,
         })
         result.trashed.push({ path, side: "remote" })
@@ -659,7 +672,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         // recorded only by its upload: recorded earlier, a failed upload would make it look deleted remotely.
         const copy = copyName(path, options.remote, date, (name) => local.has(name) || remote.has(name))
         if (!(await download(copy, there, undefined, false))) return changedHere(step)
-        await versions.keep(join(root, copy))
+        if ((await versions.keep(join(root, copy))) !== there.sha256) await keepRemote(path, there)
         await upload(path, here, expectOf(there), false)
         const { size, mtimeMs } = await stat(join(root, copy))
         const copied = { ...here, path: copy, absolute: join(root, copy), hash: there.sha256 as string, size, mtimeMs }

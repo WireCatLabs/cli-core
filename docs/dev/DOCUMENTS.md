@@ -369,12 +369,13 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 6. A crash at any step is settled by the next run's listing: the same content on both sides is adopted, a file gone
    from both is forgotten, so nothing is written twice and nothing is lost. `pending` in the state only names a
    download's temporary file, removed at the next start, and a write that ended `outcome_unknown`, which is never
-   retried within the run. A download that fails while the process lives clears its entry. The leftover temporary
-   file is removed only after the same symbolic-link check as any write; one under a link is left. A download of a
-   new file whose copy into place was cut off may leave a partial file under its name (`pending` says `created`): while
-   that file has neither the remote's nor the last sync's content, its entry stays and the path is a conflict whatever
-   `keep` says; moving the file away lets the next run download it. A download that replaced a file renames it into
-   place whole, so it is never taken as cut off. The state is saved at most once a second and at the end.
+   retried within the run. A download that fails while the process lives clears its entry once the file is missing or
+   whole (the remote's or the replaced content); a partial copy that could not be removed keeps it. The leftover
+   temporary file is removed only after the same symbolic-link check as any write; one under a link is left. A
+   download of a new file whose copy into place was cut off may leave a partial file under its name (`pending` says
+   `created`): while that file has neither the remote's nor the last sync's content, its entry stays and the path is
+   a conflict whatever `keep` says; moving the file away lets the next run download it. A download that replaced a
+   file renames it into place whole, so it is never taken as cut off. The state is saved at most once a second and at the end.
 7. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
    root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
    with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
@@ -394,12 +395,15 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
 `<dir>/objects/<sha256>`: the local file before a pull, `keep: "remote"` or a crossed deletion, and the remote file
-before an upload replaces it or a deletion trashes it. A remote content the store lacks is downloaded into the store
-first (`keep` takes a writer, such as the target's `download`); one whose hash no longer matches the listing fails
-the file with `mirror.remote-changed`, a conflict. `keep: "both"` keeps the remote side from its local copy. When the
-store cannot keep a content, the file fails with `mirror.version-not-kept` and nothing is replaced. Each change is
-appended to `<dir>/log.jsonl`: path, event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash,
-`from` (the side `old` was kept from), size and time. Retention is one rule, applied after each sync under its lock:
+before an upload replaces it. A remote content the store lacks is downloaded into the store first (`keep` takes a
+writer, such as the target's `download`); one whose hash no longer matches the listing fails the file with
+`mirror.remote-changed`, a conflict. `keep: "both"` keeps the remote side from its local copy, or from the remote
+when the copy was edited meanwhile. A remote deletion downloads nothing: the provider's trash holds the content, and
+deleting a large folder must not fetch it all. Its log event names the hash, and says `oldIn: "remote-trash"` when the
+store does not hold it. When the store cannot keep a content (a full disk during the download included), the file
+fails with `mirror.version-not-kept` and nothing is replaced. Each change is appended to `<dir>/log.jsonl`: path,
+event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash, `from` (the side `old` was kept
+from), size and time. Retention is one rule, applied after each sync under its lock:
 a content stays while a log event newer than 30 days names it, and the last content of a path whose newest event is
 a deletion stays for good. A content no event names (a crash between keeping it and logging the change) stays 30
 days after it was last kept; one that vanishes while prune runs is skipped. Call `versions.prune()` only under the

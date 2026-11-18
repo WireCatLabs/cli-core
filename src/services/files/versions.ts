@@ -21,6 +21,8 @@ export interface VersionEvent {
   old?: string
   /** The side `old` was kept from. */
   from?: "local" | "remote"
+  /** Where `old` is when the store does not hold it: a remote deletion leaves it in the provider's trash. */
+  oldIn?: "remote-trash"
   new?: string
   size?: number
   /** A rename's new path. */
@@ -36,7 +38,8 @@ export interface FileVersions {
   /**
    * Copies a content into the store before the sync overwrites or deletes it; returns the hash of what it copied. The
    * source is a local file, or a writer that creates the temporary file it is given, such as a target's `download`.
-   * A failure of the store itself is `mirror.version-not-kept`; the writer's own errors pass through.
+   * A failure of the store itself, the writer's local file-system errors (a full disk) included, is
+   * `mirror.version-not-kept`; the writer's other errors pass through.
    */
   keep(source: string | ((temp: string) => Promise<void>)): Promise<string>
   /** Whether the store holds this content. */
@@ -55,14 +58,21 @@ export interface FileVersions {
 
 const RETAIN_MS = 30 * 24 * 60 * 60 * 1000
 
+/** Errors of the local file system: a writer that fails with one could not write the store, whatever it was reading. */
+const LOCAL_FAILURES = new Set(["ENOSPC", "EDQUOT", "EROFS", "EACCES", "EPERM", "EIO", "EFBIG", "EMFILE", "ENFILE"])
+
+const notKept = (error: unknown) => {
+  const why = (error as NodeJS.ErrnoException).code ?? String(error)
+  return new CliError("provider_error", `the earlier content could not be kept (${why}); nothing was replaced`, {
+    reason: "mirror.version-not-kept",
+  })
+}
+
 const stored = async <T>(act: () => Promise<T>): Promise<T> => {
   try {
     return await act()
   } catch (error) {
-    const why = (error as NodeJS.ErrnoException).code ?? String(error)
-    throw new CliError("provider_error", `the earlier content could not be kept (${why}); nothing was replaced`, {
-      reason: "mirror.version-not-kept",
-    })
+    throw notKept(error)
   }
 }
 
@@ -112,7 +122,10 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
       try {
         let sha256: string
         if (typeof source === "function") {
-          await source(temp)
+          await source(temp).catch((error: unknown) => {
+            if (LOCAL_FAILURES.has((error as NodeJS.ErrnoException).code ?? "")) throw notKept(error)
+            throw error
+          })
           sha256 = await stored(async () => (await hashFile(temp)).sha256)
         } else sha256 = await stored(() => copyHashed(source, temp))
         await stored(async () => {
