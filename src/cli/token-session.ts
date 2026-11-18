@@ -166,7 +166,10 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     if (login?.includes(":")) throw new CliError("validation_error", "a user name with a colon cannot sign in")
     refuseOffline(this, service)
     const page = options.login?.page?.(site)
-    if (page) renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
+    const input = secretInputOf(this).input ?? process.stdin
+    // Only a person at a terminal pastes it; piped in, the note would stand before the answer on stderr.
+    if (page && (input as { isTTY?: boolean }).isTTY)
+      renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
     // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
     const secret = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
     if (!secret) throw new CliError("validation_error", `no ${word} was given`)
