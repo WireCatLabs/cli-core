@@ -359,6 +359,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
       const rows = rawsOf(items === undefined ? answer : at(answer, items))
       const all = pagination?.style === "offset" ? rows : rows.slice(offset, offset + size)
       // A short page is not the last: a service may cap a page below the size asked for; only an empty one ends it.
+      // That costs one request past the last row, which losing the rows past a cap would not repay.
       return { rows: all, more: pagination?.style === "offset" ? rows.length > 0 : rows.length > offset + size }
     })
     return { ...page, items: await mapped(kind, page.items, defined, send) }

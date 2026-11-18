@@ -254,7 +254,12 @@ const customOf = (
   if (!isRaw(under)) return undefined
   const values: CrmRaw = {}
   for (const field of defined) {
-    const value = custom.typed ? typedOf(under[field.code], custom.typed) : under[field.code]
+    const typed = custom.typed ? typedOf(under[field.code], custom.typed) : undefined
+    const value = !custom.typed
+      ? under[field.code]
+      : field.multiple && typed !== null && !Array.isArray(typed)
+        ? [typed]
+        : typed
     if (value === null || value === undefined || value === "") continue
     values[field.code] = field.multiple && custom.split && typeof value === "string" ? value.split(custom.split) : value
   }

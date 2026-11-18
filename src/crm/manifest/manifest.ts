@@ -350,6 +350,14 @@ export const parseCrmManifest = (input: unknown, api: ServiceApiManifest): CrmMa
       if (kind !== "person" && kind !== "organization")
         throw invalid(`entities.${kind}.search`, "only contacts and companies are read live")
       checkCall(`entities.${kind}.search`, one.search, true)
+      for (const [name, live] of [
+        ["search", one.search],
+        ["list", one.list],
+      ] as const) {
+        const style = operations.get(live.operation)?.pagination?.style
+        if (style !== undefined && style !== "offset")
+          throw invalid(`entities.${kind}.${name}`, `a live list pages by offset or not at all, not by ${style}`)
+      }
       if (!hasPlaceholder([one.search.path, one.search.query, one.search.body], "{query}"))
         throw invalid(`entities.${kind}.search`, 'no "{query}" in its path, query or body')
     }

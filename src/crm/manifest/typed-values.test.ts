@@ -55,7 +55,10 @@ const definitions: Record<string, SchemaNode> = {
     { data: list(obj({ id: obj({ status_id: str }), title: str, celebration_enabled: bool, is_archived: bool })) },
     ["data"],
   ),
-  Attributes: obj({ data: list(obj({ api_slug: str, title: str, type: str, is_system_attribute: bool })) }, ["data"]),
+  Attributes: obj(
+    { data: list(obj({ api_slug: str, title: str, type: str, is_system_attribute: bool, is_multiselect: bool })) },
+    ["data"],
+  ),
 }
 
 const path = (name: string) => ({ name, in: "path", required: true, schema: str }) as const
@@ -82,6 +85,12 @@ const api: ServiceApiManifest = {
         limit: { in: "body", name: "limit" },
         items: "data",
       },
+    }),
+    op("scroll", "POST", "/v2/objects/{object}/records/scroll", {
+      parameters: [path("object")],
+      request: { required: false, confidence: "contract", schema: "Query" },
+      response: { confidence: "contract", schema: "Records" },
+      pagination: { style: "cursor", cursor: { in: "body", name: "after" }, next: "next", items: "data" },
     }),
     op("get", "GET", "/v2/objects/{object}/records/{record_id}", {
       parameters: [path("object"), path("record_id")],
@@ -110,7 +119,7 @@ const records = (object: string, filter: unknown) => ({
 
 const attributes = (object: string) => ({
   call: { operation: "attributes", path: { object }, items: "data" },
-  map: { code: "api_slug", label: "title", type: "type" },
+  map: { code: "api_slug", label: "title", type: "type", multiple: "is_multiselect" },
   keep: { path: "is_system_attribute", is: false },
 })
 
@@ -250,7 +259,7 @@ describe("Attio's shapes", () => {
     ])
   })
 
-  it("keeps the current entry of each own attribute, a list when several are current, and skips built-in ones", async () => {
+  it("keeps the current entries of each own attribute, a list for a multi-select or several, and skips built-in ones", async () => {
     const deal = {
       id: { record_id: "d1" },
       values: {
@@ -261,7 +270,11 @@ describe("Attio's shapes", () => {
         ],
         tags: [
           { ...current, attribute_type: "select", option: { title: "A" } },
-          { ...current, attribute_type: "select", option: { title: "B" } },
+          { ...replaced, attribute_type: "select", option: { title: "B" } },
+        ],
+        regions: [
+          { ...current, attribute_type: "select", option: { title: "EU" } },
+          { ...current, attribute_type: "select", option: { title: "US" } },
         ],
         budget: [{ ...current, attribute_type: "currency", currency_value: 900 }],
       },
@@ -271,7 +284,8 @@ describe("Attio's shapes", () => {
         data: [
           { api_slug: "name", title: "Name", type: "text", is_system_attribute: true },
           { api_slug: "priority", title: "Priority", type: "select", is_system_attribute: false },
-          { api_slug: "tags", title: "Tags", type: "select", is_system_attribute: false },
+          { api_slug: "tags", title: "Tags", type: "select", is_system_attribute: false, is_multiselect: true },
+          { api_slug: "regions", title: "Regions", type: "select", is_system_attribute: false },
           { api_slug: "budget", title: "Budget", type: "currency", is_system_attribute: false },
         ],
       }),
@@ -281,7 +295,8 @@ describe("Attio's shapes", () => {
     const [item] = "items" in page ? page.items : []
     expect(item?.metadata).toEqual({
       priority: { label: "Priority", value: "High" },
-      tags: { label: "Tags", value: ["A", "B"] },
+      tags: { label: "Tags", value: ["A"] },
+      regions: { label: "Regions", value: ["EU", "US"] },
       budget: { label: "Budget", value: 900 },
     })
   })
@@ -306,7 +321,7 @@ describe("Attio's shapes", () => {
     expect(isCliError(refused) && refused.code).toBe("validation_error")
   })
 
-  it("refuses a search without {query}, one on a deal, and a stage group without a flat list", () => {
+  it("refuses a search without {query}, one on a deal, one that pages by cursor, and a stage group without a flat list", () => {
     const person = MANIFEST.entities.person as NonNullable<CrmManifest["entities"]["person"]>
     const refused = (manifest: unknown) => {
       try {
@@ -333,6 +348,15 @@ describe("Attio's shapes", () => {
         pipelines: { deal: { ...pipeline, stages: { ...pipeline.stages, each: "data", pipeline: "pipeline" } } },
       }),
     ).toContain("groups stages only when the call answers them")
+    expect(
+      refused({
+        ...MANIFEST,
+        entities: {
+          ...MANIFEST.entities,
+          person: { ...person, search: { ...person.search, operation: "scroll" } },
+        },
+      }),
+    ).toContain("a live list pages by offset or not at all, not by cursor")
   })
 
   it("hands extend the service call, so a hook can read what the manifest does not", async () => {

@@ -116,8 +116,10 @@ const fixedOf = (value: unknown, trail: readonly string[] = []): [string, string
   return [[trail.join("."), value as string | number | boolean]]
 }
 
-const fixedCount = (call: CrmOperationCall) =>
-  fixedOf(call.path).length + fixedOf(call.query).length + fixedOf(call.body).length
+const fixedCount = (call: CrmOperationCall, paging: (where: "query" | "body", key: string) => boolean) =>
+  fixedOf(call.path).length +
+  fixedOf(call.query).filter(([key]) => !paging("query", key)).length +
+  fixedOf(call.body).filter(([key]) => !paging("body", key)).length
 
 interface Route {
   call: CrmOperationCall
@@ -318,7 +320,11 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       const won =
         typeof outcome === "object" && "path" in outcome ? [outcome.won?.[0], outcome.lost?.[0]][n - 1] : undefined
       if (won !== undefined && typeof outcome === "object" && "path" in outcome)
-        put(stage, outcome.path, won === "true" ? true : won === "false" ? false : won, stageNode)
+        for (const value of won === "true" || won === "false" ? [won === "true", won] : [won]) {
+          // A flag the schema keeps as a boolean takes one; a text field the word.
+          put(stage, outcome.path, value, stageNode)
+          if (at(stage, outcome.path) === value) break
+        }
       if (flat && spec.stages.pipeline) put(stage, spec.stages.pipeline, id, stageNode)
       return stage
     })
@@ -444,7 +450,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       .filter((route) => matches(route, call) && (!route.query || readPlace(call, route.query) !== undefined))
       .sort(
         (a, b) =>
-          fixedCount(b.call) - fixedCount(a.call) ||
+          fixedCount(b.call, (where, key) => paging(b.call.operation, where, key)) -
+            fixedCount(a.call, (where, key) => paging(a.call.operation, where, key)) ||
           Number(!!b.query) - Number(!!a.query) ||
           Number(!!a.since) - Number(!!b.since),
       )[0]
