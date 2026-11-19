@@ -28,6 +28,7 @@ import { acknowledgeCommand, resetMarkCommand } from "./marks.js"
 import { mailReviewCommand } from "./review.js"
 
 export { bulkTriageOf, MAIL_BULK_SETTINGS } from "./bulk-settings.js"
+export { type MailInboxOptions, mailInboxCommand } from "./inbox.js"
 export { mailMark, markItem, markText } from "./marks.js"
 export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS, mailReviewSteps } from "./review.js"
 

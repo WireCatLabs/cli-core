@@ -228,6 +228,8 @@ const OTHERS: Entry[] = [
   validation("mail.cursor-ahead", "an acknowledge cursor is past the newest stored email"),
   ["mail.holder-not-yours", "permission_error", "a run moves only the mark of the holder its schedule names"],
   ["mail.no-mark", "not_found", "the holder has no mark in the mailbox yet; its first review starts it"],
+  ["mail.inbox-agent", "permission_error", "an agent sorts mail itself from review; inbox --offline lists"],
+  ["mail.inbox-answer-invalid", "invalid_response", "the AI model's answer to inbox is not the JSON it asks for"],
   ["mail.reset-owner-only", "permission_error", "only the owner moves a holder's mark back"],
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
   ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],

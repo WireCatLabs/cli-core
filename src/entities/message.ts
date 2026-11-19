@@ -133,6 +133,8 @@ export const message = v.strictObject({
       new_sender: v.optional(v.boolean()),
       /** Mail `review`: how many identities the sender's person has; 1 is this address alone. */
       sender_identities: v.optional(v.number()),
+      /** Mail `review`: how `inbox` sorted the thread, by the AI model; the reason is untrusted. */
+      inbox: v.optional(v.strictObject({ bucket: v.picklist(["answer", "read", "later"]), reason: text })),
     }),
   ),
   provider_metadata: providerMetadata,
