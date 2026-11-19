@@ -92,9 +92,9 @@ export interface MirrorHints {
   sync: string
   /** How a sync allows deletions: `--allow-deletions <count>`. */
   allowDeletions: string
-  /** How a sync allows replacements: `--allow-replacements <count>`. */
+  /** How a sync allows replacements: `--replace`, the vocabulary's overwrite switch. */
   allowReplacements: string
-  /** How to exclude a folder: `ydisk work mirrors exclude <id> <glob>`. */
+  /** How to leave a folder out: `ydisk work mirrors update <id> --ignore <path>`. */
   exclude: string
 }
 
@@ -103,8 +103,8 @@ const HINTS: MirrorHints = {
   repin: "--repin",
   sync: "sync",
   allowDeletions: "--allow-deletions <count>",
-  allowReplacements: "--allow-replacements <count>",
-  exclude: "--exclude <glob>",
+  allowReplacements: "--replace",
+  exclude: "--ignore <path>",
 }
 
 export interface FileStep {

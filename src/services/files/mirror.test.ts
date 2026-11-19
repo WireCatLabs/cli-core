@@ -459,7 +459,7 @@ describe("syncFileMirror, the guard on mass changes", () => {
     preview: "ydisk work mirrors preview <id>",
     sync: "ydisk work mirrors sync <id>",
     allowDeletions: "--allow-deletions <count>",
-    allowReplacements: "--allow-replacements <count>",
+    allowReplacements: "--replace",
   }
 
   it("lets up to 10 deletions through, however large or small the mirror", async () => {
@@ -512,7 +512,7 @@ describe("syncFileMirror, the guard on mass changes", () => {
         reason: "mirror.too-many-replacements",
         message: expect.stringContaining(
           "replace 51 existing files (more than 50); check them with `ydisk work mirrors preview 1a2b3c4d`, then " +
-            "allow them with `ydisk work mirrors sync 1a2b3c4d --allow-replacements 51`",
+            "allow them with `ydisk work mirrors sync 1a2b3c4d --replace`",
         ),
       }),
     ])
@@ -538,9 +538,7 @@ describe("syncFileMirror, the guard on mass changes", () => {
     for (let n = 11; n < 70; n++) put(context.root, `f${n}.md`, `${n}, edited`)
     const stopped = await context.sync(undefined, { id: "1a2b3c4d", hints, allowReplacements: 59 })
     expect(stopped.errors[0]).toMatchObject({ reason: "mirror.too-many-deletions" })
-    expect(stopped.errors[0]?.message).toContain(
-      "`ydisk work mirrors sync 1a2b3c4d --allow-deletions 11 --allow-replacements 59`",
-    )
+    expect(stopped.errors[0]?.message).toContain("`ydisk work mirrors sync 1a2b3c4d --allow-deletions 11 --replace`")
     const allowed = await context.sync(undefined, { allowDeletions: 11, allowReplacements: 59 })
     expect([allowed.trashed.length, allowed.uploaded.length]).toEqual([11, 59])
   })
@@ -583,12 +581,12 @@ describe("syncFileMirror, free space", () => {
     const space = async () => ({ free, dev: 1 })
     const preview = await context.sync(undefined, { dryRun: true, space })
     expect(preview.noSpace).toEqual({ path: context.root, needed: 2_000, free })
-    const stopped = await context.sync(undefined, { space, hints: { exclude: "mirrors exclude <id> <glob>" } })
+    const stopped = await context.sync(undefined, { space, hints: { exclude: "mirrors update <id> --ignore <path>" } })
     expect(stopped.errors).toEqual([
       expect.objectContaining({
         code: "validation_error",
         reason: "mirror.no-space",
-        message: expect.stringContaining("leave big folders out with `mirrors exclude <id> <glob>`"),
+        message: expect.stringContaining("leave big folders out with `mirrors update <id> --ignore <path>`"),
       }),
     ])
     expect(await context.local()).toEqual({})
