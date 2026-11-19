@@ -279,6 +279,24 @@ describe("a role refused some of a kind's calls", () => {
       expect((await copy.content.get(account, "post", "10"))?.record.title).toBe("Edited elsewhere")
     })
 
+  it("holds a scheduled page an editor stored, once its time passed, for a role that may not read it", async () => {
+    const copy = await store()
+    const editor = over(WORDPRESS_CONTENT)
+    const page = editor.fake.rows.post?.[1]?.[0] as Record<string, unknown>
+    page.status = "future"
+    page.date_gmt = new Date(editor.now() + 3_600_000).toISOString().slice(0, 19)
+    await syncContent(editor.source, copy, account, { now: editor.now() })
+    expect((await copy.content.get(account, "post", "12"))?.record.status).toBe("scheduled")
+
+    const author = over(WORDPRESS_CONTENT, ROLES.author)
+    author.later(2 * DAY)
+    const report = await syncContent(author.source, copy, account, { now: author.now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "held" })
+    expect((await copy.content.get(account, "post", "12"))?.record.status).toBe("scheduled")
+    expect(author.fake.refusals).toEqual(["getWpV2PagesById"])
+    author.fake.refusals.length = 0
+  })
+
   it("takes a 400 whose details name 403 as a refusal: a gap, and the other call's posts kept", async () => {
     const [post, page] = WORDPRESS_CONTENT.entities.post as unknown as [object, { optional: object }]
     const { needs: _, ...optional } = page.optional as { needs?: unknown }

@@ -34,6 +34,10 @@ interface ContentPass {
   gapped?: true
 }
 
+/** The sign-in may not read it, which proves nothing about the row; WordPress also refuses with 400 and 403 inside. */
+const refusedRead = (error: unknown): error is CliError =>
+  isCliError(error) && (error.code === "permission_error" || error.details.inner_status === 403)
+
 const fresh = (): ContentCursor => ({ v: 1, token: null, round: null, passAt: 0 })
 
 const parsed = <T extends { v: number }>(value: string | null | undefined): T | null => {
@@ -247,7 +251,13 @@ const readDue = async (run: Run, result: ContentSyncResult) => {
       post = await source.get("post", id, run.context)
     } catch (error) {
       if (isCliError(error) && error.details.reason === GET_UNSUPPORTED) return null
-      throw error
+      // An author's scheduled page, stored by an editor's sign-in: a refusal holds it, and the other posts go on.
+      if (!refusedRead(error)) throw error
+      run.context.gap({
+        kind: "post",
+        message: `${source.provider} would not give this sign-in every post: ${error.message}`,
+      })
+      continue
     }
     if (post) result.saved += await store.content.save(account, "post", [post], run.now)
     else if (await store.content.markDeleted(account, "post", id, run.now)) result.unlisted += 1
@@ -287,7 +297,7 @@ const confirmGone = async (run: Run, kind: ContentKind, missing: readonly string
     } catch (error) {
       // WordPress leaves others' drafts out of a contributor's list and refuses to read them, and a row of a status we
       // do not know reads as nothing: neither proves it gone.
-      if (isCliError(error) && (error.code === "permission_error" || error.code === "invalid_response")) {
+      if (refusedRead(error) || (isCliError(error) && error.code === "invalid_response")) {
         run.context.gap({
           kind,
           message: `${source.provider} would not give this sign-in every ${kind}: ${error.message}`,

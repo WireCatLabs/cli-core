@@ -37,7 +37,8 @@ Channels first: a channel whose address changed is reported in `moved` and holds
 next ones, until `sync --rescan`. Then each kind's changes since its cursor, with an overlap, page by page; a round in
 which a read was refused (a gap) keeps the cursor it started from, so what changed meanwhile is read once access
 returns. Then the scheduled posts whose time has passed are read again one by one (up to 50, the longest unread
-first), so a post that went out is published in the copy, and one deleted is marked so.
+first), so a post that went out is published in the copy, and one deleted is marked so; one the sign-in may not read
+stays as it is, with a gap.
 
 Once a day an id pass lists every id. It is held, marking nothing, when the list is empty, when it would mark more than
 half of a kind of ten rows or more, when a page of it was refused (in this run or the run it resumes), or when the site
@@ -112,6 +113,6 @@ our example rows written into each entity's shape by its map, read by the calls 
 operation's pagination (a page count header and a refused page past the end included), and written by its writes.
 `call` and `write` feed `contentSourceFromManifest` and `contentWriterFromManifest`; `fetch` answers the CLI's own
 commands over HTTP. A call the manifest does not make lands in `refusals`. `lacks` names the rights a sign-in lacks,
-as `check` paths: its rights reads answer false, and a call whose `needs` it lacks is refused with HTTP 400 and 403 in
-the details, and lands in `refusals`. `denied` names operations refused with 403, as WordPress refuses an author the
+as `check` paths: its rights reads answer false, and a call whose `needs` it lacks is refused (a list with HTTP 400 and
+403 in the details, one row with 403, as WordPress refuses an author) and lands in `refusals`. `denied` names operations refused with 403, as WordPress refuses an author the
 users list.

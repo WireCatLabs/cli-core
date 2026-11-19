@@ -24,7 +24,8 @@ export interface ContentManifestFakeOptions {
   /**
    * The rights the sign-in lacks, as the `check` paths of the manifest's `requires` and `needs` reads
    * (`capabilities.edit_pages`): they answer false. A call whose `needs` is lacked is refused, as WordPress refuses an
-   * author pages with a private status: HTTP 400 with 403 in its details, and it lands in `refusals`.
+   * author pages with a private status: a list with HTTP 400 and 403 in its details, one row with 403. It lands in
+   * `refusals`.
    */
   lacks?: readonly string[]
   /** Operations refused with 403 to this sign-in, as WordPress refuses an author the users list. */
@@ -330,6 +331,8 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     const needs = entity.optional?.needs
     if (needs && lacks.has(needs.check)) {
       refusals.push(operation)
+      if (route.role === "get")
+        throw new CliError("permission_error", `the content fake denies ${operation} to this sign-in`)
       throw new CliError("validation_error", `the content fake refuses ${operation} to this sign-in`, {
         status: 400,
         inner_status: 403,
