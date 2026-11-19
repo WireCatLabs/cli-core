@@ -209,3 +209,113 @@ describe("contentManifestFake over HTTP", () => {
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 })
+
+// WordPress 6.9.4 on a local site (2026-11-19): neither role has these rights, and both are refused the users list.
+const ROLES = {
+  author: ["capabilities.edit_others_posts", "capabilities.edit_pages", "capabilities.edit_others_pages"],
+  contributor: ["capabilities.edit_others_posts", "capabilities.edit_pages", "capabilities.edit_others_pages"],
+}
+
+describe("a role refused some of a kind's calls", () => {
+  const DAY = 86_400_000
+  const over = (manifest: unknown, lacks: readonly string[] = [], read: unknown = manifest) => {
+    let now = Date.parse("2026-11-17T00:00:00Z")
+    const fake = contentManifestFake(manifest, {
+      api,
+      clock: () => (now += 1000),
+      lacks,
+      denied: lacks.length ? ["getWpV2Users"] : [],
+    })
+    fakes.push(fake)
+    const call = serviceApiCall({
+      manifest: api,
+      service: "WordPress",
+      serverVariables: { site: "blog.example.test" },
+      token: () => "someone:pw",
+      fetch: fake.fetch,
+    })
+    const source = contentSourceFromManifest(read, { api, call, site: "blog.example.test", now: () => now })
+    return { fake, source, later: (ms: number) => (now += ms), now: () => now }
+  }
+  const opened: Awaited<ReturnType<typeof openStore>>[] = []
+  afterEach(async () => {
+    for (const store of opened.splice(0)) await store.close()
+  })
+  const store = async () => {
+    const one = await openStore({ path: join(mkdtempSync(join(tmpdir(), "content-roles-")), "wirecat.db") })
+    opened.push(one)
+    return one
+  }
+  const account = { provider: "wordpress", account: "blog.example.test" }
+
+  for (const [role, lacks] of Object.entries(ROLES))
+    it(`syncs the ${role}'s posts, never sends the pages list, and marks no stored page deleted`, async () => {
+      const copy = await store()
+      const editor = over(WORDPRESS_CONTENT)
+      await syncContent(editor.source, copy, account, { now: editor.now() })
+      const pages = async () =>
+        (await copy.content.list(account, "post", { type: "page" })).items.map((one) => one.record.externalId)
+      expect(await pages()).toEqual(["12"])
+
+      const signedIn = over(WORDPRESS_CONTENT, lacks)
+      signedIn.later(2 * DAY)
+      const first = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+      expect(first.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "held" })
+      expect(first.gaps.map((one) => one.scope)).toEqual(
+        expect.arrayContaining(["edit_pages", "edit_others_posts", "list_users"]),
+      )
+      expect(first.gaps.find((one) => one.scope === "edit_pages")?.message).toBe(
+        "only an editor or administrator reads the pages",
+      )
+      expect(await pages()).toEqual(["12"])
+
+      // The live symptom: an edit after the first sync never reached the copy.
+      const row = signedIn.fake.rows.post?.[0]?.find((one) => String(one.id) === "10") as Record<string, unknown>
+      row.title = { raw: "Edited elsewhere" }
+      signedIn.fake.touch("post", "10")
+      signedIn.later(60_000)
+      const second = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+      expect(second.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete" })
+      expect((await copy.content.get(account, "post", "10"))?.record.title).toBe("Edited elsewhere")
+    })
+
+  it("holds a scheduled page an editor stored, once its time passed, for a role that may not read it", async () => {
+    const copy = await store()
+    const editor = over(WORDPRESS_CONTENT)
+    const page = editor.fake.rows.post?.[1]?.[0] as Record<string, unknown>
+    page.status = "future"
+    page.date_gmt = new Date(editor.now() + 3_600_000).toISOString().slice(0, 19)
+    await syncContent(editor.source, copy, account, { now: editor.now() })
+    expect((await copy.content.get(account, "post", "12"))?.record.status).toBe("scheduled")
+
+    const author = over(WORDPRESS_CONTENT, ROLES.author)
+    author.later(2 * DAY)
+    const report = await syncContent(author.source, copy, account, { now: author.now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "held" })
+    expect((await copy.content.get(account, "post", "12"))?.record.status).toBe("scheduled")
+    expect(author.fake.refusals).toEqual(["getWpV2PagesById"])
+    author.fake.refusals.length = 0
+  })
+
+  it("takes a 400 whose details name 403 as a refusal: a gap, and the other call's posts kept", async () => {
+    const [post, page] = WORDPRESS_CONTENT.entities.post as unknown as [object, { optional: object }]
+    const { needs: _, ...optional } = page.optional as { needs?: unknown }
+    const unguarded = {
+      ...WORDPRESS_CONTENT,
+      entities: { ...WORDPRESS_CONTENT.entities, post: [post, { ...page, optional }] },
+    }
+    const { fake, source, now } = over(WORDPRESS_CONTENT, ["capabilities.edit_pages"], unguarded)
+    const copy = await store()
+    const report = await syncContent(source, copy, account, { now: now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete" })
+    expect(report.gaps.find((one) => one.scope === "edit_others_pages")?.message).toBe(
+      "the sign-in may not read every page",
+    )
+    expect((await copy.content.list(account, "post")).items.map((one) => one.record.externalId).sort()).toEqual([
+      "10",
+      "11",
+    ])
+    expect(fake.refusals).toContain("getWpV2Pages")
+    fake.refusals.length = 0
+  })
+})

@@ -66,7 +66,9 @@ export const wordpressApi = (): ServiceApiManifest => {
 const STATUSES = "publish,future,draft,pending,private,trash"
 const per = 100
 
-const posts = (operation: string, type: string) => {
+const ME = { operation: "getWpV2UsersMe", query: { context: "edit", _fields: "capabilities" } }
+
+const posts = (operation: string, type: "post" | "page") => {
   const list = { operation, query: { context: "edit", status: STATUSES, per_page: per, orderby: "id", order: "asc" } }
   return {
     list,
@@ -104,16 +106,26 @@ const posts = (operation: string, type: string) => {
       terms: { all: ["tags", "categories"] },
     },
     body: { path: "content.raw", format: "wp-blocks", fallback: { path: "content.rendered", format: "html" } },
-    optional: {
-      message: "the sign-in may not read every post: a contributor sees its own",
-      scope: "edit_others_posts",
-      // WordPress leaves others' posts out of a contributor's list without an error: only its rights tell.
-      requires: {
-        operation: "getWpV2UsersMe",
-        query: { context: "edit", _fields: "capabilities" },
-        check: "capabilities.edit_others_posts",
-      },
-    },
+    optional:
+      type === "post"
+        ? {
+            message: "the sign-in may not read every post: a contributor sees its own",
+            scope: "edit_others_posts",
+            // WordPress leaves others' posts out of a contributor's list without an error: only its rights tell.
+            requires: { ...ME, check: "capabilities.edit_others_posts" },
+          }
+        : {
+            message: "the sign-in may not read every page",
+            scope: "edit_others_pages",
+            requires: { ...ME, check: "capabilities.edit_others_pages" },
+            // An author's or contributor's list of pages with a private status is refused: HTTP 400, 403 inside.
+            needs: {
+              ...ME,
+              check: "capabilities.edit_pages",
+              message: "only an editor or administrator reads the pages",
+              scope: "edit_pages",
+            },
+          },
   }
 }
 
@@ -172,7 +184,8 @@ export interface WordpressFakeOptions {
   clock?: () => number
   /**
    * A contributor, as WordPress 6.9 answers one (checked on a local site): a list with `context=edit` leaves out every
-   * post of another author, with no error; reading one of them is refused with 403; the users list too.
+   * post of another author, with no error; reading one of them is refused with 403; the users list too. An author
+   * is the same here: neither may list pages with a private status (HTTP 400 with 403 inside, checked 2026-11-19).
    */
   contributor?: number
 }
@@ -260,9 +273,12 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
       return page(users, input)
     }
     if (operation === "getWpV2UsersMe") {
+      // WordPress leaves a capability the role lacks out, rather than false.
       const capabilities = {
         edit_posts: true,
-        ...(options.contributor === undefined ? { edit_others_posts: true } : {}),
+        ...(options.contributor === undefined
+          ? { edit_others_posts: true, edit_pages: true, edit_others_pages: true }
+          : {}),
       }
       return { body: { capabilities }, headers: new Headers() }
     }
@@ -282,6 +298,11 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
     }
     if (operation === "getWpV2Posts" || operation === "getWpV2Pages") {
       const statuses = (input.query.status ?? "publish").split(",")
+      if (operation === "getWpV2Pages" && options.contributor !== undefined && statuses.includes("private"))
+        throw new CliError("validation_error", "WordPress refused pages-list (HTTP 400)", {
+          status: 400,
+          inner_status: 403,
+        })
       const after = input.query.modified_after ? Date.parse(input.query.modified_after) : null
       if (after !== null && Number.isNaN(after)) throw new CliError("validation_error", "Invalid date.")
       const by = input.query.orderby === "modified" ? "modified_gmt" : "id"

@@ -14,7 +14,12 @@ import {
   type ContentSource,
   GET_UNSUPPORTED,
 } from "../source.js"
-import { type ContentChangesCall, type ContentManifestEntity, parseContentManifest } from "./manifest.js"
+import {
+  type ContentChangesCall,
+  type ContentManifestEntity,
+  type ContentRightsCall,
+  parseContentManifest,
+} from "./manifest.js"
 import { mapContentRecord, postBodyOf, utcEpoch } from "./map.js"
 
 /**
@@ -111,8 +116,10 @@ const pageOf = (page: string | undefined, now: number) => {
 }
 
 const gone = (error: unknown) => isCliError(error) && error.code === "not_found"
+// A service may refuse a role with a 400 whose details say 403 (WordPress, for a status the role may not read).
 const refused = (error: unknown) =>
-  isCliError(error) && (error.code === "permission_error" || error.code === "not_found")
+  isCliError(error) &&
+  (error.code === "permission_error" || error.code === "not_found" || error.details.inner_status === 403)
 
 /**
  * A `ContentSource` read from a manifest: each kind by the calls it names, paged by each operation's own
@@ -186,28 +193,42 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     return records
   }
 
-  const rights = new Map<string, boolean>()
-  /** Whether the sign-in sees every row of the entity, by its `requires` read; asked once per source. */
+  const rights = new Map<string, Promise<unknown>>()
+  /** Whether the sign-in has the right `check` names; each rights read is sent once per source, whatever it checks. */
+  const has = async (read: ContentRightsCall, send: ContentReadCall) => {
+    const request = inputOf(read, {})
+    const key = JSON.stringify([read.operation, request])
+    let answer = rights.get(key)
+    if (answer === undefined) {
+      answer = send(read.operation, request)
+      rights.set(key, answer)
+      answer.catch(() => rights.delete(key))
+    }
+    return at(await answer, read.check) === true
+  }
+
+  /**
+   * Whether the call may be sent: a role its `needs` read refuses is a gap, and the call is skipped. Else a sign-in
+   * its `requires` read says sees only part is a gap, and the call is sent.
+   */
   const checkRights = async (
     kind: ContentKind,
     entity: ContentManifestEntity,
     send: ContentReadCall,
     context?: ContentCallContext,
   ) => {
-    const requires = entity.optional?.requires
-    if (!requires) return
-    const key = JSON.stringify(requires)
-    let seen = rights.get(key)
-    if (seen === undefined) {
-      seen = at(await send(requires.operation, inputOf(requires, {})), requires.check) === true
-      rights.set(key, seen)
+    const { needs, requires } = entity.optional ?? {}
+    if (needs && !(await has(needs, send))) {
+      context?.gap({ kind, message: needs.message, ...(needs.scope ? { scope: needs.scope } : {}) })
+      return false
     }
-    if (!seen)
+    if (requires && !(await has(requires, send)))
       context?.gap({
         kind,
         message: entity.optional?.message ?? "",
         ...(entity.optional?.scope ? { scope: entity.optional.scope } : {}),
       })
+    return true
   }
 
   const gapOf = (kind: ContentKind, entity: ContentManifestEntity, error: unknown, context?: ContentCallContext) => {
@@ -251,9 +272,9 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const changes = since === null ? undefined : entity.changes
     let read: { rows: crmValues.CrmRaw[]; next: string | undefined } | { reset: true }
     try {
-      await checkRights(kind, entity, send, context)
-      read =
-        changes?.keyset && since !== null
+      read = !(await checkRights(kind, entity, send, context))
+        ? { rows: [], next: undefined }
+        : changes?.keyset && since !== null
           ? await keysetPage(
               { ...changes, keyset: changes.keyset },
               spot.token === undefined ? since - overlap : Number(spot.token),
@@ -285,8 +306,9 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     let read: { rows: crmValues.CrmRaw[]; next: string | undefined }
     const send = metered(context)
     try {
-      await checkRights(kind, entity, send, context)
-      read = await readPage(entity.ids ?? entity.list, {}, spot.token, send)
+      read = (await checkRights(kind, entity, send, context))
+        ? await readPage(entity.ids ?? entity.list, {}, spot.token, send)
+        : { rows: [], next: undefined }
     } catch (error) {
       // Refused, the ids read so far would mark every unread row deleted: the gap holds the pass.
       if (!gapOf(kind, entity, error, context)) throw error

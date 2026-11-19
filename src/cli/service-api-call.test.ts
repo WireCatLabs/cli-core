@@ -28,6 +28,32 @@ const createPost: ManifestOperation = {
 const input = { path: {}, query: {}, headers: {}, fields: {} }
 
 describe("a source's read through the manifest", () => {
+  it("keeps the status a refusal's details name, without the service's text", async () => {
+    // WordPress 6.9.4 to an author who lists pages with a private status (checked on a local site, 2026-11-19).
+    const wordpress = {
+      code: "rest_invalid_param",
+      message: "Invalid parameter(s): status",
+      data: {
+        status: 400,
+        params: { status: "Status is forbidden." },
+        details: { status: { code: "rest_forbidden_status", message: "Status is forbidden.", data: { status: 403 } } },
+      },
+    }
+    let answer: unknown = wordpress
+    const call = serviceApiCall({
+      manifest: { operations: [listPosts], servers: [{ url: "https://host.test/wp-json" }] },
+      service: "WordPress",
+      fetch: async () => Response.json(answer, { status: 400 }),
+    })
+    const refused = await call("list-posts", input).catch((error: unknown) => error)
+    expect(refused).toMatchObject({ code: "validation_error", details: { status: 400, inner_status: 403 } })
+    expect(JSON.stringify(refused)).not.toContain("forbidden")
+    answer = { code: "rest_invalid_param", data: { status: 400 } }
+    const plain = await call("list-posts", input).catch((error: unknown) => error)
+    expect(plain).toMatchObject({ code: "validation_error" })
+    expect((plain as { details: Record<string, unknown> }).details.inner_status).toBeUndefined()
+  })
+
   it("gives the headers with the body, where WordPress counts its pages, and stops at the last", async () => {
     const asked: string[] = []
     const call = serviceApiCall({
