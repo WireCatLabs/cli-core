@@ -59,6 +59,8 @@ export interface ViewSection {
   groups: ViewTaskGroup[]
   /** The open tasks with no due date, a line after the groups on the same section; null when there are none. */
   undated: { count: number; link: ViewLink | null } | null
+  /** The section began in an earlier Telegram message: its heading says it goes on. */
+  continued: boolean
 }
 
 export interface ViewHealth {
@@ -94,6 +96,8 @@ export interface ReportView {
   counts: { today: number; money: number }
   scope: ViewScope | null
   links: ViewLink[]
+  /** A later Telegram message of a digest split in several: the title says it goes on. */
+  continued: boolean
 }
 
 /** Builds the URL a ref opens, or null; the renderer passes `linkFor` with the form its channel needs. */
@@ -113,15 +117,17 @@ export const SECTION_EMOJI: Record<SectionKind, string> = {
   crm: "🤝",
   mail: "📬",
 }
+// A safety net, not the digest's size: memo's brief allows up to 25 items, all of which may fall in one section, and
+// Telegram splits a long digest into several messages.
 export const SECTION_CAPS: Record<SectionKind | "health", number> = {
-  today: 7,
-  decisions: 5,
-  money: 5,
-  meetings: 5,
-  projects: 5,
-  crm: 7,
-  mail: 5,
-  health: 3,
+  today: 25,
+  decisions: 25,
+  money: 25,
+  meetings: 25,
+  projects: 25,
+  crm: 25,
+  mail: 25,
+  health: 10,
 }
 const STALE_HOURS = 24
 const HOUR_MS = 3_600_000
@@ -293,6 +299,7 @@ export const reportView = (
         more: more + Math.max(items.length - cap, 0),
         groups: [],
         undated: null,
+        continued: false,
       },
     ]
   })
@@ -339,5 +346,6 @@ export const reportView = (
     counts: { today: count("today"), money: count("money") },
     scope: report.scope && scopeView(report.scope, language),
     links: [],
+    continued: false,
   }
 }

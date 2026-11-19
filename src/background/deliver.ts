@@ -55,7 +55,8 @@ export const DELIVERY_REASONS = {
 export type DeliveryReason = (typeof DELIVERY_REASONS)[keyof typeof DELIVERY_REASONS]
 
 /**
- * One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message.
+ * One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message,
+ * and for a split report which part failed (`part 2 of 3`).
  * A send that went as plain text because Telegram refused the HTML, or a mail-cli older than `--html` refused the
  * flag, is `ok` with the `html-fallback` reason, and the one line sent in place of a report that failed its check is
  * `ok` with `report-invalid`.
@@ -117,7 +118,8 @@ export interface Parcel {
 }
 
 export interface RenderedParcel {
-  telegram: string
+  /** The Telegram messages, sent in this order. */
+  telegram: string[]
   /** The email's HTML; without it, or when `mail` refuses `--html`, the email is `text`. */
   email?: string
   text: string
@@ -134,8 +136,26 @@ const plainFit = (text: string): string => {
   return `${line > 0 ? cut.slice(0, line) : cut}\n…`
 }
 
-/** A rendered report needs no file: Telegram's text was fitted when it was rendered, and mail has no limit. */
-const renderedArgvOf = (program: string, route: Route, rendered: RenderedParcel, plain = false) => {
+const UNESCAPES: Record<string, string> = { "&lt;": "<", "&gt;": ">", "&quot;": '"', "&amp;": "&" }
+
+/** One part of a split report as plain text, so a refused part goes in place without shifting the others. */
+const plainPart = (rendered: RenderedParcel, part: number): string =>
+  rendered.telegram.length === 1
+    ? plainFit(rendered.text)
+    : plainFit(
+        (rendered.telegram[part] ?? "")
+          .replace(/<[^>]*>/g, "")
+          .replace(/&(lt|gt|quot|amp);/g, (one) => UNESCAPES[one] as string),
+      )
+
+/**
+ * Telegram's FAQ asks for about one message a second in a chat and twenty a minute in a group
+ * (https://core.telegram.org/bots/faq#my-bot-is-hitting-limits-how-do-i-avoid-this).
+ */
+const PART_GAP_MS = { chat: 1_100, group: 3_100 }
+
+/** A rendered report needs no file: Telegram's parts were fitted when it was rendered, and mail has no limit. */
+const renderedArgvOf = (program: string, route: Route, rendered: RenderedParcel, plain = false, part = 0) => {
   const lead = [program, route.profile, "--json", "--no-input"]
   if (route.kind === "email")
     return [
@@ -156,7 +176,7 @@ const renderedArgvOf = (program: string, route: Route, rendered: RenderedParcel,
     ...(plain ? [] : ["--html"]),
     "--",
     route.chat,
-    plain ? plainFit(rendered.text) : rendered.telegram,
+    plain ? plainPart(rendered, part) : (rendered.telegram[part] ?? ""),
   ]
 }
 
@@ -210,7 +230,10 @@ const argvOf = (
   ]
 }
 
-/** Hands the parcel to each route's CLI, one after another; a route that fails is recorded and the next one still goes. */
+/**
+ * Hands the parcel to each route's CLI, one after another; a route that fails is recorded and the next one still goes.
+ * A report split into several Telegram messages sends them in order, a pause apart, and stops at the first that fails.
+ */
 export const deliver = async (
   system: ServerSystem,
   env: NodeJS.ProcessEnv,
@@ -221,6 +244,7 @@ export const deliver = async (
     errorOf,
     locked,
     timeoutMs = DELIVERY_TIMEOUT_MS,
+    wait = (ms) => new Promise((done) => setTimeout(done, ms)),
   }: {
     /** Where a program is on the run's PATH. */
     find: (name: string, env: NodeJS.ProcessEnv) => string | undefined
@@ -229,6 +253,8 @@ export const deliver = async (
     /** The lock the scheduler itself runs under: nothing goes out from a locked run. */
     locked?: string
     timeoutMs?: number
+    /** The pause between two parts of a split report. */
+    wait?: (ms: number) => Promise<void>
   },
 ): Promise<Delivery[]> => {
   const failed = (to: string, reason: DeliveryReason, error?: string): Delivery => ({
@@ -274,22 +300,34 @@ export const deliver = async (
         timeoutMs,
         ...(route.kind === "email" ? { input: mailInput(plain) } : {}),
       })
-      const argv = (plain = false) =>
+      const argv = (plain: boolean, part: number) =>
         rendered
-          ? renderedArgvOf(program, route, rendered, plain)
+          ? renderedArgvOf(program, route, rendered, plain, part)
           : argvOf(program, route, parcel.title, report, copy, plain)
-      let ran = await system.run(argv(), childEnv, options())
-      let fellBack = ""
-      const refused =
-        ran.code !== 0 &&
-        ran.code !== TIMED_OUT &&
-        (route.kind === "telegram-bot"
-          ? codeOf(ran.stderr) === REFUSED_CONTENT
-          : rendered?.email !== undefined && refusesHtmlFlag(ran.stderr))
-      if (refused) {
-        fellBack = errorOf(ran.stderr, ran.code)
-        ran = await system.run(argv(true), childEnv, options(true))
+      const send = async (part: number) => {
+        const ran = await system.run(argv(false, part), childEnv, options())
+        const refused =
+          ran.code !== 0 &&
+          ran.code !== TIMED_OUT &&
+          (route.kind === "telegram-bot"
+            ? codeOf(ran.stderr) === REFUSED_CONTENT
+            : rendered?.email !== undefined && refusesHtmlFlag(ran.stderr))
+        if (!refused) return { ran, fellBack: "" }
+        return {
+          ran: await system.run(argv(true, part), childEnv, options(true)),
+          fellBack: errorOf(ran.stderr, ran.code),
+        }
       }
+      const parts = rendered && route.kind === "telegram-bot" ? rendered.telegram.length : 1
+      let { ran, fellBack } = await send(0)
+      let part = 1
+      for (; part < parts && ran.code === 0; part += 1) {
+        await wait(route.kind === "telegram-bot" && route.chat.startsWith("-") ? PART_GAP_MS.group : PART_GAP_MS.chat)
+        const next = await send(part)
+        ran = next.ran
+        fellBack ||= next.fellBack
+      }
+      const which = parts > 1 ? `part ${part} of ${parts}` : ""
       if (ran.code === 0) {
         out.push(
           rendered?.invalid
@@ -298,8 +336,11 @@ export const deliver = async (
               ? { to, ok: true, reason: DELIVERY_REASONS.htmlFallback, error: fellBack }
               : { to, ok: true },
         )
-      } else if (ran.code === TIMED_OUT) out.push(failed(to, DELIVERY_REASONS.timeout))
-      else out.push(failed(to, DELIVERY_REASONS.failed, errorOf(ran.stderr, ran.code)))
+      } else if (ran.code === TIMED_OUT) out.push(failed(to, DELIVERY_REASONS.timeout, which))
+      else
+        out.push(
+          failed(to, DELIVERY_REASONS.failed, [errorOf(ran.stderr, ran.code), which].filter(Boolean).join(" · ")),
+        )
     } catch {
       out.push(failed(to, DELIVERY_REASONS.failed))
     } finally {

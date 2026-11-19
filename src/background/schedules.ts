@@ -690,7 +690,7 @@ export const runSchedule = async (
             ...(prepared ? { rendered: prepared } : {}),
           }
         : notice
-          ? { title: notice.subject, rendered: notice }
+          ? { title: notice.subject, rendered: { ...notice, telegram: [notice.telegram] } }
           : {
               title: `${title} failed · ${at}`,
               line:
@@ -712,7 +712,9 @@ export const runSchedule = async (
             (language) => gapsView(gaps, { language, now: now().getTime(), linkOf: options.linkOf }),
             options,
           ).catch(() => undefined)
-    const deliveries = message ? await sendAlong({ title: message.subject, rendered: message }) : []
+    const deliveries = message
+      ? await sendAlong({ title: message.subject, rendered: { ...message, telegram: [message.telegram] } })
+      : []
     writeSecurely(
       join(folder, WEEKLY_GAPS_FILE),
       `${JSON.stringify({ at: now().toISOString(), gaps: gaps.gaps.length, runs: gaps.runs, deliveries }, null, 2)}\n`,

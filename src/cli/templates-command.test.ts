@@ -257,7 +257,7 @@ describe("templates", () => {
     })
 
     expect(prepared?.text).toBe("МОЙ Two replies are waiting, one payment is overdue.")
-    expect(prepared?.telegram).toMatch(/Two replies are waiting/)
+    expect(prepared?.telegram).toEqual([expect.stringMatching(/Two replies are waiting/)])
     expect(prepared?.run.reasons).toEqual(["report.template-failed"])
     const failing = await prepareReport(SAMPLE, {
       language: "ru",

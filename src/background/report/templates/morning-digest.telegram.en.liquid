@@ -6,7 +6,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
 {% endcapture -%}
 {%- assign weekdays = "Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday" | split: "," -%}
 {%- assign weekday = date.weekday | minus: 1 -%}
-{{ emoji }} <b>Digest for {{ weekdays[weekday] }}, {{ date.date }}</b>
+{{ emoji }} <b>Digest for {{ weekdays[weekday] }}, {{ date.date }}{% if continued %} (continued){% endif %}</b>
 {%- if summary %}{{ nl }}{{ summary }}{% endif -%}
 {%- if quiet -%}
   {{ nl }}{{ nl }}
@@ -23,7 +23,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- when "projects" %}Projects in motion
     {%- when "mail" %}New mail
     {%- when "crm" %}CRM
-  {%- endcase %}</b>
+  {%- endcase %}{% if section.continued %} (continued){% endif %}</b>
   {%- for item in section.items -%}
     {%- capture due -%}
       {%- if item.due -%}
