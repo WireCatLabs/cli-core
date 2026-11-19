@@ -184,6 +184,8 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     if (!query.trim()) searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
     if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
       searchError("query.too-large", { start: 0, end: query.length }, "query is longer than 8 KiB")
+    if (reply !== undefined && new TextEncoder().encode(reply).length > QUERY_LIMITS.bytes)
+      throw new CliError("validation_error", "--reply is longer than 8 KiB: one sentence is enough")
     const refreshed = await refreshSearch(deps, {
       chat,
       limit,
@@ -354,11 +356,8 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       .slice(0, limit)
       .map(located)
     const shown = new Set(hits.map((hit) => hit.summary.id))
-    const ownBest = new Map<string, ConversationHit>()
-    for (const hit of own)
-      if (!shown.has(hit.summary.id) && hit.score > (ownBest.get(hit.summary.id)?.score ?? -2))
-        ownBest.set(hit.summary.id, hit)
-    const ownHits = [...ownBest.values()]
+    const ownHits = own
+      .filter((hit) => !shown.has(hit.summary.id))
       .sort((a, b) => b.score - a.score)
       .slice(0, OWN_BLOCK)
       .map((hit) => located({ ...hit, by: ["meaning" as const] }))
@@ -466,7 +465,8 @@ const shared = (hits: ConversationHit[], limit: number) => {
 
 /**
  * Reciprocal rank fusion of the meaning lists (the query's, and a made-up reply's when given) and the word list: each
- * conversation scores 1 / (k + rank) in every list it is in, and keeps its nearest chunk.
+ * conversation scores 1 / (k + rank) in every list it is in, and keeps the chunk and cosine of the first list that
+ * has it, so a score shown is the query's wherever the query found it.
  */
 const fused = (
   meaning: ConversationHit[][],
@@ -494,7 +494,6 @@ const fused = (
           return
         }
         held.fused += share
-        if (score > (held.score ?? -2)) Object.assign(held, { chunk, score, stale })
       })
   words.forEach(({ summary, chunk }, index) => {
     const share = 1 / (RRF_K + index + 1)
@@ -533,7 +532,10 @@ const shownLines = (
     .slice(0, SHOWN_LINES)
     .sort((a, b) => a.at - b.at)
     .map(({ sender, flat, outgoing, first }) => {
-      const start = Number.isFinite(first) && first > SHOWN_CHARS / 2 ? first - SHOWN_CHARS / 4 : 0
+      const start =
+        Number.isFinite(first) && first > SHOWN_CHARS / 2
+          ? Math.max(0, Math.min(first - SHOWN_CHARS / 4, flat.length - SHOWN_CHARS))
+          : 0
       const cut = flat.slice(start, start + SHOWN_CHARS)
       const who = outgoing ? `${sender ?? "you"}${sender ? " (you)" : ""}: ` : sender ? `${sender}: ` : ""
       return `${who}${start > 0 ? "…" : ""}${cut}${start + SHOWN_CHARS < flat.length ? "…" : ""}`

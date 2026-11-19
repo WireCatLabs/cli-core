@@ -4350,6 +4350,9 @@ describe("the shared read commands", () => {
       lines: [expect.stringContaining("chapter")],
       untrusted: ["lines"],
     })
+    const locked = { ...env, CHAT_READ_ONLY: "1", CHAT_UNTRUSTED_MARK: "0123456789abcdef" }
+    const text = await call(["search", "conversations", "chapter"], never, locked)
+    expect(text.stdout.join("")).toMatch(/⟦untrusted:0123456789abcdef source=lines[^⟧]*⟧[^⟦]*chapter/u)
 
     const related = await call(["conversations", "related", "7", "3", "--json"], never, env)
     expect([related.code, related.stdout]).toEqual([6, []])

@@ -39,6 +39,7 @@ import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-que
 import { positiveCount } from "../paging.js"
 import { readsStdin } from "../stdin-field.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
+import { marked, runMarkOf } from "../untrusted-marks.js"
 import { ANALYSIS_CONSENTS_QUERY, analysisConsentFilter } from "./analysis-consents-query.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
@@ -841,10 +842,11 @@ const itemLine = (one: ConversationItem) =>
   `${one.id}  ${one.started_at.slice(0, 16).replace("T", " ")}–${one.ended_at.slice(11, 16)}  ` +
   `${one.messages_count} messages · ${one.senders_count} people · from ${one.first_message}`
 
-const hitLine = ({ summary, chunk, score, stale, locator, lines }: FoundConversation) =>
+/** In a scheduled agent's run (`mark`), other people's lines go between the run's markers, as JSON marks them. */
+const hitLine = ({ summary, chunk, score, stale, locator, lines }: FoundConversation, mark?: string) =>
   `${score === null ? "  —  " : score.toFixed(3)}  ${line(summary)}  ` +
   `(messages ${chunk.firstMessageId}–${chunk.lastMessageId})${locator ? `  ${locator}` : ""}${stale ? "  stale" : ""}` +
-  (lines ?? []).map((one) => `\n        ${one}`).join("")
+  (lines ?? []).map((one) => `\n        ${mark === undefined ? one : marked(one, mark, "lines", locator)}`).join("")
 
 const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, model: string) =>
   graph === null
@@ -963,14 +965,15 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         )
       if (found.words === "out-of-time")
         context.renderer.note("the word half ran out of time, so these are by meaning alone; --timeout gives it longer")
+      const mark = runMarkOf(this)
       renderAnswer(
         this,
         context,
         foundConversations("search conversations", found, limit, messenger, chat, window.meta),
         () =>
-          found.hits.map((hit) => `${hitLine(hit)}\n`).join("") +
+          found.hits.map((hit) => `${hitLine(hit, mark)}\n`).join("") +
           (found.own?.length
-            ? `conversations where you wrote, nearest in meaning:\n${found.own.map((hit) => `${hitLine(hit)}\n`).join("")}`
+            ? `conversations where you wrote, nearest in meaning:\n${found.own.map((hit) => `${hitLine(hit, mark)}\n`).join("")}`
             : ""),
       )
       if (found.hits.length === 0 && context.format === "pretty")
