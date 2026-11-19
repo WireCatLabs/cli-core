@@ -3,7 +3,7 @@ import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"
-import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { NO_EFFECTS, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import {
   apiFlagOf,
   apiJson,
@@ -38,6 +38,19 @@ export interface ApiCommands {
   /** An upload's file, `-` for stdin. */
   readBytes?: (command: Command, path: string) => Uint8Array<ArrayBuffer>
   execute: (command: Command, operation: ManifestOperation, input: ApiCommandInput) => Promise<void>
+  /** Called with each operation's command once it is built, before it is mounted. */
+  configure?: (command: Command, operation: ManifestOperation) => void
+}
+
+/**
+ * The words after `api`: `contacts-list` in the group `contacts` is `contacts list`, `move-page` in `pages` keeps its
+ * name, and an operation without a group stays `api <command>`. The same rule as cli-base's `apiCommandPath`; `group`
+ * is read as optional, so a manifest generated before groups mounts flat, as it always did.
+ */
+export const apiPathOf = (operation: ManifestOperation): string[] => {
+  const { command, group } = operation as ManifestOperation & { group?: string }
+  if (!group) return [command]
+  return [group, command.startsWith(`${group}-`) ? command.slice(group.length + 1) : command]
 }
 
 const scalarOf = (value: unknown): string | undefined =>
@@ -51,6 +64,7 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
     "--store-token <profile>",
     "keep a returned authentication token only in this bot profile's OS keyring; never print it",
   )
+  const subgroups = new Set<Command>()
   for (const operation of api.operations) {
     const binding =
       operation.binding.kind === "http"
@@ -58,7 +72,8 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
         : operation.binding.kind === "graphql"
           ? `${operation.binding.operation} ${operation.binding.field}`
           : operation.binding.name
-    const command = annotate(new Command(operation.command), {
+    const path = apiPathOf(operation)
+    const command = annotate(new Command(path.at(-1)), {
       effects: operation.effect === "read" ? REMOTE_READ : REMOTE_WRITE,
     }).description(`${operation.summary ?? operation.id} — ${operation.effect} (${binding})`)
     for (const parameter of operation.parameters) {
@@ -145,7 +160,23 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       if (body !== undefined) input.body = body
       await api.execute(this, operation, input)
     })
-    group.addCommand(command)
+    api.configure?.(command, operation)
+    const [first] = path
+    const taken = group.commands.find((one) => one.name() === first)
+    // A command and a group of one name would put an operation under another's command, or answer with the wrong one.
+    if (taken && (path.length === 1 || !subgroups.has(taken)))
+      throw new CliError("configuration_error", `api ${first} is both a group and an operation: rename one`)
+    if (path.length === 1 || first === undefined) {
+      group.addCommand(command)
+      continue
+    }
+    const subgroup =
+      taken ?? annotate(new Command(first), { effects: NO_EFFECTS }).description(`the ${first} operations`)
+    if (!taken) {
+      subgroups.add(subgroup)
+      group.addCommand(subgroup)
+    }
+    subgroup.addCommand(command)
   }
   return group
 }
