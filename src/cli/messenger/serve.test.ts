@@ -116,6 +116,18 @@ describe("serve", () => {
     expect(existsSync(lockOf(root))).toBe(false)
   })
 
+  it("**leaves when the store was last current**, for a messenger with no sync to time", async () => {
+    const { root, env } = setup()
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 20)
+    const before = Date.now()
+
+    await call(["serve", "--json"], env, [], stop.signal)
+
+    const { at } = JSON.parse(readFileSync(join(root, "state", "serve", "default.current"), "utf8"))
+    expect(Date.parse(at)).toBeGreaterThanOrEqual(before)
+  })
+
   it("writes each diagnostic off a terminal as a log record", async () => {
     const { env } = setup()
     const stop = new AbortController()

@@ -213,6 +213,16 @@ describe("server without a unit", () => {
     expect((await call(["status"], env, machine("linux").system, true)).text).toContain("is gone and left its lock")
   })
 
+  it("**status says when the store was last current**, from the stamp serve leaves", async () => {
+    const { env } = setup()
+    mkdirSync(dirname(lockFile(env)), { recursive: true })
+    writeFileSync(join(env.CHAT_STATE_DIR, "serve", "default.current"), '{"at":"2026-11-19T08:30:00.000Z"}\n')
+
+    const json = await call(["status", "--json"], env, machine("linux").system)
+    expect(json.answer).toMatchObject({ running: false, current_at: "2026-11-19T08:30:00.000Z" })
+    expect((await call(["status"], env, machine("linux").system, true)).text).toContain("The store was current at")
+  })
+
   it("**says when the running serve is older than this CLI**, as max-cli's server status does", async () => {
     const { env } = setup()
     const stale = sleeper()

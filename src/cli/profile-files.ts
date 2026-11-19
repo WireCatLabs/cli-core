@@ -46,6 +46,7 @@ export const profileFiles = (
     replyConsentPathFor(app, profile, env),
     repliesStatePathFor(app, profile, env),
     join(state, "serve", `${profile}.log`),
+    join(state, "serve", `${profile}.current`),
     join(state, "checkpoints", profile),
     ...pointFolders(schedules).map((folder) => join(state, folder, `${profile}.json`)),
   ]

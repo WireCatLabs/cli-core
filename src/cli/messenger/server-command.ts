@@ -4,7 +4,7 @@ import { CliError, EXIT_CODES, exitCodeFor, resolvePaths, writeSecurely } from "
 import { annotate } from "@wirecat/cli-base/commands"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
-import { lockPath, readLock } from "../../background/lock.js"
+import { lockPath, readCurrent, readLock } from "../../background/lock.js"
 import { alive, carries } from "../../background/processes.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables, platformFor, readableLog, tail, type Unit } from "../../background/units.js"
@@ -305,6 +305,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const held = await server.probe()
       const by = held ? await byOf(prepared, held) : null
       const left = held ? undefined : readLock(lockPath(app, unit.profile, context.env))
+      const currentAt = readCurrent(lockPath(app, unit.profile, context.env))
       // An update leaves a running serve on the old code.
       const outdated = held?.version !== undefined && held.version !== app.version
       const gaveUp =
@@ -339,6 +340,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
           cliVersion: app.version,
           log: isInstalled && unit.path.endsWith(".service") ? `journalctl --user -u ${unit.name}` : unit.logPath,
           ...(left ? { stale: { pid: left.pid, startedAt: left.startedAt } } : {}),
+          ...(currentAt ? { currentAt } : {}),
           ...(gaveUp !== undefined
             ? { stopped: { exitCode: gaveUp, reason: gaveUpReason ?? null, restarts: false } }
             : {}),
@@ -351,7 +353,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
             ? held.connected
               ? `Serving profile ${unit.profile} since ${clock(held.startedAt)} (PID ${held.pid}), connected${held.connectedAt ? ` since ${clock(held.connectedAt)}` : ""}, ${how(by ?? "hand", unit)}.`
               : `Starting profile ${unit.profile} since ${clock(held.startedAt)} (PID ${held.pid}) — not connected yet, ${how(by ?? "hand", unit)}.`
-            : `Not serving profile ${unit.profile}.${isInstalled && gaveUp === undefined && state.detail?.startsWith("failed") ? ` The unit failed — \`${app.command} ${unit.profile} server logs\`.` : ""}`,
+            : `Not serving profile ${unit.profile}.${currentAt ? ` The store was current at ${clock(currentAt)}.` : ""}${isInstalled && gaveUp === undefined && state.detail?.startsWith("failed") ? ` The unit failed — \`${app.command} ${unit.profile} server logs\`.` : ""}`,
           ...(gaveUp === exitCodeFor("authentication_error")
             ? [
                 `It stopped because the login is no longer valid, and it will not restart by itself — \`${app.command} ${unit.profile} session start\`, then \`${app.command} ${unit.profile} server start\`.`,

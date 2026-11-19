@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
+import { holdLock, lockPath, markCurrent, releaseLock, takeLock } from "../../background/lock.js"
 import { parseDuration } from "../../domain/duration.js"
 import type { Chat, ChatKind, Message, MessageEvent } from "../../domain/models.js"
 import { failureKey } from "../../errors/failures.js"
@@ -36,6 +36,8 @@ import { listenUntilStopped } from "./watch-command.js"
 
 export { type Lock, lockPath, readLock, servingProfiles } from "../../background/lock.js"
 
+const CURRENT_EVERY_MS = 60_000
+
 /**
  * Keeps the store current: every new message, edit, deletion and reaction, and on start what arrived
  * while nothing listened. **One per profile**, held by a lock file; a lock whose process is gone is
@@ -67,10 +69,19 @@ export const serveCommand = (messenger: Messenger): Command => {
       )
     }
     let relaying: Promise<void> | undefined
+    let current: NodeJS.Timeout | undefined
+    // A stamp that cannot be written must not end serve: the store is still kept.
+    const stamp = () => {
+      try {
+        markCurrent(path)
+      } catch {}
+    }
     // `server start` answers on this, not on the lock alone: a lock is written before the connection opens.
     const onReady = () => {
       const listening = { pid: process.pid, startedAt, version, listeningAt: new Date().toISOString() }
       holdLock(path, listening)
+      stamp()
+      current ??= setInterval(stamp, CURRENT_EVERY_MS).unref()
       note({
         code: "listening",
         text: `listening for profile ${context.profile}, catching up on what arrived while it was down`,
@@ -202,6 +213,10 @@ export const serveCommand = (messenger: Messenger): Command => {
         },
       })
     } finally {
+      if (current) {
+        clearInterval(current)
+        stamp()
+      }
       watch.stop()
       await relaying
       await relay?.close()

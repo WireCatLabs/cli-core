@@ -1367,6 +1367,7 @@ separately as `serve_summary`.
    | `log` | where its log is |
    | `unit` | `{ name, path, installed, loaded, active, detail }` |
    | `stale` | `{ pid, started_at }` — a lock or socket file was left by a server that is gone |
+   | `current_at` | when a serve last had the store current: on connect, every minute while it runs, and as it stops; kept after it stops. Absent before the first serve |
 
    Starting and stopping in the background is `server start` and `server stop` only; `serve` is
    the foreground command a unit or a person runs.
