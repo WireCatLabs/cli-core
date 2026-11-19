@@ -46,16 +46,25 @@ is marked deleted: a list paged by number skips a row when an earlier one is del
 cannot read one row by id throws `content.get-unsupported`, and then absence from a complete list marks it. A budget
 stops a run between requests; the next run goes on from the page it reached.
 
+## Commands
+
+`sync`, `channels list`, `users list` (the source's authors), `tags list` (tags and categories), `posts list|show|search`
+and `posts stats <post>` (the metric readings). `posts list` narrows by query fields: `status:`, `type:`, `channel:`,
+`tag:`, `author:` and `published:` (a time, or a range such as `published:[2026-01-01 TO 2026-02-01]`). A write takes
+`--title`, `--text-file <path>` (Markdown; `-` reads stdin), `--description` (the excerpt), `--slug` and `--tags <ids>`
+(comma-separated, replacing the post's tags and categories).
+
 ## Writes and permissions
 
-`addContentCommands(program, { app, open, writes: true })` adds `posts create|update|publish|unpublish|schedule|delete`.
+`addContentCommands(program, { app, open, writes: true })` adds `posts create|update|publish|unpublish|delete`;
+`posts publish --at-time <time>` schedules.
 Every write is checked and journaled through `guardedWrite`, its operation id kept, a lost answer `outcome_unknown`.
 
 | Key | Default | Checked for |
 |---|---|---|
 | `posts.create`, `posts.update`, `posts.delete` | `ask` | the write itself |
-| `posts.publish` | `ask` | publish, schedule, and an update of a published or scheduled post |
-| `posts.delete.force` | `ask` | `posts delete --force`, past the trash |
+| `posts.publish` | `ask` | publish, `publish --at-time`, and an update of a published or scheduled post |
+| `posts.delete.force` | `ask` | `posts delete --allow-delete`, past the trash |
 
 `posts.publish` is the value key the `api` group checks for the same publishing through a raw call. Before a write the
 post is read again from the source, so the keys follow its status there: WordPress publishes a scheduled post whose time
@@ -92,3 +101,9 @@ contract kits pass over it against a fake site that answers as WordPress 6.9 doe
 
 `contentSourceContract`, `contentSyncContract` and `contentWriteContract` (`/content/testing`), with
 `fakeContentSource`, a stateful fake blog. A source or writer adapter runs the first and the last in its tests.
+
+`contentManifestFake(manifest, { api })` is the service a manifest describes, in memory, for a CLI made from a config:
+our example rows written into each entity's shape by its map, read by the calls the manifest names, paged by each
+operation's pagination (a page count header and a refused page past the end included), and written by its writes.
+`call` and `write` feed `contentSourceFromManifest` and `contentWriterFromManifest`; `fetch` answers the CLI's own
+commands over HTTP. A call the manifest does not make lands in `refusals`.

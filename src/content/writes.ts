@@ -78,10 +78,17 @@ const written = async <T>(
   key: PermissionKey,
   extra: PermissionKey[],
   operationId: string,
-  act: () => Promise<T>,
+  act: (confirmed: readonly PermissionKey[]) => Promise<T>,
 ): Promise<T> => {
   try {
-    return await guardedWrite(guardOf(context, extra), { chatId: null, kind: "edit", key, operationId }, act)
+    // The keys the owner was asked about here (an `ask` level) need not be asked again by a writer's own call; a key
+    // allowed here was asked about by nobody, so it confirms nothing.
+    const settings = context.writes.settings()
+    const defaults = { ...DEFAULT_PERMISSIONS, ...CONTENT_WRITE_DEFAULTS, ...settings.permissionDefaults }
+    const asked = [key, ...extra].filter((one) => levelFor(settings.permissions, one, defaults).level === "ask")
+    return await guardedWrite(guardOf(context, extra), { chatId: null, kind: "edit", key, operationId }, () =>
+      act(asked),
+    )
   } catch (error) {
     if (!isCliError(error) || error.code !== "outcome_unknown") throw error
     throw new CliError(
@@ -136,8 +143,8 @@ export const createPost = async (context: ContentWriteContext, draft: ContentDra
   if (!draft.title?.trim() && !draft.body?.trim())
     throw new CliError("validation_error", "a new post needs a title or a body", { reason: "content.empty" })
   const operationId = newOperationId()
-  const post = await written(context, "posts.create", [], operationId, () =>
-    context.writes.writer.createDraft(draft, { operationId }),
+  const post = await written(context, "posts.create", [], operationId, (confirmed) =>
+    context.writes.writer.createDraft(draft, { operationId, confirmed }),
   )
   return kept(context, post, operationId)
 }
@@ -164,8 +171,8 @@ export const updatePost = async (
     )
   const operationId = newOperationId()
   const extra = PUBLIC.has(copy.record.status) ? [POSTS_PUBLISH_KEY] : []
-  const post = await written(context, "posts.update", extra, operationId, () =>
-    context.writes.writer.update(externalId, fields, { operationId, version: copy.record.version ?? null }),
+  const post = await written(context, "posts.update", extra, operationId, (confirmed) =>
+    context.writes.writer.update(externalId, fields, { operationId, version: copy.record.version ?? null, confirmed }),
   )
   return kept(context, post, operationId)
 }
@@ -175,8 +182,8 @@ export const publishPost = async (context: ContentWriteContext, externalId: stri
   const copy = await copyOf(context, externalId)
   if (copy.record.status === "published") return { operationId: "", post: copy.record, unchanged: true }
   const operationId = newOperationId()
-  const post = await written(context, POSTS_PUBLISH_KEY, [], operationId, () =>
-    context.writes.writer.publish(externalId, { operationId, version: copy.record.version ?? null }),
+  const post = await written(context, POSTS_PUBLISH_KEY, [], operationId, (confirmed) =>
+    context.writes.writer.publish(externalId, { operationId, version: copy.record.version ?? null, confirmed }),
   )
   return kept(context, post, operationId)
 }
@@ -200,8 +207,8 @@ export const schedulePost = async (
       reason: "content.already-published",
     })
   const operationId = newOperationId()
-  const post = await written(context, "posts.schedule", [POSTS_PUBLISH_KEY], operationId, () =>
-    context.writes.writer.schedule(externalId, at, { operationId, version: copy.record.version ?? null }),
+  const post = await written(context, POSTS_PUBLISH_KEY, [], operationId, (confirmed) =>
+    context.writes.writer.schedule(externalId, at, { operationId, version: copy.record.version ?? null, confirmed }),
   )
   return kept(context, post, operationId)
 }
@@ -210,8 +217,8 @@ export const unpublishPost = async (context: ContentWriteContext, externalId: st
   const copy = await copyOf(context, externalId)
   if (copy.record.status === "draft") return { operationId: "", post: copy.record, unchanged: true }
   const operationId = newOperationId()
-  const post = await written(context, "posts.unpublish", [], operationId, () =>
-    context.writes.writer.unpublish(externalId, { operationId, version: copy.record.version ?? null }),
+  const post = await written(context, "posts.unpublish", [], operationId, (confirmed) =>
+    context.writes.writer.unpublish(externalId, { operationId, version: copy.record.version ?? null, confirmed }),
   )
   return kept(context, post, operationId)
 }
@@ -224,12 +231,18 @@ export const deletePost = async (
 ): Promise<{ operationId: string; post: ContentPost | null; deleted: boolean }> => {
   const copy = await copyOf(context, externalId)
   const operationId = newOperationId()
-  const post = await written(context, "posts.delete", options.force ? [POSTS_DELETE_FORCE_KEY] : [], operationId, () =>
-    context.writes.writer.trash(externalId, {
-      operationId,
-      version: copy.record.version ?? null,
-      ...(options.force ? { force: true } : {}),
-    }),
+  const post = await written(
+    context,
+    "posts.delete",
+    options.force ? [POSTS_DELETE_FORCE_KEY] : [],
+    operationId,
+    (confirmed) =>
+      context.writes.writer.trash(externalId, {
+        operationId,
+        confirmed,
+        version: copy.record.version ?? null,
+        ...(options.force ? { force: true } : {}),
+      }),
   )
   if (post && !options.force) return { ...(await kept(context, post, operationId)), deleted: false }
   await context.store.content.markDeleted(context.account, "post", externalId, context.now?.() ?? Date.now())

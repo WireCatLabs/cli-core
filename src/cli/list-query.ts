@@ -239,13 +239,19 @@ export const queryTerms = (
  * A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`, and the `meta`
  * an answer reports them by: the zone calendar words and bare dates were read in, and the bounds in UTC.
  * `until` is inclusive: an exclusive end (a bare date's next midnight, `… TO …}`) comes back 1 ms inside. `since` stays
- * as written, because the inbox reads strictly after a `date>` start.
+ * as written, because the inbox reads strictly after a `date>` start; `from` is the first moment taken, for a reader
+ * that takes its start.
  */
 export const timeBounds = (
   term: Predicate | undefined,
   zone = timezoneOf(),
   now?: number,
-): { since?: number; until?: number; meta?: { timezone: string; window: { since?: string; until?: string } } } => {
+): {
+  since?: number
+  from?: number
+  until?: number
+  meta?: { timezone: string; window: { since?: string; until?: string } }
+} => {
   if (!term) return {}
   const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
   const range = dateRange(
@@ -259,7 +265,9 @@ export const timeBounds = (
   )
   const until = range.upper === undefined ? undefined : range.upper - (range.upper_inclusive ? 0 : 1)
   return {
-    ...(range.lower === undefined ? {} : { since: range.lower }),
+    ...(range.lower === undefined
+      ? {}
+      : { since: range.lower, from: range.lower_inclusive ? range.lower : range.lower + 1 }),
     ...(until === undefined ? {} : { until }),
     meta: {
       timezone: zone,

@@ -83,7 +83,12 @@ describe("content commands", () => {
     expect(ids(await cli("posts", "list", "status:draft"))).toEqual(["11"])
     expect(ids(await cli("posts", "list", "status:draft", "status:published")).sort()).toEqual(["10", "11", "12"])
     expect(ids(await cli("posts", "list", "type:page"))).toEqual(["12"])
-    expect(ids(await cli("posts", "list", "term:tag-7"))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", "tag:tag-7"))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", "published:2026-11-01")).sort()).toEqual(["10", "12"])
+    expect(ids(await cli("posts", "list", "published:[2026-10-01 TO 2026-10-31]"))).toEqual([])
+    // Post 12 went out at exactly midnight: a strict start leaves it out.
+    expect(ids(await cli("posts", "list", 'published:>"2026-11-01T00:00:00Z"'))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", 'published:>="2026-11-01T00:00:00Z"')).sort()).toEqual(["10", "12"])
     const shown = (await cli("posts", "show", "10")).item
     expect(shown).toMatchObject({
       title: "Version 2 is out",
@@ -95,8 +100,28 @@ describe("content commands", () => {
       untrusted: expect.arrayContaining(["title", "body"]),
     })
     expect(ids(await cli("posts", "search", "pricing"))).toEqual(["11"])
-    expect(ids(await cli("terms", "list")).sort()).toEqual(["cat-1", "tag-7"])
+    expect(ids(await cli("tags", "list")).sort()).toEqual(["cat-1", "tag-7"])
     expect((await cli("channels", "list")).items[0]).toMatchObject({ network: "fake-blog" })
+  })
+
+  it("hands the writer only the keys the owner was asked about, never one a profile allows", async () => {
+    const source = fakeContentSource({ rows: exampleContentRows(), clock: () => NOW })
+    const confirmed: unknown[] = []
+    const writer: ContentWriter = {
+      ...source.writer,
+      provider: source.writer.provider,
+      update: (id, patch, options) => {
+        confirmed.push(options.confirmed)
+        return source.writer.update(id, patch, options)
+      },
+    }
+    const allowed = await setup({ "posts.update": "allow" }, { source, writer, account: ACCOUNT })
+    await allowed.cli("sync")
+    await allowed.cli("posts", "update", "11", "--title", "Quiet")
+    const asked = await setup({ "posts.update": "ask" }, { source, writer, account: ACCOUNT })
+    await asked.cli("sync")
+    await asked.cli("posts", "update", "11", "--title", "Asked", "--yes")
+    expect(confirmed).toEqual([[], ["posts.update"]])
   })
 
   it("writes a draft from a Markdown file, publishes it once, and keeps what it replaced", async () => {
@@ -104,10 +129,16 @@ describe("content commands", () => {
     await cli("sync")
     const file = join(mkdtempSync(join(tmpdir(), "content-text-")), "post.md")
     writeFileSync(file, "# Hello\n\nA new post.")
-    const made = (await cli("posts", "create", "--title", "Hello", "--body-file", file, "--yes")).item as {
+    const made = (
+      await cli("posts", "create", "--title", "Hello", "--text-file", file, "--tags", "tag-7, cat-1", "--yes")
+    ).item as {
       post: { external_id: string; status: string }
     }
     expect(made.post.status).toBe("draft")
+    await expect(cli("posts", "update", made.post.external_id, "--tags", " , ", "--yes")).rejects.toThrow(
+      "--tags takes one or more ids",
+    )
+    expect((await cli("posts", "show", made.post.external_id)).item).toMatchObject({ terms: ["tag-7", "cat-1"] })
     const id = made.post.external_id
     expect(((await cli("posts", "publish", id, "--yes")).item as { post: { status: string } }).post.status).toBe(
       "published",
@@ -123,7 +154,7 @@ describe("content commands", () => {
     const { cli, source } = await setup({ "posts.publish": "deny" })
     await cli("sync")
     await expect(cli("posts", "publish", "11", "--yes")).rejects.toThrow(/posts\.publish/)
-    await expect(cli("posts", "schedule", "11", "--at", "2026-12-01T09:00:00Z", "--yes")).rejects.toThrow(
+    await expect(cli("posts", "publish", "11", "--at-time", "2026-12-01T09:00:00Z", "--yes")).rejects.toThrow(
       /posts\.publish/,
     )
     await expect(cli("posts", "update", "10", "--title", "Public edit", "--yes")).rejects.toThrow(/posts\.publish/)
@@ -136,14 +167,25 @@ describe("content commands", () => {
     expect(source.requests).toEqual(["schedule"])
   })
 
+  it("with posts.update allowed, a draft edit asks nothing, and an edit of a missed schedule still asks posts.publish", async () => {
+    const { cli, source } = await setup({ "posts.update": "allow" })
+    await cli("sync")
+    expect((await cli("posts", "update", "11", "--title", "Quiet edit")).item).toMatchObject({
+      post: { title: "Quiet edit" },
+    })
+    await source.writer.schedule("11", NOW - 60_000, { operationId: "elsewhere" })
+    await expect(cli("posts", "update", "11", "--title", "Missed schedule")).rejects.toThrow(/posts\.publish/)
+    expect(source.requests).toEqual(["update", "schedule"])
+  })
+
   it("refuses a schedule in the past and a body over blocks without --replace-body", async () => {
     const { cli, source, store } = await setup()
     await cli("sync")
     const file = join(mkdtempSync(join(tmpdir(), "content-text-")), "flat.md")
     writeFileSync(file, "Flat text.")
-    await expect(cli("posts", "schedule", "11", "--at", "2020-01-01T00:00:00Z", "--yes")).rejects.toThrow()
+    await expect(cli("posts", "publish", "11", "--at-time", "2020-01-01T00:00:00Z", "--yes")).rejects.toThrow()
     await store.content.save(ACCOUNT, "post", [{ externalId: "10", status: "published", lossy: true }], NOW)
-    await expect(cli("posts", "update", "10", "--body-file", file, "--yes")).rejects.toThrow(/--replace-body/)
+    await expect(cli("posts", "update", "10", "--text-file", file, "--yes")).rejects.toThrow(/--replace-body/)
     expect(source.requests).toEqual([])
   })
 

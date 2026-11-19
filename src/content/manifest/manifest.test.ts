@@ -171,6 +171,24 @@ describe("WordPress from configuration", () => {
     expect(sent).toEqual([{ tags: [7], categories: [1], content: { raw: expect.stringContaining("<em>new</em>") } }])
   })
 
+  it("passes the keys the content command checked to the api writer, with the call's own key", async () => {
+    const { fake, source } = wordpress()
+    const confirmed: (readonly string[])[] = []
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api,
+      write: (command, operation, input, keys) => {
+        confirmed.push(keys)
+        return fake.write(command, operation, input)
+      },
+      command: new Command("wp"),
+      source,
+    })
+    await writer.publish("11", { operationId: "op-1", confirmed: ["posts.publish"] })
+    await writer.update("11", { title: "t" }, { operationId: "op-2" })
+    const own = `api.${api.operations.find((one) => one.id === WORDPRESS_CONTENT.writes.update.operation)?.command}`
+    expect(confirmed).toEqual([["posts.publish", own], []])
+  })
+
   it("names the place of a mistake in the manifest, with the nearest operation", () => {
     const wrong = structuredClone(WORDPRESS_CONTENT)
     const [posts] = wrong.entities.post

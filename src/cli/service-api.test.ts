@@ -629,6 +629,15 @@ describe("the shared service api group", () => {
     ])
   })
 
+  it("**the writer asks nothing for a plain edit** at the default levels: no publish, date, force or delete key", async () => {
+    const { cli, bare } = fixture({})
+    const edited = await cli("work", "write", "update-post", "--id", "5", "--body", '{"title":"t"}', "--json")
+    expect(edited.error).toBeUndefined()
+    expect(bare().map(({ method }) => method)).toEqual(["POST"])
+    const dated = await cli("work", "write", "update-post", "--id", "5", "--body", '{"date":"2000-01-01"}', "--json")
+    expect(dated.error).toMatchObject({ code: "confirmation_required" })
+  })
+
   it("**the writer asks once per key**: a key the caller confirmed is not asked again, every other still is", async () => {
     const { cli, bare } = fixture({ "posts.publish": "ask", api: "allow" })
     const unasked = await cli("work", "write", "update-post", "--id", "5", "--body", '{"status":"publish"}', "--json")
