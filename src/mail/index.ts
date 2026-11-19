@@ -18,6 +18,13 @@ export { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 export { dropMissing, type Gone, tooManyGone } from "./gone.js"
 export { type AuthVerdicts, HEADER_FIELDS, headersOf, type MailHeaders, mailHeadersOf } from "./headers.js"
 export { type MailIdsInput, mailIds } from "./ids.js"
+export {
+  INBOX_BUCKETS,
+  INBOX_LIMITS,
+  type InboxBucket,
+  type InboxVerdict,
+  inboxVerdicts,
+} from "./inbox.js"
 export { decodedLabelName, decodeMailboxName, labelName, systemLabel } from "./labels.js"
 export {
   acknowledgeMark,

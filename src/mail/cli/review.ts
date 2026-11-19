@@ -27,6 +27,7 @@ import { formatReference } from "../../domain/references.js"
 import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
 import type { AccountKey, EmailMarks } from "../../store/store.js"
+import { type InboxVerdict, inboxVerdicts } from "../inbox.js"
 import { cursorOf, findingsKeyOf, readPastMark } from "../marks.js"
 import { BULK_TRIAGE_DEFAULTS } from "../newsletter.js"
 import { hitText } from "../read.js"
@@ -121,7 +122,13 @@ const markText = (marks: EmailMarks | undefined, excerptOnly = false, partial = 
   return shown ? `\n  [${shown}]` : ""
 }
 
-const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, step: Steps) => {
+const reviewAnswer = (
+  found: MailReview,
+  mailbox: AccountKey,
+  fresh: boolean,
+  step: Steps,
+  sorted: ReadonlyMap<string, InboxVerdict> = new Map(),
+) => {
   // Excerpts come after the mail written to the owner, so an agent with a budget reads that first.
   const read = found.chats
     .flatMap((chat) => chat.messages.map((message) => ({ ...message, chatTitle: chat.title })))
@@ -176,6 +183,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
         ...(message.through ? { cursor: message.through.cursor, findings_key: message.through.findingsKey } : {}),
         list_id: message.marks?.listId ?? null,
         rule_id: message.marks?.ruleId ?? null,
+        ...inboxOf(sorted.get(message.chatId)),
         ...(message.marks
           ? {
               fingerprint: message.marks.fingerprint,
@@ -184,7 +192,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
             }
           : {}),
       },
-      untrusted: REVIEW_UNTRUSTED,
+      untrusted: sorted.has(message.chatId) ? [...REVIEW_UNTRUSTED, "email.inbox.reason"] : REVIEW_UNTRUSTED,
     })),
     limit: Math.max(1, read.length),
     has_more: false,
@@ -193,6 +201,12 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
     meta: found.complete ? {} : { complete: false },
   })
 }
+
+const inboxOf = (verdict: InboxVerdict | undefined) =>
+  verdict ? { inbox: { bucket: verdict.bucket, reason: verdict.reason } } : {}
+
+const sortedOf = async (store: Parameters<Parameters<MailReads["read"]>[1]>[0], mailbox: AccountKey) =>
+  new Map((await inboxVerdicts(store, mailbox)).map((one) => [one.thread, one]))
 
 const holderReview = async (command: Command, mail: MailReads, holder: string, query: string[]) => {
   const { unanswered, waiting } = command.opts<{ unanswered?: unknown; waiting?: unknown }>()
@@ -203,12 +217,12 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     )
   const triage = mail.bulkTriage?.(command) ?? BULK_TRIAGE_DEFAULTS
   const now = Date.now()
-  const { read, mailbox, marks } = await mail.read(command, async (store, mailbox) => {
+  const { read, mailbox, marks, sorted } = await mail.read(command, async (store, mailbox) => {
     const read = await readPastMark(store, mailbox, holder, { triage, now })
     const ids = [...read.emails, ...read.excerpts.map(({ email }) => email)].map((one) => one.id)
     const account = ids.length ? await store.accounts.storedAccount(mailbox) : undefined
     const marks = account ? await store.mail.emailMarks(account.id, ids) : new Map()
-    return { read, mailbox, marks }
+    return { read, mailbox, marks, sorted: await sortedOf(store, mailbox) }
   })
   const markedThrough = read.mark?.throughId ?? 0
   const heldThrough = [...read.emails, ...read.excerpts.map(({ email }) => email)].reduce(
@@ -262,7 +276,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     quiet: 0,
   }
   const step = stepsFor(mail.mount, mailbox)
-  const answer = reviewAnswer(found, mailbox, true, step)
+  const answer = reviewAnswer(found, mailbox, true, step, sorted)
   const skipped = Object.entries(read.skipped).filter(([, count]) => count > 0)
   const stage =
     read.findingsKey === undefined || emails.length === 0 ? [] : step("mail-findings.add", { key: read.findingsKey })
@@ -375,7 +389,7 @@ an agent over MCP, and each scheduled run.`,
       const waiting = options.waiting === undefined ? undefined : waitingHours(options.waiting)
       const env = environmentOf(this).env ?? process.env
       const now = Date.now()
-      const { found, mailbox, saved } = await mail.read(this, async (store, mailbox) => {
+      const { found, mailbox, saved, sorted } = await mail.read(this, async (store, mailbox) => {
         const saved = options.new
           ? checkPoints(mail.app, {
               command: pointsOf(this, "review", mail.app),
@@ -393,10 +407,10 @@ an agent over MCP, and each scheduled run.`,
           ...(unanswered === undefined ? {} : { unansweredAfterHours: unanswered }),
           ...(waiting === undefined ? {} : { waitingAfterHours: waiting }),
         })
-        return { found, mailbox, saved }
+        return { found, mailbox, saved, sorted: await sortedOf(store, mailbox) }
       })
       const output = outputFor(this)
-      const answer = reviewAnswer(found, mailbox, saved !== undefined, stepsFor(mail.mount, mailbox))
+      const answer = reviewAnswer(found, mailbox, saved !== undefined, stepsFor(mail.mount, mailbox), sorted)
       if (meta) answer.meta = { ...meta, ...answer.meta }
       answerLocally(this, output, answer, (local) => {
         const read = found.chats.flatMap((chat) => chat.messages)

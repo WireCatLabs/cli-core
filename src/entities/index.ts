@@ -441,6 +441,7 @@ export const ENTITIES = {
     attachments: v.optional(v.array(hitFile)),
     untrusted,
   }),
+  // Typed loosely: the inferred type of `ENTITIES` would pass the size the compiler writes out (TS7056).
   "message.summary": v.strictObject({
     ...v.pick(message, [
       "ref",
@@ -456,7 +457,7 @@ export const ENTITIES = {
       "email",
     ]).entries,
     untrusted,
-  }),
+  }) as v.GenericSchema,
   message_link: messageLink,
   message_write: messageWrite,
   message_send: messageSend,
