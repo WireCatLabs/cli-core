@@ -141,6 +141,15 @@ describe("a second secret in the same entry", () => {
     expect(store.readSecret("office", "sftp")).toBeUndefined()
   })
 
+  it("**keeps a named secret in the file when the keyring does not answer**, before any token is saved", () => {
+    const store = storeOf(envHere(), brokenKeyring())
+    expect(store.writeSecret("office", "sftp", "sftp-password")).toBe("file")
+    expect(store.write("office", "db-password")).toBe("file")
+
+    expect(store.readSecret("office", "sftp")).toEqual({ secret: "sftp-password", source: "file" })
+    expect(store.read("office")).toEqual({ secret: "db-password", source: "file" })
+  })
+
   it("**changes the token without losing the named secrets**, and the other way round", () => {
     const store = storeOf(envHere(), memoryKeyring())
     store.writeSecret("office", "ssh", "ssh-1")

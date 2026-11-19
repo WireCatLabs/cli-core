@@ -155,7 +155,7 @@ export class ProfileTokenStore {
   /** A named secret, kept in the profile's one entry beside its token; where the entry is now when not given. */
   writeSecret(profile: string, name: string, secret: string, storage?: TokenStorage): CredentialSource {
     checkName(name)
-    const found = this.#stored.read(accountOf(profile))
+    const found = this.#storedUnlessUnreachable(profile)
     const held = unpack(found?.secret)
     const where = storage ?? (found?.source === "file" ? "file" : "keyring")
     return this.#put(profile, { ...held, secrets: { ...held.secrets, [name]: secret } }, where)
@@ -184,10 +184,14 @@ export class ProfileTokenStore {
 
   /** A sign-in must still land, in the file, when the keyring does not answer; what the keyring held stays there. */
   #heldUnlessUnreachable(profile: string): Held {
+    return unpack(this.#storedUnlessUnreachable(profile)?.secret)
+  }
+
+  #storedUnlessUnreachable(profile: string): StoredCredential | undefined {
     try {
-      return this.#held(profile)
+      return this.#stored.read(accountOf(profile))
     } catch (error) {
-      if (isCliError(error) && error.details.reason === "keyring.unreachable") return unpack(undefined)
+      if (isCliError(error) && error.details.reason === "keyring.unreachable") return undefined
       throw error
     }
   }
