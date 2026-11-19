@@ -321,7 +321,12 @@ listing per run instead of one read per file. The provider implements `FileTarge
 ```ts
 interface FileTarget {
   identity(): Promise<string>
-  list(root: string, signal?: AbortSignal): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
+  list(
+    root: string,
+    signal?: AbortSignal,
+    options?: { excluded?(path: string): boolean },
+  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
+  exists(path: string, signal?: AbortSignal): Promise<boolean>
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
   trash(path: string, expect: { sha256: string; md5?: string }, signal?: AbortSignal): Promise<void>
@@ -332,8 +337,9 @@ type Expect = { absent: true } | { sha256: string; md5?: string }
 ```
 
 `list` returns each file's path relative to `root`, its `id` (kept across a move and an overwrite), `size`, `sha256`
-(the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id and `complete`, false when a page was skipped or a cap was hit. The other calls take the
-remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
+(the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id and `complete`, false when a page was skipped or a cap was hit. Files at paths
+`excluded` names are listed too, so a file moved there is found by its id, but count toward no cap. `exists` reads one
+path directly, false only when the provider says nothing is there. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
 size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
 `conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
 just before the write. An editing command reuses the same call, `upload(path, file, { sha256: whatWasDownloaded })`.
@@ -347,11 +353,17 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    `name (conflict YYYY-MM-DD <remote>).ext`, then sends both. The copy enters the state only once its upload
    returns, so a failed upload leaves it to send next time, never to delete.
 2. A deletion crosses sides into a trash: the remote's (`trash`, with the expected hashes) or
-   `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. Up to 2 deletions always go through; a
-   run that would delete more than 2 files and also more than 50, or more than a quarter of the mirror, stops before
-   any write with `mirror.too-many-deletions` unless `allowDeletions` covers the count. `hints` (`preview`, `repin`,
-   `allowDeletions`) names the app's own commands in this message and the repin one; the defaults are `--dry-run`,
-   `--repin` and "explicitly".
+   `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. A run that would delete more than 10
+   files (`MAX_DELETIONS`), or replace more than 50 existing files on either side (`MAX_REPLACEMENTS`: an upload over
+   a remote file, a download over a local one, `keep: "both"`), stops before any write unless `allowDeletions` and
+   `allowReplacements` cover the counts, however large the mirror. The stop is not thrown: the mirror's result has
+   one error at path `.` with `code: "confirmation_required"` and `reason` `mirror.too-many-deletions` or
+   `mirror.too-many-replacements`, plus `tooManyDeletions` and `tooManyReplacements`, so `syncFileMirrors` goes on
+   with the other mirrors and a watch reports the stop at every cycle that syncs the mirror. The message names
+   every count over its limit and the one command that allows them all. Replacements get the higher bar because the
+   store keeps every content they replace. A dry run reports the counts without stopping. `hints` (`preview`, `repin`, `sync`,
+   `allowDeletions`, `allowReplacements`, `exclude`) are the app's commands in these messages, with `<id>` (the
+   mirror's `id`) and `<count>` filled in.
 3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
    file.
 4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local
@@ -375,13 +387,18 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    download of a new file whose copy into place was cut off may leave a partial file under its name (`pending` says
    `created`): while that file has neither the remote's nor the last sync's content, its entry stays and the path is
    a conflict whatever `keep` says; moving the file away lets the next run download it. A download that replaced a
-   file renames it into place whole, so it is never taken as cut off. The state is saved at most once a second and at the end.
+   file renames it into place whole, so it is never taken as cut off. The state is saved at the end and, during the
+   run, at most once a second per 10,000 entries.
 7. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
    root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
    with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
    drive reads as empty; the error says to mount it, or to add a file or remove the mirror's state when the files
    really were deleted). A file missing from an incomplete listing is reported in `unknown` and nothing is deleted
-   for it. When a root fails, the run does nothing, reports every file of the state in `unknown` and the root
+   for it. A file missing from a complete listing is deleted locally only once `exists`, read after the listing,
+   says nothing is there: a listing read in pages can miss a file that moved while it was read, and a provider's
+   flat listing may lag. A file `exists` finds, or cannot answer for, is `unknown`, and these checks come before the
+   guard counts deletions, so a skipped page never reads as a mass deletion. No retry loop waits for the remote to
+   stand still, so a remote that changes all the time (a phone uploading photos) still has its deletions proven. When a root fails, the run does nothing, reports every file of the state in `unknown` and the root
    problem in `errors` (path `.`), even at a first sync. Either way the run is partial. A file the last sync did not
    see is never a deletion. Hidden remote files are skipped as local ones are.
 8. A root that was replaced (the remote root has another id, or the local folder another device or inode) blocks
@@ -391,6 +408,17 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    root was replaced is re-pinned: `syncFileMirrors` with `repin` leaves the state of every other mirror as it is. A
    root that is gone, or a local folder that is empty where the state had files, still blocks.
 9. `dryRun` lists the remote and returns the `plan`; it writes nothing on either side and saves no state.
+10. `exclude` (a `Mirror`'s `exclude`) takes globs: a pattern without `/` is a name at any depth (`node_modules`,
+    `*.iso`), one with `/` a path from the root (`/Camera`, `Work/**/build`); `*` and `?` stay within a name, `**`
+    crosses folders (`excludedBy`; `exclusionPattern` checks one). An excluded path is absent by filter, never
+    deleted: it is skipped on both sides, and its entries are dropped from the state at the end of the run, so adding
+    an exclusion trashes nothing and removing one later syncs the path as a new folder. A synced file moved into an
+    excluded folder on the remote is renamed there locally, then left alone.
+11. Before writing, the run checks free space (`space`, `statfs` by default): downloads land under the root, and
+    the store keeps what they replace. When a drive would keep less free than a tenth of what the run writes there
+    (at least 100 MB, at most 1 GB), the run stops with one `mirror.no-space` error at path `.` (`noSpace` says the
+    drive, the bytes needed and free); a dry run reports it. The local scan takes at most 100,000 files
+    (`maxFiles`).
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
@@ -410,7 +438,7 @@ days after it was last kept; one that vanishes while prune runs is skipped. Call
 sync lock.
 `versions.list(path)` lists a path's events with `available` (bytes still kept); `restoreFileVersion(root, path,
 sha256, versions, lock)` puts one back under the same lock as a sync, keeping the current file first, and the next
-sync sends it.
+sync sends it. `versions.dir` is the store's folder, whose drive the free-space check reads.
 
 The lock is either what `acquireLock` returns (its `held()` is checked before every write; a lost lock fails with
 `profile.busy`) or any `{ assertHeld, release }`. `skippedName(name)` is the rule for hidden files, `node_modules` and

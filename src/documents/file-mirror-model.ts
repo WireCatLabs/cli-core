@@ -26,11 +26,18 @@ export interface FileTarget {
   /**
    * Every file under `root`, with the root folder's own id; undefined when the folder does not exist. `complete` is
    * false when any page was skipped or a cap was hit: a file missing from such a listing is not taken as deleted.
+   * Files at paths `excluded` names are listed too, so a file moved there is found by its id, but count toward no cap.
    */
   list(
     root: string,
     signal?: AbortSignal,
+    options?: { excluded?(path: string): boolean },
   ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
+  /**
+   * Whether anything is at `path` now, read directly rather than from a listing; false only when the provider says
+   * nothing is there. A file missing from a listing is deleted only once this says so.
+   */
+  exists(path: string, signal?: AbortSignal): Promise<boolean>
   /** Streams the file into `into`, a new local file. */
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   /** Streams the local file `from` to `path` and returns the file as the remote now has it. */

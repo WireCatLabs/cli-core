@@ -206,6 +206,7 @@ export const scanLocal = async (
   kindOf: (path: string) => string | undefined,
   maxFiles = 10_000,
   known?: (path: string) => { size: number; mtimeMs: number; hash: string } | undefined,
+  skip?: (path: string) => boolean,
 ): Promise<{ files: LocalDocument[]; unsupported: number; links: string[] }> => {
   const files: LocalDocument[] = []
   const links: string[] = []
@@ -215,6 +216,7 @@ export const scanLocal = async (
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (SKIPPED.test(entry.name)) continue
       const path = relative ? posix.join(relative, entry.name) : entry.name
+      if (skip?.(path)) continue
       if (entry.isSymbolicLink()) {
         links.push(path)
         continue

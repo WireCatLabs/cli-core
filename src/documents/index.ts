@@ -40,6 +40,7 @@ export {
   skippedName,
 } from "../services/documents/push.js"
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
+export { excludedBy, exclusionPattern } from "../services/files/exclusions.js"
 export {
   type FileMirrorOptions,
   type FileMirrorResult,
@@ -48,6 +49,8 @@ export {
   fileMirrorStatus,
   fileRemoteChanges,
   fileSyncState,
+  MAX_DELETIONS,
+  MAX_REPLACEMENTS,
   type MirrorHints,
   syncFileMirror,
   syncFileMirrors,

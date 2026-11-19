@@ -35,6 +35,8 @@ export interface FileVersion extends VersionEvent {
 }
 
 export interface FileVersions {
+  /** The folder the store keeps its copies in, when it is on disk: a sync checks its free space first. */
+  readonly dir?: string
   /**
    * Copies a content into the store before the sync overwrites or deletes it; returns the hash of what it copied. The
    * source is a local file, or a writer that creates the temporary file it is given, such as a target's `download`.
@@ -116,6 +118,7 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
   }
   const has = (sha256: string) => existsSync(join(objects, sha256))
   return {
+    dir,
     keep: async (source) => {
       await stored(() => mkdir(objects, { recursive: true, mode: 0o700 }))
       const temp = join(objects, `.${randomUUID()}.tmp`)
