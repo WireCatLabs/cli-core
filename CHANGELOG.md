@@ -5,6 +5,31 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.709.0 — 19.11.2026
+
+### Added
+
+- **`mailInboxCommand`: a mail CLI's `inbox` sorts new mail with the shared AI model.** The threads that changed since
+  its last run go to the model chosen with `models ai` (Anthropic, OpenAI or a local Ollama), with no agent. It puts
+  each one under needs an answer, to read or can wait, with a one-line reason, then lists every sorted thread, those
+  that need an answer first. It sends each thread's subject, senders and its 3 newest emails without quoted mail or
+  the signature, at most 1500 characters each. Mail sent to many is not sent. `--max-messages` (40 by default) and
+  `--max-tokens` (60000) limit a run, and the threads left wait for the next. A model outside this computer follows
+  local only and `models chats`: under ask it needs `--yes`. An agent is refused (`mail.inbox-agent`), and
+  `--offline` lists without calling the model. A thread the owner answered leaves the list on the next run. The
+  verdicts are kept in the store, so a schedule can run it.
+- **Mail `review` shows how `inbox` sorted each thread**, as `email.inbox` (`bucket` and `reason`, the reason marked
+  untrusted).
+- **wordpress joins `WIRECAT_TOOLS`.** WordPress (`wordpress`, `@wirecat/wordpress-cli`) is on npm since 0.1.0, so
+  every CLI's first screen ("Works with") and first-run list of other WireCat tools now name it, and an upload refuses
+  a file from its folders (`wordpress-cli`, `WCWP_`) as it does for the other tools.
+
+### Fixed
+
+- **`parity.json` has rows for `messages scheduled cancel`, `edit` and `send`** (max and tg; WhatsApp has no scheduled
+  messages). 0.706.0 added the commands without rows, so the parity manifest check failed for max-cli and tg-cli,
+  hidden only because both were listed as known broken.
+
 ## 0.708.0 — 19.11.2026
 
 ### Fixed
