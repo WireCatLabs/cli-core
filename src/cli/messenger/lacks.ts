@@ -27,6 +27,9 @@ export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "messages comments": ["comments", "read comments on a channel post"],
   "messages pin": ["pin", "pin a message"],
   "messages unpin": ["unpin", "unpin a message"],
+  "messages scheduled cancel": ["cancelScheduled", "cancel a scheduled message"],
+  "messages scheduled edit": ["editScheduled", "edit a scheduled message"],
+  "messages scheduled send": ["sendScheduled", "send a scheduled message now"],
 }
 
 /** The commands the store answers for a messenger whose history is pushed to it, so the method is not needed there. */

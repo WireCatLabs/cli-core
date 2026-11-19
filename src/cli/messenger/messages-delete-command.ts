@@ -13,8 +13,8 @@ import { type Messenger, messengerContext } from "./context.js"
  * question, and `--allow-dangerous` is the yes. For everyone only
  * with `--for-everyone` (max-cli `NEED-239`), and never for an agent (NEED-1423).
  */
-export const deleteCommand = (messenger: Messenger): Command =>
-  annotate(new Command("delete"), {
+export const deleteCommand = (messenger: Messenger): Command => {
+  const command = annotate(new Command("delete"), {
     examples: [`${messenger.app.command} personal messages delete "Book club" 101`],
     effects: REMOTE_WRITE,
     output: { entity: "message_deletion" },
@@ -49,3 +49,10 @@ export const deleteCommand = (messenger: Messenger): Command =>
       )
       renderAnswer(this, context, itemOf(snakeKeys(deleted)))
     })
+  if (messenger.scheduledSends !== false)
+    command.addHelpText(
+      "after",
+      "\nA message waiting to be sent has an id of its own; cancel it with `messages scheduled cancel`.",
+    )
+  return command
+}

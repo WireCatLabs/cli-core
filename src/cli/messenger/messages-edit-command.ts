@@ -38,5 +38,10 @@ export const editCommand = (messenger: Messenger): Command => {
       await afterWrite(edited, () => renderAnswer(this, context, writtenAnswer(edited, reader)))
     })
   if (messenger.html) edit.option("--html", HTML_HELP)
+  if (messenger.scheduledSends !== false)
+    edit.addHelpText(
+      "after",
+      "\nA message waiting to be sent has an id of its own; change it with `messages scheduled edit`.",
+    )
   return edit
 }

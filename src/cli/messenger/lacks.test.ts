@@ -42,6 +42,9 @@ const argvOf = (root: string): Record<string, string[]> => {
     "messages comments": [chat, message],
     "messages pin": [chat, message],
     "messages unpin": [chat, message],
+    "messages scheduled cancel": [chat, message],
+    "messages scheduled edit": [chat, message, "new text"],
+    "messages scheduled send": [chat, message],
   }
 }
 

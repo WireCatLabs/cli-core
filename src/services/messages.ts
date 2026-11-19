@@ -234,6 +234,11 @@ export interface Reacted {
 /** max-cli's: many at once is what a ban for automation looks like. */
 export const DELETE_AT_ONCE = 10
 
+const atOnce = (ids: readonly string[]) => {
+  if (ids.length > DELETE_AT_ONCE)
+    throw new CliError("validation_error", `at most ${DELETE_AT_ONCE} messages at once, got ${ids.length}`)
+}
+
 /** Every write goes through the guard: asked before it goes, told after, on every outcome. */
 /** Only a message with files says what can be linked of them. */
 const filesOf = ({ attachments }: Pick<Message, "attachments">): { files?: ReturnType<typeof fileLinks> } => {
@@ -276,6 +281,24 @@ export interface MessagesService {
   ): Promise<Operated<{ message: Message }>>
   /** Each message counts toward the hourly limit. */
   delete(request: { chat: string; messages: string[]; forEveryone: boolean }): Promise<Operated<Deletion>>
+  /**
+   * The scheduled messages by the ids `scheduled` lists, each checked against that list first: the same number in the
+   * chat's history is another message. Cancelling counts as deleting, sending now as sending.
+   */
+  cancelScheduled(request: { chat: string; ids: string[] }): Promise<Operated<{ chatId: Id; cancelled: Id[] }>>
+  /** New text, a new time (`at`), or both. */
+  editScheduled(request: {
+    chat: string
+    id: string
+    text?: string
+    markdown?: boolean
+    html?: boolean
+    at?: string
+  }): Promise<Operated<{ message: Message; scheduledFor: string }>>
+  sendScheduled(request: {
+    chat: string
+    ids: string[]
+  }): Promise<Operated<{ chatId: Id; sent: Id[]; messages: Message[] }>>
   /** Guarded against the chat it goes to: that is where somebody new reads it. */
   forward(
     target: MessageTarget & { to: string; silent: boolean; sendId?: string; sendAs?: Id; threadId?: Id },
@@ -347,6 +370,22 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         ...(query.saved === undefined ? {} : { saved: query.saved }),
       })
       .catch(() => undefined)
+  }
+
+  /** The chat and its scheduled messages by the ids asked for; an id it does not list is refused before any write. */
+  const waiting = async (connection: MessengerAdapter, chat: string, ids: readonly string[]) => {
+    const list = capability(connection, "scheduled", "list scheduled messages")
+    const { id: chatId } = await connection.resolve(chat)
+    const queued = await list(chatId)
+    const unknown = ids.filter((id) => !queued.some((message) => message.id === id))
+    if (unknown.length > 0)
+      throw new CliError(
+        "not_found",
+        `nothing scheduled in this chat has the id ${unknown.join(", ")} — a scheduled message has an id of ` +
+          `its own, not the one of a sent message; \`messages scheduled ${chat}\` lists them`,
+        { sent: false },
+      )
+    return { chatId, found: ids.map((id) => queued.find((message) => message.id === id) as Message) }
   }
 
   const pinning = async (
@@ -780,6 +819,71 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         remove(chatId, messages, { forEveryone }),
       )
       return { operationId, chatId, deleted: messages, forEveryone }
+    },
+
+    cancelScheduled: async ({ chat, ids }) => {
+      atOnce(ids)
+      const connection = await deps.connection()
+      const cancel = capability(connection, "cancelScheduled", "cancel a scheduled message")
+      const { chatId } = await waiting(connection, chat, ids)
+      const operationId = newOperationId()
+      await guardedWrite(
+        guard,
+        { operationId, chatId, kind: "delete", key: "messages.scheduled.cancel", count: ids.length },
+        () => cancel(chatId, ids),
+      )
+      return { operationId, chatId, cancelled: ids }
+    },
+
+    editScheduled: async ({ chat, id, text: typed, markdown, html, at }) => {
+      if (typed === undefined && at === undefined)
+        throw new CliError("validation_error", "nothing to change — give the new text, --at-time, or both")
+      const connection = await deps.connection()
+      const edit = capability(connection, "editScheduled", "edit a scheduled message")
+      const prepared = typed === undefined ? undefined : await formatted(connection, typed, { markdown, html })
+      const change = prepared && (deps.agentText ? visibleFormattedText(prepared) : prepared)
+      if (change !== undefined && change.text.trim() === "")
+        throw new CliError("validation_error", "no new text — the marks leave nothing")
+      const {
+        chatId,
+        found: [current],
+      } = await waiting(connection, chat, [id])
+      const scheduledFor = at ?? current?.scheduledFor ?? current?.timestamp
+      if (scheduledFor === undefined) throw new CliError("invalid_response", "the scheduled message has no time")
+      const operationId = newOperationId()
+      const message = await guardedWrite(
+        guard,
+        {
+          operationId,
+          chatId,
+          kind: "edit",
+          key: "messages.scheduled.edit",
+          messageId: id,
+          scheduledFor,
+          ...(change === undefined ? {} : { length: change.text.length }),
+        },
+        () =>
+          edit(chatId, id, {
+            at: scheduledFor,
+            ...(change === undefined ? {} : { text: change.text }),
+            ...(change === undefined || change.spans.length === 0 ? {} : { formatting: change.spans }),
+          }),
+      )
+      return { operationId, message, scheduledFor }
+    },
+
+    sendScheduled: async ({ chat, ids }) => {
+      atOnce(ids)
+      const connection = await deps.connection()
+      const send = capability(connection, "sendScheduled", "send a scheduled message now")
+      const { chatId } = await waiting(connection, chat, ids)
+      const operationId = newOperationId()
+      const messages = await guardedWrite(
+        guard,
+        { operationId, chatId, kind: "message", key: "messages.scheduled.send", count: ids.length },
+        () => send(chatId, ids),
+      )
+      return { operationId, chatId, sent: ids, messages }
     },
 
     forward: async ({ chat, message, to, silent, sendId, sendAs, threadId: typedThread }) => {
