@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.714.0 — 19.11.2026
+
+### Fixed
+
+- **The file mirror's default hints use the WireCat vocabulary.** A guard stop or a full drive names
+  `--replace` and `--ignore <path>`, which `cli-dev lint` accepts, instead of `--allow-replacements <count>` and
+  `--exclude <glob>`.
+- **A second secret saves to the file when the keyring does not answer.** `ProfileTokenStore#writeSecret` read the
+  profile's old entry first, and since cli-base 0.108 that read throws `keyring.unreachable` when the keyring fails
+  and the file has no entry. So `setup apply` of a profile with two passwords (pbx: the database and SFTP or SSH)
+  failed on a computer with no keyring, where it used to save to the private file. That read now counts as no old
+  entry, as `write` has done since 0.685.0.
+
 ## 0.713.0 — 19.11.2026
 
 ### Added
