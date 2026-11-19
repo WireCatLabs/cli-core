@@ -577,11 +577,12 @@ describe("syncFileMirror, the guard on mass changes", () => {
 })
 
 describe("syncFileMirror, free space", () => {
-  it("downloads nothing when the drive would keep less than 1 GB free, and says how much it needs", async () => {
+  it("downloads nothing when the drive would keep less than 100 MB free, and says how much it needs", async () => {
     const context = setup({}, { "big.bin": "x".repeat(2_000) })
-    const space = async () => ({ free: 1024 ** 3 + 1_000, dev: 1 })
+    const free = 100 * 1024 ** 2 + 1_000
+    const space = async () => ({ free, dev: 1 })
     const preview = await context.sync(undefined, { dryRun: true, space })
-    expect(preview.noSpace).toEqual({ path: context.root, needed: 2_000, free: 1024 ** 3 + 1_000 })
+    expect(preview.noSpace).toEqual({ path: context.root, needed: 2_000, free })
     const stopped = await context.sync(undefined, { space, hints: { exclude: "mirrors exclude <id> <glob>" } })
     expect(stopped.errors).toEqual([
       expect.objectContaining({
@@ -591,7 +592,7 @@ describe("syncFileMirror, free space", () => {
       }),
     ])
     expect(await context.local()).toEqual({})
-    expect(await context.sync(undefined, { space: async () => ({ free: 2 * 1024 ** 3, dev: 1 }) })).toMatchObject({
+    expect(await context.sync(undefined, { space: async () => ({ free: free + 1_000, dev: 1 }) })).toMatchObject({
       downloaded: ["big.bin"],
     })
   })
@@ -601,9 +602,13 @@ describe("syncFileMirror, free space", () => {
     await context.sync()
     context.disk.write("a.md", "new, longer")
     const space = async (path: string) =>
-      path === context.root ? { free: 10 * 1024 ** 3, dev: 1 } : { free: 1024 ** 3, dev: 2 }
+      path === context.root ? { free: 10 * 1024 ** 3, dev: 1 } : { free: 100 * 1024 ** 2, dev: 2 }
     const stopped = await context.sync(undefined, { space })
-    expect(stopped.noSpace).toEqual({ path: expect.stringContaining(context.stateDir), needed: 3, free: 1024 ** 3 })
+    expect(stopped.noSpace).toEqual({
+      path: expect.stringContaining(context.stateDir),
+      needed: 3,
+      free: 100 * 1024 ** 2,
+    })
     expect(await context.local()).toEqual({ "a.md": "old" })
   })
 })

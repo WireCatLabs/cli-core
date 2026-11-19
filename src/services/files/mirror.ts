@@ -156,8 +156,8 @@ interface Step extends FileStep {
  */
 export const MAX_DELETIONS = 10
 export const MAX_REPLACEMENTS = 50
-/** What a run leaves free on a file system it downloads or keeps versions into. */
-const SPARE_BYTES = 1024 ** 3
+/** What a run leaves free on a drive it writes to: a tenth of what it writes, from 100 MB up to 1 GB. */
+const spareFor = (needed: number) => Math.min(1024 ** 3, Math.max(100 * 1024 ** 2, needed / 10))
 const MAX_FILES = 100_000
 const CHECKS = 8
 const TRASH = ".wirecat-trash"
@@ -580,7 +580,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       reason: "mirror.no-space",
       message:
         `this sync needs ${gigabytes(noSpace.needed)} on the drive of ${noSpace.path}, which has ` +
-        `${gigabytes(noSpace.free)} free, and leaves ${gigabytes(SPARE_BYTES)} of it free; free some space, or ` +
+        `${gigabytes(noSpace.free)} free, and leaves ${gigabytes(spareFor(noSpace.needed))} of it free; free some space, or ` +
         `leave big folders out with \`${fill(hints.exclude)}\``,
     })
   if (unapproved || noSpace) return result
@@ -884,7 +884,7 @@ const shortOfSpace = async (
           { path: root, needed: incoming, free: here.free },
           { path: versions.dir as string, needed: kept, free: store.free },
         ]
-  return needs.find((need) => need.needed > 0 && need.free < need.needed + SPARE_BYTES)
+  return needs.find((need) => need.needed > 0 && need.free < need.needed + spareFor(need.needed))
 }
 
 const ancestors = (path: string) => {

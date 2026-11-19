@@ -359,9 +359,9 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    `allowReplacements` cover the counts, however large the mirror. The stop is not thrown: the mirror's result has
    one error at path `.` with `code: "confirmation_required"` and `reason` `mirror.too-many-deletions` or
    `mirror.too-many-replacements`, plus `tooManyDeletions` and `tooManyReplacements`, so `syncFileMirrors` goes on
-   with the other mirrors and a watch reports the stop at every cycle. The message names every count over its limit
-   and the one command that allows them all. Replacements get the higher bar because the store keeps every content
-   they replace. A dry run reports the counts without stopping. `hints` (`preview`, `repin`, `sync`,
+   with the other mirrors and a watch reports the stop at every cycle that syncs the mirror. The message names
+   every count over its limit and the one command that allows them all. Replacements get the higher bar because the
+   store keeps every content they replace. A dry run reports the counts without stopping. `hints` (`preview`, `repin`, `sync`,
    `allowDeletions`, `allowReplacements`, `exclude`) are the app's commands in these messages, with `<id>` (the
    mirror's `id`) and `<count>` filled in.
 3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
@@ -387,7 +387,8 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    download of a new file whose copy into place was cut off may leave a partial file under its name (`pending` says
    `created`): while that file has neither the remote's nor the last sync's content, its entry stays and the path is
    a conflict whatever `keep` says; moving the file away lets the next run download it. A download that replaced a
-   file renames it into place whole, so it is never taken as cut off. The state is saved at most once a second and at the end.
+   file renames it into place whole, so it is never taken as cut off. The state is saved at the end and, during the
+   run, at most once a second per 10,000 entries.
 7. A file counts as deleted on a side only when the last sync saw it, the side's listing is complete, and the side's
    root is the same folder: the remote root has the id it had at the first sync; the local root exists, is a folder
    with the device and inode recorded at the first sync, and is not empty while the state has files (an unmounted
@@ -414,10 +415,10 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     an exclusion trashes nothing and removing one later syncs the path as a new folder. A synced file moved into an
     excluded folder on the remote is renamed there locally, then left alone.
 11. Before writing, the run checks free space (`space`, `statfs` by default): downloads land under the root, and
-    the store keeps what they replace. When a drive would keep less than 1 GB free, the run stops with one
-    `mirror.no-space` error at path `.` (`noSpace` says the drive, the bytes needed and free); a dry run reports it.
-    The local scan takes at most 100,000 files (`maxFiles`); the state is saved at most once a second for 10,000
-    entries, and proportionally less often for more.
+    the store keeps what they replace. When a drive would keep less free than a tenth of what the run writes there
+    (at least 100 MB, at most 1 GB), the run stops with one `mirror.no-space` error at path `.` (`noSpace` says the
+    drive, the bytes needed and free); a dry run reports it. The local scan takes at most 100,000 files
+    (`maxFiles`).
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
