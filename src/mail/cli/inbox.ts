@@ -10,23 +10,27 @@ import { listOf } from "../../cli/envelope.js"
 import { answerLocally } from "../../cli/local-times.js"
 import { answerOf as askOwner } from "../../cli/messenger/ask.js"
 import { positiveCount } from "../../cli/paging.js"
+import { ownerLanguageOf } from "../../cli/schedule/schedule-command.js"
 import { formatReference } from "../../domain/references.js"
 import { reference, text, time, untrusted } from "../../entities/fields.js"
 import { aiBaseUrl, aiSettingPath, aiTextReader, readAiSetting } from "../../models/ai.js"
 import { chatSendingAllowed, chatSendingAskRefusal } from "../../models/chat-sending.js"
 import { localOnly, localOnlyRefusal } from "../../models/local-only.js"
+import type { ModelUsage } from "../../models/types.js"
 import { agentOf } from "../../runs/run-context.js"
+import { costOf } from "../../services/enrichment-setting.js"
 import type { AccountKey } from "../../store/store.js"
 import {
+  ANSWER_TOKENS_PER_THREAD,
   INBOX_BUCKETS,
   INBOX_LIMITS,
-  INBOX_SYSTEM,
   type InboxBucket,
   type InboxSkip,
   type InboxThread,
   type InboxVerdict,
   inboxDue,
   inboxPrompt,
+  inboxSystem,
   inboxVerdicts,
   parseInboxAnswer,
   planInbox,
@@ -51,6 +55,7 @@ const inboxThread = v.strictObject({
   last_email_at: time,
   sorted_at: time,
   by: text,
+  sender: v.nullable(v.strictObject({ name: v.nullable(text), address: text })),
   untrusted,
 })
 
@@ -62,8 +67,9 @@ const itemOf = (mailbox: AccountKey) => (one: InboxVerdict) => ({
   last_email_at: one.lastEmailAt,
   sorted_at: one.sortedAt,
   by: one.by,
-  // The reason is the model's reading of mail other people wrote.
-  untrusted: ["title", "reason"],
+  sender: one.sender,
+  // The reason is the model's reading of mail other people wrote; the sender named himself.
+  untrusted: ["title", "reason", "sender"],
 })
 
 interface Run {
@@ -75,6 +81,10 @@ interface Run {
   overflow: number
   stopped?: "messages" | "tokens"
   failed?: string
+  /** What the model did, for `meta.model_run`; absent when no model is chosen and nothing was due. */
+  model?: { provider: string; model: string; endpoint: string; sent: number; waiting: number; ms: number }
+  usage?: ModelUsage
+  costUsd: number | null
 }
 
 const missingOf = (run: Run | undefined, command: string): Missing[] => {
@@ -165,9 +175,18 @@ export const mailInboxCommand = sharedCommand(
             { reason: "mail.inbox-agent" },
           )
         const now = Date.now()
+        const language = offline ? "en" : await ownerLanguageOf(env)
         const { verdicts, mailbox, run } = await mail.read(this, async (store, mailbox) => {
           if (offline) return { verdicts: await inboxVerdicts(store, mailbox), mailbox, run: undefined }
-          const run = await sortNew(this, store, mailbox, { ...options, app: mail.app, models, env, now, flags })
+          const run = await sortNew(this, store, mailbox, {
+            ...options,
+            app: mail.app,
+            models,
+            env,
+            now,
+            flags,
+            language,
+          })
           return { verdicts: await inboxVerdicts(store, mailbox), mailbox, run }
         })
         const output = outputFor(this)
@@ -176,8 +195,15 @@ export const mailInboxCommand = sharedCommand(
           limit: Math.max(1, verdicts.length),
           has_more: false,
           missing: missingOf(run, `${mail.app.command}`),
-          ...(run && (run.left > 0 || run.overflow > 0 || run.skipped.length > 0 || run.failed)
-            ? { meta: { complete: false } }
+          ...(run && (run.left > 0 || run.overflow > 0 || run.skipped.length > 0 || run.failed || run.model)
+            ? {
+                meta: {
+                  ...(run.left > 0 || run.overflow > 0 || run.skipped.length > 0 || run.failed
+                    ? { complete: false }
+                    : {}),
+                  ...(run.model ? { model_run: modelRunOf(run, run.model) } : {}),
+                },
+              }
             : {}),
         })
         answerLocally(this, output, body, (local) => {
@@ -200,6 +226,18 @@ export const mailInboxCommand = sharedCommand(
       }),
 )
 
+const modelRunOf = (run: Run, model: NonNullable<Run["model"]>) => ({
+  provider: model.provider,
+  model: model.model,
+  endpoint: model.endpoint,
+  sent: model.sent,
+  done: run.sorted,
+  left: model.waiting - run.sorted,
+  ...(run.usage ? { usage: run.usage } : {}),
+  cost_usd: run.costUsd,
+  ms: model.ms,
+})
+
 const sortNew = async (
   command: Command,
   store: Parameters<Parameters<MailReads["read"]>[1]>[0],
@@ -210,14 +248,20 @@ const sortNew = async (
     env: NodeJS.ProcessEnv
     now: number
     flags: { maxMessages?: number; maxTokens?: number; yes?: boolean }
+    language: string
   },
 ): Promise<Run> => {
-  const { models, env, now, flags } = given
+  const { models, env, now, flags, language } = given
   const due = await inboxDue(store, mailbox, now)
-  const plan = planInbox(due, {
-    emails: flags.maxMessages ?? INBOX_LIMITS.emails,
-    tokens: flags.maxTokens ?? INBOX_LIMITS.tokens,
-  })
+  const plan = planInbox(
+    due,
+    { emails: flags.maxMessages ?? INBOX_LIMITS.emails, tokens: flags.maxTokens ?? INBOX_LIMITS.tokens },
+    language,
+  )
+  const setting = readAiSetting(aiSettingPath(env))
+  const threads = plan.batches.flat().length
+  // Every thread that changed and is not sorted yet waits for a next run, those past what one review reads too.
+  const waiting = due.threads.length + due.skipped
   const run: Run = {
     sorted: 0,
     answered: due.answered.length,
@@ -226,6 +270,19 @@ const sortNew = async (
     quiet: due.quiet,
     overflow: due.skipped,
     ...(plan.stopped ? { stopped: plan.stopped } : {}),
+    ...(setting
+      ? {
+          model: {
+            provider: setting.provider,
+            model: setting.model,
+            endpoint: aiBaseUrl(setting),
+            sent: 0,
+            waiting,
+            ms: 0,
+          },
+        }
+      : {}),
+    costUsd: 0,
   }
   if (plan.batches.length === 0) {
     await saveInbox(store, mailbox, due, [], { by: "none", now, complete: due.complete && plan.left === 0 })
@@ -243,7 +300,6 @@ const sortNew = async (
       { reason: reader.refused },
     )
   if (reader.leavesComputer) {
-    const setting = readAiSetting(aiSettingPath(env))
     const host = setting ? new URL(aiBaseUrl(setting)).host : reader.by
     if (localOnly(env)) throw localOnlyRefusal("the text of your new mail", host)
     refuseUnderReadOnly(command, `send mail to ${host}`)
@@ -252,21 +308,39 @@ const sortNew = async (
         `${plan.emails} emails of ${plan.batches.flat().length} threads (about ${plan.tokens} tokens) go to ` +
         `${reader.by} at ${host}`
       const answer = await askOwner(command, `${what}. Send them? [y/N] `)
-      if (answer === null) throw chatSendingAskRefusal(what, models)
+      if (answer === null) {
+        const output = threads * ANSWER_TOKENS_PER_THREAD
+        throw chatSendingAskRefusal(what, models, {
+          emails: plan.emails,
+          threads,
+          tokens: plan.tokens,
+          host,
+          model: reader.by,
+          estimated_cost_usd: setting ? costOf({ input: plan.tokens - output, output }, setting) : null,
+        })
+      }
       if (!/^y(es)?$/i.test(answer.trim())) throw new CliError("cancelled", "cancelled — nothing was sent")
     }
   }
   const sorted: (InboxThread & { bucket: InboxBucket; reason: string })[] = []
+  const usage: ModelUsage = { input: 0, output: 0 }
+  let counted = true
+  const started = Date.now()
   for (const batch of plan.batches) {
     let answer: ReturnType<typeof parseInboxAnswer>
     try {
-      const text = await reader.complete({
+      if (run.model) run.model.sent += batch.length
+      const reply = await reader.answer({
         purpose: "mail-inbox",
-        system: INBOX_SYSTEM,
+        system: inboxSystem(language),
         prompt: inboxPrompt(batch),
         maxTokens: 4096,
       })
-      answer = parseInboxAnswer(text, batch)
+      if (reply.usage) {
+        usage.input += reply.usage.input
+        usage.output += reply.usage.output
+      } else counted = false
+      answer = parseInboxAnswer(reply.text, batch)
     } catch (error) {
       // What is sorted so far is kept; the rest comes with the next run.
       if (sorted.length === 0) throw error
@@ -281,6 +355,10 @@ const sortNew = async (
     }
   }
   run.sorted = sorted.length
+  if (run.model) run.model.ms = Date.now() - started
+  // A sum with a batch the provider did not count would read as the whole run's tokens.
+  if (counted) run.usage = usage
+  run.costUsd = !reader.leavesComputer ? 0 : counted && setting ? costOf(usage, setting) : null
   const complete = due.complete && run.left === 0 && run.skipped.length === 0 && run.failed === undefined
   await saveInbox(store, mailbox, due, sorted, { by: reader.by, now, complete })
   return run

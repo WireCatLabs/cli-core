@@ -869,6 +869,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--slug` | `<slug>` | string | the last part of its web address |  |
 | `--tags` | `<ids>` | list | its tags and categories, by comma-separated ids; replaces the ones it has |  |
 | `--replace-body` |  | switch | write the new text over a body the tool cannot fully read back, losing what it could not show |  |
+| `--like` | `<text>` | string | a made-up example of the text sought, such as a reply that would answer the question, searched by meaning beside the query |  |
 
 <!-- flags: end -->
 

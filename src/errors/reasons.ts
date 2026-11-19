@@ -2,6 +2,7 @@ import type { FailureContext } from "@wirecat/cli-base"
 import { QUERY_REASONS } from "@wirecat/cli-base/query"
 import type { ErrorReason } from "@wirecat/cli-base/standards"
 import { defineReasons } from "@wirecat/cli-base/standards"
+import { CHAT_SENDING_ASK_DETAILS } from "../models/chat-sending.js"
 
 type Entry = [reason: string, code: ErrorReason["code"], message: string]
 
@@ -795,6 +796,11 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
   },
 ])
 
+const DETAILED: Record<string, readonly string[]> = {
+  "vocabulary.consolidation-over-budget": ["table"],
+  "chat-sending.ask": CHAT_SENDING_ASK_DETAILS,
+}
+
 /** Every reason this package raises; cli-base's own are known to the handler already. */
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
@@ -803,7 +809,7 @@ export const REASONS: ErrorReason[] = defineReasons([
     reason,
     code,
     message,
-    details: reason === "vocabulary.consolidation-over-budget" ? ["table"] : [],
+    details: DETAILED[reason] ?? [],
   })),
 ])
 

@@ -15,6 +15,18 @@ const Setting = v.strictObject({
 
 export type ChatSendingSetting = v.InferOutput<typeof Setting>
 
+/** Registered on `chat-sending.ask`; `estimated_cost_usd` is null for a model with no known price. */
+export interface ChatSendingAskDetails {
+  emails?: number
+  threads?: number
+  tokens?: number
+  host?: string
+  model?: string
+  estimated_cost_usd?: number | null
+}
+
+export const CHAT_SENDING_ASK_DETAILS = ["emails", "threads", "tokens", "host", "model", "estimated_cost_usd"] as const
+
 const pathOf = (env: NodeJS.ProcessEnv) => sharedConfigPath(storePath(env), env)
 
 /** The owner's choice, ask when absent. A broken section reads as denied: a typo must not let chat text out. */
@@ -55,11 +67,14 @@ export const chatSendingAllowed = (env: NodeJS.ProcessEnv, host: string, command
   return mode === "allowed"
 }
 
-/** The refusal under ask when nobody can answer: what an agent can do next. */
-export const chatSendingAskRefusal = (what: string, command: string): CliError =>
+/**
+ * The refusal under ask when nobody can answer: what an agent can do next. `details` are what would be sent, as data,
+ * so a caller can word the question in the owner's language.
+ */
+export const chatSendingAskRefusal = (what: string, command: string, details: ChatSendingAskDetails = {}): CliError =>
   new CliError(
     "confirmation_required",
     `${what} — add --yes to send them (an agent may pass yes), or ask the owner to run ` +
       `\`${chatSendingCommand(command, "allowed")}\` so no yes is needed`,
-    { reason: "chat-sending.ask" },
+    { ...details, reason: "chat-sending.ask" },
   )
