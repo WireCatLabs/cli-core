@@ -1003,7 +1003,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--all-in-chat` |  | decide a name in every undecided place of it in the same chat too |  | `mentions confirm`, `mentions reject` |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot api` (planned), `bot messages send` (planned), `messages send` |
 | `--allow-chats` | `<ids>` | replace allowed chat ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
-| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate` (planned), `bot messages delete` (planned), `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `schedule agent` (planned), `store clear` |
+| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate` (planned), `bot messages delete` (planned), `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `messages scheduled cancel`, `schedule agent` (planned), `store clear` |
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp add` |
 | `--analysis-provider` | `<provider>` | analysis: agent, openai or anthropic |  | `conversations links rebuild` |
@@ -1021,7 +1021,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
 | `--assignee` | `<person...>` | who does it: sender (whoever sent the task's message) or person:<id>; none clears it. Leave it out when unsure: a task with no assignee is better than none |  | `tasks add`, `tasks update` |
 | `--at` | `<HH:MM>` | every day at this local time |  | `attachments jobs install`, `schedule agent` (planned), `schedule command` (planned) |
-| `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages send` (max, tg only), `schedule agent` (planned), `schedule command` (planned) |
+| `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages scheduled edit`, `messages send` (max, tg only), `schedule agent` (planned), `schedule command` (planned) |
 | `--attachment` | `<n>` | which file of the message, from 1; needed when it has more than one |  | `attachments show`, `attachments update`, `images read`, `messages download` |
 | `--backend` | `<archive\|server\|both>` | where to search: the local archive, the messenger's server, or both (default: both; message discovery uses archive only) |  | `search all` (planned), `search messages` (max, tg only) |
 | `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `messages sync`, `store gaps repair` |
@@ -1115,7 +1115,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--hide-phone` |  | leave the phone number out |  | `account show`, `account update`, `contacts show` |
 | `--history` |  | the people added also see the messages from before they came |  | `chats members add` (max-only) |
 | `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
-| `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit` (tg-only), `messages send` (tg-only) |
+| `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit` (tg-only), `messages scheduled edit` (tg-only), `messages send` (tg-only) |
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp serve` |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
 | `--include` | `<kinds>` | every chat of these kinds, comma-separated. **a folder (`chats folders`) or an export folder (`store export`) takes these chats** |  | `chats folders create` (planned), `chats folders update` (planned), `store export` |
@@ -1151,7 +1151,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-subscriber-total-buffer-bytes` | `<bytes>` | combined watcher buffer budget; 0 is unlimited |  | `serve` (max-only) |
 | `--max-tokens` | `<n>` | remote embeddings: bound input tokens; analysis: reserve input and output tokens across this run |  | `conversations embed`, `conversations links rebuild` |
 | `--max-uses` | `<n>` | at most this many people join by it, 1 to 99999 |  | `chats links create` (tg-only), `chats links update` (tg-only) |
-| `--md` |  | read this messenger's Markdown; see its formatting guide for supported syntax |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit`, `messages send` |
+| `--md` |  | read this messenger's Markdown; see its formatting guide for supported syntax |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit`, `messages scheduled edit`, `messages send` |
 | `--measure` | `<name>` | the metric used to order a ranking; not with --score or --weights |  | `stats contacts top`, `stats messages top` |
 | `--members-see-link` | `<on\|off>` | members may see the invite link |  | `chats update` (max-only) |
 | `--mentions-me` |  | require a mention of you or a reply to you |  | `replies edit` |
