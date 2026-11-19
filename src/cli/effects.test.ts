@@ -237,13 +237,20 @@ describe("command effects", () => {
       return leaf
     }
 
-    it("is a closed list of two paths", () => {
-      expect([...PROPOSE_COMMANDS]).toEqual(["messages acknowledge", "mail findings add"])
+    it("is a closed list of four paths", () => {
+      expect([...PROPOSE_COMMANDS]).toEqual([
+        "messages acknowledge",
+        "mail findings add",
+        "projects actions add",
+        "meetings actions add",
+      ])
     })
 
     it("lets a marked command on a listed path through the lock, under a profile too", () => {
       expect(isStoreChange(at(["mail", "findings", "add"], true))).toBe(false)
       expect(isStoreChange(at(["personal", "messages", "acknowledge"], true))).toBe(false)
+      expect(isStoreChange(at(["projects", "actions", "add"], true))).toBe(false)
+      expect(isStoreChange(at(["meetings", "actions", "add"], true))).toBe(false)
     })
 
     it("refuses a marked command on any other path, and a listed path nobody marked", () => {
@@ -251,6 +258,7 @@ describe("command effects", () => {
       expect(isStoreChange(at(["tasks", "add"], true))).toBe(true)
       expect(isStoreChange(at(["remail", "findings", "add"], true))).toBe(true)
       expect(isStoreChange(at(["mail", "findings", "add"], false))).toBe(true)
+      expect(isStoreChange(at(["projects", "actions", "confirm"], true))).toBe(true)
     })
   })
 
