@@ -5,6 +5,7 @@ import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import { crmValues } from "../../crm/index.js"
 import { markdownToHtml } from "../../documents/html-markdown.js"
 import type { ContentPost, TermKind } from "../../domain/content.js"
+import type { PermissionKey } from "../../sends/permissions.js"
 import type { ContentSource } from "../source.js"
 import { type ContentFields, type ContentWriteOptions, type ContentWriter, contentConflict } from "../writer.js"
 import { parseContentManifest } from "./manifest.js"
@@ -19,6 +20,8 @@ export type ContentWriteCall = (
   command: Command,
   operation: string,
   input: ApiCommandInput,
+  /** The keys the content command already checked, the call's own `api.<operation>` among them. */
+  confirmed: readonly PermissionKey[],
 ) => Promise<{ operation_id: string; result: unknown }>
 
 export interface ContentManifestWriterOptions {
@@ -103,47 +106,60 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   const send = async (
     call: typeof writes.update,
     slots: { id?: string; at?: string },
+    confirmed: readonly PermissionKey[] | undefined,
     body?: Record<string, unknown>,
   ) => {
     const base = call.body === undefined ? {} : (fill(call.body, slots) as Record<string, unknown>)
+    // The owner said yes to this write in the content command, so its one call is not asked about again; a key that
+    // command did not check, as the publish key for a post that is published at the source now, still is.
+    const own = options.api.operations.find((one) => one.id === call.operation)?.command
     const { result } = await options.write(
       options.command,
       call.operation,
       inputOf(call, slots, body === undefined && call.body === undefined ? undefined : { ...base, ...body }),
+      confirmed === undefined ? [] : [...confirmed, ...(own === undefined ? [] : [`api.${own}`])],
     )
     return result
   }
 
-  const updated = async (externalId: string, body: Record<string, unknown>) => {
-    const post = await postOf(await send(writes.update, { id: externalId }, body))
+  const updated = async (
+    externalId: string,
+    body: Record<string, unknown>,
+    confirmed: readonly PermissionKey[] | undefined,
+  ) => {
+    const post = await postOf(await send(writes.update, { id: externalId }, confirmed, body))
     if (!post) throw new CliError("invalid_response", `${manifest.provider} answered an update with no post`)
     return post
   }
 
   return {
     provider: manifest.provider,
-    async createDraft(draft) {
+    async createDraft(draft, options_) {
       if (draft.type === "page") throw pagesUnwritten()
-      const post = await postOf(await send(writes.create, {}, await bodyOf(draft)))
+      const post = await postOf(await send(writes.create, {}, options_.confirmed, await bodyOf(draft)))
       if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a create with no post`)
       return post
     },
     async update(externalId, patch, options_) {
       await current(externalId, options_)
-      return updated(externalId, await bodyOf(patch))
+      return updated(externalId, await bodyOf(patch), options_.confirmed)
     },
     async publish(externalId, options_) {
       const found = await current(externalId, options_)
       if (found.status === "published") return found
-      return updated(externalId, { ...writes.publish })
+      return updated(externalId, { ...writes.publish }, options_.confirmed)
     },
     async schedule(externalId, when, options_) {
       await current(externalId, options_)
-      return updated(externalId, fill(writes.schedule, { at: iso(when) }) as Record<string, unknown>)
+      return updated(
+        externalId,
+        fill(writes.schedule, { at: iso(when) }) as Record<string, unknown>,
+        options_.confirmed,
+      )
     },
     async unpublish(externalId, options_) {
       await current(externalId, options_)
-      return updated(externalId, { ...writes.unpublish })
+      return updated(externalId, { ...writes.unpublish }, options_.confirmed)
     },
     async trash(externalId, options_) {
       await current(externalId, options_)
@@ -152,10 +168,10 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
           throw new CliError("validation_error", `${manifest.provider} takes no deletion past the trash`, {
             reason: "content.write-unsupported",
           })
-        await send(writes.delete, { id: externalId })
+        await send(writes.delete, { id: externalId }, options_.confirmed)
         return null
       }
-      return postOf(await send(writes.trash, { id: externalId }))
+      return postOf(await send(writes.trash, { id: externalId }, options_.confirmed))
     },
   }
 }

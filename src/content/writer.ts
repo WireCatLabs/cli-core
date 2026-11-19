@@ -18,6 +18,8 @@ export type ContentDraft = ContentFields & { type?: PostType; channel?: string }
 export interface ContentWriteOptions {
   /** Journaled before the call. */
   operationId: string
+  /** The keys the content command checked for this write: a writer over the `api` group does not ask them again. */
+  confirmed?: readonly PermissionKey[]
   /**
    * The version the copy holds. A source whose post has another one now refuses with `content.conflict`: someone
    * changed it since the last sync, and the write would overwrite that.
