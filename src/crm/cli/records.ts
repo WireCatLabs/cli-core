@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery, type Predicate, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { isoTime } from "@wirecat/cli-base/standards"
@@ -7,7 +7,15 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf } from "../../cli/envelope.js"
-import { commandPath, listQuery, nativeTerms, searchText, typedQuery, withQuery } from "../../cli/list-query.js"
+import {
+  commandPath,
+  listQuery,
+  nativeTerms,
+  searchText,
+  typedQuery,
+  withQuery,
+  withWords,
+} from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import type { CrmField, CrmOrganization, CrmPerson, CrmUser } from "../../domain/crm.js"
 import type { AppIdentity } from "../../ports/app.js"
@@ -251,6 +259,8 @@ export interface CrmRecordCommandOptions {
   open: (command: Command, access: { readOnly: boolean }) => Promise<CrmRun>
   app: AppIdentity
   live: readonly CrmLiveRecord[]
+  /** `words`: the live lists are the service's own search (a source from a manifest), which takes no field terms. */
+  liveQuery?: "fields" | "words"
   writes?: CrmWriteCapabilities
   now: () => number
 }
@@ -273,32 +283,36 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
     return stored.length ? stored : ((await run.source().fields?.(kind)) ?? [])
   }
 
+  const words = options.liveQuery === "words"
   const records = (noun: Noun) => {
     const group = annotate(program.command(noun.noun), { effects: REMOTE_READ }).description(
       `the CRM's ${noun.what}, read live: the copy holds only your own`,
     )
+    const query = words
+      ? { ...noun.query, fields: noun.query.fields.filter(({ name }) => name === "name") }
+      : noun.query
+    const list = answerEntity(
+      annotate(group.command("list"), { effects: REMOTE_READ, offline: false }),
+      noun.entity,
+      noun.schema,
+    )
     example(
-      withQuery(
-        answerEntity(
-          annotate(group.command("list"), { effects: REMOTE_READ, offline: false }),
-          noun.entity,
-          noun.schema,
-        ),
-        noun.query,
+      (words
+        ? withWords(list, query, `words the CRM's own search looks for in ${noun.what}`)
+        : withQuery(list, query).addHelpText("after", CUSTOM_HELP)
       )
         .description(`${noun.what} in the CRM, newest first; another client is found here, never in the copy`)
         .option("--limit <n>", `${noun.what} per page, 1–${MOST}`, integer(MOST), 50)
         .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
-        .addOption(csvFormatOption())
-        .addHelpText("after", CUSTOM_HELP),
+        .addOption(csvFormatOption()),
       `${noun.noun} list`,
-      `${noun.noun} list name:anna* --json`,
+      words ? `${noun.noun} list anna --json` : `${noun.noun} list name:anna* --json`,
       `${noun.noun} list --format csv > ${noun.noun}.csv`,
     ).action(async (words: string[], opts: { limit: number; page: number; format?: "csv" }, command: Command) => {
       const csv = opts.format === "csv"
       const path = commandPath(command)
       const text = typedQuery(words)
-      const names = customNames(text, noun.query, path, "name")
+      const names = customNames(text, query, path, "name")
       const columns = command.optsWithGlobals<{ fields?: string }>().fields
       const wanted = csv && columns === undefined ? "all" : wantedCodes(columns)
       const read = async (run: CrmRun) => {
@@ -307,7 +321,7 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
         const chosen = filterableFields(fields, names)
         selectedCodes(fields, wanted)
         const terms = nativeTerms(
-          listQuery(text, withCustomFields(noun.query, chosen), path, { defaultField: "name" }),
+          listQuery(text, withCustomFields(query, chosen), path, { defaultField: "name" }),
           path,
         )
         const custom = customConditions(terms, chosen)
@@ -364,9 +378,19 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
 }
 
 /** By the CRM's id first; else the one record whose whole name is the given one, folded. */
+/** A service whose ids have a fixed shape refuses a word as one (Attio answers 400): the word is then a name. */
+const byIdOrNone = async (run: CrmRun, noun: Noun, id: string) => {
+  try {
+    return await sourceWith(run, "get", noun.what).get(noun.kind, id)
+  } catch (error) {
+    if (isCliError(error) && error.code === "validation_error") return null
+    throw error
+  }
+}
+
 const recordNamed = async (run: CrmRun, noun: Noun, given: string): Promise<CrmPerson | CrmOrganization> => {
   const id = given.trim()
-  const byId = RECORD_ID.test(id) ? await sourceWith(run, "get", noun.what).get(noun.kind, id) : null
+  const byId = RECORD_ID.test(id) ? await byIdOrNone(run, noun, id) : null
   if (byId) return byId as CrmPerson | CrmOrganization
   const want = foldName(id)
   const page = await sourceWith(run, "list", noun.what).list(noun.kind, { conditions: [], text: id, limit: MOST })
