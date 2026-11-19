@@ -86,7 +86,12 @@ export const destroysNothing = <T extends Command>(command: T): T => {
  * be marked `proposesOnly` **and** end with one of these paths; adding a path widens what a read-only agent can
  * write, so it needs its own review.
  */
-export const PROPOSE_COMMANDS = ["messages acknowledge", "mail findings add"] as const
+export const PROPOSE_COMMANDS = [
+  "messages acknowledge",
+  "mail findings add",
+  "projects actions add",
+  "meetings actions add",
+] as const
 
 const PROPOSES = new WeakSet<Command>()
 
