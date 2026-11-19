@@ -35,11 +35,34 @@ shape of this file.
   its messages.
 - **`syncFileMirrors` and `restoreFileVersion` take the lock `acquireLock` returns.** Its `held()` is checked before
   every write; a caller no longer keeps its own flag. A lock with `assertHeld` works as before.
+- **`serviceApiWriter`: a write from code through the `api` group's own guard.** A content command that publishes or
+  deletes through a generated manifest now checks the same keys as `<cli> api <operation>`: `api.<operation>` and
+  every manifest key the call sets off (`posts.publish`, `posts.delete.force`), at the profile's levels, with the same
+  question and journal line. `confirmed` names keys the command already asked about in this run, so a person is
+  asked once; a `deny` or `readonly` on them still stops the write. The writer checks parameters and the body against
+  the schemas as the command does, and refuses a query parameter or header the operation does not declare (a
+  method override among them), so it reaches no further than the command.
+- **`serviceApiCall(…).withHeaders` gives a read's response headers**, and `nextPage` takes them: a page style with
+  `pagesHeader` (WordPress's `X-WP-TotalPages`) stops at the last page instead of asking for one past the end, which
+  WordPress refuses. `items: ""` reads the answer itself as the list, and `start` is the first page's number, so
+  `api … --all` on such a read needs no `--page`. `nextPage`, `PageStep` and `underBase` are exported.
+- **A manifest key can lift itself with `unless`.** WordPress publishes a scheduled post whose `date` moves into the
+  past; the generated key on `date` and `date_gmt` applies unless the call itself sets `status` to draft, pending or
+  private. Such a field counts once sent, `null` included, as WordPress resets a null date to now. A flag now counts in
+  the body or the query, as WordPress reads both.
+- **`manifestVerify` checks a sign-in on the owner's own site.** For a service on the owner's site (WordPress), the
+  check goes to the site `session start --site` names, and its `fetch` gets that site, as its host is not among the
+  CLI's own. A `fetch` that takes one argument still works.
+- **`wirecat.config.ts` takes `spec.kind: "wp-json"` (with the `spec.version` the index runs) and `auth.preset: "app-password"`** for a WordPress CLI made with
+  `new --from-config`.
 
 ### Changed — may break callers
 
 - **`FileVersions` has `has(sha256)`, and `keep` takes a writer as well as a path.** Code that implements
   `FileVersions` itself adds `has`; `fileVersions()` has both. `FileMirrorOptions.assertHeld` may return a promise.
+- **`--all` refuses a next link outside the server's path.** A service whose links point to another path on the same
+  host (a `/v2` link from a `/v1` server) now stops with `invalid_response` instead of following it.
+- **Requires `@wirecat/cli-base` 0.120.0** for the new page style fields and `unless`.
 
 ### Fixed
 
@@ -52,6 +75,21 @@ shape of this file.
   (kept while a partial copy could not be removed),
   and a leftover temporary file under a symbolic link is left alone. The error for an empty local folder says what
   to do: mount it, or add a file or remove the mirror's state when the files really were deleted.
+- **A content source from a manifest pages by `nextPage` with the answer's headers.** Its own reader of the page count
+  is gone.
+- **`session start --login` names where to make the password only at a terminal.** Piped in, as an agent or a test
+  signs in, the note stood before the JSON error on stderr.
+
+### Security
+
+- **A sign-in never leaves the server's path.** For a site under a path (`host/blog`, a WordPress multisite in
+  subfolders), `--all` refuses a next page outside the base URL's path, not only outside its origin, and the `api`
+  group, the writer and `serviceApiCall` refuse to sign a request outside it, and a signed request to a site (a server
+  with free variables) follows no redirect: its error names the address the site moved to, without its query.
+  `hostsFetch` takes a `credentialScope` that refuses a signed request outside it and drops the sign-in on a redirect
+  out of it (cli-base `hostFetch`).
+- **`<PREFIX>_TOKEN_SITE` is cleaned as `--site` is.** `host/blog/..` was the root site of the same host, and the
+  password went there.
 
 ## 0.704.0 — 19.11.2026
 
