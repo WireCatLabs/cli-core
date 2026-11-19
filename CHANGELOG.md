@@ -5,6 +5,20 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.708.0 — 19.11.2026
+
+### Fixed
+
+- **The shared CRM help fits every CRM.** The `create` and `update` examples set a field by its label
+  (`--field Source=web`), not by Bitrix24's own `UF_CRM_SOURCE`. A CRM mounted with `leads: false`, such as amoCRM, no
+  longer mentions leads in the descriptions of `sync`, `store status`, `store apply`, `changes`, `fields list` and
+  `search all`, nor shows `kind:lead` in its examples.
+- A CRM CLI whose live `people list` and `organizations list` are the service's own search (a source from a manifest)
+  passes `liveQuery: "words"` to `addCrmCommands`: the lists then take words, and their help no longer promises
+  field terms and a Fields table the search cannot take.
+- `people show` and `organizations show` read a word as a name when the CRM refuses it as an id with a validation
+  error. Attio answered HTTP 400 to `people show "Anna Example"`, and the command failed.
+
 ## 0.707.0 — 19.11.2026
 
 ### Added
