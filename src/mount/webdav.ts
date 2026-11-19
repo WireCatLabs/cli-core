@@ -77,6 +77,8 @@ const responseXml = (href: string, entry: MountEntry) => {
     ...[httpDate(entry.modifiedAt)].filter(Boolean).map((date) => `<D:getlastmodified>${date}</D:getlastmodified>`),
     ...(entry.createdAt ? [`<D:creationdate>${xml(entry.createdAt)}</D:creationdate>`] : []),
     ...[etagOf(entry)].filter(Boolean).map((tag) => `<D:getetag>${xml(tag ?? "")}</D:getetag>`),
+    // Windows reads this flag and opens the file read-only, so an editor says so before a save fails.
+    `<Z:Win32FileAttributes>${entry.folder ? "00000011" : "00000001"}</Z:Win32FileAttributes>`,
   ]
   return (
     `<D:response><D:href>${xml(href)}</D:href><D:propstat><D:prop>${props.join("")}</D:prop>` +
@@ -86,7 +88,7 @@ const responseXml = (href: string, entry: MountEntry) => {
 
 const multistatus = (responses: string[]) =>
   new Response(
-    `<?xml version="1.0" encoding="utf-8"?>\n<D:multistatus xmlns:D="DAV:">${responses.join("")}</D:multistatus>`,
+    `<?xml version="1.0" encoding="utf-8"?>\n<D:multistatus xmlns:D="DAV:" xmlns:Z="urn:schemas-microsoft-com:">${responses.join("")}</D:multistatus>`,
     {
       status: 207,
       headers: { "content-type": "application/xml; charset=utf-8" },
@@ -94,7 +96,10 @@ const multistatus = (responses: string[]) =>
   )
 
 const plain = (status: number, text: string, headers: Record<string, string> = {}) =>
-  new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8", ...headers } })
+  new Response(text, {
+    status,
+    headers: { "content-type": "text/plain; charset=utf-8", "x-content-type-options": "nosniff", ...headers },
+  })
 
 /** One `bytes=` range; anything else (several ranges, another unit) is ignored and the whole file is sent. */
 const rangeOf = (header: string | null, size: number | undefined): ByteRange | "unsatisfiable" | undefined => {
@@ -212,6 +217,10 @@ export const webdavHandler = (source: MountSource, options: WebdavOptions) => {
     const lastModified = httpDate(entry.modifiedAt)
     const headers: Record<string, string> = {
       "content-type": entry.mime ?? "application/octet-stream",
+      // A file is anyone's content: an HTML or SVG file opened from the mount would run on its origin, read the secret
+      // from its own address and fetch the rest of the folder.
+      "content-security-policy": "sandbox",
+      "x-content-type-options": "nosniff",
       "accept-ranges": "bytes",
       ...(etag ? { etag } : {}),
       ...(lastModified ? { "last-modified": lastModified } : {}),
@@ -248,7 +257,8 @@ export const webdavHandler = (source: MountSource, options: WebdavOptions) => {
       return multistatus([responseXml("/", { name: "", folder: true })])
     if (!sameSecret(segments[0] ?? "", secret)) return plain(404, "not found")
     if (!["PROPFIND", "GET", "HEAD"].includes(request.method))
-      return plain(405, "this mount is read-only", { allow: ALLOW })
+      // A 405 to MKCOL means "it already exists" (RFC 4918, 9.3.1); 403 says creating is refused.
+      return plain(request.method === "MKCOL" ? 403 : 405, "this mount is read-only", { allow: ALLOW })
     let path: string
     try {
       path = innerPath(segments.slice(1))

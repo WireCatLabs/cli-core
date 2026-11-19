@@ -123,6 +123,7 @@ describe("serveMount", () => {
     expect(answer.body).toContain("<D:getcontentlength>20</D:getcontentlength>")
     expect(answer.body).toContain("<D:getlastmodified>Fri, 02 Jan 2026 03:04:05 GMT</D:getlastmodified>")
     expect(answer.body).toContain("<D:getetag>&quot;md5abc&quot;</D:getetag>")
+    expect(answer.body).toContain("<Z:Win32FileAttributes>00000001</Z:Win32FileAttributes>")
   })
 
   it("answers depth 0 with the item alone and refuses depth infinity", async () => {
@@ -157,6 +158,15 @@ describe("serveMount", () => {
     expect(answer.headers["content-type"]).toBe("text/plain")
     expect(answer.headers["accept-ranges"]).toBe("bytes")
     expect(answer.headers.etag).toBe('"md5abc"')
+  })
+
+  it("serves a file sandboxed, so an HTML file on the mount cannot script the mount's own origin", async () => {
+    const { url } = await start()
+    for (const method of ["GET", "HEAD"]) {
+      const answer = await send(url("a%20%26%20b.txt"), method)
+      expect(answer.headers["content-security-policy"]).toBe("sandbox")
+      expect(answer.headers["x-content-type-options"]).toBe("nosniff")
+    }
   })
 
   it("answers a range with 206 and reads only that range", async () => {
@@ -195,16 +205,23 @@ describe("serveMount", () => {
     expect(calls.some((call) => call.startsWith("read"))).toBe(false)
   })
 
-  it.each(["PUT", "DELETE", "MOVE", "COPY", "MKCOL", "PROPPATCH", "LOCK", "UNLOCK", "POST"])(
-    "refuses %s with 405 and asks the source nothing",
-    async (method) => {
-      const { url, calls } = await start()
-      const answer = await send(url("a%20%26%20b.txt"), method, {}, "x")
-      expect(answer.status).toBe(405)
-      expect(answer.headers.allow).toBe("OPTIONS, PROPFIND, GET, HEAD")
-      expect(calls).toEqual([])
-    },
-  )
+  it.each([
+    ["PUT", 405],
+    ["DELETE", 405],
+    ["MOVE", 405],
+    ["COPY", 405],
+    ["MKCOL", 403],
+    ["PROPPATCH", 405],
+    ["LOCK", 405],
+    ["UNLOCK", 405],
+    ["POST", 405],
+  ])("refuses %s with %i and asks the source nothing", async (method, status) => {
+    const { url, calls } = await start()
+    const answer = await send(url("a%20%26%20b.txt"), method, {}, "x")
+    expect(answer.status).toBe(status)
+    expect(answer.headers.allow).toBe("OPTIONS, PROPFIND, GET, HEAD")
+    expect(calls).toEqual([])
+  })
 
   it("refuses a body too large to be a PROPFIND before reading it", async () => {
     const { url, calls } = await start()

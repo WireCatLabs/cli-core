@@ -27,11 +27,21 @@ it declares `lifetime: "persistent"`, so it is never offered over MCP, and close
 - The URL holds a random secret, new each run; a request without it gets 404. The URL holds nothing else: no token.
 - The `Host` must be `127.0.0.1:<port>` or `localhost:<port>`, and an `Origin` must be the same; a page on another site
   that points its name at 127.0.0.1 (DNS rebinding) is refused. No answer carries a CORS header.
-- Only OPTIONS, PROPFIND, GET and HEAD are answered; PUT, DELETE, MOVE, COPY, MKCOL, PROPPATCH, LOCK and UNLOCK get
-  405. A request body larger than 64 KB is refused unread.
+- Only OPTIONS, PROPFIND, GET and HEAD are answered; PUT, DELETE, MOVE, COPY, PROPPATCH, LOCK and UNLOCK get 405,
+  and MKCOL 403, since a 405 to MKCOL means "it already exists" (RFC 4918). A request body larger than 64 KB is refused
+  unread.
+- A file is served with `Content-Security-Policy: sandbox` and `nosniff`: an HTML or SVG file opened from the mount
+  in a browser cannot run on the mount's origin, read the secret from its own address and fetch the rest.
 - A path segment that decodes to `/`, `\`, NUL, `.` or `..` is refused, so `a%2F..%2F..` cannot climb out of the
   mounted folder.
-- The server says `DAV: 1` and offers no locks.
+- The server says `DAV: 1` and offers no locks, and marks each item read-only in Microsoft's `Win32FileAttributes`.
+
+## Clients
+
+Checked with GNOME's gvfs (`gio mount dav://…`, 2026-11-19): listing, reading and partial reads work; `mkdir` is
+refused, and `rm`, `mv` and `gio copy` fail. Through gvfs's FUSE folder, `touch` and `echo >` exit 0 although
+nothing is written: gvfs drops the error of the upload it makes when the file closes. Finder and Windows' WebClient
+are not checked yet.
 
 ## Performance
 
