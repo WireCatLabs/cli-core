@@ -221,7 +221,7 @@ export const webdavHandler = (source: MountSource, options: WebdavOptions) => {
     const range = rangeOf(asked, entry.size)
     if (range === "unsatisfiable")
       return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${entry.size}` } })
-    const whole = entry.size === undefined ? {} : { "content-length": String(entry.size) }
+    const whole: Record<string, string> = entry.size === undefined ? {} : { "content-length": String(entry.size) }
     if (request.method === "HEAD") return new Response(null, { status: 200, headers: { ...headers, ...whole } })
     const read = await source.read(path, entry, range)
     if (!range || !read.ranged) return new Response(read.body, { status: 200, headers: { ...headers, ...whole } })
