@@ -158,20 +158,24 @@ export interface CrmChangeCommandOptions {
   pathOf: (command: Command) => string[]
   /** Also mount `activities list`, for a CLI that copies the CRM's activities. */
   activities?: boolean
+  /** The CRM has leads; true when absent. */
+  leads?: boolean
 }
 
 /** `changes list`: what happened in the copy in a window, newest first; `--format report` is the morning digest. */
 export const addCrmChangeCommands = (program: Command, options: CrmChangeCommandOptions): void => {
   const { within, example, now, ownerOf, pathOf } = options
+  const deals = options.leads === false ? "deals" : "deals and leads"
   if (options.activities) addCrmActivityCommands(program, { within, example, now, ownerOf, pathOf })
   const group = annotate(program.command("changes"), { effects: NO_EFFECTS }).description(
-    "what changed in the CRM's deals, leads, activities and contacts, as the syncs copied it",
+    `what changed in the CRM's ${options.leads === false ? "deals" : "deals, leads"}, activities and contacts, ` +
+      "as the syncs copied it",
   )
   example(
     withQuery(
       answerEntity(annotate(group.command("list"), { effects: LOCAL_READ }), "crm_change", crmChange)
         .description(
-          "deals and leads made, moved, won, lost and given another owner, activities added and done, and contacts " +
+          `${deals} made, moved, won, lost and given another owner, activities added and done, and contacts ` +
             "added, newest first; the last day unless at: says otherwise",
         )
         .option("--limit <n>", `changes per page, 1–${MOST}`, integer(MOST), 50)
