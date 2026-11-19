@@ -135,22 +135,30 @@ export const search = (commands: Record<string, McpCommand>, query: string): [st
         .map(stem),
     ),
   ]
-  return all
-    .map((entry) => {
-      const fields = fieldsOf(entry[0], entry[1])
-      const weights = words.map((word) =>
-        fields.reduce(
-          (best, [weight, known]) => (known.some((one) => sameWord(word, one)) ? Math.max(best, weight) : best),
-          0,
-        ),
+  return (
+    all
+      .map((entry) => {
+        const fields = fieldsOf(entry[0], entry[1])
+        const weights = words.map((word) =>
+          fields.reduce(
+            (best, [weight, known]) => (known.some((one) => sameWord(word, one)) ? Math.max(best, weight) : best),
+            0,
+          ),
+        )
+        const matched = weights.filter((weight) => weight > 0).length
+        const exact = normal(entry[0]) === named || (entry[1].aliases ?? []).some((alias) => normal(alias) === named)
+        return { entry, matched, rank: (exact ? 1000 : 0) + matched * 10 + weights.reduce((a, b) => a + b, 0) }
+      })
+      .filter(({ matched, rank }) => matched > 0 || rank >= 1000)
+      // A tie goes to the shorter name, which holds less the task did not ask for: `messages send` first.
+      .sort(
+        (a, b) =>
+          b.rank - a.rank ||
+          wordsOf(a.entry[0]).length - wordsOf(b.entry[0]).length ||
+          a.entry[0].localeCompare(b.entry[0]),
       )
-      const matched = weights.filter((weight) => weight > 0).length
-      const exact = normal(entry[0]) === named || (entry[1].aliases ?? []).some((alias) => normal(alias) === named)
-      return { entry, matched, rank: (exact ? 1000 : 0) + matched * 10 + weights.reduce((a, b) => a + b, 0) }
-    })
-    .filter(({ matched, rank }) => matched > 0 || rank >= 1000)
-    .sort((a, b) => b.rank - a.rank || a.entry[0].localeCompare(b.entry[0]))
-    .map(({ entry }) => entry)
+      .map(({ entry }) => entry)
+  )
 }
 
 const nearest = (commands: Record<string, McpCommand>, asked: string): string[] => {

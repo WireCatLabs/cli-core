@@ -209,6 +209,9 @@ write messages download
 write messages edit
 write messages forward
 write messages pin
+write messages scheduled cancel
+write messages scheduled edit
+write messages scheduled send
 write messages send
 write messages star
 write messages sync

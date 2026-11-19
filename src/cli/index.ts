@@ -116,6 +116,7 @@ export type {
   PushedHistory,
   ReadState,
   RemoteFile,
+  ScheduledChanges,
   ScheduledMessages,
   SenderIdentities,
   SenderSearch,

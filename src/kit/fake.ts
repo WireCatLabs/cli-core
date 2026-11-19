@@ -36,6 +36,7 @@ import type {
   PassiveUpdates,
   PushedHistory,
   ReadState,
+  ScheduledChanges,
   ScheduledMessages,
   Sent,
   ServerReads,
@@ -59,6 +60,7 @@ export type FakeAdapter = MessengerCore &
   LiveUpdates &
   MessageMedia &
   ScheduledMessages &
+  ScheduledChanges &
   GroupModeration &
   AccountTools &
   GroupAdmin &
@@ -152,6 +154,11 @@ export const fakeAdapter = (
     return pickChat(reference, state.chats)
   }
   const messagesOf = (chatId: Id) => state.messages.filter((message) => message.chatId === chatId)
+  const scheduledAt = (chatId: Id, id: Id): number => {
+    const at = scheduled.findIndex((message) => message.chatId === chatId && message.id === id)
+    if (at === -1) throw missing(`scheduled message ${id} in chat ${chatId}`)
+    return at
+  }
   const messageOf = (chatId: Id, messageId: Id): Message => {
     const found = state.messages.find((message) => message.chatId === chatId && message.id === messageId)
     if (!found) throw missing(`message ${messageId} in chat ${chatId}`)
@@ -430,6 +437,20 @@ export const fakeAdapter = (
       const chat = chatOf(reference)
       return structuredClone(scheduled.filter((message) => message.chatId === chat.id))
     },
+    cancelScheduled: async (chatId, ids) => {
+      for (const id of ids) scheduled.splice(scheduledAt(chatId, id), 1)
+    },
+    editScheduled: async (chatId, id, { text, at }) => {
+      const message = scheduled[scheduledAt(chatId, id)] as Message
+      if (text !== undefined) message.text = text
+      message.scheduledFor = at
+      return structuredClone(message)
+    },
+    sendScheduled: async (chatId, ids) =>
+      ids.map((id) => {
+        const [waiting] = scheduled.splice(scheduledAt(chatId, id), 1) as [Message]
+        return structuredClone(post(chatOf(chatId), waiting.text, { attachments: waiting.attachments }))
+      }),
 
     members: async (reference, window) => {
       const chat = chatOf(reference)

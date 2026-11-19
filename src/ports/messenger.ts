@@ -520,6 +520,22 @@ export interface ScheduledMessages {
   scheduled(chat: string): Promise<Message[]>
 }
 
+/**
+ * Changes to what `scheduled` lists. An id here is one `scheduled` gave: a scheduled message has ids of its own, and
+ * the same number in the chat's history is another, already sent message.
+ */
+export interface ScheduledChanges {
+  /** Takes them off the list unsent; nobody can get them back. */
+  cancelScheduled(chatId: Id, ids: Id[]): Promise<void>
+  /**
+   * New text, a new time, or both; the answer is the message as it now waits. `at` is always given, the current time
+   * when only the text changes, as the messenger may take the id for a sent message's without it.
+   */
+  editScheduled(chatId: Id, id: Id, change: { text?: string; formatting?: TextSpan[]; at: string }): Promise<Message>
+  /** Sends them now; the answer is the messages as sent, with their new ids. */
+  sendScheduled(chatId: Id, ids: Id[]): Promise<Message[]>
+}
+
 /** Who is in a group, who runs it, and who came and went. */
 export interface GroupModeration {
   /**
@@ -747,6 +763,7 @@ export interface MessengerAdapter
     Partial<PushedHistory>,
     Partial<MessageMedia>,
     Partial<ScheduledMessages>,
+    Partial<ScheduledChanges>,
     Partial<ChannelComments>,
     Partial<MessagePermalinks>,
     Partial<SenderIdentities>,

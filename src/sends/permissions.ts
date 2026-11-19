@@ -10,7 +10,14 @@ export type Level = (typeof LEVELS)[number]
 export type PermissionKey = string
 
 /** The deletions nobody gets back: the word that skips their question is `--allow-dangerous`, never `--yes`. */
-const DANGEROUS = new Set(["messages.delete", "bot.messages.delete", "topics.delete", "chats.delete", "chats.clear"])
+const DANGEROUS = new Set([
+  "messages.delete",
+  "messages.scheduled.cancel",
+  "bot.messages.delete",
+  "topics.delete",
+  "chats.delete",
+  "chats.clear",
+])
 
 /** Deleting has its own word for "yes": the flag a person has to mean, not a habit (max-cli `NEED-238`). */
 export const skipFlagFor = (key: string): "--allow-dangerous" | "--yes" =>
@@ -310,6 +317,9 @@ const NAMED_WRITE_KEYS = [
   "messages.sync-first",
   "messages.server-search",
   "messages.press",
+  "messages.scheduled.cancel",
+  "messages.scheduled.edit",
+  "messages.scheduled.send",
   "chats.start",
   "chats.app",
   "stats.messages.counters.sync",

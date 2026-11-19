@@ -121,7 +121,7 @@ import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { mention, mentionDecision, mentionDetails, mentionDomain, mentionRebuild, place } from "./mention.js"
 import { message } from "./message.js"
-import { messageDeletion, messagePin, messageStar } from "./message-change.js"
+import { messageDeletion, messagePin, messageStar, scheduledCancellation, scheduledSend } from "./message-change.js"
 import { messageContext } from "./message-context.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
@@ -352,7 +352,9 @@ export {
   runHit,
   runLocation,
   savedSearch,
+  scheduledCancellation,
   scheduledJob,
+  scheduledSend,
   scheduleHarness,
   searchHistoryClear,
   sendAttempt,
@@ -461,6 +463,8 @@ export const ENTITIES = {
   message_pin: messagePin,
   message_star: messageStar,
   message_deletion: messageDeletion,
+  scheduled_cancellation: scheduledCancellation,
+  scheduled_send: scheduledSend,
   message_transcript: messageTranscript,
   message_links: messageLinks,
   evidence_packet: evidencePacket,
