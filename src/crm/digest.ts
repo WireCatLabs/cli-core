@@ -1,6 +1,5 @@
 import { zonedMoment } from "@wirecat/cli-base/query"
 import { REPORT_FORMAT } from "../background/report/schema.js"
-import { SECTION_CAPS } from "../background/report/view.js"
 import { dayIn } from "../domain/moment.js"
 import { taskAccount } from "../services/task-rules.js"
 import { type CopyViewer, viewerSql } from "../store/sqlite/copy-viewer.js"
@@ -11,6 +10,8 @@ import type { AccountKey } from "../store/types.js"
 import { crmStatus, SYNC_FAILED } from "./sync.js"
 
 const HOUR = 3_600_000
+// The CRM digest's own size, apart from the renderer's safety cap: a CRM section is a part of a morning, not all of it.
+const SHOWN = 7
 const STALE_HOURS = 24
 
 const WORDS = {
@@ -80,7 +81,7 @@ export const crmDigest = async (
 ): Promise<Record<string, unknown>> => {
   const { since, until, now, zone, viewer } = options
   const words = WORDS[options.language as keyof typeof WORDS] ?? WORDS.en
-  const cap = SECTION_CAPS.crm
+  const cap = SHOWN
   const window = { since, until, ...(viewer ? { viewer } : {}) }
   const counts = await store.crm.changeCounts(account, window)
   const changesOf = async (kind: CrmChangeKind) =>

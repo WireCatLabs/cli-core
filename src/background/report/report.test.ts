@@ -248,7 +248,7 @@ describe("links, task groups, sync health and the footer", () => {
 
   it("leaves every link out when links are off, and keeps the words", async () => {
     const prepared = await prepareReport(digest(), { ...options, env: { WIRECAT_LINKS: "off" } })
-    expect(prepared?.telegram).not.toContain("<a ")
+    expect(prepared?.telegram.join("\n")).not.toContain("<a ")
     expect(prepared?.terminal).not.toContain("wirecat://")
     expect(prepared?.text).toContain("Все просроченные (5) · на сегодня (3)")
   })
@@ -280,23 +280,103 @@ describe("links, task groups, sync health and the footer", () => {
 })
 
 describe("the platform rules", () => {
-  it("drops the last item of the largest section until Telegram's limit fits, and counts it in more", async () => {
-    const many = Array.from({ length: 40 }, (_, n) => ({
+  const facts = (from: number, count: number) =>
+    Array.from({ length: count }, (_, n) => ({
       type: "fact",
-      topic: `Проект ${n}`,
+      topic: `Проект ${from + n}`,
       detail: "д".repeat(150),
       who: "Анна Котова",
+      refs: [`task:${from + n}`],
     }))
-    const view = viewOf(digest([...SECTIONS, { kind: "mail", items: many }]))
-    view.sections = view.sections.map((section) =>
-      section.kind === "mail" ? { ...section, items: [...section.items, ...section.items, ...section.items] } : section,
+  const tagsBalanced = (html: string) => {
+    const open: string[] = []
+    for (const [, close, name] of html.matchAll(/<(\/?)([a-z]+)[^>]*>/g)) {
+      if (!close) open.push(name as string)
+      else if (open.pop() !== name) return false
+    }
+    return open.length === 0
+  }
+
+  it("splits a long digest into Telegram messages between items, each whole, none lost, in order", async () => {
+    const long = digest([
+      ...SECTIONS,
+      { kind: "projects", items: facts(0, 15) },
+      { kind: "mail", items: facts(15, 25), more: 3 },
+    ])
+    const { parts, text } = await renderReport(viewOf(long), "telegram")
+
+    expect(parts.length).toBeGreaterThan(1)
+    expect(text).toBe(parts.join("\n\n"))
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(TELEGRAM_TEXT_CHARS)
+      expect(tagsBalanced(part)).toBe(true)
+    }
+    const shown = parts.flatMap((part) => [...part.matchAll(/<b>Проект (\d+)<\/b>/g)].map(([, n]) => Number(n)))
+    expect(shown).toEqual(Array.from({ length: 40 }, (_, n) => n))
+    expect(parts[0]).toMatch(/^☀️ <b>Сводка на пятницу, 6 ноября<\/b>\nТри ответа ждут вас/)
+    for (const part of parts.slice(1)) {
+      expect(part).toMatch(/^☀️ <b>Сводка на пятницу, 6 ноября \(продолжение\)<\/b>\n\n/)
+      expect(part).not.toContain("Три ответа ждут вас")
+    }
+    const last = parts.at(-1) ?? ""
+    expect(last).toContain("ещё 3")
+    expect(parts.filter((part) => part.includes("ещё 3"))).toHaveLength(1)
+    expect(parts.filter((part) => part.includes("Просмотрено за"))).toEqual([last])
+    expect(parts.filter((part) => part.includes("синхронизация падает"))).toEqual([last])
+    expect(parts.join("")).not.toContain("<b>Новая почта</b>\n<b>")
+  })
+
+  it("moves a section to the next message whole when it fits there, and splits one too long for any message", async () => {
+    const view = viewOf(
+      digest([
+        { kind: "today", items: facts(0, 12) },
+        { kind: "projects", items: facts(12, 8) },
+        { kind: "mail", items: facts(20, 30) },
+      ]),
     )
-    const { text } = await renderReport(view, "telegram")
-    expect(text.length).toBeLessThanOrEqual(TELEGRAM_TEXT_CHARS)
-    expect(text.length).toBeGreaterThan(TELEGRAM_TEXT_CHARS - 400)
-    const shown = text.match(/<b>Проект \d+<\/b>/g)?.length ?? 0
-    expect(text).toContain(`ещё ${15 - shown + 35}`)
-    expect(text).toContain("Акт сверки")
+    const { parts } = await renderReport(view, "telegram")
+
+    const sectionsOf = (part: string) => [...part.matchAll(/(🔥|🚀|📬) <b>([^<]+)<\/b>/g)].map(([, , name]) => name)
+    expect(parts.map(sectionsOf)).toEqual([
+      ["Сегодня"],
+      ["Проекты в движении", "Новая почта"],
+      ["Новая почта (продолжение)"],
+      ["Новая почта (продолжение)"],
+    ])
+  })
+
+  it("keeps a digest that fits one Telegram message as one, with no continuation", async () => {
+    const { parts, text } = await renderReport(viewOf(digest()), "telegram")
+    expect(parts).toEqual([text])
+    expect(text).not.toContain("продолжение")
+  })
+
+  it("shows a 25-item section whole: the caps are a safety net, not the digest's size", async () => {
+    const { parts } = await renderReport(viewOf(digest([{ kind: "today", items: facts(0, 25) }])), "telegram")
+    expect(parts.join("").match(/<b>Проект \d+<\/b>/g)).toHaveLength(25)
+    expect(parts.join("")).not.toMatch(/ещё \d/)
+    const { text } = await renderReport(viewOf(digest([{ kind: "today", items: facts(0, 27) }])), "text")
+    expect(text).toContain("ещё 2")
+  })
+
+  it("sends a long digest whole in mail, in one text", async () => {
+    const long = viewOf(
+      digest([
+        { kind: "mail", items: facts(0, 25) },
+        { kind: "projects", items: facts(25, 20) },
+      ]),
+    )
+    const { parts, text } = await renderReport(long, "email")
+    expect(parts).toEqual([text])
+    expect(text.match(/<b[^>]*>Проект \d+<\/b>/g)).toHaveLength(45)
+  })
+
+  it("falls back to dropping items when a part cannot hold even one, and stops when nothing is left", async () => {
+    const view = viewOf(digest([{ kind: "mail", items: facts(0, 25) }]))
+    const huge = { ...view, summary: "ж".repeat(4100) }
+    const { parts } = await renderReport(huge, "telegram")
+    expect(parts).toHaveLength(1)
+    expect(parts[0]?.length).toBeGreaterThan(TELEGRAM_TEXT_CHARS)
   })
 
   it("escapes markup an agent wrote, so mail text cannot add a tag or a link", async () => {

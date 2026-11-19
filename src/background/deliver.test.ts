@@ -225,6 +225,74 @@ describe("delivery", () => {
   })
 })
 
+describe("a report split into several Telegram messages", () => {
+  const split = (telegram: string[]): Parcel => ({
+    title: "t",
+    rendered: { telegram, text: "plain", subject: "s", invalid: false },
+  })
+  const pauses: number[] = []
+  const options = { ...found, wait: async (ms: number) => void pauses.push(ms) }
+
+  it("sends the parts in order, a pause apart within Telegram's rate, as one delivery", async () => {
+    pauses.length = 0
+    const { system, sent } = sender()
+    const done = await deliver(
+      system,
+      {},
+      ["telegram-bot:p/user:1", "email:w/me@example.com"],
+      split(["a", "b", "c"]),
+      options,
+    )
+
+    expect(sent.slice(0, 3).map((one) => one.argv.at(-1))).toEqual(["a", "b", "c"])
+    expect(sent[3]?.options?.input).toBe("plain")
+    expect(pauses).toEqual([1_100, 1_100])
+    expect(done).toEqual([
+      { to: "telegram-bot:p/user:1", ok: true },
+      { to: "email:w/me@example.com", ok: true },
+    ])
+  })
+
+  it("waits longer between parts in a group", async () => {
+    pauses.length = 0
+    await deliver(sender().system, {}, ["telegram-bot:p/-1001"], split(["a", "b"]), options)
+    expect(pauses).toEqual([3_100])
+  })
+
+  it("stops at the part that failed and says which", async () => {
+    let calls = 0
+    const { system, sent } = sender()
+    const run = system.run
+    system.run = async (argv, env, more) => {
+      calls += 1
+      return calls === 2 ? { code: 1, stdout: "", stderr: refused("network_error") } : run(argv, env, more)
+    }
+    const done = await deliver(system, {}, ["telegram-bot:p/user:1"], split(["a", "b", "c"]), options)
+
+    expect(sent.map((one) => one.argv.at(-1))).toEqual(["a"])
+    expect(done).toEqual([
+      { to: "telegram-bot:p/user:1", ok: false, reason: "delivery.failed", error: "exit 1 · part 2 of 3" },
+    ])
+  })
+
+  it("sends a part Telegram refused as its own plain text, and the next part as HTML", async () => {
+    let calls = 0
+    const { system, sent } = sender()
+    const run = system.run
+    system.run = async (argv, env, more) => {
+      calls += 1
+      return calls === 1 ? { code: 1, stdout: "", stderr: refused("validation_error") } : run(argv, env, more)
+    }
+    const done = await deliver(system, {}, ["telegram-bot:p/user:1"], split(["<b>a &amp; b</b>", "<i>c</i>"]), options)
+
+    expect(sent.map((one) => [one.argv.includes("--html"), one.argv.at(-1)])).toEqual([
+      [false, "a & b"],
+      [true, "<i>c</i>"],
+    ])
+    expect(done[0]).toMatchObject({ ok: true, reason: "delivery.html-fallback" })
+  })
+})
+
 describe("the caption", () => {
   it("keeps a short report whole and cuts a long one where a line ends", () => {
     expect(headOf("t", "  one\ntwo  ")).toBe("t\none\ntwo")

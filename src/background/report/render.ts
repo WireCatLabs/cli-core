@@ -127,7 +127,10 @@ export const sanitizeHtml = (
 }
 
 export interface Rendering {
+  /** The parts joined by a blank line: the whole text everywhere but a Telegram digest split in several messages. */
   text: string
+  /** Telegram's messages in order, each within its limit; one part on every other channel. */
+  parts: string[]
   /** The override template failed and the default was used. */
   templateFailed: boolean
   /** Tags or attributes the platform rules took out. */
@@ -151,13 +154,81 @@ const renderWithFallback = async (
   view: MessageView,
   channel: ReportChannel,
   template: string | undefined,
-): Promise<Rendering> => {
+): Promise<Omit<Rendering, "parts">> => {
   const shipped = () => renderOnce(view, channel, defaultTemplate(view.kind, channel, view.language))
   if (template === undefined) return { ...(await shipped()), templateFailed: false }
   try {
     return { ...(await renderOnce(view, channel, template)), templateFailed: false }
   } catch {
     return { ...(await shipped()), templateFailed: true }
+  }
+}
+
+const fits = (text: string) => text.length <= TELEGRAM_TEXT_CHARS
+
+/**
+ * The items `from` up to `to` of the digest, counted across its sections in order, as one Telegram message: the
+ * summary on the first, the sources and the footer on the last, a section's "ещё N" and task links where it ends.
+ */
+const partOf = (view: ReportView, from: number, to: number, first: boolean, last: boolean): ReportView => {
+  let at = 0
+  const sections = view.sections.flatMap((section): ReportView["sections"] => {
+    const start = at
+    at += section.items.length
+    const items = section.items.slice(Math.max(from - start, 0), Math.max(to - start, 0))
+    if (items.length === 0) return []
+    const ends = to >= at
+    return [{ ...section, items, continued: from > start, ...(ends ? {} : { more: 0, groups: [], undated: null }) }]
+  })
+  return {
+    ...view,
+    sections,
+    summary: first ? view.summary : null,
+    health: last ? view.health : { ...view.health, items: [], more: 0 },
+    scope: last ? view.scope : null,
+    continued: !first,
+  }
+}
+
+/**
+ * A digest too long for one Telegram message as several, each rendered whole by the template, so every part's markup
+ * is complete and no item is cut. A section moves to the next message whole when it would fit there, and is split
+ * between items only when it fills a message by itself. Undefined when a single item cannot fit a message.
+ */
+const digestParts = async (
+  view: ReportView,
+  render: (part: ReportView) => Promise<string>,
+): Promise<string[] | undefined> => {
+  const ends: number[] = []
+  for (const section of view.sections) ends.push((ends.at(-1) ?? 0) + section.items.length)
+  const total = ends.at(-1) ?? 0
+  const starts = new Set([0, ...ends])
+  const endOf = (item: number) => ends.find((end) => end > item) ?? total
+  const parts: string[] = []
+  for (let from = 0; ; ) {
+    const first = parts.length === 0
+    const rest = await render(partOf(view, from, total, first, true))
+    if (fits(rest)) return [...parts, rest]
+    let to = from
+    let kept: string | undefined
+    while (to < total) {
+      if (to > from && starts.has(to)) {
+        const whole = await render(partOf(view, from, endOf(to), first, false))
+        if (fits(whole)) {
+          kept = whole
+          to = endOf(to)
+          continue
+        }
+        if (fits(await render(partOf(view, to, endOf(to), false, false)))) break
+      }
+      const text = await render(partOf(view, from, to + 1, first, false))
+      if (!fits(text)) break
+      kept = text
+      to += 1
+    }
+    if (kept === undefined) return undefined
+    parts.push(kept)
+    from = to
   }
 }
 
@@ -188,28 +259,42 @@ const dropOne = (view: MessageView): MessageView | undefined => {
 
 /**
  * One channel's text of a report. A failing `template` (a stored override, later) falls back to the shipped one for
- * this channel only. Telegram is rendered again with an item fewer, from the largest section, until it fits.
+ * this channel only. A digest too long for one Telegram message is split into several (`digestParts`); any other
+ * Telegram text, or a digest whose single item cannot fit, is rendered again with an item fewer until it fits.
  */
 export const renderReport = async (
   view: MessageView,
   channel: ReportChannel,
   { template }: { template?: string } = {},
 ): Promise<Rendering> => {
+  const whole = await renderWithFallback(view, channel, template)
+  if (channel !== "telegram" || fits(whole.text)) return { ...whole, parts: [whole.text] }
+  if (view.kind === "morning-digest") {
+    const split = (source: string) => digestParts(view, async (part) => (await renderOnce(part, channel, source)).text)
+    const shipped = defaultTemplate(view.kind, channel, view.language)
+    let failed = whole.templateFailed
+    const parts = await (failed || template === undefined ? split(shipped) : split(template)).catch(() => {
+      failed = true
+      return split(shipped)
+    })
+    if (parts) return { text: parts.join("\n\n"), parts, templateFailed: failed, templateTags: whole.templateTags }
+  }
   let current = view
   let source = template
   for (;;) {
     const rendering = await renderWithFallback(current, channel, source)
     if (rendering.templateFailed) source = undefined
-    const smaller = channel === "telegram" && rendering.text.length > TELEGRAM_TEXT_CHARS ? dropOne(current) : undefined
-    if (!smaller) return { ...rendering, templateFailed: rendering.templateFailed || source !== template }
+    const smaller = fits(rendering.text) ? undefined : dropOne(current)
+    if (!smaller)
+      return { ...rendering, parts: [rendering.text], templateFailed: rendering.templateFailed || source !== template }
     current = smaller
   }
 }
 
 /**
  * Why `source` may not be saved for this view, empty when it may, and what it renders: it must render, the platform
- * rules may take nothing out, and a Telegram text must fit once the size fit dropped what it could. Unlike
- * `renderReport` it never falls back to the shipped template.
+ * rules may take nothing out, and a Telegram text must fit in its messages, split or once the size fit dropped what
+ * it could. Unlike `renderReport` it never falls back to the shipped template.
  */
 export const checkTemplate = async (
   view: MessageView,
@@ -230,8 +315,13 @@ export const checkTemplate = async (
         problems: [...new Set(rendering.removed)].map((what) => `the ${channel} rules would remove ${what}`),
         text: rendering.text,
       }
-    if (channel !== "telegram" || rendering.text.length <= TELEGRAM_TEXT_CHARS)
-      return { problems: [], text: rendering.text }
+    if (channel !== "telegram" || fits(rendering.text)) return { problems: [], text: rendering.text }
+    if (current === view && current.kind === "morning-digest") {
+      const parts = await digestParts(current, async (part) => (await renderOnce(part, channel, source)).text).catch(
+        () => undefined,
+      )
+      if (parts) return { problems: [], text: parts.join("\n\n") }
+    }
     const smaller = dropOne(current)
     if (!smaller)
       return {
@@ -258,7 +348,8 @@ export interface ReportRun {
 }
 
 export interface PreparedReport {
-  telegram: string
+  /** The Telegram messages, sent in this order. */
+  telegram: string[]
   /** HTML with inline CSS for `mail messages send --html`; absent for an invalid report, which goes as `text`. */
   email?: string
   /** Plain text with web links: the email when the installed mail cannot send `--html`. */
@@ -311,7 +402,7 @@ export const prepareReport = async (
   if ("invalid" in parsed) {
     const line = INVALID_LINES[language] ?? (INVALID_LINES[DEFAULT_LANGUAGE] as string)
     return {
-      telegram: escapeHtml(line),
+      telegram: [escapeHtml(line)],
       text: line,
       terminal: line,
       subject: line,
@@ -347,7 +438,7 @@ export const prepareReport = async (
   ]
   const title = text.text.split("\n")[0] ?? ""
   return {
-    telegram: telegram.text,
+    telegram: telegram.parts,
     email: email.text,
     text: text.text,
     terminal: terminal.text,
@@ -366,6 +457,7 @@ const templateOf = (templates: Partial<Record<ReportChannel, string>>, channel: 
 
 /** A message other than the digest, rendered for every channel: what `deliver` sends as a rendered parcel. */
 export interface PreparedMessage {
+  /** One Telegram message: a notice or the gaps are fitted to one by leaving the last gaps out. */
   telegram: string
   email: string
   text: string
