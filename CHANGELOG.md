@@ -16,6 +16,20 @@ shape of this file.
   writes (at least 100 MB, at most 1 GB) on the drive it downloads into, or on the version store's drive, stops with
   `mirror.no-space` and the bytes it needs. The local
   scan takes up to 100,000 files, and a big state is saved less often.
+- **linear joins `WIRECAT_TOOLS`.** Linear (`linear`, `@wirecat/linear-cli`) is on npm since 0.1.0, so every CLI's
+  first screen ("Works with") and first-run list of other WireCat tools now name it, and an upload refuses a file from
+  its folders (`linear-cli`, `WCLINEAR_`) as it does for the other tools.
+- **A read-only scheduled agent may stage project and meeting findings.** `projects actions add` and
+  `meetings actions add` join `messages acknowledge` and `mail findings add` in the propose tier, when the host marks
+  them `proposesOnly`. Like mail findings, each stages a cited batch the owner confirms or rejects; nothing becomes a
+  fact or a task until he does. memo's task agent needs it to propose tasks from messengers and meetings.
+- **`@wirecat/cli-core/mount`: show a service's folder as a read-only folder on this computer.** `serveMount` serves a
+  `MountSource` (`stat`, `list`, `read` of a byte range; it has no write) over WebDAV on 127.0.0.1, which the system's
+  own client mounts: `gio mount` on Linux, Finder on macOS, `net use` on Windows. Every request must carry a random
+  per-run secret in its path and this machine's `Host`, so another site's page cannot reach it. Only OPTIONS,
+  PROPFIND, GET and HEAD are answered; every write method is refused (405, MKCOL 403), and a file is served sandboxed
+  so an HTML file on the mount cannot script it. Listings are kept 10 seconds, so a file manager's
+  probes do not spend the service's rate limit ([mount](docs/mount.md)).
 
 ### Changed — may break callers
 
@@ -32,6 +46,11 @@ shape of this file.
   direct read after the listing finds nothing there, so a page that shifted while it was read, or a lagging flat
   listing, never deletes a file. A remote that changes all the time still has its deletions proven: no listing has to
   stand still.
+
+### Fixed
+
+- **A local server's answer ends when its body fails part-way.** `listen` left the connection open, and the client
+  waited for bytes that never came.
 
 ## 0.710.0 — 19.11.2026
 
