@@ -150,8 +150,12 @@ describe("WordPress from configuration", () => {
     const report = await syncContent(wordpress({ contributor: 2 }).source, store, account, {
       now: Date.UTC(2026, 10, 18, 1),
     })
-    expect(report.gaps.map((one) => one.scope)).toContain("edit_others_posts")
-    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ pass: "held", unlisted: 0 })
+    expect(report.gaps.map((one) => one.scope)).toEqual(expect.arrayContaining(["edit_others_posts", "edit_pages"]))
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({
+      state: "complete",
+      pass: "held",
+      unlisted: 0,
+    })
     expect(await store.content.count(account, "post")).toBe(3)
   })
 
@@ -197,5 +201,11 @@ describe("WordPress from configuration", () => {
     const writing = structuredClone(WORDPRESS_CONTENT)
     writing.writes.update.operation = "getWpV2PostsById"
     expect(() => parseContentManifest(writing, api)).toThrow(/writes\.update.*is a read/)
+    const needing = structuredClone(WORDPRESS_CONTENT) as unknown as {
+      entities: { post: { optional: { needs: { operation: string } } }[] }
+    }
+    const [, pages] = needing.entities.post
+    if (pages) pages.optional.needs.operation = "postWpV2Posts"
+    expect(() => parseContentManifest(needing, api)).toThrow(/entities\.post\.1\.optional\.needs.*is a write/)
   })
 })

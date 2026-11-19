@@ -37,10 +37,19 @@ export interface ContentManifestEntity {
   /**
    * The sign-in may be refused this call (a role without the right): a gap with this text, and the rest syncs. A
    * source that leaves rows out without an error names `requires`: a read whose value at `check` is true when the
-   * sign-in sees every row; false or missing is the same gap.
+   * sign-in sees every row; false or missing is the same gap. A source that refuses the call outright to a role names
+   * `needs`: unless its `check` is true the call is never sent, and the gap says its own `message`.
    */
-  optional?: { message: string; scope?: string; requires?: CrmOperationCall & { check: string } }
+  optional?: {
+    message: string
+    scope?: string
+    requires?: ContentRightsCall
+    needs?: ContentRightsCall & { message: string; scope?: string }
+  }
 }
+
+/** A read of the sign-in's rights, true at `check` when it has the right (WordPress: `users/me`'s capabilities). */
+export type ContentRightsCall = CrmOperationCall & { check: string }
 
 /** A post's writes, as calls and values over the update call. `"{id}"` and `"{at}"` are filled by the engine. */
 export interface ContentManifestWrites {
@@ -107,6 +116,14 @@ const entity = v.strictObject({
       message: v.pipe(v.string(), v.minLength(1)),
       scope: v.optional(v.string()),
       requires: v.optional(v.strictObject({ ...call.entries, check: path })),
+      needs: v.optional(
+        v.strictObject({
+          ...call.entries,
+          check: path,
+          message: v.pipe(v.string(), v.minLength(1)),
+          scope: v.optional(v.string()),
+        }),
+      ),
     }),
   ),
 })
@@ -192,6 +209,7 @@ export const parseContentManifest = (input: unknown, api: ServiceApiManifest): C
       }
       if (one.ids) checkCall(`${where}.ids`, one.ids, true)
       if (one.optional?.requires) checkCall(`${where}.optional.requires`, one.optional.requires, true)
+      if (one.optional?.needs) checkCall(`${where}.optional.needs`, one.optional.needs, true)
       if (one.get) {
         checkCall(`${where}.get`, one.get, true)
         if (!holds([one.get.path, one.get.query], "{id}"))

@@ -239,7 +239,8 @@ export const httpApiExchange =
       const failed =
         status >= 500 && writes
           ? refusal(options.service, operation, response, writes)
-          : (options.failure?.(status, answer, operation) ?? refusal(options.service, operation, response, writes))
+          : (options.failure?.(status, answer, operation) ??
+            refusal(options.service, operation, response, writes, innerStatus(answer)))
       end({ status, error: failed })
       throw failed
     }
@@ -304,7 +305,30 @@ const unreadable = (service: string, writes: boolean, status: number): CliError 
       )
     : new CliError("invalid_response", `${service} sent an answer that could not be read`, { status, retryable: true })
 
-const refusal = (service: string, operation: ManifestOperation, response: Response, writes: boolean): CliError => {
+/**
+ * The status a refusal's `details` name, as WordPress answers a role a status it may not read: HTTP 400 with 403 in
+ * `data.details`. Only the number is kept, never the service's text (WC-SECR-6).
+ */
+const innerStatus = (answer: unknown): number | undefined => {
+  const find = (value: unknown, depth: number, inDetails: boolean): number | undefined => {
+    if (depth > 5 || typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+    for (const [key, one] of Object.entries(value)) {
+      if (inDetails && key === "status" && typeof one === "number" && one >= 400 && one < 600) return one
+      const found = find(one, depth + 1, inDetails || key === "details")
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  return find(answer, 0, false)
+}
+
+const refusal = (
+  service: string,
+  operation: ManifestOperation,
+  response: Response,
+  writes: boolean,
+  inner?: number,
+): CliError => {
   const { status } = response
   if (status === 429) {
     const wait = providerWaitMs(response.headers, wallClock)
@@ -346,5 +370,6 @@ const refusal = (service: string, operation: ManifestOperation, response: Respon
   return new CliError(statusToCode(status), `${service} refused ${operation.command} (HTTP ${status})`, {
     status,
     retryable: status >= 500,
+    ...(inner === undefined || inner === status ? {} : { inner_status: inner }),
   })
 }

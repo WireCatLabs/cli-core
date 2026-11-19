@@ -21,6 +21,14 @@ export interface ContentManifestFakeOptions {
   pageSize?: number
   /** The service's clock, for the change time a write stamps. */
   clock?: () => number
+  /**
+   * The rights the sign-in lacks, as the `check` paths of the manifest's `requires` and `needs` reads
+   * (`capabilities.edit_pages`): they answer false. A call whose `needs` is lacked is refused, as WordPress refuses an
+   * author pages with a private status: HTTP 400 with 403 in its details, and it lands in `refusals`.
+   */
+  lacks?: readonly string[]
+  /** Operations refused with 403 to this sign-in, as WordPress refuses an author the users list. */
+  denied?: readonly string[]
 }
 
 export interface ContentManifestFake {
@@ -220,7 +228,7 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
   type Route = {
     kind: ContentKind
     index: number
-    role: "list" | "changes" | "get" | "requires"
+    role: "list" | "changes" | "get" | "rights"
     call: CrmOperationCall
   }
   const routes: Route[] = manifest.kinds.flatMap((kind) =>
@@ -229,10 +237,16 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       ...(entity.get ? [{ kind, index, role: "get" as const, call: entity.get }] : []),
       { kind, index, role: "list" as const, call: entity.list },
       ...(entity.ids ? [{ kind, index, role: "list" as const, call: entity.ids }] : []),
-      ...(entity.optional?.requires
-        ? [{ kind, index, role: "requires" as const, call: entity.optional.requires }]
-        : []),
+      ...[entity.optional?.requires, entity.optional?.needs].flatMap((call) =>
+        call ? [{ kind, index, role: "rights" as const, call }] : [],
+      ),
     ]),
+  )
+  const lacks = new Set(options.lacks ?? [])
+  const checks = manifest.kinds.flatMap((kind) =>
+    entities(kind).flatMap((entity) =>
+      [entity.optional?.requires, entity.optional?.needs].flatMap((call) => (call ? [call] : [])),
+    ),
   )
   const carries = (route: Route, request: ApiCommandInput) => {
     const fixed = fixedOf({ path: route.call.path ?? {}, query: route.call.query ?? {} })
@@ -301,12 +315,25 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       refusals.push(operation)
       throw new CliError("configuration_error", `the content fake answers no ${operation} call like this`)
     }
+    if (options.denied?.includes(operation))
+      throw new CliError("permission_error", `the content fake denies ${operation} to this sign-in`)
     const entity = entities(route.kind)[route.index] as ContentManifestEntity
     const held = rows[route.kind]?.[route.index] ?? []
-    if (route.role === "requires") {
+    // One rights read answers every right the manifest checks with it.
+    if (route.role === "rights") {
       const body: Row = {}
-      put(body, (route.call as CrmOperationCall & { check: string }).check, true)
+      for (const one of checks)
+        if (one.operation === operation && carries({ ...route, call: one }, request))
+          put(body, one.check, !lacks.has(one.check))
       return { body, headers: new Headers() }
+    }
+    const needs = entity.optional?.needs
+    if (needs && lacks.has(needs.check)) {
+      refusals.push(operation)
+      throw new CliError("validation_error", `the content fake refuses ${operation} to this sign-in`, {
+        status: 400,
+        inner_status: 403,
+      })
     }
     if (route.role === "get") {
       const place = placeOf(route.call, "{id}")
@@ -434,7 +461,13 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       return Response.json(write(found.operation.id, request))
     } catch (error) {
       if (!(error instanceof CliError) || error.code === "outcome_unknown") throw error
-      return Response.json({ message: error.message }, { status: statusOf(error) })
+      const inner = error.details.inner_status
+      return Response.json(
+        inner === undefined
+          ? { message: error.message }
+          : { message: error.message, data: { status: 400, details: { status: { data: { status: inner } } } } },
+        { status: statusOf(error) },
+      )
     }
   }
 
