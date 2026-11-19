@@ -47,6 +47,16 @@ export const withQuery = (command: Command, registry: QueryRegistry): Command =>
 }
 
 /**
+ * A list the service's own search narrows by words only: no Fields section in its help. The argument keeps the name
+ * `query`, so its MCP tool takes the same input as a list that takes field terms.
+ */
+export const withWords = (command: Command, registry: QueryRegistry, words: string): Command => {
+  annotate(command, { query: defineQuery(registry), output: { entity: registry.entity } })
+  queryWordsAfterOptions(command).argument("[query...]", words)
+  return command
+}
+
+/**
  * A list its source answers whole and cannot narrow: the entity's fields are named, none is filterable, so any
  * term is `query.unsupported-field` rather than a filter applied to what came back.
  */

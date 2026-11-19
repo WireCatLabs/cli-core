@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
@@ -267,6 +268,31 @@ describe("people, organizations and users, read live", () => {
       },
     })
     await expect(cli("people", "show", "Nobody Example")).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("show reads a word the CRM refuses as an id as a name (Attio answers 400)", async () => {
+    const { cli, source } = await setup()
+    const get = source.get?.bind(source)
+    if (!get) throw new Error("the fake reads one by id")
+    source.get = (kind, id) =>
+      /^p\d+$/u.test(id) ? get(kind, id) : Promise.reject(new CliError("validation_error", "not a record id"))
+    expect((await cli("people", "show", "Anna Example")).item).toMatchObject({ id: "p2" })
+  })
+
+  it("a source that searches by words says so in list's help and takes no field terms", async () => {
+    const root = new Command("crm")
+    addCrmCommands(root, {
+      app: APP,
+      open: () => Promise.reject(new Error("not opened")),
+      live: ["person"],
+      liveQuery: "words",
+    })
+    const help = commandAt(root, ["people", "list"]).helpInformation()
+    expect(help).toContain("words the CRM's own search looks for")
+    expect(help).not.toContain("field:value")
+    const bitrix = new Command("crm")
+    addCrmCommands(bitrix, { app: APP, open: () => Promise.reject(new Error("not opened")), live: ["person"] })
+    expect(commandAt(bitrix, ["people", "list"]).helpInformation()).toContain("field:value")
   })
 
   it("users show refuses a malformed id, and a run reads the CRM's users once (NIT-1, PERF-1)", async () => {

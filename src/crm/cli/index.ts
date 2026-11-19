@@ -125,6 +125,8 @@ export interface CrmCommandOptions {
    * `source.list`/`get`, `user` mounts `users` list/show over `source.users`. None when absent.
    */
   live?: readonly CrmLiveRecord[]
+  /** `words` for a source whose live lists are the service's own search: their help takes words, not field terms. */
+  liveQuery?: "fields" | "words"
   activities?: boolean
   files?: boolean
   now?: () => number
@@ -949,6 +951,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     open: options.open,
     app: options.app,
     live: options.live ?? [],
+    ...(options.liveQuery ? { liveQuery: options.liveQuery } : {}),
     ...(writes ? { writes } : {}),
     now,
   })
