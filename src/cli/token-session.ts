@@ -47,7 +47,10 @@ export interface TokenSessionOptions {
    * `<name>:<password>` too.
    */
   login?: { page?: (site: string | undefined) => string }
-  /** Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so. */
+  /**
+   * Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so.
+   * With `site`, `id` is `<site>:<id>`, the site as `--site` was cleaned.
+   */
   claim?: (env: NodeJS.ProcessEnv, profile: string, id: string, tokens: ProfileTokenStore) => void
   /** What the token is, for the prompt and help: "API token" when not given. */
   token?: string
@@ -175,7 +178,12 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     if (!secret) throw new CliError("validation_error", `no ${word} was given`)
     const token = login === undefined ? secret : `${login}:${secret}`
     const { id, account } = await run((events) => options.verify(this, token, events, site))
-    ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(env, profile, id, tokens)
+    ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(
+      env,
+      profile,
+      siteAccount(site, id),
+      tokens,
+    )
     const storedIn = tokens.write(profile, token, args.credentialStorage, site === undefined ? {} : { site })
     answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...siteOf(site), ...account })
   })
@@ -258,6 +266,12 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
 }
 
 const SITE = "site"
+
+/**
+ * The account a profile keeps: on a service of the owner's own site, `<site>:<id>`, as bitrix24-cli keeps
+ * `<portal>:<user id>`. Each site numbers its users from 1, so the id alone would put two sites' records together.
+ */
+const siteAccount = (site: string | undefined, id: string): string => (site === undefined ? id : `${site}:${id}`)
 const noSite = (app: AppIdentity, profile: string) =>
   new CliError(
     "authentication_error",
