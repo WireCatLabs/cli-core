@@ -12,7 +12,7 @@ import type { Level, PermissionKey } from "../sends/permissions.js"
 import { levelFor } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { refusedPlace } from "../sends/upload.js"
-import { type ApiCommandInput, generatedApiCommand } from "./bot/api.js"
+import { type ApiCommandInput, apiPathOf, generatedApiCommand } from "./bot/api.js"
 import { type HttpApiRequest, httpApiExchange, httpApiRequest, unsendableBody } from "./bot/api-http.js"
 import {
   apiJson,
@@ -113,7 +113,20 @@ const MOST_PAGES = 500
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value)
 
-const keyOf = (operation: ManifestOperation): PermissionKey => `api.${operation.command}`
+const keyOf = (operation: ManifestOperation): PermissionKey => ["api", ...apiPathOf(operation)].join(".")
+
+/** `contacts list`: what follows `api` on the command line. */
+const pathOf = (operation: ManifestOperation): string => apiPathOf(operation).join(" ")
+
+/**
+ * The key a grouped operation had while `api` was flat, `api.contacts-list`. A profile that still names it keeps its
+ * hold on that one command: checked beside the new key, it only ever tightens. A group never takes an old command's
+ * name (the generator refuses it), so the old key never reaches past its command.
+ */
+const formerKeyOf = (operation: ManifestOperation): PermissionKey | undefined => {
+  const former = `api.${operation.command}`
+  return former === keyOf(operation) ? undefined : former
+}
 
 const permissionsOf = (operation: ManifestOperation): readonly OperationPermission[] => operation.permissions ?? []
 
@@ -195,18 +208,29 @@ export const serviceApiPermissions = (
   extra: readonly PermissionKey[]
 } => {
   const checks = new Map<string, (PermissionKey | ConditionalKey)[]>()
-  for (const operation of input.manifest.operations)
-    checks.set(operation.command, [
+  const former: PermissionKey[] = []
+  for (const operation of input.manifest.operations) {
+    const old = formerKeyOf(operation)
+    if (old) former.push(old)
+    checks.set(pathOf(operation), [
       ...permissionsOf(operation).map((permission) => {
         const when = whenOf(permission)
         return when === undefined ? permission.key : { key: permission.key, when }
       }),
       ...(input.bodyPermissions?.[operation.command] ?? []).map(({ key, when }) => ({ key, when })),
+      ...(old ? [{ key: old, when: "while a profile still names this old key" }] : []),
     ])
-  const keys = [...new Set([...checks.values()].flat().map((one) => (typeof one === "string" ? one : one.key)))]
+  }
+  const keys = [
+    ...new Set(
+      [...checks.values()]
+        .flat()
+        .flatMap((one) => (typeof one === "string" ? [one] : former.includes(one.key) ? [] : [one.key])),
+    ),
+  ]
   return {
-    extra: keys,
-    alsoChecks: (path) => (path[0] === "api" && path.length === 2 ? (checks.get(path[1] ?? "") ?? []) : []),
+    extra: [...keys, ...former],
+    alsoChecks: (path) => (path[0] === "api" ? (checks.get(path.slice(1).join(" ")) ?? []) : []),
     defaults: {
       ...Object.fromEntries(keys.map((key) => [key, "ask" as const])),
       ...Object.fromEntries(
@@ -217,7 +241,8 @@ export const serviceApiPermissions = (
 }
 
 const rowOf = (operation: ManifestOperation) => ({
-  command: operation.command,
+  command: pathOf(operation),
+  group: apiPathOf(operation).length > 1 ? apiPathOf(operation)[0] : null,
   method:
     operation.binding.kind === "http" ? operation.binding.method : operation.binding.kind === "graphql" ? "POST" : "",
   path:
@@ -283,9 +308,10 @@ const serviceApiCore = (options: ServiceApiOptions) => {
   })
 
   const operationOf = (name: string): ManifestOperation => {
-    const found = operations.find((operation) => operation.command === name || operation.id === name)
+    const named = (one: ManifestOperation) => pathOf(one) === name || one.command === name || one.id === name
+    const found = operations.find(named)
     if (found) return found
-    const id = manifest.operations.find((one) => one.command === name || one.id === name)?.id ?? name
+    const id = manifest.operations.find(named)?.id ?? name
     const why = options.excluded?.find((one) => one.id === name) ?? left.find((one) => one.id === id)
     throw new CliError(
       "not_found",
@@ -378,18 +404,35 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     }
   }
 
-  return { operations, left, baseUrlOf, defaults, exchange, operationOf, readsFreely, signed, write }
+  /** The old flat key, when the profile names it: on a read only its refusal or its question applies. */
+  const formerKeys = (command: Command, operation: ManifestOperation): PermissionKey[] => {
+    const former = formerKeyOf(operation)
+    if (!former) return []
+    const { settings, renderer } = baseContext(command, configuration.resolveSettings)
+    const level = settings.permissions[former]
+    if (level === undefined) return []
+    renderer.warn(
+      `permissions name ${former}, the old key of api ${pathOf(operation)}: rename it to ${keyOf(operation)}`,
+    )
+    return operation.effect === "read" && level !== "deny" && level !== "ask" ? [] : [former]
+  }
+
+  return { operations, left, baseUrlOf, defaults, exchange, formerKeys, operationOf, readsFreely, signed, write }
 }
 
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const { app, configuration } = options
-  const { operations, baseUrlOf, exchange, operationOf, readsFreely, signed, write } = serviceApiCore(options)
+  const { operations, baseUrlOf, exchange, formerKeys, operationOf, readsFreely, signed, write } =
+    serviceApiCore(options)
   const send = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) =>
     (await exchange(command, operation, request)).answer
   let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
   const loaded = () => {
     if (!schemas) throw new CliError("configuration_error", "the api schemas were not loaded before the command ran")
     return schemas
+  }
+  const load = async () => {
+    schemas ??= await options.schemas()
   }
   /** Every page, in one run; a next page outside the server's address is never sent the sign-in. */
   const allPages = async (command: Command, operation: ManifestOperation, input: ApiCommandInput) => {
@@ -438,7 +481,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     renderAnswer(
       command,
       outputFor(command),
-      listOf(`api ${operation.command}`, { items, limit: items.length, has_more: false }),
+      listOf(`api ${pathOf(operation)}`, { items, limit: items.length, has_more: false }),
     )
   }
 
@@ -461,8 +504,13 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       refuseOwnFiles(command, path)
       return readApiBytes(path)
     },
+    configure: (command, operation) => {
+      if (operation.pagination && !operation.parameters.some(({ name }) => name === "all"))
+        command.option("--all", "read every page, as the API pages it")
+      command.hook("preAction", load)
+    },
     execute: async (command, operation, input) => {
-      const extra = serviceApiKeys(options, operation, input)
+      const extra = [...serviceApiKeys(options, operation, input), ...formerKeys(command, operation)]
       const read = readsFreely(command, operation, extra)
       if (operation.pagination && command.opts<{ all?: unknown }>().all === true) {
         if (!read)
@@ -500,10 +548,12 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
 
   const show = annotate(new Command("show"), {
     effects: NO_EFFECTS,
-    examples: [`${app.command} api show ${operations[0]?.command ?? "<operation>"} --json`],
+    examples: [
+      `${app.command} api show ${operations[0] ? JSON.stringify(pathOf(operations[0])) : "<operation>"} --json`,
+    ],
   })
     .description(`show one operation's parameters and request schema, without calling ${options.service}`)
-    .argument("<operation>", "the operation, as api list prints it")
+    .argument("<operation>", "the operation as api list prints it (quoted), its old name, or its operation id")
     .action(async function (this: Command, name: string) {
       const operation = operationOf(name)
       const definitions = await options.definitions()
@@ -519,15 +569,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     `the raw ${options.service} API, one command per operation of its OpenAPI document`,
   )
   group.addCommand(list).addCommand(show)
-  const load = async () => {
-    schemas ??= await options.schemas()
-  }
-  for (const child of generated.commands) {
-    const operation = operations.find((one) => one.command === child.name())
-    if (operation?.pagination && !operation.parameters.some(({ name }) => name === "all"))
-      child.option("--all", "read every page, as the API pages it")
-    group.addCommand(child.hook("preAction", load))
-  }
+  for (const child of [...generated.commands]) group.addCommand(child)
   return group
 }
 
@@ -565,7 +607,7 @@ const writerBody = (
  * can be asked. A read that no key guards goes through `serviceApiCall`.
  */
 export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite => {
-  const { baseUrlOf, operationOf, signed, write } = serviceApiCore(options)
+  const { baseUrlOf, formerKeys, operationOf, signed, write } = serviceApiCore(options)
   return async (command, name, input, { confirmed } = {}) => {
     const operation = operationOf(name)
     // The api group offers only declared parameters; code must not reach further, as WordPress's `_method` turns a
@@ -607,6 +649,6 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
       operation,
       httpApiRequest(operation, writerBody(operation, input, schemas), baseUrlOf(command)),
     )
-    return write(command, operation, extra, request, confirmed)
+    return write(command, operation, [...extra, ...formerKeys(command, operation)], request, confirmed)
   }
 }
