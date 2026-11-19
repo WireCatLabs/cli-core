@@ -11,6 +11,8 @@ export interface Mirror {
   id: string
   path: string
   folder: string
+  /** Globs of paths the mirror leaves alone on both sides, as `excludedBy` reads them. */
+  exclude?: string[]
 }
 
 export const mirrorId = (root: string, folder: string): string =>

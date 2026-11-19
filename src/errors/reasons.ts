@@ -249,6 +249,13 @@ const OTHERS: Entry[] = [
     "the sync would delete more files than the guard allows; check them with --dry-run and allow them explicitly",
   ],
   [
+    "mirror.too-many-replacements",
+    "confirmation_required",
+    "the sync would replace more files than the guard allows; check them with --dry-run and allow them explicitly",
+  ],
+  validation("mirror.no-space", "the sync needs more free space than the local drive has"),
+  validation("mirror.bad-exclusion", "the exclusion is not a path pattern inside the mirror"),
+  [
     "mirror.version-not-kept",
     "provider_error",
     "the earlier content could not be kept in the version store, so the sync did not replace it",

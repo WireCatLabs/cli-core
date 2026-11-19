@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { mkdir, rm, stat, unlink } from "node:fs/promises"
+import { mkdir, rm, stat, statfs, unlink } from "node:fs/promises"
 import { dirname, join, posix } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import * as v from "valibot"
@@ -26,6 +26,7 @@ import {
   scanLocal,
   skippedName,
 } from "../documents/push.js"
+import { excludedBy } from "./exclusions.js"
 import type { FileVersions } from "./versions.js"
 
 type Local = LocalDocument & { size: number; mtimeMs: number }
@@ -47,8 +48,14 @@ export interface FileMirrorOptions {
   /** Settles conflicts; without it they are reported and left. */
   keep?: Keep
   dryRun?: boolean
-  /** Lets a run delete this many files although the deletion guard would stop it. */
+  /** Lets a run delete this many files although the guard would stop it. */
   allowDeletions?: number
+  /** Lets a run replace this many existing files, on either side, although the guard would stop it. */
+  allowReplacements?: number
+  /** Globs of paths the mirror leaves alone on both sides, as `excludedBy` reads them. */
+  exclude?: string[]
+  /** The mirror's id, put for `<id>` in the hints. */
+  id?: string
   /**
    * The owner confirmed that a root reported as replaced is the right folder now: its identity is recorded again and
    * the run is a first sync (identical files adopted, different ones conflicts), deleting nothing.
@@ -56,7 +63,7 @@ export interface FileMirrorOptions {
   repin?: boolean
   /** How the app names the remote side; it ends a conflict copy's name. */
   remote: string
-  /** How the app's commands are named in the deletion guard's and the repin message; the defaults are flags. */
+  /** How the app's commands are named in the guard's, the free space and the repin message. */
   hints?: Partial<MirrorHints>
   /** Runs one write behind the app's permission checks; `side` says which side it changes. */
   guard<T>(
@@ -68,20 +75,37 @@ export interface FileMirrorOptions {
   /** Throws once the sync lock is lost; checked before every write. */
   assertHeld(): void | Promise<void>
   signal?: AbortSignal
+  /** Local files the mirror takes at most; more fail the run. */
   maxFiles?: number
+  /** Bytes free for this process on the file system holding `path`, and its device. */
+  space?(path: string): Promise<{ free: number; dev: number }>
   now?(): number
 }
 
+/** The app's commands, as the engine's messages name them; `<id>` is the mirror's id and `<count>` a number. */
 export interface MirrorHints {
-  /** How to preview a run: `--dry-run`. */
+  /** How to preview a run: `ydisk work mirrors preview <id>`. */
   preview: string
-  /** How to record a replaced root again: `--repin`. */
+  /** How to record a replaced root again: `ydisk work mirrors sync <id> --repin`. */
   repin: string
-  /** How to allow a run's deletions: `explicitly`, as in "allow them explicitly". */
+  /** The sync an approval is added to: `ydisk work mirrors sync <id>`. */
+  sync: string
+  /** How a sync allows deletions: `--allow-deletions <count>`. */
   allowDeletions: string
+  /** How a sync allows replacements: `--allow-replacements <count>`. */
+  allowReplacements: string
+  /** How to exclude a folder: `ydisk work mirrors exclude <id> <glob>`. */
+  exclude: string
 }
 
-const HINTS: MirrorHints = { preview: "--dry-run", repin: "--repin", allowDeletions: "explicitly" }
+const HINTS: MirrorHints = {
+  preview: "--dry-run",
+  repin: "--repin",
+  sync: "sync",
+  allowDeletions: "--allow-deletions <count>",
+  allowReplacements: "--allow-replacements <count>",
+  exclude: "--exclude <glob>",
+}
 
 export interface FileStep {
   kind: FileStepKind
@@ -98,7 +122,8 @@ export interface FileMirrorResult {
   adopted: string[]
   unchanged: number
   conflicts: PushConflict[]
-  errors: { path: string; code: string; message: string }[]
+  /** A whole-run refusal (the guard, too little space) is one error at path `.` with its `reason`. */
+  errors: { path: string; code: string; message: string; reason?: string }[]
   /**
    * Files of the last sync missing from a side that cannot prove a deletion: its listing was incomplete, or its root
    * is gone or is another folder. Nothing is deleted for them.
@@ -106,8 +131,12 @@ export interface FileMirrorResult {
   unknown: { path: string; side: Side; reason: string }[]
   /** Every step but the unchanged files, on a dry run. */
   plan?: FileStep[]
-  /** On a dry run, the deletions that would stop the real run without `allowDeletions`. */
+  /** The deletions that stop the run without `allowDeletions`; a dry run reports them without stopping. */
   tooManyDeletions?: number
+  /** The replacements of existing files that stop the run without `allowReplacements`. */
+  tooManyReplacements?: number
+  /** The run needs more free space than the file system at `path` has. */
+  noSpace?: { path: string; needed: number; free: number }
   stopped?: true
 }
 
@@ -121,12 +150,16 @@ interface Step extends FileStep {
 }
 
 /**
- * A run that would delete more than `ALWAYS_DELETED` files and more than `MAX_DELETIONS` files or `MAX_DELETED_SHARE`
- * of the mirror stops before writing.
+ * A run that would delete more than `MAX_DELETIONS` files, or replace more than `MAX_REPLACEMENTS` existing files on
+ * either side, stops before writing until the owner allows the count. Replacements get the higher bar: every content
+ * one replaces is kept in the version store first, and bulk edits (a find-and-replace, a branch switch) are common.
  */
-const ALWAYS_DELETED = 2
-const MAX_DELETIONS = 50
-const MAX_DELETED_SHARE = 0.25
+export const MAX_DELETIONS = 10
+export const MAX_REPLACEMENTS = 50
+/** What a run leaves free on a file system it downloads or keeps versions into. */
+const SPARE_BYTES = 1024 ** 3
+const MAX_FILES = 100_000
+const CHECKS = 8
 const TRASH = ".wirecat-trash"
 const SAVE_EVERY_MS = 1_000
 
@@ -229,8 +262,13 @@ const renameLocal = async (root: string, from: string, to: string, hash: string)
   return true
 }
 
-/** Every local file, hashed only when its size or mtime moved since the last sync. */
-const scan = async (root: string, entries: Record<string, FileEntry>, maxFiles?: number) => {
+/** Every local file but excluded ones, hashed only when its size or mtime moved since the last sync. */
+const scan = async (
+  root: string,
+  entries: Record<string, FileEntry>,
+  excluded: (path: string) => boolean,
+  maxFiles = MAX_FILES,
+) => {
   const { files, links } = await scanLocal(
     root,
     () => "file",
@@ -239,6 +277,7 @@ const scan = async (root: string, entries: Record<string, FileEntry>, maxFiles?:
       const entry = entries[path]
       return entry && { size: entry.localSize, mtimeMs: entry.localMtimeMs, hash: entry.sha256 }
     },
+    excluded,
   )
   return { files: files as Local[], links }
 }
@@ -268,6 +307,20 @@ const whole = async (absolute: string, hashes: (string | undefined)[]) => {
 /** True when `path` is `link` or lies under it. */
 const under = (path: string, link: string) => path === link || path.startsWith(`${link}/`)
 
+/** Free bytes and the device of the file system holding `path`, or of its nearest folder that exists. */
+const freeSpace = async (path: string): Promise<{ free: number; dev: number }> => {
+  for (let at = path; ; at = dirname(at)) {
+    try {
+      const [{ bavail, bsize }, { dev }] = await Promise.all([statfs(at), stat(at)])
+      return { free: bavail * bsize, dev }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dirname(at) === at) throw error
+    }
+  }
+}
+
+const gigabytes = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`
+
 /**
  * Syncs a local folder and a remote folder of plain files both ways, whole files at a time. Each path is compared
  * three ways (local now, remote now, last sync): a change on one side is copied to the other, the same content on
@@ -278,6 +331,9 @@ const under = (path: string, link: string) => path === link || path.startsWith(`
 export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMirrorResult> => {
   const { root, folder, target, principal, keep, signal, versions } = options
   const hints = { ...HINTS, ...options.hints }
+  const fill = (hint: string, count?: number) =>
+    hint.replaceAll("<id>", options.id ?? "<id>").replaceAll("<count>", count === undefined ? "<count>" : `${count}`)
+  const excluded = excludedBy(options.exclude)
   const now = options.now ?? Date.now
   if (signal?.aborted) throw new CliError("cancelled", "sync was cancelled")
   if ((await target.identity()) !== principal)
@@ -287,7 +343,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const state = options.state.read()
   if (state.principal !== principal || state.root !== root || state.target !== folder)
     throw new CliError("configuration_error", "mirror state belongs to another account or mirror")
-  const listed = await target.list(folder, signal)
+  const listed = await target.list(folder, signal, { excluded })
   const localRoot = await stat(root).catch(() => undefined)
   const remoteReplaced = listed !== undefined && state.rootId !== undefined && listed.rootId !== state.rootId
   const localReplaced =
@@ -296,9 +352,13 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     (state.localRoot.dev !== localRoot.dev || state.localRoot.ino !== localRoot.ino)
   // Only a mirror whose root really was replaced is re-pinned; `repin` on a sync of every mirror leaves the others be.
   const repin = options.repin === true && (remoteReplaced || localReplaced)
+  // An excluded path is absent by filter, never deleted: the last sync's entries under it are left out.
+  const synced = Object.fromEntries(Object.entries(state.entries).filter(([path]) => !excluded(path)))
   // A re-pinned mirror starts over: the last sync's entries describe the folder it replaced.
-  const entries = repin ? {} : state.entries
-  const scanned = localRoot?.isDirectory() ? await scan(root, entries, options.maxFiles) : { files: [], links: [] }
+  const entries = repin ? {} : synced
+  const scanned = localRoot?.isDirectory()
+    ? await scan(root, entries, excluded, options.maxFiles)
+    : { files: [], links: [] }
   const local = new Map(scanned.files.map((file) => [file.path, file]))
   const problem = (side: Side, code: string, reason: string, repinnable = false) => ({ side, code, reason, repinnable })
   // A folder that is gone, replaced, or empty where the state had files (an unmounted drive) is not this mirror.
@@ -310,7 +370,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         ? problem("local", "not_found", "the local folder is gone")
         : localReplaced && !repin
           ? problem("local", "confirmation_required", "the local folder was replaced by another one", true)
-          : Object.keys(state.entries).length > 0 && !local.size
+          : Object.keys(synced).length > 0 && !local.size
             ? problem(
                 "local",
                 "validation_error",
@@ -320,11 +380,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
             : undefined
   const refused = rootProblem ? [] : (listed?.files ?? []).filter((file) => !safePath(file.path))
   const refusedIds = new Set(refused.map((file) => file.id))
-  const remote = new Map(
-    rootProblem
-      ? []
-      : mirrored((listed?.files ?? []).filter((file) => safePath(file.path))).map((file) => [file.path, file]),
-  )
+  const visible = rootProblem ? [] : mirrored((listed?.files ?? []).filter((file) => safePath(file.path)))
+  const remote = new Map(visible.filter((file) => !excluded(file.path)).map((file) => [file.path, file]))
+  // Where a synced file went when it moved into an excluded folder on the remote.
+  const excludedIds = new Set(visible.filter((file) => excluded(file.path)).map((file) => file.id))
   const sure = {
     local: rootProblem?.side !== "local",
     remote: rootProblem?.side !== "remote" && listed?.complete === true,
@@ -332,7 +391,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const base = { ...entries }
 
   const steps: Step[] = []
-  const byId = new Map([...remote.values()].map((file) => [file.id, file]))
+  const byId = new Map(visible.map((file) => [file.id, file]))
   for (const [path, entry] of Object.entries(entries)) {
     const moved = remote.has(path) ? undefined : byId.get(entry.id)
     const file = local.get(path)
@@ -360,12 +419,12 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   }
   if (rootProblem) {
     const { side, code, reason, repinnable } = rootProblem
-    result.unknown = Object.keys(state.entries).map((path) => ({ path, side, reason }))
+    result.unknown = Object.keys(synced).map((path) => ({ path, side, reason }))
     result.errors.push({
       path: ".",
       code,
       message: repinnable
-        ? `${reason}; if it is the right folder now, sync again with ${hints.repin} to record it ` +
+        ? `${reason}; if it is the right folder now, sync again with ${fill(hints.repin)} to record it ` +
           "(that run deletes nothing)"
         : reason,
     })
@@ -379,6 +438,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     })
   const cutOff = new Set<string>()
   for (const path of paths) {
+    // A synced file moved into an excluded folder is renamed there above, and then left alone.
+    if (excluded(path)) continue
     const entry = base[path]
     if (entry && !local.has(path) && scanned.links.some((link) => under(path, link))) {
       steps.push({
@@ -391,6 +452,15 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     }
     if (entry && !remote.has(path) && refusedIds.has(entry.id)) {
       steps.push({ kind: "unknown", path, reason: "remote", why: `moved on the ${options.remote} to a refused path` })
+      continue
+    }
+    if (entry && !remote.has(path) && excludedIds.has(entry.id)) {
+      steps.push({
+        kind: "unknown",
+        path,
+        reason: "remote",
+        why: `moved on the ${options.remote} into an excluded folder`,
+      })
       continue
     }
     const file = remote.get(path)
@@ -424,6 +494,23 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       touched.push(path)
   }
   result.unchanged = unchanged
+  const remotePath = (path: string) => posix.join(folder, path)
+  // A listing read in pages can miss a file that moved while it was read, and a provider's flat listing may lag: a
+  // file missing from it is deleted locally only once a direct read, made after the listing, finds nothing there.
+  const absent = steps.filter((step) => step.kind === "trash-local")
+  for (let at = 0; at < absent.length; at += CHECKS)
+    await Promise.all(
+      absent.slice(at, at + CHECKS).map(async (step) => {
+        const why = await target.exists(remotePath(step.path), signal).then(
+          (there) => (there ? `missing from the ${options.remote} listing, but still there` : undefined),
+          (error: unknown) => {
+            if (signal?.aborted) throw error
+            return `the ${options.remote} could not say whether it was deleted: ${options.errorOf(error).message}`
+          },
+        )
+        if (why) Object.assign(step, { kind: "unknown", reason: "remote", why })
+      }),
+    )
   const conflict = (step: Step, reason: string) =>
     result.conflicts.push({
       path: step.path,
@@ -442,21 +529,61 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   }
 
   const deletions = steps.filter((step) => step.kind === "trash-local" || step.kind === "trash-remote").length
-  const tooMany =
-    deletions > ALWAYS_DELETED &&
-    (deletions > MAX_DELETIONS || deletions > Object.keys(state.entries).length * MAX_DELETED_SHARE)
+  const replacements = steps.filter(
+    (step) =>
+      (step.kind === "upload" && step.remote) || (step.kind === "download" && step.local) || step.kind === "keep-both",
+  ).length
+  const over = [
+    ...(deletions > MAX_DELETIONS
+      ? [
+          {
+            reason: "mirror.too-many-deletions",
+            what: `delete ${deletions} files (more than ${MAX_DELETIONS})`,
+            flag: fill(hints.allowDeletions, deletions),
+            allowed: (options.allowDeletions ?? 0) >= deletions,
+          },
+        ]
+      : []),
+    ...(replacements > MAX_REPLACEMENTS
+      ? [
+          {
+            reason: "mirror.too-many-replacements",
+            what: `replace ${replacements} existing files (more than ${MAX_REPLACEMENTS})`,
+            flag: fill(hints.allowReplacements, replacements),
+            allowed: (options.allowReplacements ?? 0) >= replacements,
+          },
+        ]
+      : []),
+  ]
+  if (deletions > MAX_DELETIONS) result.tooManyDeletions = deletions
+  if (replacements > MAX_REPLACEMENTS) result.tooManyReplacements = replacements
+  const noSpace = await shortOfSpace(steps, root, versions, options.space ?? freeSpace)
+  if (noSpace) result.noSpace = noSpace
   if (options.dryRun) {
     result.plan = steps.map(({ kind, path, to }) => ({ kind, path, ...(to ? { to } : {}) }))
-    if (tooMany) result.tooManyDeletions = deletions
     return result
   }
-  if (tooMany && (options.allowDeletions ?? 0) < deletions)
-    throw new CliError(
-      "confirmation_required",
-      `this sync would delete ${deletions} files; ` +
-        `check them with ${hints.preview} and allow them ${hints.allowDeletions}`,
-      { reason: "mirror.too-many-deletions", deletions },
-    )
+  const unapproved = over.find((one) => !one.allowed)
+  if (unapproved)
+    result.errors.push({
+      path: ".",
+      code: "confirmation_required",
+      reason: unapproved.reason,
+      message:
+        `this sync would ${over.map((one) => one.what).join(" and ")}; check them with \`${fill(hints.preview)}\`, ` +
+        `then allow them with \`${fill(hints.sync)} ${over.map((one) => one.flag).join(" ")}\``,
+    })
+  if (noSpace)
+    result.errors.push({
+      path: ".",
+      code: "validation_error",
+      reason: "mirror.no-space",
+      message:
+        `this sync needs ${gigabytes(noSpace.needed)} on the drive of ${noSpace.path}, which has ` +
+        `${gigabytes(noSpace.free)} free, and leaves ${gigabytes(SPARE_BYTES)} of it free; free some space, or ` +
+        `leave big folders out with \`${fill(hints.exclude)}\``,
+    })
+  if (unapproved || noSpace) return result
 
   if (repin) {
     state.entries = {}
@@ -473,8 +600,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     if (!cutOff.has(path)) delete state.pending[path]
   }
   let savedAt = now()
+  // A big mirror's state is megabytes of JSON: saved less often, it costs no more than a small one's.
+  const saveEvery = SAVE_EVERY_MS * Math.max(1, Object.keys(state.entries).length / 10_000)
   const save = (force = false) => {
-    if (!force && now() - savedAt < SAVE_EVERY_MS) return
+    if (!force && now() - savedAt < saveEvery) return
     options.state.save(state)
     savedAt = now()
   }
@@ -486,7 +615,6 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   save(true)
 
   const date = new Date(now()).toISOString().slice(0, 10)
-  const remotePath = (path: string) => posix.join(folder, path)
   const folders = new Set([...remote.keys()].map((path) => posix.dirname(path)))
   for (const path of [...folders]) for (let up = path; up !== "."; up = posix.dirname(up)) folders.add(up)
   let lastOperation = ""
@@ -711,11 +839,52 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       }
     }
   } finally {
+    // Forgotten, so a file whose exclusion is removed later is a new file, never a deletion.
+    for (const path of Object.keys(state.entries)) if (excluded(path)) delete state.entries[path]
     save(true)
   }
   await options.assertHeld()
   await versions.prune()
   return result
+}
+
+/**
+ * The free space a run needs that a file system lacks: downloads land under `root`, and the store keeps every
+ * content they replace or a deletion removes, plus each remote content an upload replaces that it lacks.
+ */
+const shortOfSpace = async (
+  steps: Step[],
+  root: string,
+  versions: FileVersions,
+  space: (path: string) => Promise<{ free: number; dev: number }>,
+) => {
+  let incoming = 0
+  let kept = 0
+  for (const step of steps) {
+    const local = step.local?.size ?? 0
+    const remote = step.remote?.size ?? 0
+    if (step.kind === "download") {
+      incoming += remote
+      kept += local
+    }
+    if (step.kind === "keep-both") {
+      incoming += remote
+      kept += remote
+    }
+    if (step.kind === "trash-local") kept += local
+    if (step.kind === "upload" && step.remote && !versions.has(step.remote.sha256 as string)) kept += remote
+  }
+  if (!incoming && !kept) return undefined
+  const here = await space(root)
+  const store = versions.dir === undefined ? here : await space(versions.dir)
+  const needs =
+    store.dev === here.dev
+      ? [{ path: root, needed: incoming + kept, free: here.free }]
+      : [
+          { path: root, needed: incoming, free: here.free },
+          { path: versions.dir as string, needed: kept, free: store.free },
+        ]
+  return needs.find((need) => need.needed > 0 && need.free < need.needed + SPARE_BYTES)
 }
 
 const ancestors = (path: string) => {
@@ -763,8 +932,11 @@ export const fileSyncState = (dir: string, mirror: Mirror, principal: string): F
 export const fileMirrorStatus = async (mirrors: Mirror[], stateOf: (mirror: Mirror) => FileMirrorStatePort) => {
   const items = []
   for (const mirror of mirrors) {
-    const { entries } = stateOf(mirror).read()
-    const { files, links } = await scan(mirror.path, entries)
+    const excluded = excludedBy(mirror.exclude)
+    const entries = Object.fromEntries(
+      Object.entries(stateOf(mirror).read().entries).filter(([path]) => !excluded(path)),
+    )
+    const { files, links } = await scan(mirror.path, entries, excluded)
     const seen = new Set(files.map((file) => file.path))
     items.push({
       id: mirror.id,
@@ -802,12 +974,14 @@ export interface FileMirrorSyncOptions
     | "keep"
     | "dryRun"
     | "allowDeletions"
+    | "allowReplacements"
     | "repin"
     | "hints"
     | "guard"
     | "operationId"
     | "errorOf"
     | "signal"
+    | "space"
   > {
   mirrors: Mirror[]
   stateOf(mirror: Mirror): FileMirrorStatePort
@@ -825,6 +999,8 @@ export const syncFileMirrors = (options: FileMirrorSyncOptions) =>
       ...options,
       root: mirror.path,
       folder: mirror.folder,
+      id: mirror.id,
+      ...(mirror.exclude ? { exclude: mirror.exclude } : {}),
       state: options.stateOf(mirror),
       versions: options.versionsOf(mirror),
       assertHeld: heldCheck(held),

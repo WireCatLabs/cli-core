@@ -25,6 +25,7 @@ import { skippedName } from "../../documents/index.js"
 import type { Keep } from "../../documents/push-model.js"
 import { type Mirror, mirrorId } from "../documents/mirrors.js"
 import { hashFile, localTemp, placeNew, safePath } from "../documents/push.js"
+import { excludedBy, exclusionPattern } from "./exclusions.js"
 import {
   type FileMirrorOptions,
   fileMirrorStatus,
@@ -91,6 +92,7 @@ const fakeDisk = () => {
   let gone = false
   let complete = true
   let rootId = "root-1"
+  const unlisted = new Set<string>()
   const relative = (path: string) => posix.relative(FOLDER, path)
   const touch = (path: string) => {
     if (!ids.has(path)) ids.set(path, `res-${++next}`)
@@ -117,9 +119,10 @@ const fakeDisk = () => {
     list: async (root) => {
       if (gone || root !== FOLDER) return undefined
       const files: RemoteFile[] = []
-      for (const path of [...ids.keys()].sort()) files.push(await describe(path))
+      for (const path of [...ids.keys()].sort()) if (!unlisted.has(path)) files.push(await describe(path))
       return { rootId, files, complete }
     },
+    exists: async (path) => ids.has(relative(path)),
     download: async (path, into) => {
       calls.push({ op: "download", path: relative(path) })
       await pipeline(createReadStream(join(dir, relative(path))), createWriteStream(into, { flags: "wx" }))
@@ -185,6 +188,10 @@ const fakeDisk = () => {
     },
     replaceRoot: () => {
       rootId = "root-2"
+    },
+    /** The listing leaves the file out while it is still there, as a page that shifted or a lagging index would. */
+    unlist: (path: string) => {
+      unlisted.add(path)
     },
     writes: () => calls.filter((call) => call.op !== "folder"),
   }
@@ -384,7 +391,7 @@ describe("syncFileMirror, the three-way table", () => {
     context.disk.write("gone-here.md", "1, changed")
     put(context.root, "gone-there.md", "2, changed")
     context.disk.remove("gone-there.md")
-    const result = await context.sync("local", { allowDeletions: 1 })
+    const result = await context.sync("local")
     expect(result).toMatchObject({ uploaded: ["gone-there.md"], trashed: [{ path: "gone-here.md", side: "remote" }] })
     expect(await context.disk.files()).toEqual({ "gone-there.md": "2, changed", "c.md": "3", "d.md": "4" })
   })
@@ -446,45 +453,158 @@ describe("syncFileMirror, --keep on a file changed on both sides", () => {
   })
 })
 
-describe("syncFileMirror, deletion guard", () => {
-  it("stops before any write when a run would delete more than 2 files and more than a quarter of the mirror", async () => {
-    const files = Object.fromEntries("abcdefgh".split("").map((name, n) => [`${name}.md`, `${n}`]))
-    const context = setup(files, files)
-    await context.sync()
-    for (const name of ["a.md", "b.md", "c.md"]) rmSync(join(context.root, name))
-    put(context.root, "new.md", "n")
-    expect(await context.sync(undefined, { dryRun: true })).toMatchObject({ tooManyDeletions: 3 })
-    await expect(context.sync()).rejects.toMatchObject({
-      code: "confirmation_required",
-      details: { reason: "mirror.too-many-deletions", deletions: 3 },
-    })
-    expect(context.disk.writes()).toEqual([])
-    await expect(
-      context.sync(undefined, { hints: { preview: "mirrors preview", allowDeletions: "with --allow-deletions 3" } }),
-    ).rejects.toThrow("check them with mirrors preview and allow them with --allow-deletions 3")
-    expect(await context.sync(undefined, { allowDeletions: 3 })).toMatchObject({ uploaded: ["new.md"] })
-    expect(context.disk.trash.map((item) => item.path)).toEqual(["a.md", "b.md", "c.md"])
-  })
+describe("syncFileMirror, the guard on mass changes", () => {
+  const many = (count: number) => Object.fromEntries(Array.from({ length: count }, (_, n) => [`f${n}.md`, `${n}`]))
+  const hints = {
+    preview: "ydisk work mirrors preview <id>",
+    sync: "ydisk work mirrors sync <id>",
+    allowDeletions: "--allow-deletions <count>",
+    allowReplacements: "--allow-replacements <count>",
+  }
 
-  it("always lets up to 2 deletions through, whatever the share", async () => {
-    const files = { "a.md": "1", "b.md": "2", "c.md": "3", "d.md": "4" }
+  it("lets up to 10 deletions through, however large or small the mirror", async () => {
+    const files = many(12)
     const context = setup(files, files)
     await context.sync()
-    rmSync(join(context.root, "a.md"))
-    rmSync(join(context.root, "b.md"))
+    for (let n = 0; n < 10; n++) rmSync(join(context.root, `f${n}.md`))
     expect(await context.sync(undefined, { dryRun: true })).not.toHaveProperty("tooManyDeletions")
-    expect((await context.sync()).trashed).toEqual([
-      { path: "a.md", side: "remote" },
-      { path: "b.md", side: "remote" },
-    ])
+    expect((await context.sync()).trashed).toHaveLength(10)
   })
 
-  it("stops at more than 50 deletions whatever the share", async () => {
-    const files = Object.fromEntries(Array.from({ length: 220 }, (_, n) => [`f${n}.md`, `${n}`]))
+  it("stops at 11 deletions in a mirror of 1,000 files, before any write, naming the command that allows them", async () => {
+    const files = many(1_000)
     const context = setup(files, files)
     await context.sync()
-    for (let n = 0; n < 51; n++) rmSync(join(context.root, `f${n}.md`))
-    await expect(context.sync()).rejects.toMatchObject({ details: { deletions: 51 } })
+    for (let n = 0; n < 11; n++) rmSync(join(context.root, `f${n}.md`))
+    put(context.root, "new.md", "n")
+    context.disk.calls.length = 0
+    expect(await context.sync(undefined, { dryRun: true })).toMatchObject({ tooManyDeletions: 11 })
+    const stopped = await context.sync(undefined, { id: "1a2b3c4d", hints })
+    expect(stopped).toMatchObject({ tooManyDeletions: 11, uploaded: [], trashed: [] })
+    expect(stopped.errors).toEqual([
+      {
+        path: ".",
+        code: "confirmation_required",
+        reason: "mirror.too-many-deletions",
+        message:
+          "this sync would delete 11 files (more than 10); check them with `ydisk work mirrors preview 1a2b3c4d`, " +
+          "then allow them with `ydisk work mirrors sync 1a2b3c4d --allow-deletions 11`",
+      },
+    ])
+    expect(context.disk.writes()).toEqual([])
+    expect(await context.sync(undefined, { allowDeletions: 10 })).toMatchObject({ trashed: [] })
+    const allowed = await context.sync(undefined, { allowDeletions: 11 })
+    expect(allowed).toMatchObject({ uploaded: ["new.md"], errors: [] })
+    expect(allowed.trashed).toHaveLength(11)
+  })
+
+  it("stops at more than 50 replacements on either side, as an editor or ransomware rewriting every file would", async () => {
+    const files = many(60)
+    const context = setup(files, files)
+    await context.sync()
+    for (let n = 0; n < 30; n++) put(context.root, `f${n}.md`, `${n}, encrypted`)
+    for (let n = 30; n < 51; n++) context.disk.write(`f${n}.md`, `${n}, encrypted`)
+    context.disk.calls.length = 0
+    const stopped = await context.sync(undefined, { id: "1a2b3c4d", hints })
+    expect(stopped.errors).toEqual([
+      expect.objectContaining({
+        code: "confirmation_required",
+        reason: "mirror.too-many-replacements",
+        message: expect.stringContaining(
+          "replace 51 existing files (more than 50); check them with `ydisk work mirrors preview 1a2b3c4d`, then " +
+            "allow them with `ydisk work mirrors sync 1a2b3c4d --allow-replacements 51`",
+        ),
+      }),
+    ])
+    expect(context.disk.writes()).toEqual([])
+    expect(await context.local()).toMatchObject({ "f40.md": "40" })
+    const allowed = await context.sync(undefined, { allowReplacements: 51 })
+    expect([allowed.uploaded.length, allowed.downloaded.length]).toEqual([30, 21])
+  })
+
+  it("lets 50 replacements through", async () => {
+    const files = many(50)
+    const context = setup(files, files)
+    await context.sync()
+    for (let n = 0; n < 50; n++) put(context.root, `f${n}.md`, `${n}, edited`)
+    expect((await context.sync()).uploaded).toHaveLength(50)
+  })
+
+  it("names every count over the limit, so one approved run is enough", async () => {
+    const files = many(70)
+    const context = setup(files, files)
+    await context.sync()
+    for (let n = 0; n < 11; n++) rmSync(join(context.root, `f${n}.md`))
+    for (let n = 11; n < 70; n++) put(context.root, `f${n}.md`, `${n}, edited`)
+    const stopped = await context.sync(undefined, { id: "1a2b3c4d", hints, allowReplacements: 59 })
+    expect(stopped.errors[0]).toMatchObject({ reason: "mirror.too-many-deletions" })
+    expect(stopped.errors[0]?.message).toContain(
+      "`ydisk work mirrors sync 1a2b3c4d --allow-deletions 11 --allow-replacements 59`",
+    )
+    const allowed = await context.sync(undefined, { allowDeletions: 11, allowReplacements: 59 })
+    expect([allowed.trashed.length, allowed.uploaded.length]).toEqual([11, 59])
+  })
+
+  it("stops only the mirror over the limit: the next one still syncs, and each run reports the stop", async () => {
+    const files = many(12)
+    const big = setup(files, files)
+    await big.sync()
+    for (let n = 0; n < 11; n++) rmSync(join(big.root, `f${n}.md`))
+    const small = setup({ "a.md": "1" })
+    const lock = { assertHeld: vi.fn(), release: vi.fn() }
+    const run = () =>
+      syncFileMirrors({
+        target: big.disk.target,
+        principal: "alpha",
+        remote: "disk",
+        guard: (_attempt, act) => act(),
+        operationId: () => "op",
+        errorOf: (error) => (isCliError(error) ? error : new CliError("provider_error", String(error))),
+        mirrors: [big.mirror, { ...small.mirror, folder: FOLDER }],
+        stateOf: (mirror) => (mirror.path === big.root ? big.port : small.port),
+        versionsOf: (mirror) => (mirror.path === big.root ? big.versions : small.versions),
+        lock: async () => lock,
+      })
+    const first = await run()
+    expect(first.items[0]?.errors[0]).toMatchObject({ reason: "mirror.too-many-deletions" })
+    expect(first.items[1]).toMatchObject({ errors: [], unknown: [] })
+    expect(first.issues).toEqual([
+      { code: "provider_error", reason: "mirror.partial", source: `mirror ${big.mirror.id}` },
+    ])
+    expect((await run()).items[0]?.errors[0]).toMatchObject({ reason: "mirror.too-many-deletions" })
+    expect(big.disk.trash).toEqual([])
+  })
+})
+
+describe("syncFileMirror, free space", () => {
+  it("downloads nothing when the drive would keep less than 1 GB free, and says how much it needs", async () => {
+    const context = setup({}, { "big.bin": "x".repeat(2_000) })
+    const space = async () => ({ free: 1024 ** 3 + 1_000, dev: 1 })
+    const preview = await context.sync(undefined, { dryRun: true, space })
+    expect(preview.noSpace).toEqual({ path: context.root, needed: 2_000, free: 1024 ** 3 + 1_000 })
+    const stopped = await context.sync(undefined, { space, hints: { exclude: "mirrors exclude <id> <glob>" } })
+    expect(stopped.errors).toEqual([
+      expect.objectContaining({
+        code: "validation_error",
+        reason: "mirror.no-space",
+        message: expect.stringContaining("leave big folders out with `mirrors exclude <id> <glob>`"),
+      }),
+    ])
+    expect(await context.local()).toEqual({})
+    expect(await context.sync(undefined, { space: async () => ({ free: 2 * 1024 ** 3, dev: 1 }) })).toMatchObject({
+      downloaded: ["big.bin"],
+    })
+  })
+
+  it("counts the versions a pull keeps on the store's own drive when it is another one", async () => {
+    const context = setup({ "a.md": "old" }, { "a.md": "old" })
+    await context.sync()
+    context.disk.write("a.md", "new, longer")
+    const space = async (path: string) =>
+      path === context.root ? { free: 10 * 1024 ** 3, dev: 1 } : { free: 1024 ** 3, dev: 2 }
+    const stopped = await context.sync(undefined, { space })
+    expect(stopped.noSpace).toEqual({ path: expect.stringContaining(context.stateDir), needed: 3, free: 1024 ** 3 })
+    expect(await context.local()).toEqual({ "a.md": "old" })
   })
 })
 
@@ -814,6 +934,113 @@ describe("fileMirrorStatus and fileRemoteChanges", () => {
     expect(await changes(signal)).toEqual([])
     const { revision: _, ...plain } = disk.target
     expect(await fileRemoteChanges(plain)(signal)).toBe("all")
+  })
+})
+
+describe("syncFileMirror, a file missing from the listing", () => {
+  const files = Object.fromEntries(Array.from({ length: 30 }, (_, n) => [`f${n}.md`, `${n}`]))
+
+  it("is deleted only once a direct read after the listing finds nothing, and never counts toward the guard", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    for (let n = 0; n < 20; n++) context.disk.unlist(`f${n}.md`)
+    context.disk.remove("f29.md")
+    const result = await context.sync()
+    expect(result).not.toHaveProperty("tooManyDeletions")
+    expect(result.trashed).toEqual([{ path: "f29.md", side: "local" }])
+    expect(result.unknown).toHaveLength(20)
+    expect(result.unknown[0]).toEqual({
+      path: "f0.md",
+      side: "remote",
+      reason: "missing from the disk listing, but still there",
+    })
+    expect(await context.local()).toMatchObject({ "f0.md": "0" })
+  })
+
+  it("deletes nothing when the direct read fails", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    context.disk.remove("f0.md")
+    const target: FileTarget = {
+      ...context.disk.target,
+      exists: async () => {
+        throw new CliError("provider_unavailable", "busy")
+      },
+    }
+    const result = await context.sync(undefined, { target })
+    expect(result.trashed).toEqual([])
+    expect(result.unknown).toEqual([
+      { path: "f0.md", side: "remote", reason: "the disk could not say whether it was deleted: busy" },
+    ])
+  })
+})
+
+describe("syncFileMirror, exclusions", () => {
+  const files = { "a.md": "1", "Photos/1.jpg": "p1", "Photos/2019/2.jpg": "p2", "work/big.iso": "iso" }
+
+  it("never sends anything to a trash on either side when an exclusion is added", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    context.disk.calls.length = 0
+    const result = await context.sync(undefined, { exclude: ["Photos", "*.iso"] })
+    expect(result).toMatchObject({ trashed: [], unknown: [], uploaded: [], downloaded: [], errors: [] })
+    expect(context.disk.writes()).toEqual([])
+    expect(context.disk.trash).toEqual([])
+    expect(existsSync(join(context.root, ".wirecat-trash"))).toBe(false)
+    expect(Object.keys(context.port.read().entries)).toEqual(["a.md"])
+    rmSync(join(context.root, "Photos"), { recursive: true })
+    context.disk.remove("work/big.iso")
+    expect(await context.sync(undefined, { exclude: ["Photos", "*.iso"] })).toMatchObject({ trashed: [] })
+    expect(await context.disk.files()).toMatchObject({ "Photos/1.jpg": "p1" })
+    expect(await context.local()).toMatchObject({ "work/big.iso": "iso" })
+  })
+
+  it("syncs an excluded path as a new folder once the exclusion is removed: nothing is deleted", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    await context.sync(undefined, { exclude: ["Photos"] })
+    rmSync(join(context.root, "Photos/1.jpg"))
+    context.disk.write("Photos/2019/2.jpg", "p2, edited")
+    const result = await context.sync()
+    expect(result).toMatchObject({ trashed: [], downloaded: ["Photos/1.jpg"] })
+    expect(result.conflicts).toEqual([expect.objectContaining({ path: "Photos/2019/2.jpg" })])
+    expect(await context.local()).toMatchObject({ "Photos/1.jpg": "p1" })
+  })
+
+  it("leaves excluded files alone on both sides and keeps them out of the status", async () => {
+    const context = setup({ "a.md": "1", "Photos/here.jpg": "h" }, { "Photos/there.jpg": "t" })
+    const result = await context.sync(undefined, { exclude: ["/Photos"] })
+    expect(result).toMatchObject({ uploaded: ["a.md"], downloaded: [] })
+    expect(await context.disk.files()).toEqual({ "a.md": "1", "Photos/there.jpg": "t" })
+    const mirror = { ...context.mirror, exclude: ["/Photos"] }
+    expect((await fileMirrorStatus([mirror], () => context.port))[0]).toMatchObject({ upload: [], delete: [] })
+  })
+
+  it("renames a file moved into an excluded folder on the remote instead of deleting it, then leaves it", async () => {
+    const context = setup(files, files)
+    await context.sync()
+    context.disk.move("a.md", "Photos/a.md")
+    const result = await context.sync(undefined, { exclude: ["Photos"] })
+    expect(result).toMatchObject({ trashed: [], renamed: [{ from: "a.md", to: "Photos/a.md" }], unknown: [] })
+    expect(await context.local()).toMatchObject({ "Photos/a.md": "1" })
+    expect(context.port.read().entries).not.toHaveProperty(["Photos/a.md"])
+  })
+
+  it("does not take a local folder whose files are all excluded for an unmounted drive", async () => {
+    const context = setup({ "Photos/1.jpg": "p1" }, { "Photos/1.jpg": "p1" })
+    await context.sync()
+    expect(await context.sync(undefined, { exclude: ["Photos"] })).toMatchObject({ errors: [], unknown: [] })
+  })
+
+  it("reads names at any depth, paths from the root, and refuses patterns that leave the mirror", () => {
+    const excluded = excludedBy(["node_modules", "*.iso", "/Camera", "Work/**/build", "Docs/?.md"])
+    expect(
+      ["a/node_modules/x.js", "deep/disk.iso", "Camera/1.jpg", "a/Camera/1.jpg", "Work/build/x", "Work/a/b/build/y"]
+        .concat(["Docs/a.md", "Docs/ab.md", "notes.md"])
+        .map(excluded),
+    ).toEqual([true, true, true, false, true, true, true, false, false])
+    expect(exclusionPattern(" Photos/ ")).toBe("Photos")
+    for (const bad of ["", "/", "../x", "a/./b", "a//b"]) expect(() => exclusionPattern(bad)).toThrow(/path pattern/)
   })
 })
 
