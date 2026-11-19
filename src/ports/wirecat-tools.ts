@@ -110,4 +110,11 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     package: "@wirecat/wordpress-cli",
     does: "WordPress posts and pages, searchable with your other WireCat data",
   },
+  {
+    command: "linear",
+    appName: "linear-cli",
+    envPrefix: "WCLINEAR",
+    package: "@wirecat/linear-cli",
+    does: "Linear issues and projects, searchable with your other WireCat data",
+  },
 ]
