@@ -118,6 +118,19 @@ export const knownPermissionKeys = (
   return known
 }
 
+const RENAMED = new WeakMap<Command, ReadonlyMap<PermissionKey, PermissionKey>>()
+
+/**
+ * Old keys of commands that moved, on the group that moved them (the generated `api` group, `api.contacts-list` →
+ * `api.contacts.list`): such a key is still refused like any unknown one (WC-CMD-8), and the refusal names the new key.
+ */
+export const markRenamedPermissionKeys = (command: Command, renamed: ReadonlyMap<PermissionKey, PermissionKey>) => {
+  if (renamed.size > 0) RENAMED.set(command, renamed)
+}
+
+export const renamedPermissionKeys = (command: Command): Map<PermissionKey, PermissionKey> =>
+  new Map(everyCommand(rootOf(command)).flatMap((one) => [...(RENAMED.get(one) ?? [])]))
+
 /** The known keys one level under the unknown key's parent, to name in the refusal. */
 export const knownBeside = (key: PermissionKey, known: ReadonlySet<PermissionKey>): PermissionKey[] => {
   const parent = key.split(".").slice(0, -1).join(".")
@@ -144,9 +157,12 @@ export const unknownPermissionIssues = (
     Object.keys(settings.permissions)
       .filter((key) => key !== CEILING_KEY && settings.permissionSources[key] !== "flag")
       .map((key) => ({ key, at: ["profiles", settings.profile, "permissions", key] }))
-  return permissionIssues(saved, knownPermissionKeys(command, keyOf), { file: settings.configPath, tool }).map(
-    publicIssue,
-  )
+  return permissionIssues(
+    saved,
+    knownPermissionKeys(command, keyOf),
+    { file: settings.configPath, tool },
+    renamedPermissionKeys(command),
+  ).map(publicIssue)
 }
 
 /**
@@ -166,6 +182,11 @@ export const refuseUnknownPermissionKeys = (
     Object.fromEntries(flagged.map((one) => [one, true])),
     knownPermissionKeys(command, keyOf),
   )
-  if (key !== undefined)
-    throw new CliError("validation_error", `--permission ${key} names no command`, { permission: key })
+  if (key === undefined) return
+  const now = renamedPermissionKeys(command).get(key)
+  throw new CliError(
+    "validation_error",
+    `--permission ${key} names no command${now === undefined ? "" : `: its command moved, so use ${now}`}`,
+    { permission: key },
+  )
 }
