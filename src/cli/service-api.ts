@@ -565,8 +565,10 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       )
     })
 
+  const graphql = operations.length > 0 && operations.every((one) => one.binding.kind === "graphql")
+  const described = graphql ? "GraphQL schema" : "OpenAPI document"
   const group = annotate(new Command("api"), { effects: NO_EFFECTS }).description(
-    `the raw ${options.service} API, one command per operation of its OpenAPI document`,
+    `the raw ${options.service} API, one command per operation of its ${described}`,
   )
   group.addCommand(list).addCommand(show)
   for (const child of [...generated.commands]) group.addCommand(child)
