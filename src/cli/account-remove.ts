@@ -78,6 +78,11 @@ export interface AccountRemoval {
   account?(profile: string, context: AccountRemovalContext): AccountKey | undefined
   /** Keyring entries of this profile the sign-out leaves: app keys, a bot token. Removing a missing one is fine. */
   secrets?(profile: string, context: AccountRemovalContext): AccountSecrets[]
+  /**
+   * Where the sign-in itself lives, for `account rename` to move it with the rest; `secrets` and the file hooks name
+   * everything else. A tool without it has no `account rename`: its sign-in would stay under the old name.
+   */
+  signIn?(profile: string, context: AccountRemovalContext): { secrets?: AccountSecrets[]; files?: string[] }
   /** The tool's own files and folders for this profile that hold no messages: cursors, a device id. Always removed. */
   stateFiles?(profile: string, context: AccountRemovalContext): string[]
   /** Files and folders holding this account's data outside the store: removed only with `--delete-data`. */
@@ -124,7 +129,7 @@ const choiceOf = ({ keepData, deleteData }: { keepData?: boolean; deleteData?: b
 }
 
 /** Inside the tool's own folders and not one of them: a hook's mistake must not reach the home folder. */
-const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv, extra: readonly string[]) => {
+export const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv, extra: readonly string[]) => {
   const home = absolute(env.HOME ?? env.USERPROFILE ?? homedir())
   for (const root of extra)
     if (!isAbsolute(root) || !absolute(root).startsWith(`${home}${sep}`))
@@ -170,7 +175,7 @@ const ownerFolders = (
 }
 
 /** The profile's own serve unit, by its exact name, when one is installed; never a pattern over the unit folder. */
-const serveUnit = (app: AppIdentity, system: ServerSystem, profile: string, env: NodeJS.ProcessEnv) => {
+export const serveUnit = (app: AppIdentity, system: ServerSystem, profile: string, env: NodeJS.ProcessEnv) => {
   if (!env.HOME) return undefined
   const unit = platformFor(app, system, env).unit({
     profile,

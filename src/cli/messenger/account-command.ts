@@ -5,6 +5,7 @@ import { withoutPhone } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { accountRemoveCommand } from "../account-remove.js"
+import { accountRenameCommand } from "../account-rename.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { queryTerms, withQuery } from "../list-query.js"
@@ -129,6 +130,17 @@ export const accountCommand = (messenger: Messenger): Command => {
         provider: messenger.provider,
         resolveSettings: messenger.resolveSettings,
       }),
+    )
+  const renaming = messenger.accountRemoval
+  if (renaming?.signIn)
+    account.addCommand(
+      accountRenameCommand(
+        messenger.app,
+        { ...renaming, signIn: renaming.signIn },
+        {
+          resolveSettings: messenger.resolveSettings,
+        },
+      ),
     )
   if (messenger.privacy === true) account.addCommand(privacyCommand(messenger))
   return hideNever(messenger, account)

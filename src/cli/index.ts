@@ -240,6 +240,7 @@ export {
   mayRevoke,
   type SignedOut,
 } from "./account-remove.js"
+export { type AccountRenameOptions, type AccountRenaming, accountRenameCommand } from "./account-rename.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"
 export {
   type AgentPolicy,
