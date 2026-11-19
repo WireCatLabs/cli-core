@@ -289,18 +289,17 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const rowsFrom = `FROM ${corpus.rows} m`
   const joinedFrom = `${rowsFrom} JOIN ${corpus.threads} c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id LEFT JOIN identities i ON i.id=m.sender_identity_id`
   let baseFrom = joinedFrom
-  const requiredText = (node: ResolvedNode, index: "fts" | "stems" = "fts"): string | undefined => {
+  const requiredText = (node: ResolvedNode, index: "fts" | "stems" = "fts", partial = false): string | undefined => {
     if (node.kind === "predicate") return fragments.get(node)?.fragment[index]
     const required = node.clauses.filter(({ occur }) => occur === "must")
     const optional = node.clauses.filter(({ occur }) => occur === "should")
     if (required.length) {
-      const parts = required.flatMap(({ node }) => requiredText(node, index) ?? [])
+      const parts = required.flatMap(({ node }) => requiredText(node, index, partial) ?? [])
       return parts.length ? parts.map((part) => `(${part})`).join(" AND ") : undefined
     }
-    const parts = optional.map(({ node }) => requiredText(node, index))
-    return parts.length && parts.every((part) => part !== undefined)
-      ? parts.map((part) => `(${part})`).join(" OR ")
-      : undefined
+    const parts = optional.flatMap(({ node }) => requiredText(node, index, partial) ?? [])
+    const whole = partial || parts.length === optional.length
+    return parts.length && whole ? parts.map((part) => `(${part})`).join(" OR ") : undefined
   }
   const stemmed = [...fragments.keys()].some(isStemmed)
   // A word found only in a file is not in the word index, so neither may filter: they rank, joined LEFT.
@@ -360,10 +359,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     )
   // A stemmed search ranks by stems but must not filter by them, so its ranking is a set computed once and
   // joined LEFT; joined row by row, the same query took 420 ms instead of 5 at 100k (stemming gate).
-  const ranking = stemmed ? requiredText(execution.root, "stems") : elsewhere ? requiredText(execution.root) : undefined
-  const rankIndex = stemmed
-    ? { table: corpus.stems, column: "stems" }
-    : { table: corpus.words, column: "normalized_text" }
+  // One word without stems (a word's start) or without any indexed form must not cost the others their bm25.
+  const byStems = stemmed ? requiredText(execution.root, "stems") : undefined
+  const ranking = byStems ?? (stemmed || elsewhere ? requiredText(execution.root, "fts", true) : undefined)
+  const rankIndex = { table: byStems ? corpus.stems : corpus.words, column: byStems ? "stems" : "normalized_text" }
   const exactTier = stemmed ? requiredText(execution.root) : undefined
   const ranked: { sql: string[]; params: SqlValue[] } = driver
     ? { sql: [`d(id) AS MATERIALIZED (${driver.sql})`], params: [...driver.params] }
