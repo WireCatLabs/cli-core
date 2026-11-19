@@ -166,6 +166,50 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**shows the message after the one that asks**: an answer rarely repeats the question's words", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", "cat zebra"),
+        message("2", "fish", "1"),
+        message("3", "cat", "2"),
+        message("4", "cat", "3"),
+        message("5", "cat", "4"),
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("cat zebra", { model: "tiny", limit: 1 })
+    expect(found.hits[0]?.lines).toEqual(["cat zebra", "fish", "cat", "cat"])
+    await store.close()
+  })
+
+  it("**keeps the owner's chunk in the block when a named chat's hits push its conversation off the page**", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: [{ ...message("80", "fish"), outgoing: true }],
+    })
+    await store.chats.saveChats(account, [
+      { id: "7", title: "Kit", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      account,
+      "7",
+      ["Kitten dog", "Kitten cat", "Kitten fish"].map((text, at) => ({
+        ...message(`${100 * (at + 1)}`, text),
+        chatId: "7",
+      })),
+      { via: "history" },
+    )
+    await conversations.build("7")
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("fish kitten", { model: "tiny", limit: 1 })
+    expect(found.named).toMatchObject({ chatId: "7" })
+    expect(found.hits.map(({ summary }) => summary.chatId)).toEqual(["7"])
+    expect(found.own?.map(({ summary }) => [summary.chatId, summary.firstMessageId])).toEqual([["9", "80"]])
+    expect(found).not.toHaveProperty("ownSpare")
+    await store.close()
+  })
+
   it("names a chat embedded only with another model, which the search finds by words alone", async () => {
     const { store, embeddings } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })

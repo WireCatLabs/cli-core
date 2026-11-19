@@ -139,6 +139,8 @@ export interface FoundConversations {
   hits: FoundConversation[]
   /** The owner's own conversations nearest in meaning that `hits` left out. */
   own?: FoundConversation[]
+  /** Owner chunks `own` left out because `hits` showed their conversation: the named-chat step may drop those. */
+  ownSpare?: FoundConversation[]
   readiness: SearchReadiness
   /** Kept for callers of 0.141.0 and before; `readiness.wordsOnly` says more. */
   embeddedOnlyElsewhere: Id[]

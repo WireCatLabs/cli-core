@@ -35,6 +35,11 @@ const OWN_BLOCK = 5
  * clear best must not lose to that.
  */
 const PER_CHAT = 20
+/**
+ * A chat holding this many of the `ACROSS_CHATS` candidates is a big group: its 20th best sits right under its best, so
+ * nothing in it could lead. It is measured against this many instead.
+ */
+const BIG_CHAT = 100
 /** Messages the word search reads: one long thread can hold many of them. */
 const WORD_HITS = 200
 /** Messages of a hit shown with it, and how much of each: enough to tell the answer, not the whole chunk. */
@@ -357,15 +362,20 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       .slice(0, limit)
       .map(located)
     const shown = new Set(hits.map((hit) => hit.summary.id))
-    const ownHits = own
-      .filter((hit) => !shown.has(hit.summary.id))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, OWN_BLOCK)
-      .map((hit) => located({ ...hit, by: ["meaning" as const] }))
-    const stems = wordStems(texts.join(" "))
+    const ownOf = (keep: (hit: ConversationHit) => boolean) =>
+      own
+        .filter(keep)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, OWN_BLOCK)
+        .map((hit) => located({ ...hit, by: ["meaning" as const] }))
+    const ownHits = ownOf((hit) => !shown.has(hit.summary.id))
+    const ownSpare = ownOf((hit) => shown.has(hit.summary.id))
+    // The query's own words count twice: the made-up answer's words would otherwise pick its lines over the answer's.
+    const asked = wordStems(query)
+    const stems = [...asked, ...wordStems(texts.join(" "))]
     const withLines = async <T extends FoundConversation>(hit: T, ownFirst: boolean): Promise<T> => {
       const read = await store.conversations.chunkMessages(hit.source ?? account, hit.summary.id, hit.chunk, CHUNK_READ)
-      const lines = shownLines(read, stems, ownFirst)
+      const lines = shownLines(read, stems, ownFirst, asked)
       return lines.length ? { ...hit, lines } : hit
     }
     return {
@@ -376,6 +386,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       ...(words.respellings.size ? { respelled: Object.fromEntries(words.respellings) } : {}),
       hits: await Promise.all(hits.map((hit) => withLines(hit, false))),
       ...(ownHits.length ? { own: await Promise.all(ownHits.map((hit) => withLines(hit, true))) } : {}),
+      ...(ownSpare.length ? { ownSpare: await Promise.all(ownSpare.map((hit) => withLines(hit, true))) } : {}),
       readiness,
       ...(locallyRefreshed ? { prepared: locallyRefreshed } : {}),
       ...(refreshed
@@ -388,7 +399,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
   return {
     /** Over every chat, a query that names someone by a name their private chat uses has that chat's hits first. */
     search: async (query, options) => {
-      const found = await search(query, options)
+      const { ownSpare, ...found } = await search(query, options)
       if (options.chat !== undefined || options.filter !== undefined || found.accounts?.length !== 1) return found
       const named = await namedChat(
         await deps.store(),
@@ -406,10 +417,21 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       const { syncFirst: _, refresh: __, ...plain } = options
       const inside = await search(rest || query, { ...plain, chat: named.chatId })
       const shown = new Set(inside.hits.map(({ summary }) => summary.id))
+      const hits = [...inside.hits, ...found.hits.filter(({ summary }) => !shown.has(summary.id))].slice(
+        0,
+        options.limit,
+      )
+      const kept = new Set(hits.map(({ summary }) => summary.id))
+      // The chat's hits push some of the list out; the owner's chunks of what left belong back in the block.
+      const own = [...(found.own ?? []), ...(ownSpare ?? []).filter(({ summary }) => !kept.has(summary.id))]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, OWN_BLOCK)
+      const { own: _shown, ...plainFound } = found
       return {
-        ...found,
+        ...plainFound,
+        ...(own.length ? { own } : {}),
         named: { word: named.word, chatId: named.chatId, title: named.title },
-        hits: [...inside.hits, ...found.hits.filter(({ summary }) => !shown.has(summary.id))].slice(0, options.limit),
+        hits,
       }
     },
 
@@ -455,12 +477,16 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
  * Each chat's best hits, as many as the page holds, with each one's lead over the chat's `PER_CHAT`th best (or its
  * last, in a chat with fewer).
  */
-const shared = (hits: ConversationHit[], limit: number) => {
+export const shared = (hits: ConversationHit[], limit: number) => {
   const chats = new Map<Id, ConversationHit[]>()
   for (const hit of hits) chats.set(hit.summary.chatId, [...(chats.get(hit.summary.chatId) ?? []), hit])
   return [...chats.values()].flatMap((own) => {
-    const level = own[Math.min(PER_CHAT, own.length) - 1]?.score ?? 0
-    return own.slice(0, Math.max(limit, PER_CHAT)).map((hit) => ({ hit, lead: hit.score - level }))
+    const share = own.length >= BIG_CHAT ? BIG_CHAT : PER_CHAT
+    const level = own[Math.min(share, own.length) - 1]?.score ?? 0
+    // A big group's entries past the usual share would push private dialogs down, so they come after every chat's.
+    return own
+      .slice(0, Math.max(limit, share))
+      .map((hit, at) => ({ hit, lead: share > PER_CHAT && at >= PER_CHAT ? hit.score - 10 : hit.score - level }))
   })
 }
 
@@ -520,6 +546,7 @@ const shownLines = (
   read: { sender: string | null; text: string; outgoing: boolean }[],
   stems: string[],
   ownFirst: boolean,
+  asked: string[],
 ) => {
   const scored = read.map(({ text, ...line }, at) => {
     const flat = text.replace(/\s+/g, " ").trim()
@@ -528,9 +555,16 @@ const shownLines = (
     const first = found.reduce((least, stem) => Math.min(least, lower.indexOf(stem)), Number.POSITIVE_INFINITY)
     return { ...line, flat, at, score: found.length + (ownFirst && line.outgoing ? 100 : 0), first }
   })
-  return [...scored]
-    .sort((a, b) => b.score - a.score || a.at - b.at)
-    .slice(0, SHOWN_LINES)
+  const picked = [...scored].sort((a, b) => b.score - a.score || a.at - b.at).slice(0, SHOWN_LINES)
+  // A question is answered by the message after it, which rarely repeats the question's words.
+  const matches = (flat: string) => asked.filter((stem) => flat.toLowerCase().includes(stem)).length
+  const asking = scored.reduce<(typeof scored)[number] | undefined>(
+    (best, line) => (matches(line.flat) > (best ? matches(best.flat) : 0) ? line : best),
+    undefined,
+  )
+  const reply = asking && scored[asking.at + 1]
+  if (reply && !picked.includes(reply)) picked.push(reply)
+  return picked
     .sort((a, b) => a.at - b.at)
     .map(({ sender, flat, outgoing, first }) => {
       const who = outgoing ? `${sender ?? "you"}${sender ? " (you)" : ""}: ` : sender ? `${sender}: ` : ""
