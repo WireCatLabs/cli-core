@@ -375,6 +375,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `privacy` | singular | who may find, see, call or add the account |  |
 | `metadata` | singular | a profile's cached source attributes |  |
 | `auth` | singular | the credentials a bot profile uses: its token and the secrets beside it |  |
+| `scheduled` | singular | a chat's messages the messenger will send later; their ids are their own, never the ids of sent messages |  |
 | `schedule` | singular | a profile's timers the owner saved, each running a command of this tool or an agent; the tool's own background work is jobs |  |
 
 <!-- resources: end -->
@@ -499,9 +500,11 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--allow-delete` |  | switch | permit a call that deletes for good |  |
 | `--allow-remote` |  | switch | consent to sending the stored data to the configured remote model |  |
 | `--answerer` | `<person>` | string | a person whose reply counts as an answer; repeat it for more |  |
-| `--browser` | `<program>` | string | the browser program to open for sign-in |  |
+| `--browser` | `<program>` | string | the browser to open for sign-in |  |
 | `--credential-storage` | `<storage>` | choice | where a sign-in is kept: keyring, which falls back to a private file by itself, or file (WC-SECR-4) |  |
 | `--checkpoint` | `<file>` | path | keep resume progress in this file |  |
+| `--site` | `<address>` | string | the owner's site a sign-in is for |  |
+| `--login` | `<name>` | string | the user name a password is for |  |
 | `--expected-event-id` | `<id>` | id | refuse unless the linked event is still this one, or none |  |
 | `--expected-person` | `<uid>` | id | refuse unless the linked person is still this one, or none |  |
 | `--html` |  | switch | the text is HTML |  |
