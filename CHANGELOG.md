@@ -10,6 +10,36 @@ shape of this file.
 ### Added
 
 - **The first screen's "Works with" names `amo`** (amoCRM and Kommo, `@wirecat/amo-cli`), now that it is on npm.
+- **The content category: posts and pages of a site such as WordPress, in the store.** Store version 71 adds
+  channels, authors, tags and categories, posts with their text as Markdown, the versions a sync or a write replaced,
+  metrics readings and a word index. `@wirecat/cli-core/content` has the `ContentSource` and `ContentWriter` ports,
+  `syncContent` (a trashed post stays with the status `trashed`, a post deleted for good is marked so only by a
+  complete id pass, and a pass is held when the sign-in read only part or the site moved), and `addContentCommands`:
+  `sync`, `posts list|show|search`, `authors list`, `terms list`, `channels list`, `metrics show`, and with writes
+  `posts create|update|publish|unpublish|schedule|delete`. Publishing asks first (`posts.publish`, the key the `api`
+  group checks), and so do an edit of a public post and a deletion past the trash (`posts.delete.force`).
+- **`contentSourceFromManifest` and `contentWriterFromManifest`** build a content CLI's source and writer from
+  configuration over its generated `api` group. A WordPress manifest needs no hook. The category `content` joins
+  `wirecat.config`. See [Content](docs/dev/CONTENT.md).
+- **`/content/testing`**: `contentSourceContract`, `contentSyncContract`, `contentWriteContract` and
+  `fakeContentSource`.
+- **A file mirror keeps the remote content it replaces, too.** Before an upload overwrites a remote file, the old
+  content is kept in the mirror's version store, downloaded first when the store does not have it. A remote deletion
+  downloads nothing, since the provider's trash holds the file; its log entry says `oldIn: "remote-trash"` when the
+  store lacks the content. Each log entry says in `from` which side its `old` content came from. When the store
+  cannot keep a content, a full disk during the download included, the file fails with `mirror.version-not-kept`
+  and nothing is replaced; a remote file that changed since the listing fails with `mirror.remote-changed`
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#sync-plain-files-with-a-provider)).
+- **`skippedName` in `@wirecat/cli-core/documents`,** so a target skips `.git`, `node_modules` and editor leftovers
+  while it lists. `syncFileMirror` takes `hints` to name the app's own preview, repin and allow-deletions commands in
+  its messages.
+- **`syncFileMirrors` and `restoreFileVersion` take the lock `acquireLock` returns.** Its `held()` is checked before
+  every write; a caller no longer keeps its own flag. A lock with `assertHeld` works as before.
+
+### Changed — may break callers
+
+- **`FileVersions` has `has(sha256)`, and `keep` takes a writer as well as a path.** Code that implements
+  `FileVersions` itself adds `has`; `fileVersions()` has both. `FileMirrorOptions.assertHeld` may return a promise.
 
 ### Fixed
 
@@ -17,6 +47,11 @@ shape of this file.
   contacts-list`, so `people: deny` stops the raw read too (WC-PERM-22). Before, any key beyond `api.*` sent the read
   the way a write goes, with an `operation_id` in the answer, and refused `--all`. Now `deny` refuses it, `allow`
   sends it as a read with `--all`, and only `ask` keeps the write's path. Found by the hubspot-cli review.
+- **A download that replaced a file is never reported as cut off.** Only a new file can be left partial, so only a
+  new file's interrupted download makes the path a conflict. A download that fails cleanly clears its pending entry
+  (kept while a partial copy could not be removed),
+  and a leftover temporary file under a symbolic link is left alone. The error for an empty local folder says what
+  to do: mount it, or add a file or remove the mirror's state when the files really were deleted.
 
 ## 0.704.0 — 19.11.2026
 
