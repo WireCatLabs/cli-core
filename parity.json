@@ -3522,6 +3522,29 @@
       "in": ["max", "tg"],
       "reason": "WhatsApp has no scheduled messages"
     },
+    "messages scheduled cancel": {
+      "in": ["max", "tg"],
+      "reason": "WhatsApp has no scheduled messages",
+      "options": {
+        "--allow-dangerous": "all"
+      }
+    },
+    "messages scheduled edit": {
+      "in": ["max", "tg"],
+      "reason": "WhatsApp has no scheduled messages",
+      "options": {
+        "--at-time": "all",
+        "--html": {
+          "in": ["tg"],
+          "reason": "MAX formats a personal message with Markdown only"
+        },
+        "--md": "all"
+      }
+    },
+    "messages scheduled send": {
+      "in": ["max", "tg"],
+      "reason": "WhatsApp has no scheduled messages"
+    },
     "messages send": {
       "in": "all",
       "options": {

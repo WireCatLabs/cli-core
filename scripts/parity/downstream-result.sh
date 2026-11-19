@@ -91,7 +91,6 @@ if [ "$labelled" = true ]; then
   exit 0
 fi
 echo "::error title=downstream::these CLIs break against this cli-core: $list. Fix it, or, if the break is on purpose," \
-  "list them in scripts/parity/known-broken.json with this pull request and a date to adopt by," \
-  "and say why in its body"
+  "list them in scripts/parity/known-broken.json with this pull request, a date to adopt by and the reason"
 printf '**Broken**: %s.\n' "$list" >>"$summary"
 exit 1
