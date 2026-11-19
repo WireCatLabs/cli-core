@@ -1,3 +1,4 @@
+export { type ContentManifestFake, type ContentManifestFakeOptions, contentManifestFake } from "./manifest-fake.js"
 export {
   exampleContentRows,
   type FakeContentRows,

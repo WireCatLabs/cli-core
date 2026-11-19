@@ -92,3 +92,9 @@ contract kits pass over it against a fake site that answers as WordPress 6.9 doe
 
 `contentSourceContract`, `contentSyncContract` and `contentWriteContract` (`/content/testing`), with
 `fakeContentSource`, a stateful fake blog. A source or writer adapter runs the first and the last in its tests.
+
+`contentManifestFake(manifest, { api })` is the service a manifest describes, in memory, for a CLI made from a config:
+our example rows written into each entity's shape by its map, read by the calls the manifest names, paged by each
+operation's pagination (a page count header and a refused page past the end included), and written by its writes.
+`call` and `write` feed `contentSourceFromManifest` and `contentWriterFromManifest`; `fetch` answers the CLI's own
+commands over HTTP. A call the manifest does not make lands in `refusals`.
