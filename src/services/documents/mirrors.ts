@@ -133,23 +133,35 @@ interface MirrorLock {
   release(): Promise<void> | void
 }
 
+/** A sync lock: one as `acquireLock` returns it (`held()`), or one with a synchronous `assertHeld`. */
+export type HeldLock = { release(): Promise<void> | void } & ({ assertHeld(): void } | { held(): Promise<boolean> })
+
+/** The check a write runs first: it throws once the lock is no longer this process's. */
+export const heldCheck = (lock: HeldLock) => async (): Promise<void> => {
+  if ("assertHeld" in lock) return lock.assertHeld()
+  if (!(await lock.held()))
+    throw new CliError("provider_unavailable", "the mirrors' sync lock was lost; sync again", {
+      reason: "profile.busy",
+    })
+}
+
 /**
  * Runs `sync` for each mirror under one lock. A mirror with conflicts, missing remote files or errors does not stop
  * the others; it gets one `mirror.partial` issue, so the caller can answer `complete: false` and fail after printing.
  */
 export const eachMirror = async <
   R extends { conflicts: PushConflict[]; errors: unknown[]; missing?: unknown[]; unknown?: unknown[] },
+  L extends { release(): Promise<void> | void },
 >(
   mirrors: Mirror[],
-  lock: () => Promise<MirrorLock>,
+  lock: () => Promise<L>,
   remote: string,
-  sync: (mirror: Mirror, assertHeld: () => void) => Promise<R>,
+  sync: (mirror: Mirror, held: L) => Promise<R>,
 ) => {
   const held = await lock()
   const results: ({ id: string; path: string } & R)[] = []
   try {
-    for (const mirror of mirrors)
-      results.push({ id: mirror.id, path: mirror.path, ...(await sync(mirror, () => held.assertHeld())) })
+    for (const mirror of mirrors) results.push({ id: mirror.id, path: mirror.path, ...(await sync(mirror, held)) })
   } finally {
     await held.release()
   }
@@ -181,7 +193,7 @@ export interface MirrorSyncOptions<S>
 
 /** Syncs each mirror both ways, as `eachMirror` runs them. */
 export const syncMirrors = <S>(options: MirrorSyncOptions<S>) =>
-  eachMirror(options.mirrors, options.lock, options.remote, (mirror, assertHeld) =>
+  eachMirror(options.mirrors, options.lock, options.remote, (mirror, held) =>
     pushDocuments({
       root: mirror.path,
       folder: mirror.folder,
@@ -193,7 +205,7 @@ export const syncMirrors = <S>(options: MirrorSyncOptions<S>) =>
       guard: options.guard,
       operationId: options.operationId,
       errorOf: options.errorOf,
-      assertHeld,
+      assertHeld: () => held.assertHeld(),
       ...(options.signal ? { signal: options.signal } : {}),
     }),
   )

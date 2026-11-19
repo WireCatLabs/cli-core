@@ -20,6 +20,7 @@ export {
 export {
   conflictReport,
   fileMirrorState,
+  type HeldLock,
   type Mirror,
   type MirrorSyncOptions,
   mirrorId,
@@ -36,6 +37,7 @@ export {
   planPush,
   pushDocuments,
   scanLocal,
+  skippedName,
 } from "../services/documents/push.js"
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export {
@@ -46,6 +48,7 @@ export {
   fileMirrorStatus,
   fileRemoteChanges,
   fileSyncState,
+  type MirrorHints,
   syncFileMirror,
   syncFileMirrors,
 } from "../services/files/mirror.js"

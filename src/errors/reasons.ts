@@ -246,6 +246,12 @@ const OTHERS: Entry[] = [
     "confirmation_required",
     "the sync would delete more files than the guard allows; check them with --dry-run and allow them explicitly",
   ],
+  [
+    "mirror.version-not-kept",
+    "provider_error",
+    "the earlier content could not be kept in the version store, so the sync did not replace it",
+  ],
+  ["mirror.remote-changed", "conflict", "the remote file changed since the listing; the next sync settles it"],
   ["upload.mismatch", "conflict", "the uploaded file reads back with other content; the local file changed meanwhile"],
   ["download.mismatch", "invalid_response", "the downloaded file has other content than the listing said"],
   ["catalog.unavailable", "configuration_error", "the store has no shared catalog for this account"],

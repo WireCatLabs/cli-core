@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { mkdir, rm, stat, unlink } from "node:fs/promises"
 import { dirname, join, posix } from "node:path"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type {
   Expect,
@@ -13,7 +13,7 @@ import type {
   RemoteFile,
 } from "../../documents/file-mirror-model.js"
 import type { Keep, LocalDocument } from "../../documents/push-model.js"
-import { eachMirror, jsonState, type Mirror } from "../documents/mirrors.js"
+import { eachMirror, type HeldLock, heldCheck, jsonState, type Mirror } from "../documents/mirrors.js"
 import {
   assertNoLink,
   hashFile,
@@ -38,7 +38,10 @@ export interface FileMirrorOptions {
   folder: string
   target: FileTarget
   state: FileMirrorStatePort
-  /** Keeps every local file's content before the sync overwrites or deletes it, and logs each change. */
+  /**
+   * Keeps every content before the sync overwrites or deletes it (a remote one an upload replaces is downloaded first
+   * unless the store has it; a remote deletion leaves it in the provider's trash), and logs each change.
+   */
   versions: FileVersions
   principal: string
   /** Settles conflicts; without it they are reported and left. */
@@ -53,6 +56,8 @@ export interface FileMirrorOptions {
   repin?: boolean
   /** How the app names the remote side; it ends a conflict copy's name. */
   remote: string
+  /** How the app's commands are named in the deletion guard's and the repin message; the defaults are flags. */
+  hints?: Partial<MirrorHints>
   /** Runs one write behind the app's permission checks; `side` says which side it changes. */
   guard<T>(
     attempt: { action: MirrorAction; side: Side; path: string; operationId: string },
@@ -60,11 +65,23 @@ export interface FileMirrorOptions {
   ): Promise<T>
   operationId(): string
   errorOf(error: unknown): CliError
-  assertHeld(): void
+  /** Throws once the sync lock is lost; checked before every write. */
+  assertHeld(): void | Promise<void>
   signal?: AbortSignal
   maxFiles?: number
   now?(): number
 }
+
+export interface MirrorHints {
+  /** How to preview a run: `--dry-run`. */
+  preview: string
+  /** How to record a replaced root again: `--repin`. */
+  repin: string
+  /** How to allow a run's deletions: `explicitly`, as in "allow them explicitly". */
+  allowDeletions: string
+}
+
+const HINTS: MirrorHints = { preview: "--dry-run", repin: "--repin", allowDeletions: "explicitly" }
 
 export interface FileStep {
   kind: FileStepKind
@@ -229,6 +246,25 @@ const scan = async (root: string, entries: Record<string, FileEntry>, maxFiles?:
 /** Remote files the mirror covers: hidden files and editor leftovers are skipped, as they are locally. */
 const mirrored = (files: RemoteFile[]) => files.filter((file) => !file.path.split("/").some(skippedName))
 
+/** False when `path` or a folder on the way to it is a symbolic link, so nothing under it is touched. */
+const linkFree = (root: string, path: string) =>
+  assertNoLink(root, path).then(
+    () => true,
+    (error: unknown) => {
+      if (isCliError(error) && error.details?.reason === "mirror.symlink") return false
+      throw error
+    },
+  )
+
+/** True when the file at `absolute` is missing or has one of `hashes`: no partial copy is left there. */
+const whole = async (absolute: string, hashes: (string | undefined)[]) => {
+  try {
+    return hashes.includes((await hashFile(absolute)).sha256)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+  }
+}
+
 /** True when `path` is `link` or lies under it. */
 const under = (path: string, link: string) => path === link || path.startsWith(`${link}/`)
 
@@ -241,6 +277,7 @@ const under = (path: string, link: string) => path === link || path.startsWith(`
  */
 export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMirrorResult> => {
   const { root, folder, target, principal, keep, signal, versions } = options
+  const hints = { ...HINTS, ...options.hints }
   const now = options.now ?? Date.now
   if (signal?.aborted) throw new CliError("cancelled", "sync was cancelled")
   if ((await target.identity()) !== principal)
@@ -274,7 +311,12 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         : localReplaced && !repin
           ? problem("local", "confirmation_required", "the local folder was replaced by another one", true)
           : Object.keys(state.entries).length > 0 && !local.size
-            ? problem("local", "validation_error", "the local folder is empty; it may be an unmounted drive")
+            ? problem(
+                "local",
+                "validation_error",
+                "the local folder is empty; it may be an unmounted drive. Mount it, or if the files were really " +
+                  "deleted, add a file to the folder or remove the mirror's state to start over",
+              )
             : undefined
   const refused = rootProblem ? [] : (listed?.files ?? []).filter((file) => !safePath(file.path))
   const refusedIds = new Set(refused.map((file) => file.id))
@@ -323,7 +365,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       path: ".",
       code,
       message: repinnable
-        ? `${reason}; if it is the right folder now, sync again with --repin to record it (that run deletes nothing)`
+        ? `${reason}; if it is the right folder now, sync again with ${hints.repin} to record it ` +
+          "(that run deletes nothing)"
         : reason,
     })
     return result
@@ -358,7 +401,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     const here = local.get(path)
     // Where links fail, a download is copied into place; a crash midway leaves a partial file under the real name,
     // which must be neither sent nor overwritten.
-    if (state.pending[path]?.op === "download" && here && here.hash !== file?.sha256 && here.hash !== entry?.sha256) {
+    const pending = state.pending[path]
+    // A replaced file is renamed into place whole; only a new file may be a partial copy.
+    const created = pending?.op === "download" && pending.created !== false
+    if (created && here && here.hash !== file?.sha256 && here.hash !== entry?.sha256) {
       cutOff.add(path)
       steps.push({
         kind: "conflict",
@@ -407,7 +453,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   if (tooMany && (options.allowDeletions ?? 0) < deletions)
     throw new CliError(
       "confirmation_required",
-      `this sync would delete ${deletions} files; check them with --dry-run and allow them explicitly`,
+      `this sync would delete ${deletions} files; ` +
+        `check them with ${hints.preview} and allow them ${hints.allowDeletions}`,
       { reason: "mirror.too-many-deletions", deletions },
     )
 
@@ -420,7 +467,9 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     if (localRoot) state.localRoot ??= { dev: localRoot.dev, ino: localRoot.ino }
   }
   for (const [path, pending] of Object.entries(state.pending)) {
-    if (pending.op === "download") await rm(localTemp(join(root, path), tagOf(pending.operationId)), { force: true })
+    const parent = posix.dirname(path)
+    if (pending.op === "download" && (parent === "." || (await linkFree(root, parent))))
+      await rm(localTemp(join(root, path), tagOf(pending.operationId)), { force: true })
     if (!cutOff.has(path)) delete state.pending[path]
   }
   let savedAt = now()
@@ -441,8 +490,14 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const folders = new Set([...remote.keys()].map((path) => posix.dirname(path)))
   for (const path of [...folders]) for (let up = path; up !== "."; up = posix.dirname(up)) folders.add(up)
   let lastOperation = ""
-  const write = <T>(action: MirrorAction, side: Side, path: string, act: () => Promise<T>, operationId?: string) => {
-    options.assertHeld()
+  const write = async <T>(
+    action: MirrorAction,
+    side: Side,
+    path: string,
+    act: () => Promise<T>,
+    operationId?: string,
+  ) => {
+    await options.assertHeld()
     lastOperation = operationId ?? options.operationId()
     return options.guard({ action, side, path, operationId: lastOperation }, act)
   }
@@ -460,7 +515,21 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     save()
   }
 
-  const upload = async (path: string, from: Local, expect: Expect, created: boolean) => {
+  /**
+   * Keeps the remote content an upload will replace, downloaded through the store unless it holds it already.
+   * Refused as `mirror.remote-changed` when the remote no longer has the listed content.
+   */
+  const keepRemote = async (path: string, file: RemoteFile) => {
+    const listed = file.sha256 as string
+    if (versions.has(listed)) return
+    const kept = await versions.keep((temp) => target.download(remotePath(path), temp, signal))
+    if (kept !== listed)
+      throw new CliError("conflict", `the ${options.remote} file changed since the listing`, {
+        reason: "mirror.remote-changed",
+      })
+  }
+  const upload = async (path: string, from: Local, expect: Expect, created: boolean, replaced?: RemoteFile) => {
+    if (replaced) await keepRemote(path, replaced)
     for (const up of ancestors(path))
       if (!folders.has(up)) {
         await write("folder", "remote", up, () => target.ensureFolder(remotePath(up), signal))
@@ -476,7 +545,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       path,
       event: created ? "created" : "changed",
       direction: "local-to-remote",
-      ...("sha256" in expect ? { old: expect.sha256 } : {}),
+      ...("sha256" in expect ? { old: expect.sha256, from: "remote" as const } : {}),
       new: from.hash,
       size: from.size,
     })
@@ -488,23 +557,32 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
    */
   const download = async (path: string, file: RemoteFile, over?: Local, recorded = true) => {
     const operationId = options.operationId()
-    state.pending[path] = { op: "download", operationId }
+    state.pending[path] = { op: "download", operationId, created: !over }
     save(true)
     const absolute = join(root, path)
-    await assertNoLink(root, path)
-    await mkdir(dirname(absolute), { recursive: true })
-    const old = over ? await versions.keep(absolute) : undefined
-    const written = await write(
-      over ? "update" : "create",
-      "local",
-      path,
-      () =>
-        replaceLocal(absolute, over?.hash, (temp) => target.download(remotePath(file.path), temp, signal), {
-          tag: tagOf(operationId),
-          sha256: file.sha256 as string,
-        }),
-      operationId,
-    )
+    let written: { sha256: string } | undefined
+    let old: string | undefined
+    try {
+      await assertNoLink(root, path)
+      await mkdir(dirname(absolute), { recursive: true })
+      old = over ? await versions.keep(absolute) : undefined
+      written = await write(
+        over ? "update" : "create",
+        "local",
+        path,
+        () =>
+          replaceLocal(absolute, over?.hash, (temp) => target.download(remotePath(file.path), temp, signal), {
+            tag: tagOf(operationId),
+            sha256: file.sha256 as string,
+          }),
+        operationId,
+      )
+    } catch (error) {
+      // A failed copy into place removes what it wrote; should that removal fail too, the marker keeps the partial
+      // file from being sent or overwritten.
+      if (await whole(absolute, [file.sha256, over?.hash])) delete state.pending[path]
+      throw error
+    }
     delete state.pending[path]
     if (!written) return false
     if (recorded) record(path, file, await stat(absolute), written.sha256)
@@ -512,7 +590,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       path,
       event: old ? "changed" : "created",
       direction: "remote-to-local",
-      ...(old ? { old } : {}),
+      ...(old ? { old, from: "local" as const } : {}),
       new: written.sha256,
       size: file.size,
     })
@@ -537,7 +615,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         save()
         return
       case "upload":
-        if (here) await upload(path, here, expectOf(there), !there)
+        if (here) await upload(path, here, expectOf(there), !there, there)
         return
       case "download":
         if (there && !(await download(path, there, here))) changedHere(step)
@@ -558,6 +636,9 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           event: "deleted",
           direction: "local-to-remote",
           old: there.sha256 as string,
+          from: "remote",
+          // Not downloaded to be kept: the provider's trash holds it, and a deleted folder may be large.
+          ...(versions.has(there.sha256 as string) ? {} : { oldIn: "remote-trash" as const }),
           size: there.size,
         })
         result.trashed.push({ path, side: "remote" })
@@ -569,7 +650,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           return changedHere(step)
         delete state.entries[path]
         save()
-        versions.log({ path, event: "deleted", direction: "remote-to-local", old, size: here.size })
+        versions.log({ path, event: "deleted", direction: "remote-to-local", old, from: "local", size: here.size })
         result.trashed.push({ path, side: "local" })
         return
       }
@@ -591,6 +672,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         // recorded only by its upload: recorded earlier, a failed upload would make it look deleted remotely.
         const copy = copyName(path, options.remote, date, (name) => local.has(name) || remote.has(name))
         if (!(await download(copy, there, undefined, false))) return changedHere(step)
+        if ((await versions.keep(join(root, copy))) !== there.sha256) await keepRemote(path, there)
         await upload(path, here, expectOf(there), false)
         const { size, mtimeMs } = await stat(join(root, copy))
         const copied = { ...here, path: copy, absolute: join(root, copy), hash: there.sha256 as string, size, mtimeMs }
@@ -623,13 +705,15 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           )
         else result.errors.push({ path: step.path, code: failure.code, message: failure.message })
         // Not retried: the next listing shows whether it landed, and adopts it when it did.
-        if (failure.code === "outcome_unknown") state.pending[step.path] = { op: step.kind, operationId: lastOperation }
+        // A download's outcome is known: its temporary file is gone and the file is in place or not.
+        if (failure.code === "outcome_unknown" && step.kind !== "download")
+          state.pending[step.path] = { op: step.kind, operationId: lastOperation }
       }
     }
   } finally {
     save(true)
   }
-  options.assertHeld()
+  await options.assertHeld()
   await versions.prune()
   return result
 }
@@ -658,7 +742,10 @@ const stateSchema = v.object({
   rootId: v.optional(v.string()),
   localRoot: v.optional(v.object({ dev: v.number(), ino: v.number() })),
   entries: v.record(v.string(), entrySchema),
-  pending: v.record(v.string(), v.object({ op: v.string(), operationId: v.string() })),
+  pending: v.record(
+    v.string(),
+    v.object({ op: v.string(), operationId: v.string(), created: v.optional(v.boolean()) }),
+  ),
 })
 
 /** A file mirror's state in `<dir>/<id>.json`, refused rather than reset when invalid. */
@@ -716,6 +803,7 @@ export interface FileMirrorSyncOptions
     | "dryRun"
     | "allowDeletions"
     | "repin"
+    | "hints"
     | "guard"
     | "operationId"
     | "errorOf"
@@ -724,20 +812,21 @@ export interface FileMirrorSyncOptions
   mirrors: Mirror[]
   stateOf(mirror: Mirror): FileMirrorStatePort
   versionsOf(mirror: Mirror): FileVersions
-  lock(): Promise<{ assertHeld(): void; release(): Promise<void> | void }>
+  /** The sync lock, as `acquireLock` returns it or with a synchronous `assertHeld`. */
+  lock(): Promise<HeldLock>
   /** How the app names the remote side in reports and conflict copies. */
   remote: string
 }
 
 /** Syncs each file mirror under one lock, with one `mirror.partial` issue per mirror left with conflicts or errors. */
 export const syncFileMirrors = (options: FileMirrorSyncOptions) =>
-  eachMirror(options.mirrors, options.lock, options.remote, (mirror, assertHeld) =>
+  eachMirror(options.mirrors, options.lock, options.remote, (mirror, held) =>
     syncFileMirror({
       ...options,
       root: mirror.path,
       folder: mirror.folder,
       state: options.stateOf(mirror),
       versions: options.versionsOf(mirror),
-      assertHeld,
+      assertHeld: heldCheck(held),
     }),
   )
