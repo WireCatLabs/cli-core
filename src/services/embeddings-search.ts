@@ -40,6 +40,7 @@ const WORD_HITS = 200
 /** Messages of a hit shown with it, and how much of each: enough to tell the answer, not the whole chunk. */
 const SHOWN_LINES = 3
 const SHOWN_CHARS = 200
+const SHOWN_HEAD = 80
 /** Messages of a chunk read to pick the shown ones: a chunk is ~1,200 characters. */
 const CHUNK_READ = 60
 /** Reciprocal rank fusion's usual constant (phase 5 E9). */
@@ -512,8 +513,8 @@ const fused = (
 const wordStems = (text: string) => [...new Set(queryWords(text).map((word) => word.slice(0, 5)))]
 
 /**
- * The messages that share most of `stems`, at most `SHOWN_LINES`, oldest first, each cut to `SHOWN_CHARS` around
- * its first match. With `ownFirst` the owner's own messages come first: the owner block is there for them.
+ * The messages that share most of `stems`, at most `SHOWN_LINES`, oldest first, each cut by `cutAround`. With
+ * `ownFirst` the owner's own messages come first: the owner block is there for them.
  */
 const shownLines = (
   read: { sender: string | null; text: string; outgoing: boolean }[],
@@ -532,14 +533,21 @@ const shownLines = (
     .slice(0, SHOWN_LINES)
     .sort((a, b) => a.at - b.at)
     .map(({ sender, flat, outgoing, first }) => {
-      const start =
-        Number.isFinite(first) && first > SHOWN_CHARS / 2
-          ? Math.max(0, Math.min(first - SHOWN_CHARS / 4, flat.length - SHOWN_CHARS))
-          : 0
-      const cut = flat.slice(start, start + SHOWN_CHARS)
       const who = outgoing ? `${sender ?? "you"}${sender ? " (you)" : ""}: ` : sender ? `${sender}: ` : ""
-      return `${who}${start > 0 ? "…" : ""}${cut}${start + SHOWN_CHARS < flat.length ? "…" : ""}`
+      return `${who}${cutAround(flat, first)}`
     })
+}
+
+/**
+ * A message's start says what it is about, so it stays: whole up to `SHOWN_CHARS`, else its head, and, when the
+ * match lies past it, the head and the part around the match. Centring on the match alone cut away the answer.
+ */
+const cutAround = (flat: string, first: number) => {
+  if (flat.length <= SHOWN_CHARS) return flat
+  if (!Number.isFinite(first) || first < SHOWN_CHARS - 25) return `${flat.slice(0, SHOWN_CHARS)}…`
+  const tail = SHOWN_CHARS - SHOWN_HEAD
+  const from = Math.min(first - 30, flat.length - tail)
+  return `${flat.slice(0, SHOWN_HEAD)}…${flat.slice(from, from + tail)}${from + tail < flat.length ? "…" : ""}`
 }
 
 /** The chats in readiness by how a meaning search with these vectors could see them, and the word matches outside any. */
