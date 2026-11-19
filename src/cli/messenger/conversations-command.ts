@@ -841,9 +841,10 @@ const itemLine = (one: ConversationItem) =>
   `${one.id}  ${one.started_at.slice(0, 16).replace("T", " ")}–${one.ended_at.slice(11, 16)}  ` +
   `${one.messages_count} messages · ${one.senders_count} people · from ${one.first_message}`
 
-const hitLine = ({ summary, chunk, score, stale, locator }: FoundConversation) =>
+const hitLine = ({ summary, chunk, score, stale, locator, lines }: FoundConversation) =>
   `${score === null ? "  —  " : score.toFixed(3)}  ${line(summary)}  ` +
-  `(messages ${chunk.firstMessageId}–${chunk.lastMessageId})${locator ? `  ${locator}` : ""}${stale ? "  stale" : ""}`
+  `(messages ${chunk.firstMessageId}–${chunk.lastMessageId})${locator ? `  ${locator}` : ""}${stale ? "  stale" : ""}` +
+  (lines ?? []).map((one) => `\n        ${one}`).join("")
 
 const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, model: string) =>
   graph === null
@@ -871,6 +872,11 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         "meaning after `conversations embed`; runs on this machine",
     )
     .argument("<query>", "what to look for, in your own words, in any language the model reads")
+    .option(
+      "--reply <text>",
+      "a made-up reply that would answer the query, one sentence: searched by meaning too, which finds an answer " +
+        "worded unlike the question",
+    )
     .option("--chat <chat>", `only this chat: ${messenger.chatArgument}`)
     .option("--since-time <time>", "only those still going at this ISO 8601 time, or 30m / 2h / 1d ago, or later")
     .option(
@@ -895,6 +901,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
           chat?: string
           sinceTime?: string
           catchUp?: boolean
+          reply?: string
           filter?: string
           source?: string
           timezone?: string
@@ -935,6 +942,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
               }
             : {}),
           limit,
+          ...(options.reply === undefined ? {} : { reply: options.reply }),
           ...(options.filter === undefined ? {} : { filter: options.filter }),
           ...(options.source === undefined ? {} : { source: options.source }),
           ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
@@ -961,7 +969,9 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         foundConversations("search conversations", found, limit, messenger, chat, window.meta),
         () =>
           found.hits.map((hit) => `${hitLine(hit)}\n`).join("") +
-          (found.own?.length ? `your own messages:\n${found.own.map((hit) => `${hitLine(hit)}\n`).join("")}` : ""),
+          (found.own?.length
+            ? `conversations where you wrote, nearest in meaning:\n${found.own.map((hit) => `${hitLine(hit)}\n`).join("")}`
+            : ""),
       )
       if (found.hits.length === 0 && context.format === "pretty")
         context.renderer.note(

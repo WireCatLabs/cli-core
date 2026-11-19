@@ -70,6 +70,8 @@ export interface EmbeddingsService {
       refresh?: RefreshOptions
       /** The word half's budget, from an explicit `--timeout`; the default limit otherwise. */
       timeLimitMs?: number
+      /** A made-up reply that would answer the query: searched by meaning too, and its list fused with the query's. */
+      reply?: string
     },
   ): Promise<FoundConversations>
   /**
@@ -190,6 +192,8 @@ export interface FoundConversation {
   by: ("meaning" | "words")[]
   /** The chunk's text changed after it was embedded: the score is for what it said then (NEED-550 B). */
   stale: boolean
+  /** The chunk's messages that share most words with the query, as "sender: text", so a reader need not open it. */
+  lines?: string[]
 }
 
 export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => ({

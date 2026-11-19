@@ -37,6 +37,11 @@ const OWN_BLOCK = 5
 const PER_CHAT = 20
 /** Messages the word search reads: one long thread can hold many of them. */
 const WORD_HITS = 200
+/** Messages of a hit shown with it, and how much of each: enough to tell the answer, not the whole chunk. */
+const SHOWN_LINES = 3
+const SHOWN_CHARS = 200
+/** Messages of a chunk read to pick the shown ones: a chunk is ~1,200 characters. */
+const CHUNK_READ = 60
 /** Reciprocal rank fusion's usual constant (phase 5 E9). */
 const RRF_K = 60
 
@@ -174,7 +179,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
 
   const search: EmbeddingsService["search"] = async (
     query,
-    { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs },
+    { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs, reply },
   ) => {
     if (!query.trim()) searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
     if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
@@ -232,55 +237,64 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         }
       },
     )
-    const meaning: { hit: ConversationHit; lead: number }[] = []
+    const texts = reply?.trim() ? [query, reply] : [query]
+    const meaning: { hit: ConversationHit; lead: number }[][] = texts.map(() => [])
     const own: ConversationHit[] = []
     const sources = words.sources
     if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
       await withEmbedder(deps, target, choice, {}, async (embedder) => {
-        const [vector] = await embedder.embed([query], "query")
-        for (const one of prepared.scopeAccounts) {
-          const scope = scopeOf(one)
-          if (scope === null) continue
-          // One chat needs no share, and mail's threads are too many to share among.
-          const whole = "chatId" in scope || one.provider === MAIL
-          const hits = await store.vectors.nearestConversations(one, {
-            ...scope,
-            ...(since === undefined ? {} : { since }),
-            model: target.key,
-            limit: whole ? Math.max(limit, CANDIDATES) : Math.max(limit, ACROSS_CHATS),
-            query: vector as Float32Array,
-            ...(eligibility ? { conversations: eligibility.conversations } : {}),
-          })
-          const images = await store.vectors.nearestImages(one, {
-            ...scope,
-            ...(since === undefined ? {} : { since }),
-            model: target.key,
-            limit: Math.max(limit, CANDIDATES),
-            query: vector as Float32Array,
-          })
-          const found = [
-            ...hits,
-            ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
-          ].sort((a, b) => b.score - a.score)
-          const mine = await store.vectors.nearestConversations(one, {
-            ...scope,
-            ...(since === undefined ? {} : { since }),
-            model: target.key,
-            limit: OWN_BLOCK,
-            query: vector as Float32Array,
-            fromOwner: true,
-            ...(eligibility ? { conversations: eligibility.conversations } : {}),
-          })
-          for (const hit of found) sources.set(hit.summary.id, one)
-          for (const hit of mine) {
-            sources.set(hit.summary.id, one)
-            own.push(hit)
+        const vectors = await embedder.embed(texts, "query")
+        for (const [at, vector] of vectors.entries())
+          for (const one of prepared.scopeAccounts) {
+            const scope = scopeOf(one)
+            if (scope === null) continue
+            // One chat needs no share, and mail's threads are too many to share among.
+            const whole = "chatId" in scope || one.provider === MAIL
+            const hits = await store.vectors.nearestConversations(one, {
+              ...scope,
+              ...(since === undefined ? {} : { since }),
+              model: target.key,
+              limit: whole ? Math.max(limit, CANDIDATES) : Math.max(limit, ACROSS_CHATS),
+              query: vector as Float32Array,
+              ...(eligibility ? { conversations: eligibility.conversations } : {}),
+            })
+            // The reply only widens the text hits: pictures and the owner's block come from the query alone.
+            const images =
+              at > 0
+                ? []
+                : await store.vectors.nearestImages(one, {
+                    ...scope,
+                    ...(since === undefined ? {} : { since }),
+                    model: target.key,
+                    limit: Math.max(limit, CANDIDATES),
+                    query: vector as Float32Array,
+                  })
+            const found = [
+              ...hits,
+              ...images.filter((hit) => !eligibility || eligibility.conversations.includes(hit.summary.id)),
+            ].sort((a, b) => b.score - a.score)
+            const mine =
+              at > 0
+                ? []
+                : await store.vectors.nearestConversations(one, {
+                    ...scope,
+                    ...(since === undefined ? {} : { since }),
+                    model: target.key,
+                    limit: OWN_BLOCK,
+                    query: vector as Float32Array,
+                    fromOwner: true,
+                    ...(eligibility ? { conversations: eligibility.conversations } : {}),
+                  })
+            for (const hit of found) sources.set(hit.summary.id, one)
+            for (const hit of mine) {
+              sources.set(hit.summary.id, one)
+              own.push(hit)
+            }
+            meaning[at]?.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
           }
-          meaning.push(...(whole ? found.map((hit) => ({ hit, lead: hit.score })) : shared(found, limit)))
-        }
       })
     }
-    meaning.sort((a, b) => b.lead - a.lead)
+    for (const list of meaning) list.sort((a, b) => b.lead - a.lead)
     const scoped: { source: AccountKey; readiness: SearchReadiness }[] = []
     const elsewhere: string[] = []
     for (const one of prepared.scopeAccounts) {
@@ -333,26 +347,35 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       }
     }
     const hits = fused(
-      meaning.map(({ hit }) => hit),
+      meaning.map((list) => list.map(({ hit }) => hit)),
       words.hits,
       meaningFloor(target.key),
     )
       .slice(0, limit)
       .map(located)
     const shown = new Set(hits.map((hit) => hit.summary.id))
-    const ownHits = own
-      .filter((hit) => !shown.has(hit.summary.id))
+    const ownBest = new Map<string, ConversationHit>()
+    for (const hit of own)
+      if (!shown.has(hit.summary.id) && hit.score > (ownBest.get(hit.summary.id)?.score ?? -2))
+        ownBest.set(hit.summary.id, hit)
+    const ownHits = [...ownBest.values()]
       .sort((a, b) => b.score - a.score)
       .slice(0, OWN_BLOCK)
       .map((hit) => located({ ...hit, by: ["meaning" as const] }))
+    const stems = wordStems(texts.join(" "))
+    const withLines = async <T extends FoundConversation>(hit: T, ownFirst: boolean): Promise<T> => {
+      const read = await store.conversations.chunkMessages(hit.source ?? account, hit.summary.id, hit.chunk, CHUNK_READ)
+      const lines = shownLines(read, stems, ownFirst)
+      return lines.length ? { ...hit, lines } : hit
+    }
     return {
       accounts: prepared.scopeAccounts,
       model: target.id,
       meaning: target.installed ? "searched" : "unavailable",
       ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
       ...(words.respellings.size ? { respelled: Object.fromEntries(words.respellings) } : {}),
-      hits,
-      ...(ownHits.length ? { own: ownHits } : {}),
+      hits: await Promise.all(hits.map((hit) => withLines(hit, false))),
+      ...(ownHits.length ? { own: await Promise.all(ownHits.map((hit) => withLines(hit, true))) } : {}),
       readiness,
       ...(locallyRefreshed ? { prepared: locallyRefreshed } : {}),
       ...(refreshed
@@ -441,26 +464,38 @@ const shared = (hits: ConversationHit[], limit: number) => {
   })
 }
 
-/** Reciprocal rank fusion of the two lists: each conversation scores 1 / (k + rank) in every list it is in. */
+/**
+ * Reciprocal rank fusion of the meaning lists (the query's, and a made-up reply's when given) and the word list: each
+ * conversation scores 1 / (k + rank) in every list it is in, and keeps its nearest chunk.
+ */
 const fused = (
-  meaning: ConversationHit[],
+  meaning: ConversationHit[][],
   words: Pick<ConversationHit, "summary" | "chunk">[],
   minimumCosine: number,
 ): FoundConversation[] => {
   const merged = new Map<string, FoundConversation & { fused: number }>()
-  meaning
-    .filter(({ score }) => score > minimumCosine)
-    .forEach(({ summary, chunk, score, stale, matchedIn }, index) => {
-      merged.set(matchedIn ? `${summary.id}#${chunk.firstMessageId}` : summary.id, {
-        summary,
-        chunk,
-        score,
-        by: ["meaning"],
-        stale,
-        ...(matchedIn ? { matchedIn } : {}),
-        fused: 1 / (RRF_K + index + 1),
+  for (const list of meaning)
+    list
+      .filter(({ score }) => score > minimumCosine)
+      .forEach(({ summary, chunk, score, stale, matchedIn }, index) => {
+        const key = matchedIn ? `${summary.id}#${chunk.firstMessageId}` : summary.id
+        const share = 1 / (RRF_K + index + 1)
+        const held = merged.get(key)
+        if (!held) {
+          merged.set(key, {
+            summary,
+            chunk,
+            score,
+            by: ["meaning"],
+            stale,
+            ...(matchedIn ? { matchedIn } : {}),
+            fused: share,
+          })
+          return
+        }
+        held.fused += share
+        if (score > (held.score ?? -2)) Object.assign(held, { chunk, score, stale })
       })
-    })
   words.forEach(({ summary, chunk }, index) => {
     const share = 1 / (RRF_K + index + 1)
     const held = merged.get(summary.id)
@@ -472,6 +507,37 @@ const fused = (
   return [...merged.values()]
     .sort((a, b) => b.fused - a.fused || (b.score ?? -2) - (a.score ?? -2))
     .map(({ fused: _, ...hit }) => hit)
+}
+
+/** Each word's first five letters, lowercased: enough to match its other forms in Russian and English. */
+const wordStems = (text: string) => [...new Set(queryWords(text).map((word) => word.slice(0, 5)))]
+
+/**
+ * The messages that share most of `stems`, at most `SHOWN_LINES`, oldest first, each cut to `SHOWN_CHARS` around
+ * its first match. With `ownFirst` the owner's own messages come first: the owner block is there for them.
+ */
+const shownLines = (
+  read: { sender: string | null; text: string; outgoing: boolean }[],
+  stems: string[],
+  ownFirst: boolean,
+) => {
+  const scored = read.map(({ text, ...line }, at) => {
+    const flat = text.replace(/\s+/g, " ").trim()
+    const lower = flat.toLowerCase()
+    const found = stems.filter((stem) => lower.includes(stem))
+    const first = found.reduce((least, stem) => Math.min(least, lower.indexOf(stem)), Number.POSITIVE_INFINITY)
+    return { ...line, flat, at, score: found.length + (ownFirst && line.outgoing ? 100 : 0), first }
+  })
+  return [...scored]
+    .sort((a, b) => b.score - a.score || a.at - b.at)
+    .slice(0, SHOWN_LINES)
+    .sort((a, b) => a.at - b.at)
+    .map(({ sender, flat, outgoing, first }) => {
+      const start = Number.isFinite(first) && first > SHOWN_CHARS / 2 ? first - SHOWN_CHARS / 4 : 0
+      const cut = flat.slice(start, start + SHOWN_CHARS)
+      const who = outgoing ? `${sender ?? "you"}${sender ? " (you)" : ""}: ` : sender ? `${sender}: ` : ""
+      return `${who}${start > 0 ? "…" : ""}${cut}${start + SHOWN_CHARS < flat.length ? "…" : ""}`
+    })
 }
 
 /** The chats in readiness by how a meaning search with these vectors could see them, and the word matches outside any. */

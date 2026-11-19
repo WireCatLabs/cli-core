@@ -4345,6 +4345,12 @@ describe("the shared read commands", () => {
       missing: [{ field: "by", step: "models.download" }],
     })
 
+    const chapter = await call(["search", "conversations", "chapter", "--json"], never, env)
+    expect(JSON.parse(chapter.stdout[0] ?? "").items[0]).toMatchObject({
+      lines: [expect.stringContaining("chapter")],
+      untrusted: ["lines"],
+    })
+
     const related = await call(["conversations", "related", "7", "3", "--json"], never, env)
     expect([related.code, related.stdout]).toEqual([6, []])
     expect(related.stderr.join("\n")).toContain("conversations embed --chat 7")

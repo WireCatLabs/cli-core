@@ -514,6 +514,30 @@ export const conversationOf = ({ orm }: StoreContext, chatKey: number, messageId
   return found ? String(found.pk) : undefined
 }
 
+/** A found chunk's messages, oldest first: from `first` to `last` (external ids) inside one of the account's conversations. */
+export const chunkMessagesOf = (
+  { orm }: StoreContext,
+  accountPk: number,
+  conversationPk: number,
+  first: Id,
+  last: Id,
+  limit: number,
+): { id: Id; sender: string | null; text: string; outgoing: boolean }[] =>
+  orm
+    .all<{ id: string; sender: string | null; text: string; outgoing: number }>(
+      sql`SELECT m.external_id AS id, m.sender_name AS sender, m.text, m.outgoing
+        FROM conversations c
+        JOIN chats ch ON ch.id = c.chat_id AND ch.account_id = ${accountPk}
+        JOIN messages f ON f.chat_id = c.chat_id AND f.external_id = ${first}
+        JOIN messages l ON l.chat_id = c.chat_id AND l.external_id = ${last}
+        JOIN conversation_messages cm ON cm.conversation_id = c.id
+        JOIN messages m ON m.id = cm.message_id
+        WHERE c.id = ${conversationPk} AND m.deleted_at IS NULL AND m.text != ''
+          AND (m.sent_at, m.id) >= (f.sent_at, f.id) AND (m.sent_at, m.id) <= (l.sent_at, l.id)
+        ORDER BY m.sent_at, m.id LIMIT ${limit}`,
+    )
+    .map(({ outgoing, ...line }) => ({ ...line, outgoing: Boolean(outgoing) }))
+
 const staleLink = (chatKey: number) => sql<boolean>`(${messageLinks.staleAt} IS NOT NULL
   OR EXISTS (SELECT 1 FROM message_revisions r WHERE r.message_id IN (${messageLinks.messageId}, ${messageLinks.parentId})
     AND r.created_at >= ${messageLinks.createdAt})

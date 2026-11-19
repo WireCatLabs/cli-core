@@ -39,6 +39,13 @@ export interface ConversationsStore {
     key: AccountKey,
     refs: { chatId: Id; messageId: Id }[],
   ): Promise<(ConversationSummary | undefined)[]>
+  /** A found chunk's messages, oldest first, from `first` to `last` inside the conversation; none when not the account's. */
+  chunkMessages(
+    key: AccountKey,
+    conversationId: string,
+    chunk: { firstMessageId: Id; lastMessageId: Id },
+    limit: number,
+  ): Promise<{ id: Id; sender: string | null; text: string; outgoing: boolean }[]>
   /** Every link a message has, the messenger's first. */
   links(key: AccountKey, chatId: Id, messageId: Id, options?: { limit: number }): Promise<StoredLink[]>
   replies(key: AccountKey, chatId: Id, messageId: Id, limit: number): Promise<Page<{ messageId: Id }>>
@@ -113,6 +120,14 @@ export const conversationsStoreOver = (context: StoreContext): ConversationsStor
         pks.filter((pk) => pk !== undefined),
       )
       return pks.map((pk) => (pk === undefined ? undefined : found.get(pk)))
+    },
+
+    chunkMessages: async (key, conversationId, { firstMessageId, lastMessageId }, limit) => {
+      const accountPk = findAccountPk(key)
+      const pk = Number(conversationId)
+      return accountPk === undefined || !Number.isSafeInteger(pk)
+        ? []
+        : conversationQueries.chunkMessagesOf(context, accountPk, pk, firstMessageId, lastMessageId, limit)
     },
 
     links: async (key, chatId, messageId, options) => {
