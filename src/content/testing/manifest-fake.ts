@@ -39,6 +39,8 @@ export interface ContentManifestFake {
   fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>
   /** Each kind's rows in the service's shape, by entity, as a test may change them. */
   rows: Partial<Record<ContentKind, Row[][]>>
+  /** The ids of each kind's rows as the service holds them: what a contract's `held` names. */
+  ids(kind: ContentKind): string[]
   /** The operations each write reached, in order. */
   writes: string[]
   /** Calls no route of the manifest makes: a source that sends one would fail on the real service. */
@@ -421,6 +423,10 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     }),
     fetch,
     rows,
+    ids: (kind) =>
+      (rows[kind] ?? []).flatMap((held, index) =>
+        held.map((row) => idOf(entities(kind)[index] as ContentManifestEntity, row)),
+      ),
     writes,
     refusals,
     touch(kind, id) {

@@ -45,7 +45,7 @@ describe("contentSourceContract over the content fake of a WordPress manifest", 
     const { fake, source, skewed } = built()
     return {
       source,
-      held: { author: ["1", "2"], term: ["7", "1"], post: ["10", "11", "12"] },
+      held: { author: fake.ids("author"), term: fake.ids("term"), post: fake.ids("post") },
       deadCursor: { kind: "post", cursor: "not a time" },
       faults: {
         skewed,
@@ -83,6 +83,7 @@ describe("contentWriteContract over the content fake of a WordPress manifest", (
 describe("contentManifestFake over HTTP", () => {
   it("pages a list by the page count header, and refuses a page past the last", async () => {
     const { fake } = built()
+    expect(fake.ids("post")).toEqual(["10", "11", "12"])
     const call = serviceApiCall({
       manifest: api,
       service: "WordPress",
