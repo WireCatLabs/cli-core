@@ -99,6 +99,26 @@ describe("content commands", () => {
     expect((await cli("channels", "list")).items[0]).toMatchObject({ network: "fake-blog" })
   })
 
+  it("hands the writer only the keys the owner was asked about, never one a profile allows", async () => {
+    const source = fakeContentSource({ rows: exampleContentRows(), clock: () => NOW })
+    const confirmed: unknown[] = []
+    const writer: ContentWriter = {
+      ...source.writer,
+      provider: source.writer.provider,
+      update: (id, patch, options) => {
+        confirmed.push(options.confirmed)
+        return source.writer.update(id, patch, options)
+      },
+    }
+    const allowed = await setup({ "posts.update": "allow" }, { source, writer, account: ACCOUNT })
+    await allowed.cli("sync")
+    await allowed.cli("posts", "update", "11", "--title", "Quiet")
+    const asked = await setup({ "posts.update": "ask" }, { source, writer, account: ACCOUNT })
+    await asked.cli("sync")
+    await asked.cli("posts", "update", "11", "--title", "Asked", "--yes")
+    expect(confirmed).toEqual([[], ["posts.update"]])
+  })
+
   it("writes a draft from a Markdown file, publishes it once, and keeps what it replaced", async () => {
     const { cli, source } = await setup()
     await cli("sync")
@@ -134,6 +154,17 @@ describe("content commands", () => {
     await expect(cli("posts", "update", "11", "--title", "Missed schedule", "--yes")).rejects.toThrow(/changed/)
     await expect(cli("posts", "update", "11", "--title", "Missed schedule", "--yes")).rejects.toThrow(/posts\.publish/)
     expect(source.requests).toEqual(["schedule"])
+  })
+
+  it("with posts.update allowed, a draft edit asks nothing, and an edit of a missed schedule still asks posts.publish", async () => {
+    const { cli, source } = await setup({ "posts.update": "allow" })
+    await cli("sync")
+    expect((await cli("posts", "update", "11", "--title", "Quiet edit")).item).toMatchObject({
+      post: { title: "Quiet edit" },
+    })
+    await source.writer.schedule("11", NOW - 60_000, { operationId: "elsewhere" })
+    await expect(cli("posts", "update", "11", "--title", "Missed schedule")).rejects.toThrow(/posts\.publish/)
+    expect(source.requests).toEqual(["update", "schedule"])
   })
 
   it("refuses a schedule in the past and a body over blocks without --replace-body", async () => {

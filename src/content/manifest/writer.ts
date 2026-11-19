@@ -111,13 +111,13 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   ) => {
     const base = call.body === undefined ? {} : (fill(call.body, slots) as Record<string, unknown>)
     // The owner said yes to this write in the content command, so its one call is not asked about again; a key that
-    // command did not check, as the publish key for a post that is published at the source now, still is.
+    // command did not ask about, as the publish key for a post that is published at the source now, still is.
     const own = options.api.operations.find((one) => one.id === call.operation)?.command
     const { result } = await options.write(
       options.command,
       call.operation,
       inputOf(call, slots, body === undefined && call.body === undefined ? undefined : { ...base, ...body }),
-      confirmed === undefined ? [] : [...confirmed, ...(own === undefined ? [] : [`api.${own}`])],
+      !confirmed?.length ? [] : [...confirmed, ...(own === undefined ? [] : [`api.${own}`])],
     )
     return result
   }

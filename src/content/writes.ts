@@ -81,9 +81,13 @@ const written = async <T>(
   act: (confirmed: readonly PermissionKey[]) => Promise<T>,
 ): Promise<T> => {
   try {
-    // The keys checked here are the ones a writer's own call need not ask about again.
+    // The keys the owner was asked about here (an `ask` level) need not be asked again by a writer's own call; a key
+    // allowed here was asked about by nobody, so it confirms nothing.
+    const settings = context.writes.settings()
+    const defaults = { ...DEFAULT_PERMISSIONS, ...CONTENT_WRITE_DEFAULTS, ...settings.permissionDefaults }
+    const asked = [key, ...extra].filter((one) => levelFor(settings.permissions, one, defaults).level === "ask")
     return await guardedWrite(guardOf(context, extra), { chatId: null, kind: "edit", key, operationId }, () =>
-      act([key, ...extra]),
+      act(asked),
     )
   } catch (error) {
     if (!isCliError(error) || error.code !== "outcome_unknown") throw error
