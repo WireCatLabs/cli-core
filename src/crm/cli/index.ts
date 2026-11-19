@@ -157,7 +157,7 @@ export const LEADS_QUERY = { entity: "lead", backend: "native", fields: DEAL_FIE
 export const PIPELINES_QUERY = {
   entity: "pipeline",
   backend: "native",
-  fields: [termField("kind", "enum", "kind:lead", { values: DEAL_KINDS })],
+  fields: [termField("kind", "enum", "kind:deal", { values: DEAL_KINDS })],
 } as const satisfies QueryRegistry
 export const STAGES_QUERY = {
   entity: "stage",
@@ -342,6 +342,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     })
   const example = (command: Command, ...lines: string[]) =>
     annotate(command, { examples: lines.map((line) => `${options.app.command} work ${line}`) })
+  const hasLeads = options.leads !== false
+  const dealsAndLeads = hasLeads ? "deals and leads" : "deals"
 
   example(
     answerEntity(
@@ -350,16 +352,16 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       crmSync,
     )
       .description(
-        "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
+        `bring the CRM's copy in the local store up to date: pipelines, companies, contacts, ${dealsAndLeads} that ` +
           "changed since the last sync, or everything with --rescan; a run stops before its deadline or " +
           "--max-pages and the next one goes on from there",
       )
       // WireCat Desktop takes a summary of 300 characters at most; the settings' part is help only.
       .addHelpText(
         "after",
-        "\nWith the activities setting on, it also copies the activities and tasks on the deals and leads it keeps. " +
-          "Then each deal or lead that moved into a stage the stage-tasks setting names opens a local task, once " +
-          "per move.",
+        `\nWith the activities setting on, it also copies the activities and tasks on the ${dealsAndLeads} it keeps. ` +
+          `Then each ${hasLeads ? "deal or lead" : "deal"} that moved into a stage the stage-tasks setting names ` +
+          "opens a local task, once per move.",
       ),
     "sync",
     "sync --rescan",
@@ -455,7 +457,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     await within(command, async (run) => {
       const status = await crmStatus(run.store, run.account, { profile: run.profile, now: now() })
       if (await viewerOf(run))
-        outputFor(command).renderer.note("stored counts the whole copy, more than the deals and leads you may read")
+        outputFor(command).renderer.note(`stored counts the whole copy, more than the ${dealsAndLeads} you may read`)
       return listOf(pathOf(command).join(" "), {
         items: status.items,
         limit: status.limit,
@@ -471,7 +473,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       "crm_contacts_removed",
       crmContactsApplied,
     ).description(
-      "apply scope mine to the contacts already stored: remove those no deal or lead of the chosen users and no " +
+      `apply scope mine to the contacts already stored: remove those no ${hasLeads ? "deal or lead" : "deal"} ` +
+        "of the chosen users and no " +
         "kept company names, and the people they leave empty; counts only unless --yes, under scope all too. A " +
         "sync that narrows the scope, or sync --rescan under mine, does this itself",
     ),
@@ -732,7 +735,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       example(
         fields(create),
         `${plural} create --title "Example kitchen" --amount 15000 --currency EUR`,
-        `${plural} create --title "Example office" --pipeline Sales --stage "Quote sent" --field UF_CRM_SOURCE=web`,
+        `${plural} create --title "Example office" --pipeline Sales --stage "Quote sent" --field Source=web`,
       ).action(async (opts: Typed, command: Command) => {
         await run(command, async (context) => {
           const done = await createCrmItem(context, kind, inputOf(opts), idOf(opts))
@@ -748,7 +751,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       example(
         fields(reference(update)),
         `${plural} update ${kind}:12 --amount 18000`,
-        `${plural} update ${kind}:12 --field UF_CRM_SOURCE=`,
+        `${plural} update ${kind}:12 --field Source=`,
       ).action(async (ref: string, opts: Typed, command: Command) => {
         await run(command, async (context) => {
           const done = await updateCrmItem(context, kind, ref, inputOf(opts), idOf(opts))
@@ -832,7 +835,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       PIPELINES_QUERY,
     ),
     "pipelines list --json",
-    "pipelines list kind:lead",
+    ...(hasLeads ? ["pipelines list kind:lead"] : []),
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const terms = queryTerms(words, PIPELINES_QUERY, "pipelines list")
     await within(command, async (run) => {
@@ -900,7 +903,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       STAGES_QUERY,
     ),
     "stages list --json",
-    "stages list kind:lead",
+    ...(hasLeads ? ["stages list kind:lead"] : []),
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const terms = queryTerms(words, STAGES_QUERY, "stages list")
     await within(command, async (run) => {
@@ -958,7 +961,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
   const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(
-    "the CRM's own fields on deals, leads, people and organizations, as last synced",
+    `the CRM's own fields on ${hasLeads ? "deals, leads" : "deals"}, people and organizations, as last synced`,
   )
   example(
     withQuery(
@@ -1000,7 +1003,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   const search =
     program.commands.find((one) => one.name() === "search") ??
     annotate(program.command("search"), { effects: NO_EFFECTS }).description("search what the local store holds")
-  addCrmSearchAll(search, { within, app: options.app, example, viewerOf })
+  addCrmSearchAll(search, { within, app: options.app, example, viewerOf, leads: hasLeads })
 }
 
 // honoursDryRun: a host program other than `run` would otherwise let a write through under --dry-run.

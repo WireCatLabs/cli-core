@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **The shared CRM help fits every CRM.** The `create` and `update` examples set a field by its label
+  (`--field Source=web`), not by Bitrix24's own `UF_CRM_SOURCE`. A CRM mounted with `leads: false`, such as amoCRM, no
+  longer mentions leads in the descriptions of `sync`, `store status`, `changes`, `fields list`, `store apply` and
+  `search all`, nor shows `kind:lead` in its examples.
+
 ## 0.707.0 — 19.11.2026
 
 ### Added

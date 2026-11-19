@@ -1134,3 +1134,33 @@ describe("CRM activities", () => {
     expect(found.items).toEqual([expect.objectContaining({ kind: "deal", title: "Example deal d1" })])
   })
 })
+
+describe("help of a CRM without leads", () => {
+  it("names no lead and no other CRM's field in its descriptions and examples", () => {
+    const root = new Command("acme")
+    addCrmCommands(root, {
+      app: APP,
+      open: async () => {
+        throw new Error("help only")
+      },
+      leads: false,
+      writes: WRITES,
+    })
+    type Described = {
+      summary?: string
+      description?: string
+      examples?: readonly string[]
+      commands?: readonly Described[]
+    }
+    const texts = (nodes: readonly Described[]): string[] =>
+      nodes.flatMap((node) => [
+        node.summary ?? "",
+        node.description ?? "",
+        ...(node.examples ?? []),
+        ...texts(node.commands ?? []),
+      ])
+    const described = texts(describeProgram(root)).join("\n")
+    expect(described).toContain("Source=web")
+    expect(described).not.toMatch(/\blead|UF_CRM/)
+  })
+})

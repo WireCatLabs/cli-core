@@ -33,24 +33,28 @@ export const addCrmSearchAll = (
     app,
     example,
     viewerOf,
+    leads = true,
   }: {
     within: CrmWithin
     app: AppIdentity
     example: (command: Command, ...lines: string[]) => Command
     /** This profile's rule over its own account's copy, as the other reads of the copy take it. */
     viewerOf: (run: CrmRun) => Promise<CopyViewer | undefined>
+    /** The CRM has leads. */
+    leads?: boolean
   },
 ): void => {
+  const deals = leads ? "deals and leads" : "deals"
   const all = annotate(new Command("all"), { effects: LOCAL_READ, partial: true, output: { entity: "hit" } })
-    .summary("search stored deals and leads, messages, notes, calendar events and meetings")
+    .summary(`search stored ${deals}, messages, notes, calendar events and meetings`)
     .description(
-      "search the CRM's deals and leads by the words of their title, company, contacts and activities, and the " +
+      `search the CRM's ${deals} by the words of their title, company, contacts and activities, and the ` +
         "messages, notes, calendar events and meetings other WireCat tools stored — best match first. Use it when " +
         "you do not know where something was written",
     )
     .argument(
       "<query...>",
-      'words and "phrases"; deals and leads match the words of their title, company, contacts and activities',
+      `words and "phrases"; ${deals} match the words of their title, company, contacts and activities`,
     )
     .addHelpText("after", SAVE_HELP)
   searches.addCommand(searchAllOptions(all, SEARCHED))
