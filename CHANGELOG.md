@@ -5,6 +5,36 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.706.0 — 19.11.2026
+
+### Added
+
+- **The generated `api` group mounts subgroups: `api <group> <command>`.** An operation whose manifest names a `group`
+  (cli-base's `names.groups`) is mounted under it without the repeated word, so `contacts-list` in `contacts` is
+  `api contacts list`, checked against `api.contacts.list`; `api.contacts` covers the whole group. A profile that still
+  names the old flat key `api.contacts-list` keeps its hold on that one command: it is checked beside the new key, from
+  the command line and over MCP, warns to rename it, and only ever tightens. The old path `api contacts-list` stops
+  working. `api show` takes the path (quoted, `api show "contacts list"`), the old name or the operation id, and `api list` prints the path and the group.
+  A manifest without groups mounts flat, as before, so nothing changes until a CLI regenerates with groups and
+  releases the move as a breaking change.
+- **Cancel, edit and send now a scheduled message: `messages scheduled cancel <chat> <scheduled-id...>`,
+  `messages scheduled edit <chat> <scheduled-id> [text] [--at-time <time>]` and
+  `messages scheduled send <chat> <scheduled-id...>`.** Before, a scheduled message could only be listed, and the
+  owner cancelled one in the app. A scheduled message has an id of its own: `messages edit` on it failed, and
+  `messages delete` with the same number would have deleted an old, sent message. Each command takes only the ids
+  `messages scheduled <chat>` lists and checks them against that list before anything changes; an unknown id is
+  `not_found` and points at the list. Cancelling counts and asks as a delete does (`--allow-dangerous` at an `ask`
+  level), sending now as a send. An edit with only `--at-time` keeps the text, and one with only the text keeps the
+  time. The keys are `messages.scheduled.cancel`, `.edit` and `.send`; the answers are the entities
+  `scheduled_cancellation`, `message_write` and `scheduled_send`. An adapter adds them through the optional port
+  group `ScheduledChanges` (`cancelScheduled`, `editScheduled`, `sendScheduled`); a messenger without it answers
+  "this messenger cannot …". Needs cli-base with `scheduled` as a resource word, for `cli-dev lint`.
+
+### Fixed
+
+- **The MCP command search ranks the shorter name first on a tie**, so "send message" finds `messages send` before
+  `messages scheduled send`.
+
 ## 0.705.0 — 19.11.2026
 
 ### Added
