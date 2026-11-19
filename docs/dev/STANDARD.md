@@ -225,6 +225,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | View | Meaning |
 |---|---|
 | `tree` | the parent and child hierarchy of stored sources |
+| `stats` | a thing's own numbers, such as a post's views, as read at each sync |
 | `logs` | the log of a running process |
 | `events` | what happened in a thing over time |
 | `scheduled` | what is scheduled to happen |
@@ -271,6 +272,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `messages` | collection | posts in a messenger chat, or emails |  |
 | `drafts` | collection | e-mails saved in a mailbox's Drafts folder, written and not sent |  |
 | `polls` | collection | polls in a chat |  |
+| `posts` | collection | posts and pages on a site or blog the owner publishes |  |
+| `channels` | collection | the sites and social accounts the owner publishes posts on |  |
 | `reactions` | collection | reactions to a message |  |
 | `recipients` | collection | who a message goes to |  |
 | `replies` | collection | the automatic replies of a profile |  |
@@ -863,6 +866,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--notify-on` | `<when>` | choice | when a scheduled run tells the owner: always, failures or never |  |
 | `--deliver-to` | `<route>` | string | where a scheduled run's result also goes, by the owner's own CLI: telegram-bot:<profile>/<chat> or email:<profile>/<address>; repeat it for more. Not --to, which names who a message is for |  |
 | `--max-cost-per-day` | `<usd>` | number | start no run for the rest of the day once the day's runs cost this much; 0 for no cap | US dollars |
+| `--slug` | `<slug>` | string | the last part of its web address |  |
+| `--tags` | `<ids>` | list | its tags and categories, by comma-separated ids; replaces the ones it has |  |
+| `--replace-body` |  | switch | write the new text over a body the tool cannot fully read back, losing what it could not show |  |
 
 <!-- flags: end -->
 

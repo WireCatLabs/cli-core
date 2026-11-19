@@ -13,7 +13,7 @@
 ### Changed — may break callers
 
 - **The content commands use the vocabulary's words**, so a CLI made from them passes `cli-dev lint` (it needs
-  cli-base with the content words). A script that called the old names must change:
+  cli-base 0.123.0 or later). A script that called the old names must change:
 
   | Before | Now |
   |---|---|
