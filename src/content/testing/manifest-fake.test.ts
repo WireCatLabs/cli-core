@@ -1,8 +1,13 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { WORDPRESS_CONTENT, wordpressApi } from "../../../test/fixtures/wordpress-content.js"
 import { serviceApiCall } from "../../cli/service-api-call.js"
+import { openStore } from "../../store/store.js"
 import { contentSourceFromManifest, contentWriterFromManifest } from "../manifest/index.js"
+import { syncContent } from "../sync.js"
 import { contentSourceContract, contentWriteContract } from "./index.js"
 import { type ContentManifestFake, contentManifestFake } from "./manifest-fake.js"
 
@@ -67,6 +72,37 @@ describe("contentSourceContract over the content fake of a WordPress manifest", 
     it(name, run)
 })
 
+// A CLI's test runs the fake on its own clock, the real one, as its sync does.
+describe("contentSourceContract over the content fake on its default clock", () => {
+  for (const { name, run } of contentSourceContract(() => {
+    const fake = contentManifestFake(WORDPRESS_CONTENT, { api })
+    fakes.push(fake)
+    const source = (skew = 0) =>
+      contentSourceFromManifest(WORDPRESS_CONTENT, {
+        api,
+        call: fake.call,
+        site: "blog.example.test",
+        now: () => Date.now() + skew,
+      })
+    return {
+      source: source(),
+      held: { author: fake.ids("author"), term: fake.ids("term"), post: fake.ids("post") },
+      faults: {
+        skewed: source,
+        change: () => {
+          fake.touch("post", "11")
+          return { kind: "post", id: "11" }
+        },
+        trash: () => {
+          fake.trash("11")
+          return "11"
+        },
+      },
+    }
+  }))
+    it(name, run)
+})
+
 describe("contentWriteContract over the content fake of a WordPress manifest", () => {
   for (const { name, run } of contentWriteContract(() => {
     const { fake, writer } = built()
@@ -81,6 +117,31 @@ describe("contentWriteContract over the content fake of a WordPress manifest", (
 })
 
 describe("contentManifestFake over HTTP", () => {
+  it("syncs every kind through the api group's call, the rights read at its literal route", async () => {
+    const fake = contentManifestFake(WORDPRESS_CONTENT, { api })
+    fakes.push(fake)
+    const call = serviceApiCall({
+      manifest: api,
+      service: "WordPress",
+      serverVariables: { site: "blog.example.test" },
+      token: () => "editor:pw",
+      fetch: fake.fetch,
+    })
+    const source = contentSourceFromManifest(WORDPRESS_CONTENT, { api, call, site: "blog.example.test" })
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "content-fake-")), "wirecat.db") })
+    const account = { provider: "wordpress", account: "blog.example.test" }
+    try {
+      const report = await syncContent(source, store, account)
+      expect(report).toMatchObject({ state: "complete" })
+      expect((await store.content.list(account, "post")).items.map((one) => one.record.externalId).sort()).toEqual(
+        fake.ids("post").sort(),
+      )
+      expect(report.gaps ?? []).toEqual([])
+    } finally {
+      await store.close()
+    }
+  })
+
   it("pages a list by the page count header, and refuses a page past the last", async () => {
     const { fake } = built()
     expect(fake.ids("post")).toEqual(["10", "11", "12"])

@@ -137,8 +137,15 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
   const manifest: ContentManifest = parseContentManifest(input, options.api)
   const operations = new Map(options.api.operations.map((one) => [one.id, one]))
   const size = options.pageSize ?? 2
-  let tick = 0
-  const clock = options.clock ?? (() => T0 + 60_000 + tick++ * 1000)
+  let last = 0
+  // After every example row by default, as a sync's own clock is: an edit made now is a change since the last sync.
+  // Whole seconds, as the service writes its times: a change stamped in the cursor's own second would be lost.
+  const clock =
+    options.clock ??
+    (() => {
+      last = Math.max(last + 1000, Math.ceil(Math.max(Date.now(), T0) / 1000) * 1000 + 1000)
+      return last
+    })
   const given = options.rows ?? exampleContentRows()
   const writes: string[] = []
   const refusals: string[] = []
@@ -361,18 +368,26 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     return answer
   }
 
-  const http = [...operations.values()].flatMap((operation) =>
-    operation.binding.kind === "http"
-      ? [
-          {
-            operation,
-            method: operation.binding.method,
-            names: [...operation.binding.path.matchAll(/\{(\w+)\}/g)].map((one) => one[1] as string),
-            pattern: new RegExp(`${operation.binding.path.replace(/\{\w+\}/g, "([^/]+)")}$`),
-          },
-        ]
-      : [],
-  )
+  // A literal segment wins over a placeholder: /users/me is not the user whose id is "me".
+  const placeholders = (path: string) => (path.match(/\{\w+\}/g) ?? []).length
+  const http = [...operations.values()]
+    .sort((a, b) =>
+      a.binding.kind === "http" && b.binding.kind === "http"
+        ? placeholders(a.binding.path) - placeholders(b.binding.path) || b.binding.path.length - a.binding.path.length
+        : 0,
+    )
+    .flatMap((operation) =>
+      operation.binding.kind === "http"
+        ? [
+            {
+              operation,
+              method: operation.binding.method,
+              names: [...operation.binding.path.matchAll(/\{(\w+)\}/g)].map((one) => one[1] as string),
+              pattern: new RegExp(`${operation.binding.path.replace(/\{\w+\}/g, "([^/]+)")}$`),
+            },
+          ]
+        : [],
+    )
   const fetch = async (target: string | URL | Request, init?: RequestInit) => {
     const url = new URL(target instanceof Request ? target.url : target)
     const method = (init?.method ?? (target instanceof Request ? target.method : "GET")).toUpperCase()
