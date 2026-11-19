@@ -147,13 +147,12 @@ export const mailInboxCommand = sharedCommand(
         `stop before a request that would make the run send more tokens than this (default: ${INBOX_LIMITS.tokens})`,
         positiveCount("--max-tokens"),
       )
+      .option("--yes", "send the mail to a model outside this computer when `models chats` is ask")
       .action(async function (this: Command) {
-        const flags = this.optsWithGlobals<{
-          maxMessages?: number
-          maxTokens?: number
-          offline?: boolean
-          yes?: boolean
-        }>()
+        const flags = {
+          ...this.opts<{ maxMessages?: number; maxTokens?: number; yes?: boolean }>(),
+          offline: this.optsWithGlobals<{ offline?: boolean }>().offline,
+        }
         const environment = environmentOf(this)
         const env = environment.env ?? process.env
         const models = options.modelsCommand ?? mail.app.command
