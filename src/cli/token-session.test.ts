@@ -169,6 +169,43 @@ describe("manifestVerify", () => {
       ).rejects.toMatchObject({ code: "authentication_error" })
   })
 
+  it("checks a password on the site session start names, by Basic, and on no other", async () => {
+    const sent: { url: string; authorization: string | null }[] = []
+    const fake = async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init)
+      sent.push({ url: request.url, authorization: request.headers.get("authorization") })
+      return Response.json({ id: 7, name: "editor" })
+    }
+    const check = manifestVerify({
+      manifest: {
+        servers: [{ url: "https://{site}/wp-json", variables: { site: {} } }],
+        securitySchemes: { applicationPassword: { type: "http", scheme: "basic" } },
+        security: [{ applicationPassword: [] }],
+        operations: [
+          {
+            id: "me",
+            command: "me",
+            effect: "read",
+            binding: { kind: "http", method: "GET", path: "/wp/v2/users/me" },
+          },
+        ],
+      } as unknown as ServiceApiManifest,
+      service: "WordPress",
+      verify: { operation: "me", id: "id", name: "name" },
+      fetch: (_command, site) => hostsFetch([new URL(`https://${site}`).hostname], fake, `https://${site}/wp-json`),
+    })
+    expect(await check(new Command("start"), "editor:abcd efgh", () => undefined, "host.test/blog")).toEqual({
+      id: "7",
+      account: { id: "7", name: "editor" },
+    })
+    expect(sent).toEqual([
+      {
+        url: "https://host.test/blog/wp-json/wp/v2/users/me",
+        authorization: `Basic ${Buffer.from("editor:abcd efgh").toString("base64")}`,
+      },
+    ])
+  })
+
   it("is the service's error when the answer holds no id", async () => {
     await expect(verifying({ id: null }, { operation: "getSelf", id: "id" }).check()).rejects.toMatchObject({
       code: "provider_error",

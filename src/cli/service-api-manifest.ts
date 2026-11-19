@@ -168,13 +168,26 @@ export const signRequest = async (
   if (auth.in === "query" || auth.name !== "authorization") request.redirect = "manual"
 }
 
+/**
+ * A URL on the server's origin and under its path: a site at `host/blog` shares its host with `host/other`, which
+ * must never get its sign-in.
+ */
+export const underBase = (url: URL, baseUrl: string): boolean => {
+  const base = new URL(baseUrl)
+  const prefix = base.pathname.endsWith("/") ? base.pathname : `${base.pathname}/`
+  return url.origin === base.origin && (url.pathname === base.pathname || url.pathname.startsWith(prefix))
+}
+
+/** `""` is the answer itself: WordPress answers the list. */
 const at = (value: unknown, path: string): unknown =>
-  path
-    .split(".")
-    .reduce<unknown>(
-      (inner, key) => (inner && typeof inner === "object" ? (inner as Record<string, unknown>)[key] : undefined),
-      value,
-    )
+  path === ""
+    ? value
+    : path
+        .split(".")
+        .reduce<unknown>(
+          (inner, key) => (inner && typeof inner === "object" ? (inner as Record<string, unknown>)[key] : undefined),
+          value,
+        )
 
 const numberOf = (value: unknown): number | undefined => {
   const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number(String(value))
@@ -207,8 +220,17 @@ export interface PageStep {
   next?: { input: ApiCommandInput } | { url: string }
 }
 
-/** Reads one answer by the manifest's pagination: where its items are and what the next request is. */
-export const nextPage = (pagination: Pagination, input: ApiCommandInput, answer: unknown): PageStep => {
+/**
+ * Reads one answer by the manifest's pagination: where its items are and what the next request is. `headers` are the
+ * response's, where a page style's `pagesHeader` gives the number of pages: the page that reaches it is the last, as
+ * WordPress refuses a page past the end.
+ */
+export const nextPage = (
+  pagination: Pagination,
+  input: ApiCommandInput,
+  answer: unknown,
+  headers?: Headers,
+): PageStep => {
   const listed = pagination.items === undefined ? [answer] : at(answer, pagination.items)
   const items = Array.isArray(listed) ? listed : []
   switch (pagination.style) {
@@ -223,11 +245,19 @@ export const nextPage = (pagination: Pagination, input: ApiCommandInput, answer:
     case "page": {
       const parameter = pagination.style === "offset" ? pagination.offset : pagination.page
       const total = pagination.total === undefined ? undefined : numberOf(at(answer, pagination.total))
-      const current = numberOf(parameterValue(input, parameter)) ?? (pagination.style === "offset" ? 0 : 1)
+      const current =
+        numberOf(parameterValue(input, parameter)) ?? (pagination.style === "offset" ? 0 : (pagination.start ?? 1))
       const next = pagination.style === "offset" ? current + items.length : current + 1
-      // A short page is not the last: a service may cap the page below the limit asked for. Only a total or an
-      // empty page ends it.
-      const last = items.length === 0 || (total !== undefined && pagination.style === "offset" && next >= total)
+      const pages =
+        pagination.style === "page" && pagination.pagesHeader !== undefined
+          ? numberOf(headers?.get(pagination.pagesHeader) ?? undefined)
+          : undefined
+      // A short page is not the last: a service may cap the page below the limit asked for. Only a total, the number
+      // of pages or an empty page ends it.
+      const last =
+        items.length === 0 ||
+        (total !== undefined && pagination.style === "offset" && next >= total) ||
+        (pages !== undefined && current >= pages)
       return last ? { items } : { items, next: { input: withValue(input, parameter, next) } }
     }
     case "link": {

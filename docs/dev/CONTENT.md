@@ -72,9 +72,9 @@ command, source, site })` (`src/content/manifest/`) build both ports from config
   format (`markdown`, `html`, `wp-blocks`), and `optional`, the gap a refused call reports.
 - Times without an offset are UTC, as WordPress's `*_gmt` fields are.
 - Pages follow each operation's own `pagination`; a page style with `pagesHeader` stops at the page the header names,
-  read through the call's `withHeaders`. Without it, every list asks one page past the last, which WordPress refuses
-  with 400: syncing a real site needs the `api` group's paging change (the header, and pagination on its generated
-  operations, which the WordPress fixture sets by hand for now).
+  read through the call's `withHeaders` (`nextPage` reads it). cli-base's `wpJsonToOpenApi` sets that paging on every
+  WordPress collection read, so a CLI generated from a site's index pages without a hand-written override; the fixture
+  here sets it by hand, as it has no generator.
 - `optional.requires` names a read that says whether the sign-in sees every row (WordPress:
   `capabilities.edit_others_posts` of `users/me`): a contributor's list leaves others' posts out with no error, so
   the gap comes from its rights.

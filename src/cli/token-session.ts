@@ -63,8 +63,11 @@ export interface ManifestVerifyOptions {
   service: string
   /** The config's `auth.verify`: the operation, where its answer holds the id and a name, and whether it is live. */
   verify: CliVerify
-  /** The command's host-checked fetch, such as `hostsFetch(hosts, environment.fetch)`. */
-  fetch: (command: Command) => FetchLike
+  /**
+   * The command's host-checked fetch, such as `hostsFetch(hosts, environment.fetch)`. `site` is the one `session start
+   * --site` names, for a service on the owner's own site: its host is not among the CLI's own.
+   */
+  fetch: (command: Command, site: string | undefined) => FetchLike
 }
 
 /**
@@ -73,8 +76,14 @@ export interface ManifestVerifyOptions {
  */
 export const manifestVerify =
   ({ manifest, service, verify, fetch }: ManifestVerifyOptions): TokenSessionOptions["verify"] =>
-  async (command, token) => {
-    const call = serviceApiCall({ manifest, service, fetch: fetch(command), token: () => token })
+  async (command, token, _events, site) => {
+    const call = serviceApiCall({
+      manifest,
+      service,
+      fetch: fetch(command, site),
+      token: () => token,
+      ...(site === undefined ? {} : { serverVariables: { site } }),
+    })
     const answer = await call(verify.operation, { path: {}, query: {}, headers: {}, fields: {} })
     // A service such as Attio answers a revoked key with 200 and `active: false`, not with 401.
     if (verify.active !== undefined && valueAt(answer, verify.active) !== true)
@@ -157,7 +166,10 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     if (login?.includes(":")) throw new CliError("validation_error", "a user name with a colon cannot sign in")
     refuseOffline(this, service)
     const page = options.login?.page?.(site)
-    if (page) renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
+    const input = secretInputOf(this).input ?? process.stdin
+    // Only a person at a terminal pastes it; piped in, the note would stand before the answer on stderr.
+    if (page && (input as { isTTY?: boolean }).isTTY)
+      renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
     // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
     const secret = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
     if (!secret) throw new CliError("validation_error", `no ${word} was given`)
@@ -267,6 +279,7 @@ export const signedInSite = (
     const tokens = new ProfileTokenStore({ app, env, ...(keyring ? { keyring } : {}) })
     const site = tokens.readWith(settings.profile, SITE)?.secret
     if (site === undefined) throw noSite(app, settings.profile)
-    return { site }
+    // <PREFIX>_TOKEN_SITE skips session start's cleaning, and `host/blog/..` would be the root site.
+    return { site: siteValue(site) }
   }
 }

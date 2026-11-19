@@ -30,6 +30,12 @@ describe("parseCliConfig", () => {
       source: { provider: "acme", kinds: ["issue"], entities: {} },
     }
     expect(parseCliConfig(tracker)).toEqual(tracker)
+    const wordpress = {
+      ...config,
+      spec: { kind: "wp-json" as const, from: "https://wp.acme.test/wp-json/", version: "6.9.4" },
+      auth: { preset: "app-password" as const, verify: { operation: "getWpV2UsersMe", id: "id", name: "name" } },
+    }
+    expect(parseCliConfig(wordpress)).toEqual(wordpress)
   })
 
   it("names where a config is wrong", () => {

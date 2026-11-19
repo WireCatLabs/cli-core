@@ -190,6 +190,9 @@ it("BLOG_TOKEN goes only to BLOG_TOKEN_SITE, never to a profile's stored site", 
   const paired = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test" })
   expect((await paired.cli(["two", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
   expect(paired.sent).toEqual([{ url: "https://a.blog.test/wp-json/posts", authorization: "Bearer token-a" }])
+  const climbing = setup({ BLOG_TOKEN: "token-a", BLOG_TOKEN_SITE: "a.blog.test/news/.." })
+  expect((await climbing.cli(["two", "api", "list-posts", "--json"])).error).toMatchObject({ code: "validation_error" })
+  expect(climbing.sent).toEqual([])
 })
 
 it("a free variable inside a host takes one name, not a host with a path", async () => {
@@ -199,7 +202,7 @@ it("a free variable inside a host takes one name, not a host with a path", async
   expect(() => manifestBaseUrl(sub, undefined, { site: "evil.test/x" })).toThrow("not one name without dots")
 })
 
-it("a password for a user name: --login keeps <name>:<password>, sent as Basic, and the page is shown first", async () => {
+it("a password for a user name: --login keeps <name>:<password>, sent as Basic; piped in, no page note", async () => {
   const { cli, sent } = setup({}, true)
   expect((await cli(["one", "session", "start", "--site", "a.blog.test", "--json"], "token-a\n")).error).toMatchObject({
     code: "validation_error",
@@ -215,7 +218,8 @@ it("a password for a user name: --login keeps <name>:<password>, sent as Basic, 
     "token-a\n",
   )
   expect(started.json.item).toMatchObject({ site: "a.blog.test", verified: true })
-  expect(started.err).toContain("at https://a.blog.test/wp-admin/authorize-application.php")
+  // The note where to make one is for a person at a terminal; piped, stderr holds only the answer's errors.
+  expect(started.err).not.toContain("wp-admin")
   sent.length = 0
   expect((await cli(["one", "api", "list-posts", "--json"])).json.item).toEqual([{ id: 1, site: "a.blog.test" }])
   expect(sent).toEqual([

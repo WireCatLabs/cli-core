@@ -4,11 +4,14 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import type { ManifestOperation } from "@wirecat/cli-base/codegen"
 import { hostFetch } from "@wirecat/cli-base/http"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { outputFor } from "./context.js"
+import { itemOf, renderAnswer } from "./envelope.js"
 import { commandPermissions } from "./permission-keys.js"
 import { createProgram, run } from "./program.js"
-import { serviceApiPermissions } from "./service-api.js"
+import { serviceApiPermissions, serviceApiWriter } from "./service-api.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
 import { serviceApiCommand } from "./shared-command-exports.js"
@@ -74,6 +77,48 @@ const operations: Operation[] = [
     parameters: [query("status")],
     request: { required: false, confidence: "contract", schema: "PatchPage" },
     permissions: [{ key: "posts.publish", values: { status: ["publish", "future"] } }],
+  },
+  {
+    id: "update-post",
+    command: "update-post",
+    binding: { kind: "http", method: "POST", path: "/posts/{id}" },
+    effect: "write",
+    tags: ["Posts"],
+    parameters: [page("id")],
+    request: { required: false, confidence: "contract", schema: "PatchPage" },
+    permissions: [
+      {
+        key: "posts.publish",
+        values: { status: ["publish", "future"] },
+        body: ["date", "date_gmt"],
+        unless: { status: ["draft", "pending", "private"] },
+      },
+    ],
+  },
+  {
+    id: "delete-post",
+    command: "delete-post",
+    binding: { kind: "http", method: "DELETE", path: "/posts/{id}" },
+    effect: "destructive",
+    tags: ["Posts"],
+    parameters: [page("id"), query("force", "boolean")],
+    permissions: [{ key: "posts.delete" }, { key: "posts.delete.force", query: ["force"] }],
+  },
+  {
+    id: "list-posts",
+    command: "list-posts",
+    binding: { kind: "http", method: "GET", path: "/posts" },
+    effect: "read",
+    tags: ["Posts"],
+    parameters: [query("page", "integer"), query("per_page", "integer")],
+    pagination: {
+      style: "page",
+      page: { in: "query", name: "page" },
+      limit: { in: "query", name: "per_page" },
+      items: "",
+      start: 1,
+      pagesHeader: "x-wp-totalpages",
+    },
   },
   {
     id: "agent-batch",
@@ -263,53 +308,76 @@ const fixture = (
   const loads = { schemas: 0, definitions: 0 }
   const shared = serviceApiPermissions({ ...api, ...over })
   const configuration = settingsFor(app, { permissions: commandPermissions(shared) })
+  const options = {
+    ...api,
+    ...over,
+    app,
+    configuration,
+    service: "Pages",
+    fetch: () =>
+      hostFetch({
+        hosts: ["api.pages.test"],
+        fetch: async (input, init) => {
+          const headers = new Headers(init?.headers)
+          const authorization = headers.get("authorization")
+          const key = headers.get("x-api-key")
+          const version = headers.get("markdown-version")
+          const one: Sent = {
+            method: init?.method ?? "GET",
+            url: String(input),
+            ...(typeof init?.body === "string" ? { body: init.body } : {}),
+            ...(init?.body instanceof Uint8Array
+              ? { bytes: [...init.body], type: headers.get("content-type") ?? "" }
+              : {}),
+            ...(authorization ? { authorization } : {}),
+            ...(key ? { key, redirect: String(init?.redirect) } : {}),
+            ...(version ? { version } : {}),
+          }
+          sent.push(one)
+          return answer(one)
+        },
+      }),
+    ...(over.signsIn === false ? {} : { token: () => "page-token" }),
+    headers: () => ({ "pages-version": "2026-03-11" }),
+    schemas: async () => {
+      loads.schemas++
+      return { PatchPage: v.looseObject({ in_trash: v.optional(v.boolean()) }) }
+    },
+    definitions: async () => {
+      loads.definitions++
+      return { PatchPage: { type: "object", properties: {} } } as never
+    },
+    excluded: [{ id: "upload-file", reason: "sends multipart/form-data" }],
+    shown: { api_version: "2026-03-11" },
+  }
+  // A content command's write: the writer from code, with the keys the command already asked about.
+  const writer = new Command("write")
+    .argument("<operation>")
+    .option("--id <id>")
+    .option("--body <json>")
+    .option("--query <json>")
+    .option("--headers <json>")
+    .option("--confirmed <keys>")
+    .action(async function (this: Command, operation: string) {
+      const given = this.opts<{ id?: string; body?: string; query?: string; headers?: string; confirmed?: string }>()
+      const result = await serviceApiWriter(options)(
+        this,
+        operation,
+        {
+          path: given.id ? { id: given.id } : {},
+          query: JSON.parse(given.query ?? "{}"),
+          headers: JSON.parse(given.headers ?? "{}"),
+          fields: {},
+          ...(given.body ? { body: given.body } : {}),
+        },
+        given.confirmed ? { confirmed: given.confirmed.split(",") } : {},
+      )
+      renderAnswer(this, outputFor(this), itemOf(result))
+    })
   const definition = {
     app,
     configuration,
-    commands: () => [
-      serviceApiCommand({
-        ...api,
-        ...over,
-        app,
-        configuration,
-        service: "Pages",
-        fetch: () =>
-          hostFetch({
-            hosts: ["api.pages.test"],
-            fetch: async (input, init) => {
-              const headers = new Headers(init?.headers)
-              const authorization = headers.get("authorization")
-              const key = headers.get("x-api-key")
-              const version = headers.get("markdown-version")
-              const one: Sent = {
-                method: init?.method ?? "GET",
-                url: String(input),
-                ...(typeof init?.body === "string" ? { body: init.body } : {}),
-                ...(init?.body instanceof Uint8Array
-                  ? { bytes: [...init.body], type: headers.get("content-type") ?? "" }
-                  : {}),
-                ...(authorization ? { authorization } : {}),
-                ...(key ? { key, redirect: String(init?.redirect) } : {}),
-                ...(version ? { version } : {}),
-              }
-              sent.push(one)
-              return answer(one)
-            },
-          }),
-        ...(over.signsIn === false ? {} : { token: () => "page-token" }),
-        headers: () => ({ "pages-version": "2026-03-11" }),
-        schemas: async () => {
-          loads.schemas++
-          return { PatchPage: v.looseObject({ in_trash: v.optional(v.boolean()) }) }
-        },
-        definitions: async () => {
-          loads.definitions++
-          return { PatchPage: { type: "object", properties: {} } } as never
-        },
-        excluded: [{ id: "upload-file", reason: "sends multipart/form-data" }],
-        shown: { api_version: "2026-03-11" },
-      }),
-    ],
+    commands: () => [serviceApiCommand(options), writer],
   }
   const cli = async (...args: string[]) => {
     const streams = captureStreams()
@@ -336,7 +404,7 @@ describe("the shared service api group", () => {
   it("**lists and shows operations without a request or the schemas**, and loads them for an operation", async () => {
     const { cli, sent, loads } = fixture()
     const listed = await cli("api", "list", "effect:destructive", "--json")
-    expect(listed.json.items.map((one: { command: string }) => one.command)).toEqual(["delete-a-block"])
+    expect(listed.json.items.map((one: { command: string }) => one.command)).toEqual(["delete-a-block", "delete-post"])
     const shown = await cli("api", "show", "patch-page", "--json")
     expect(shown.json.item).toMatchObject({ api_version: "2026-03-11", request_schema: { type: "object" } })
     expect(loads).toEqual({ schemas: 0, definitions: 1 })
@@ -506,6 +574,131 @@ describe("the shared service api group", () => {
     ])
   })
 
+  it("**a date change needs the publish key unless the call keeps the post a draft**, as WordPress publishes a past date", async () => {
+    const { cli, bare } = fixture({ "posts.publish": "deny", api: "allow" })
+    for (const body of [
+      '{"date":"2000-01-01T00:00:00"}',
+      '{"date_gmt":"2000-01-01","status":"future"}',
+      '{"date":null}',
+    ])
+      expect((await cli("work", "api", "update-post", "--id", "5", "--body", body, "--json")).error).toMatchObject({
+        code: "permission_error",
+      })
+    expect(bare()).toEqual([])
+    for (const status of ["draft", "pending", "private"]) {
+      const kept = await cli(
+        "work",
+        "api",
+        "update-post",
+        "--id",
+        "5",
+        "--body",
+        `{"date":"2000-01-01","status":"${status}"}`,
+      )
+      expect(kept.code).toBe(0)
+    }
+    expect(bare()).toHaveLength(3)
+  })
+
+  it("**the writer passes the api group's guard**: publish, date, force and the profile's levels", async () => {
+    const { cli, bare } = fixture({ "posts.publish": "deny", "posts.delete.force": "deny", api: "allow" })
+    const refused = [
+      ["update-post", "--id", "5", "--body", '{"status":"publish"}'],
+      ["update-post", "--id", "5", "--body", '{"date":"2000-01-01"}'],
+      ["update-post", "--id", "5", "--body", '{"status":"publish"}', "--confirmed", "posts.publish"],
+      ["delete-post", "--id", "5", "--query", '{"force":"true"}'],
+    ]
+    for (const call of refused)
+      expect((await cli("work", "write", ...call, "--json")).error).toMatchObject({ code: "permission_error" })
+    expect(bare()).toEqual([])
+    const trashed = await cli("work", "write", "delete-post", "--id", "5", "--yes", "--json")
+    expect(trashed.json.item).toMatchObject({ operation_id: expect.any(String), result: { id: "p1" } })
+    const draft = await cli(
+      "work",
+      "write",
+      "update-post",
+      "--id",
+      "5",
+      "--body",
+      '{"date":"2000-01-01","status":"draft"}',
+    )
+    expect(draft.code).toBe(0)
+    expect(bare().map(({ method, url }) => `${method} ${url}`)).toEqual([
+      "DELETE https://api.pages.test/v1/posts/5",
+      "POST https://api.pages.test/v1/posts/5",
+    ])
+  })
+
+  it("**the writer asks once per key**: a key the caller confirmed is not asked again, every other still is", async () => {
+    const { cli, bare } = fixture({ "posts.publish": "ask", api: "allow" })
+    const unasked = await cli("work", "write", "update-post", "--id", "5", "--body", '{"status":"publish"}', "--json")
+    expect(unasked.error?.code).toBe("confirmation_required")
+    expect(bare()).toEqual([])
+    const confirmed = await cli(
+      "work",
+      "write",
+      "update-post",
+      "--id",
+      "5",
+      "--body",
+      '{"status":"publish"}',
+      "--confirmed",
+      "posts.publish",
+    )
+    expect(confirmed.code).toBe(0)
+    expect(bare()).toHaveLength(1)
+    const forced = fixture({ "posts.delete": "ask", "posts.delete.force": "ask", api: "allow" })
+    const half = await forced.cli(
+      "work",
+      "write",
+      "delete-post",
+      "--id",
+      "5",
+      "--query",
+      '{"force":"true"}',
+      "--confirmed",
+      "posts.delete.force",
+      "--json",
+    )
+    expect(half.error?.code).toBe("confirmation_required")
+    expect(half.error?.message).toContain("posts.delete")
+    expect(half.error?.message).not.toContain("posts.delete.force")
+    expect(forced.sent).toEqual([])
+  })
+
+  it("**the writer reaches no further than the api group**: no undeclared query, no method override, no plain read", async () => {
+    const { cli, sent } = fixture({ api: "allow" })
+    for (const call of [
+      ["update-post", "--id", "5", "--query", '{"_method":"DELETE","force":"true"}'],
+      ["update-post", "--id", "5", "--headers", '{"X-HTTP-Method-Override":"DELETE"}'],
+      ["update-post", "--id", "5", "--headers", '{"X-HTTP-Method":"DELETE"}'],
+      ["retrieve-a-page"],
+    ])
+      expect((await cli("work", "write", ...call, "--json")).error).toMatchObject({ code: "configuration_error" })
+    expect(sent).toEqual([])
+  })
+
+  it("**the writer reads a value code passes as a number or boolean** as the text a person types, and checks it", async () => {
+    const { cli, bare } = fixture({ api: "allow", "posts.delete": "allow", "posts.delete.force": "allow" })
+    const forced = await cli(
+      "work",
+      "write",
+      "delete-post",
+      "--id",
+      "5",
+      "--query",
+      '{"force":true}',
+      "--yes",
+      "--json",
+    )
+    expect(forced.error).toBeUndefined()
+    expect(bare().map(({ method, url }) => `${method} ${url}`)).toEqual([
+      "DELETE https://api.pages.test/v1/posts/5?force=true",
+    ])
+    const wrong = await cli("work", "write", "delete-post", "--id", "5", "--query", '{"force":[1,2]}', "--json")
+    expect(wrong.error).toMatchObject({ code: "validation_error" })
+  })
+
   it("**a read whose query flag deletes goes through the guard**, as an upload link that overwrites", async () => {
     const { cli, bare } = fixture({ "documents.delete": "deny" })
     const refused = await cli("work", "api", "upload-link", "--path", "/a.txt", "--overwrite", "true", "--json")
@@ -542,6 +735,16 @@ describe("the shared service api group", () => {
     expect(alsoChecks(["api", "create-post"])).toEqual([
       { key: "posts.publish", when: "with status publish or future" },
     ])
+    expect(alsoChecks(["api", "update-post"])).toEqual([
+      {
+        key: "posts.publish",
+        when: "with status publish or future or date or date_gmt set, unless status draft or pending or private",
+      },
+    ])
+    expect(alsoChecks(["api", "delete-post"])).toEqual([
+      "posts.delete",
+      { key: "posts.delete.force", when: "with force set" },
+    ])
     expect(alsoChecks(["api", "agent-batch"])).toEqual([
       { key: "documents.delete", when: "an operation's action is delete" },
     ])
@@ -549,10 +752,19 @@ describe("the shared service api group", () => {
     expect(defaults).toEqual({
       "documents.delete": "ask",
       "posts.publish": "ask",
+      "posts.delete": "ask",
+      "posts.delete.force": "ask",
       "documents.share": "ask",
       "api.delete-a-block": "ask",
+      "api.delete-post": "ask",
     })
-    expect(extra).toEqual(["documents.delete", "posts.publish", "documents.share"])
+    expect(extra).toEqual([
+      "documents.delete",
+      "posts.publish",
+      "posts.delete",
+      "posts.delete.force",
+      "documents.share",
+    ])
   })
 
   it("**--all reads every page** by the manifest's cursor, offset or link, in one run", async () => {
@@ -679,6 +891,11 @@ describe("the shared service api group", () => {
       "https://api.pages.test/v1/events",
       "https://api.pages.test/v1/events?page=2",
     ])
+
+    const elsewhere = fixture({}, () => Response.json({ events: ["a"], links: { next: "/v2/events?page=2" } }))
+    const left = await elsewhere.cli("work", "api", "list-events", "--all", "--json")
+    expect(left.error).toMatchObject({ code: "invalid_response" })
+    expect(elsewhere.sent).toHaveLength(1)
   })
 
   it("**--all by page number starts where the caller says** and stops on an empty page", async () => {
@@ -690,6 +907,20 @@ describe("the shared service api group", () => {
     expect(all.error).toBeUndefined()
     expect(all.json.items).toEqual(["x", "x"])
     expect(numbered.sent.map(({ url }) => url.split("?")[1])).toEqual(["page=0", "page=1", "page=2"])
+  })
+
+  it("**--all stops at the page count a header gives**, from the source's first page, the answer being the list", async () => {
+    const counted = fixture({}, ({ url }) => {
+      const at = Number(new URL(url).searchParams.get("page") ?? 1)
+      return Response.json([`p${at}`], { headers: { "X-WP-TotalPages": "3" } })
+    })
+    const all = await counted.cli("work", "api", "list-posts", "--per-page", "1", "--all", "--json")
+    expect(all.json.items).toEqual(["p1", "p2", "p3"])
+    expect(counted.sent.map(({ url }) => url.split("?")[1])).toEqual([
+      "per_page=1",
+      "per_page=1&page=2",
+      "per_page=1&page=3",
+    ])
   })
 
   it("**--all pages past a capped page until an empty one**, and carries a body cursor", async () => {

@@ -687,12 +687,28 @@ export {
   type BodyPermission,
   type ServiceApiOptions,
   type ServiceApiPermissionsInput,
+  type ServiceApiWrite,
   serviceApiKeys,
   serviceApiOperations,
   serviceApiPermissions,
+  serviceApiWriter,
 } from "./service-api.js"
-export { hostsFetch, type ServiceApiCall, type ServiceApiCallOptions, serviceApiCall } from "./service-api-call.js"
-export { manifestBaseUrl, type ServiceApiManifest, signRequest, siteValue } from "./service-api-manifest.js"
+export {
+  hostsFetch,
+  type ServiceApiCall,
+  type ServiceApiCallOptions,
+  type ServiceApiCallWithHeaders,
+  serviceApiCall,
+} from "./service-api-call.js"
+export {
+  manifestBaseUrl,
+  nextPage,
+  type PageStep,
+  type ServiceApiManifest,
+  signRequest,
+  siteValue,
+  underBase,
+} from "./service-api-manifest.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,
