@@ -170,16 +170,20 @@ running sync stored, which files bulk mail only at its end. `marksOf` lists the 
 `mailInboxCommand(mail, { modelsCommand, keyring, fetch })` gives a mail CLI `inbox` (`src/mail/cli/inbox.ts`, the
 logic in `src/mail/inbox.ts`). It sends the threads that changed since their last sort to the shared AI model
 (`aiTextReader`, the `ai` section the `models ai` commands write) and keeps one verdict per thread: `answer` (needs an
-answer), `read` or `later`, with a one-line reason. No agent harness runs: an agent is refused (`mail.inbox-agent`)
+answer), `read` or `later`, with a one-line reason in the owner's first `owner_languages` (`ownerLanguageOf`), and
+the name and address of the newest email's sender who is not the owner. No agent harness runs: an agent is refused (`mail.inbox-agent`)
 and reads `review` itself. `inboxDue` is `reviewMail` with a point per sorted thread and `noBulk`, so mail sent to
 many is never sent; a thread whose newest email is the owner's drops its verdict without a call. Each thread goes as
 its subject and its 3 newest emails, each `mailOwnText` cut to 1500 characters, 10 threads a request. `planInbox`
 keeps a run within `--max-messages` (40) and `--max-tokens` (60000, estimated at four characters a token before
 anything is sent). A model off this computer is refused under local only and `models chats` denied, and asks under
-ask (`--yes`, or `chat-sending.ask` when nobody can answer); `modelsCommand` names the CLI that has those commands,
+ask (`--yes`, or `chat-sending.ask` when nobody can answer, whose details carry `emails`, `threads`, `tokens`, `host`,
+`model` and `estimated_cost_usd` so a caller words the question itself); `modelsCommand` names the CLI that has those commands,
 memo for mail. An answer is checked as `stages suggest` checks its own: refs from the batch only, a known bucket, a
 reason; a thread without a usable verdict comes again next run. The mailbox's start moves only when nothing due was
-left out. `review` adds each thread's verdict as `email.inbox`.
+left out. The answer's `meta.model_run` says what the run did: threads sent, sorted (`done`) and waiting for the next run
+(`left`), the tokens the provider counted, `cost_usd` from the price list (`costOf`; 0 on this computer, null with no
+price) and the model's endpoint. `review` adds each thread's verdict as `email.inbox`.
 
 ## Sync state
 
@@ -193,7 +197,7 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 | `mail_coverage` | the folders, window and whether the last run was complete |
 | `mail_sender_scores` | when `scoreSenders` last ran, its version (`SCORE_VERSION`) and the senders it ranks lower |
 | `consumer:<holder>` | a holder's processing mark: `throughId`, `throughAt`, `held`, `read`, `skipped` by reason |
-| `mail_inbox` | `inbox`: where its next run starts and each sorted thread's bucket, reason, model and newest email time; at most 500 threads of the last 30 days |
+| `mail_inbox` | `inbox`: where its next run starts and each sorted thread's bucket, reason, model, sender and newest email time; at most 500 threads of the last 30 days |
 
 Mail sent to many is in the mailbox `memo:bulk` (`BULK`); mail an envelope rule recorded is in a mailbox of kind
 `envelope` named by the rule (`envelopeBox`). Neither is a folder, so neither proves a deletion.

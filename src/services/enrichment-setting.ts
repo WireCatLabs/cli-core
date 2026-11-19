@@ -131,7 +131,7 @@ export const estimateEnrichment = (
 
 export const costOf = (
   usage: { input: number; output: number },
-  setting: Pick<EnrichmentSetting, "provider" | "model" | "base_url">,
+  setting: { provider: string; model: string; base_url?: string | undefined },
 ): number | null => {
   const price = enrichmentPrice(setting.provider, setting.model, setting.base_url)
   return price ? Math.round((usage.input * price.input + usage.output * price.output) * 1_000_000) / 1_000_000 : null

@@ -14,7 +14,7 @@ import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
 import { modelAddressAllowed, onThisComputer } from "./endpoint.js"
 import { modelGateway } from "./index.js"
-import type { ModelTarget } from "./types.js"
+import type { ModelTarget, ModelUsage } from "./types.js"
 
 export const AI_PROVIDERS = ["anthropic", "openai", "ollama"] as const
 export type AiProvider = (typeof AI_PROVIDERS)[number]
@@ -230,10 +230,14 @@ export const sharedModel = (
 
 export type AiTextRefusal = "ai.not-set" | "ai.key-missing"
 
+type AiTextRequest = { purpose: string; system: string; prompt: string; maxTokens: number }
+
 export interface AiTextReader {
   by: string
   leavesComputer: boolean
-  complete(request: { purpose: string; system: string; prompt: string; maxTokens: number }): Promise<string>
+  complete(request: AiTextRequest): Promise<string>
+  /** The text with the tokens the provider counted, absent when it counted none. */
+  answer(request: AiTextRequest): Promise<{ text: string; usage?: ModelUsage }>
 }
 
 /** The chosen model for text a tool sends on purpose; picking this reader by name is the owner's consent, as for images. */
@@ -247,6 +251,10 @@ export const aiTextReader = (deps: AiCallDeps): AiTextReader | { refused: AiText
     by: `${setting.provider}/${setting.model}`,
     leavesComputer: aiLeavesComputer(setting),
     complete: async (request) => (await gateway.complete(request)).text,
+    answer: async (request) => {
+      const { text, usage } = await gateway.complete(request)
+      return usage ? { text, usage } : { text }
+    },
   }
 }
 
