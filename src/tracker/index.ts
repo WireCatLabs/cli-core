@@ -44,4 +44,11 @@ export {
   trackerCursorName,
   trackerGapsOf,
 } from "./sync.js"
-export { TRACKER_ISSUE_TASK, trackerIssueSource, trackerIssueTask } from "./tasks.js"
+export {
+  syncTrackerTasks,
+  TRACKER_ISSUE_TASK,
+  type TrackerTaskChanges,
+  trackerIssueSource,
+  trackerIssueTask,
+  trackerIssueTitle,
+} from "./tasks.js"

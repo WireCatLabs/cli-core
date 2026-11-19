@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { runBudget } from "../background/budget.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import { createTaskService } from "../tasks/index.js"
 import { syncTracker } from "./sync.js"
 import { trackerIssueTask } from "./tasks.js"
 import { exampleTrackerRows, fakeTrackerSource, trackerSourceContract } from "./testing/index.js"
@@ -23,7 +24,7 @@ const storeOf = async () => {
 describe("fake tracker source", () => {
   for (const c of trackerSourceContract(() => {
     const rows = exampleTrackerRows()
-    const source = fakeTrackerSource({ rows })
+    const source = fakeTrackerSource({ rows, self: "user-1" })
     const held = Object.fromEntries(
       Object.entries(rows).map(([kind, list]) => [kind, list.map((one) => one.externalId)]),
     )
@@ -231,7 +232,7 @@ describe("store.tracker", () => {
 })
 
 describe("trackerIssueTask", () => {
-  it("makes an issue the owner's task once, by its key, copying only the key", async () => {
+  it("makes an issue the owner's task once, by its key, titled by its key and title", async () => {
     const store = await storeOf()
     await syncTracker(fakeTrackerSource({ rows: exampleTrackerRows() }), store, account, {
       now: Date.UTC(2026, 10, 17),
@@ -242,11 +243,174 @@ describe("trackerIssueTask", () => {
       source: "tracker:issue/issue-1",
       sourceKind: "tracker_issue",
       origin: "owner",
-      title: "ENG-1",
+      title: "ENG-1 Invoices fail for EUR accounts",
     })
     expect(first.task.description).toBeUndefined()
     const again = await trackerIssueTask(store, account, "issue-1")
     expect(again).toMatchObject({ created: false, task: { id: first.task.id } })
     await expect(trackerIssueTask(store, account, "ENG-99")).rejects.toThrow(/no issue ENG-99/)
+  })
+})
+
+describe("syncTracker and the owner's tasks", () => {
+  const T = Date.UTC(2026, 10, 17)
+  const setup = async (options: { self?: string } = { self: "user-1" }) => {
+    const store = await storeOf()
+    const rows = exampleTrackerRows()
+    const source = fakeTrackerSource({ rows, ...options })
+    let at = T
+    const sync = async () => {
+      at += 60_000
+      return (await syncTracker(source, store, account, { now: at, passEvery: 0 })).tasks
+    }
+    const issue = (id: string) => rows.issue.find((one) => one.externalId === id) as (typeof rows.issue)[number]
+    const change = (id: string, patch: Partial<(typeof rows.issue)[number]>) => {
+      Object.assign(issue(id), patch)
+      source.touch("issue", id)
+    }
+    const tasks = async () =>
+      (await store.tasks.query("fake-tracker:workspace", undefined, { limit: 50, offset: 0 })).map((one) => ({
+        source: one.task.source,
+        title: one.title,
+        state: one.task.state,
+        origin: one.task.origin,
+        ...(one.task.reason ? { reason: one.task.reason } : {}),
+      }))
+    return { store, source, sync, change, tasks }
+  }
+
+  it("makes each open issue assigned to the signed-in user a task once, titled by its key and title", async () => {
+    const { sync, tasks } = await setup()
+    expect(await sync()).toEqual({ opened: 1, closed: 0, reopened: 0, renamed: 0 })
+    expect(await tasks()).toEqual([
+      {
+        source: "tracker:issue/issue-1",
+        title: "ENG-1 Invoices fail for EUR accounts",
+        state: "open",
+        origin: "rule",
+      },
+    ])
+    expect(await sync()).toEqual({ opened: 0, closed: 0, reopened: 0, renamed: 0 })
+    expect(await tasks()).toHaveLength(1)
+  })
+
+  it("keeps the title current and answers the same task to issues assign", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    change("issue-1", { title: "Invoices fail for EUR and GBP" })
+    expect(await sync()).toMatchObject({ renamed: 1 })
+    expect((await tasks())[0]?.title).toBe("ENG-1 Invoices fail for EUR and GBP")
+    expect(await trackerIssueTask(store, account, "ENG-1")).toMatchObject({ created: false })
+    expect(await tasks()).toHaveLength(1)
+  })
+
+  it("closes the task when the issue is completed, canceled or reassigned, and reopens the same task", async () => {
+    const { sync, change, tasks } = await setup()
+    await sync()
+    change("issue-1", { state: "state-done" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([{ state: "done", reason: "the issue was completed in fake-tracker" }])
+    change("issue-1", { state: "state-doing" })
+    expect(await sync()).toMatchObject({ opened: 0, reopened: 1 })
+    expect(await tasks()).toEqual([expect.objectContaining({ state: "open" })])
+    expect((await tasks())[0]).not.toHaveProperty("reason")
+
+    change("issue-1", { state: "state-gone" })
+    await sync()
+    expect(await tasks()).toMatchObject([{ state: "dismissed", reason: "the issue was canceled in fake-tracker" }])
+    change("issue-1", { state: "state-todo", assignee: "user-2" })
+    expect(await sync()).toMatchObject({ reopened: 0 })
+    expect(await tasks()).toMatchObject([{ state: "dismissed" }])
+
+    change("issue-1", { assignee: "user-1" })
+    expect(await sync()).toMatchObject({ reopened: 1 })
+    change("issue-1", { assignee: "user-2" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([
+      { state: "dismissed", reason: "the issue was assigned to someone else in fake-tracker" },
+    ])
+    change("issue-1", { assignee: "user-1" })
+    await sync()
+    expect(await tasks()).toEqual([expect.objectContaining({ state: "open", origin: "rule" })])
+  })
+
+  it("reopens nothing on a state the copy lacks, and leaves a task the owner opened again", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    change("issue-1", { state: "state-done" })
+    await sync()
+    change("issue-1", { state: "state-new" })
+    expect(await sync()).toMatchObject({ reopened: 0 })
+    expect(await tasks()).toMatchObject([{ state: "done" }])
+
+    const [task] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    await store.tasks.edit(task?.task.id as string, { status: "open" }, "owner")
+    expect(await sync()).toMatchObject({ closed: 0 })
+    expect(await tasks()).toMatchObject([{ state: "open" }])
+  })
+
+  it("says an issue left with no one was unassigned, and keeps a title of odd spaces stable", async () => {
+    const { sync, change, tasks } = await setup()
+    await sync()
+    change("issue-1", { title: "  Fix   login ", assignee: null })
+    expect(await sync()).toMatchObject({ closed: 1, renamed: 1 })
+    expect(await tasks()).toMatchObject([
+      { title: "ENG-1 Fix login", reason: "the issue was unassigned in fake-tracker" },
+    ])
+    expect(await sync()).toMatchObject({ renamed: 0 })
+  })
+
+  it("closes the task of an issue deleted outright", async () => {
+    const { source, sync, tasks } = await setup()
+    await sync()
+    source.remove("issue", "issue-1")
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([{ state: "dismissed", reason: "the issue was deleted in fake-tracker" }])
+  })
+
+  it("keeps a task the owner picked whoever holds the issue, and one the owner closed stays closed", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    await trackerIssueTask(store, account, "ENG-2")
+    const [first] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    await createTaskService({ store: store.tasks }).close(first?.task.id as string, { as: "dismissed", by: "owner" })
+    const other = await createTaskService({ store: store.tasks }).add({
+      source: "note:1",
+      sourceKind: "note",
+      account: "fake-tracker:workspace",
+      group: "note:1",
+      kind: "request",
+      origin: "owner",
+      title: "Call the bank",
+    })
+
+    expect(await sync()).toEqual({ opened: 0, closed: 0, reopened: 0, renamed: 0 })
+    expect((await tasks()).map((one) => [one.source, one.state])).toEqual([
+      ["tracker:issue/issue-1", "dismissed"],
+      ["tracker:issue/issue-2", "open"],
+      ["note:1", "open"],
+    ])
+    change("issue-2", { state: "state-done" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect((await store.tasks.get(other.task.id))?.state).toBe("open")
+  })
+
+  it("leaves tasks alone when the tracker cannot name its user", async () => {
+    const { sync, tasks } = await setup({})
+    expect(await sync()).toBeUndefined()
+    expect(await tasks()).toEqual([])
+  })
+
+  it("asks the tracker for its user once, and says why it skipped when the budget is spent", async () => {
+    const store = await storeOf()
+    let asked = 0
+    const source = { ...fakeTrackerSource({ rows: exampleTrackerRows() }), self: async () => `user-${++asked}` }
+    expect((await syncTracker(source, store, account, { now: T })).tasks).toMatchObject({ opened: 1 })
+    await syncTracker(source, store, account, { now: T + 1 })
+    expect(asked).toBe(1)
+
+    const fresh = await storeOf()
+    const report = await syncTracker(source, fresh, account, { now: T, budget: runBudget({ requests: 1 }) })
+    expect(report.tasks).toMatchObject({ skipped: expect.stringMatching(/budget was spent/) })
   })
 })

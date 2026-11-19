@@ -14,6 +14,8 @@ export interface FakeTrackerSourceOptions {
   /** Rows on one page. */
   pageSize?: number
   provider?: string
+  /** The signed-in user's id, which `self()` answers; absent, the tracker cannot say. */
+  self?: string
 }
 
 export interface FakeTrackerSource extends TrackerSource {
@@ -42,9 +44,11 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
     if (!found) throw new Error(`the fake tracker has no ${kind} ${externalId}`)
     return found
   }
+  const self = options.self
   const make = (skew: number): FakeTrackerSource => ({
     provider: options.provider ?? "fake-tracker",
     traits: { kinds: (Object.keys(rows) as TrackerKind[]).filter((kind) => listOf(kind).length > 0) },
+    ...(self === undefined ? {} : { self: async () => self }),
     async changes<K extends TrackerKind>(
       kind: K,
       cursor: string | null,
