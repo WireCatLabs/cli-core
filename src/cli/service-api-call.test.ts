@@ -64,7 +64,7 @@ describe("a source's read through the manifest", () => {
     const call = serviceApiCall({
       manifest: {
         operations: [listPosts],
-        servers: [{ url: "https://{site}/wp-json", variables: { site: {} } }],
+        servers: [{ url: "https://{site}/wp-json", variables: { site: { default: "" } } }],
         securitySchemes: { applicationPassword: { type: "http", scheme: "basic" } },
         security: [{ applicationPassword: [] }],
       },
@@ -79,7 +79,7 @@ describe("a source's read through the manifest", () => {
         })
       },
     })
-    const refused = await call("list-posts", input).catch((error: Error) => error)
+    const refused = (await call("list-posts", input).catch((error: unknown) => error)) as Error
     // The owner sees where the site went, to sign in there if it moved; a key in its query stays out.
     expect(refused.message).toContain("moved list-posts to https://host.test/other/wp-json/wp/v2/posts (HTTP 302)")
     expect(refused.message).not.toContain("key=k")
