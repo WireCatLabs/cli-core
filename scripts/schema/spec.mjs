@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { businessTables } from "./business.mjs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
+import { contentTables } from "./content.mjs"
 import { conversationReadinessTables } from "./conversation-readiness.mjs"
 import { crmTables } from "./crm.mjs"
 import { decisionRequestTables } from "./decision-requests.mjs"
@@ -1811,6 +1812,13 @@ const GROUPS = [
     "What an issue tracker account holds, as last synced: teams, users, workflow states, labels, projects, issues and comments. A user joins a person only by exact e-mail, when read; nothing here writes to the people graph.",
     [],
     trackerTables,
+  ],
+  [
+    "content",
+    "Content",
+    "What a blog or social account publishes, as last synced or written: channels, authors, tags and categories, posts with their text as Markdown, the versions a change replaced, and readings of their numbers. An author joins a person only by exact e-mail, when read.",
+    [],
+    contentTables,
   ],
   ["store", "Store", "Bookkeeping for the file itself.", ["schema_migrations", "store_settings"], []],
 ]

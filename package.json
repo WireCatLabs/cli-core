@@ -15,7 +15,7 @@
   "type": "module",
   "wirecat": {
     "store": {
-      "speaks": 70,
+      "speaks": 71,
       "minCompatible": 56
     }
   },
@@ -158,6 +158,14 @@
     "./crm/testing": {
       "types": "./dist/crm/testing/index.d.ts",
       "default": "./dist/crm/testing/index.js"
+    },
+    "./content": {
+      "types": "./dist/content/index.d.ts",
+      "default": "./dist/content/index.js"
+    },
+    "./content/testing": {
+      "types": "./dist/content/testing/index.d.ts",
+      "default": "./dist/content/testing/index.js"
     },
     "./tracker": {
       "types": "./dist/tracker/index.d.ts",

@@ -536,6 +536,17 @@ const OTHERS: Entry[] = [
     "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan",
   ),
   validation(
+    "content.unlisted-held",
+    "a content id list would mark too much deleted, the sign-in read only part, or the site moved; nothing was",
+  ),
+  validation("content.conflict", "the post changed at the source since the last sync; sync, then write again"),
+  validation("content.lossy-body", "the post's text holds blocks or embeds Markdown does not keep; --replace-body"),
+  validation("content.schedule-past", "a post is scheduled for a time to come, not one that passed"),
+  validation("content.already-published", "a published post cannot be scheduled; unpublish it first"),
+  validation("content.empty", "a write names no field to set"),
+  ["content.get-unsupported", "configuration_error", "the source cannot read one post, author or term by its id"],
+  validation("content.write-unsupported", "the source does not take this write, such as a deletion past the trash"),
+  validation(
     "crm.narrowing-held",
     "the default scope mine would mark most of a kind's stored rows deleted; none is, until the owner sets the scope",
   ),

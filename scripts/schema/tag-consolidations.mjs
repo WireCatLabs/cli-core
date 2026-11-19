@@ -38,7 +38,7 @@ export const taggingTable = {
     fk("tag_id", "canonical_tags", { notnull: true }),
     ...poly(
       "taggable",
-      "`chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, …",
+      "`chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, `post`, …",
     ),
     c("main", "integer", { notnull: true, note: "1 on the thing's main topic; at most one per thing" }),
     c("source", "text", { notnull: true, note: "where it came from: owner, agent, auto, an import" }),

@@ -158,6 +158,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261117015457_version-69-conversation-readiness-triggers", version: 69, minCompatible: 56 },
   { name: "20261117211410_version-70-tracker-items", version: 70, minCompatible: 56 },
   { name: "20261117211414_version-70-tracker-item-words", version: 70, minCompatible: 56 },
+  { name: "20261118230213_version-71-content", version: 71, minCompatible: 56 },
+  { name: "20261118230214_version-71-content-words", version: 71, minCompatible: 56 },
 ]
 
 export const generatedMigrations = (

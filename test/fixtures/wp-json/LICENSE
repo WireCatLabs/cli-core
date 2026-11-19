@@ -1,0 +1,8 @@
+The routes, arguments and schemas in wp-json-content.json are cut from the REST index of WordPress 6.9.4
+(GET /wp-json/?context=help on a plain install, no plugins), taken on 2026-11-18.
+
+WordPress - Web publishing software
+Copyright 2011-2026 by the contributors
+
+WordPress is released under the GNU General Public License, version 2 or later:
+https://wordpress.org/about/license/ and https://www.gnu.org/licenses/old-licenses/gpl-2.0.html

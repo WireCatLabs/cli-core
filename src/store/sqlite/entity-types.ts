@@ -31,6 +31,7 @@ export const ENTITY_TABLES = {
   message: "messages",
   note: "notes",
   place: "places",
+  post: "content_posts",
   tag: "canonical_tags",
   task: "tasks",
 } as const

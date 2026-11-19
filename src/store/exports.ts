@@ -44,6 +44,18 @@ export {
   fetchedKey,
   historyStartKey,
 } from "./sqlite/completeness.js"
+export {
+  type ContentFilter,
+  type ContentHit,
+  type ContentItem,
+  type ContentPerson,
+  type ContentRevision,
+  type ContentSearch,
+  type ContentStore,
+  contentHashOf,
+  type RevisionReason,
+  resetContentPostWords,
+} from "./sqlite/content.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export { type CopyViewer, seenBy } from "./sqlite/copy-viewer.js"
 export type { CounterTarget } from "./sqlite/counters.js"
