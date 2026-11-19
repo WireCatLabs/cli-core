@@ -178,7 +178,7 @@ describe("WordPress from configuration", () => {
       api,
       write: (command, operation, input, keys) => {
         confirmed.push(keys)
-        return fake.write(command, operation, input, keys)
+        return fake.write(command, operation, input)
       },
       command: new Command("wp"),
       source,

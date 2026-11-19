@@ -278,7 +278,7 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
         ...(terms.has("channel") ? { channel: terms.get("channel") as string } : {}),
         ...(terms.has("tag") ? { term: terms.get("tag") as string } : {}),
         ...(terms.has("author") ? { author: terms.get("author") as string } : {}),
-        ...(published.since === undefined ? {} : { since: published.since }),
+        ...(published.from === undefined ? {} : { since: published.from }),
         // The store reads before `until`; the query's upper bound is the last moment it takes.
         ...(published.until === undefined ? {} : { until: published.until + 1 }),
         limit: opts.limit,
@@ -463,6 +463,8 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
       ?.split(",")
       .map((one) => one.trim())
       .filter(Boolean)
+    // An unset "$TAGS" in a script would otherwise strip every tag from the post.
+    if (tags?.length === 0) throw new InvalidArgumentError("--tags takes one or more ids")
     return {
       ...(typed.title === undefined ? {} : { title: typed.title }),
       ...(body === undefined ? {} : { body }),

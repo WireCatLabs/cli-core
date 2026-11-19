@@ -245,9 +245,23 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     return true
   }
 
-  const page = (operation: ManifestOperation, list: readonly Row[], request: ApiCommandInput) => {
+  // The list sits where the source reads it: the call's own `items` first, then the operation's.
+  const wrapped = (items: string | undefined, value: unknown) => {
+    if (items === undefined || items === "") return value
+    const body: Row = {}
+    put(body, items, value)
+    return body
+  }
+
+  const page = (
+    operation: ManifestOperation,
+    call: CrmOperationCall,
+    list: readonly Row[],
+    request: ApiCommandInput,
+  ) => {
     const pagination = operation.pagination
-    if (!pagination) return { body: list, headers: new Headers() }
+    const items = call.items ?? pagination?.items
+    if (!pagination) return { body: wrapped(items, list), headers: new Headers() }
     const pageValue = (parameter: PageParameter) => {
       if (parameter.in !== "query")
         throw new CliError("configuration_error", `the content fake pages by a query parameter, not ${parameter.in}`)
@@ -265,13 +279,12 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     } else if (pagination.style === "offset") from = Number(pageValue(pagination.offset) ?? 0)
     else if (pagination.style === "cursor") from = Number(pageValue(pagination.cursor) ?? 0)
     else throw new CliError("configuration_error", `the content fake does not page by ${pagination.style}`)
-    const items = list.slice(from, from + size)
+    const rows = list.slice(from, from + size)
     const headers = new Headers(
       pagination.style === "page" && pagination.pagesHeader ? { [pagination.pagesHeader]: String(pages) } : {},
     )
-    if (pagination.items === "") return { body: items, headers }
-    const body: Row = {}
-    put(body, pagination.items ?? "items", items)
+    if (items === undefined || items === "") return { body: rows, headers }
+    const body = wrapped(items, rows) as Row
     if ("total" in pagination && pagination.total) put(body, pagination.total, list.length)
     if (pagination.style === "cursor") {
       const more = from + size < list.length
@@ -300,7 +313,7 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       const id = place ? request[place.in][place.name] : undefined
       const row = held.find((one) => idOf(entity, one) === String(id))
       if (!row) throw new CliError("not_found", `no ${route.kind} ${id}`)
-      return { body: structuredClone(row), headers: new Headers() }
+      return { body: wrapped(route.call.items, structuredClone(row)), headers: new Headers() }
     }
     let list = [...held].sort((a, b) => Number(digits(idOf(entity, a))) - Number(digits(idOf(entity, b))))
     if (route.role === "changes" && entity.changes) {
@@ -313,7 +326,7 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
         .filter((row) => changedOf(entity, row) > since)
         .sort((a, b) => changedOf(entity, a) - changedOf(entity, b))
     }
-    return page(found, structuredClone(list), request)
+    return page(found, route.call, structuredClone(list), request)
   }
 
   const write = (operation: string, request: ApiCommandInput): unknown => {
@@ -368,6 +381,10 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     return answer
   }
 
+  const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  // The server's own path, as /wp-json; a site with a path of its own (`host/blog`) stands before it.
+  const serverPath = (options.api.servers?.[0]?.url ?? "").replace(/^https:\/\/[^/]*/, "").replace(/\/+$/, "")
+  const base = serverPath ? `(?:/[^/]+)*?${escaped(serverPath)}` : ""
   // A literal segment wins over a placeholder: /users/me is not the user whose id is "me".
   const placeholders = (path: string) => (path.match(/\{\w+\}/g) ?? []).length
   const http = [...operations.values()]
@@ -383,7 +400,12 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
               operation,
               method: operation.binding.method,
               names: [...operation.binding.path.matchAll(/\{(\w+)\}/g)].map((one) => one[1] as string),
-              pattern: new RegExp(`${operation.binding.path.replace(/\{\w+\}/g, "([^/]+)")}$`),
+              pattern: new RegExp(
+                `^${base}${operation.binding.path
+                  .split(/\{\w+\}/)
+                  .map(escaped)
+                  .join("([^/]+)")}$`,
+              ),
             },
           ]
         : [],

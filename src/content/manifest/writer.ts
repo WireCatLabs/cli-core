@@ -20,7 +20,7 @@ export type ContentWriteCall = (
   command: Command,
   operation: string,
   input: ApiCommandInput,
-  /** The keys the content command already checked, the call's own `api.<operation>` among them. */
+  /** The keys the owner was already asked about (level `ask`); with any, the call's own `api.<operation>` too. */
   confirmed: readonly PermissionKey[],
 ) => Promise<{ operation_id: string; result: unknown }>
 

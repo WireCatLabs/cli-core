@@ -86,6 +86,9 @@ describe("content commands", () => {
     expect(ids(await cli("posts", "list", "tag:tag-7"))).toEqual(["10"])
     expect(ids(await cli("posts", "list", "published:2026-11-01")).sort()).toEqual(["10", "12"])
     expect(ids(await cli("posts", "list", "published:[2026-10-01 TO 2026-10-31]"))).toEqual([])
+    // Post 12 went out at exactly midnight: a strict start leaves it out.
+    expect(ids(await cli("posts", "list", 'published:>"2026-11-01T00:00:00Z"'))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", 'published:>="2026-11-01T00:00:00Z"')).sort()).toEqual(["10", "12"])
     const shown = (await cli("posts", "show", "10")).item
     expect(shown).toMatchObject({
       title: "Version 2 is out",
@@ -132,6 +135,9 @@ describe("content commands", () => {
       post: { external_id: string; status: string }
     }
     expect(made.post.status).toBe("draft")
+    await expect(cli("posts", "update", made.post.external_id, "--tags", " , ", "--yes")).rejects.toThrow(
+      "--tags takes one or more ids",
+    )
     expect((await cli("posts", "show", made.post.external_id)).item).toMatchObject({ terms: ["tag-7", "cat-1"] })
     const id = made.post.external_id
     expect(((await cli("posts", "publish", id, "--yes")).item as { post: { status: string } }).post.status).toBe(

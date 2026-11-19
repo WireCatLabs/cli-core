@@ -18,7 +18,10 @@ export type ContentDraft = ContentFields & { type?: PostType; channel?: string }
 export interface ContentWriteOptions {
   /** Journaled before the call. */
   operationId: string
-  /** The keys the content command checked for this write: a writer over the `api` group does not ask them again. */
+  /**
+   * The keys the owner was asked about for this write, those at level `ask`: a writer over the `api` group does not
+   * ask them again. A key at `allow` is not among them, and passing one would skip a question the owner set.
+   */
   confirmed?: readonly PermissionKey[]
   /**
    * The version the copy holds. A source whose post has another one now refuses with `content.conflict`: someone
@@ -79,6 +82,6 @@ export const contentAlsoChecks = (path: readonly string[]): readonly (Permission
   const [noun, command] = path
   if (path.length !== 2 || noun !== "posts") return []
   if (command === "update") return [{ key: POSTS_PUBLISH_KEY, when: "the post is published or scheduled" }]
-  if (command === "delete") return [{ key: POSTS_DELETE_FORCE_KEY, when: "--force" }]
+  if (command === "delete") return [{ key: POSTS_DELETE_FORCE_KEY, when: "--allow-delete" }]
   return []
 }

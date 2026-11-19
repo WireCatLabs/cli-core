@@ -142,6 +142,44 @@ describe("contentManifestFake over HTTP", () => {
     }
   })
 
+  it("answers a site with a path of its own, and no route by its last segments alone", async () => {
+    const fake = contentManifestFake(WORDPRESS_CONTENT, { api })
+    const ok = await fake.fetch("https://b.blog.test/news/wp-json/wp/v2/tags?context=edit&per_page=100&orderby=id")
+    expect(ok.status).toBe(200)
+    const stray = await fake.fetch("https://b.blog.test/wp-json/wp/v2/users/5/wp/v2/posts")
+    expect(stray.status).toBe(404)
+    expect(fake.refusals).toEqual(["GET /wp-json/wp/v2/users/5/wp/v2/posts"])
+    fake.refusals.length = 0
+  })
+
+  it("puts a list and a row where the source manifest's call reads them", async () => {
+    const author = WORDPRESS_CONTENT.entities.author[0] as (typeof WORDPRESS_CONTENT.entities.author)[0]
+    const wrapped = {
+      ...WORDPRESS_CONTENT,
+      entities: {
+        ...WORDPRESS_CONTENT.entities,
+        author: [{ ...author, list: { ...author.list, items: "data" }, get: { ...author.get, items: "data" } }],
+      },
+    }
+    const fake = contentManifestFake(wrapped, { api })
+    fakes.push(fake)
+    const source = contentSourceFromManifest(wrapped, { api, call: fake.call, site: "blog.example.test" })
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "content-fake-")), "wirecat.db") })
+    const account = { provider: "wordpress", account: "blog.example.test:1" }
+    try {
+      expect(await syncContent(source, store, account)).toMatchObject({ state: "complete" })
+      expect((await store.content.list(account, "author")).items.map((one) => one.record.externalId).sort()).toEqual(
+        fake.ids("author").sort(),
+      )
+      const id = fake.ids("author")[0] as string
+      expect(
+        await fake.call("getWpV2UsersById", { path: { id }, query: { context: "edit" }, headers: {}, fields: {} }),
+      ).toMatchObject({ data: { id: Number(id) } })
+    } finally {
+      await store.close()
+    }
+  })
+
   it("pages a list by the page count header, and refuses a page past the last", async () => {
     const { fake } = built()
     expect(fake.ids("post")).toEqual(["10", "11", "12"])
