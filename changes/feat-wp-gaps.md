@@ -23,6 +23,8 @@
 
 ### Fixed
 
+- **A content source from a manifest pages by `nextPage` with the answer's headers.** Its own reader of the page count
+  is gone.
 - **`session start --login` names where to make the password only at a terminal.** Piped in, as an agent or a test
   signs in, the note stood before the JSON error on stderr.
 

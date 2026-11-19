@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { PageParameter, Pagination } from "@wirecat/cli-base/codegen"
+import type { Pagination } from "@wirecat/cli-base/codegen"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import { nextPage, parameterValue, type ServiceApiManifest, withValue } from "../../cli/service-api-manifest.js"
@@ -110,17 +110,6 @@ const pageOf = (page: string | undefined, now: number) => {
   return Number.isSafeInteger(call) && call >= 0 ? { call, token, started } : { call: -1, token: undefined, started }
 }
 
-/**
- * The source says in a header how many pages there are (WordPress's `X-WP-TotalPages`), and answers 400 for one past
- * them. Read here until `nextPage` reads the header itself (the api group's paging change).
- */
-const lastPage = (pagination: Pagination, request: ApiCommandInput, parameter: PageParameter, headers: Headers) => {
-  const header = pagination.style === "page" ? (pagination as { pagesHeader?: string }).pagesHeader : undefined
-  const pages = header === undefined ? Number.NaN : Number(headers.get(header))
-  const current = Number(parameterValue(request, parameter) ?? 1)
-  return Number.isSafeInteger(pages) && headers.has(header ?? "") && current >= pages
-}
-
 const gone = (error: unknown) => isCliError(error) && error.code === "not_found"
 const refused = (error: unknown) =>
   isCliError(error) && (error.code === "permission_error" || error.code === "not_found")
@@ -169,18 +158,10 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
       const listed = call.items === undefined ? answer : at(answer, call.items)
       return { rows: crmValues.rawsOf(listed), next: undefined }
     }
-    // `items: ""` is the answer itself, a list, which nextPage reads only under a name. WordPress answers 400 for a
-    // page past the last: the page count is in a header, once nextPage reads it.
-    const whole = pagination.style === "page" && pagination.items === ""
-    const step = nextPage(
-      whole ? { ...pagination, items: "items" } : pagination,
-      request,
-      whole ? { items: answer } : answer,
-    )
+    const step = nextPage(pagination, request, answer, read.headers)
     const rows = crmValues.rawsOf(call.items === undefined ? step.items : at(answer, call.items))
     const value = step.next && "input" in step.next ? parameterValue(step.next.input, parameter) : undefined
-    if (value === undefined || value === null || lastPage(pagination, request, parameter, read.headers))
-      return { rows, next: undefined }
+    if (value === undefined || value === null) return { rows, next: undefined }
     return { rows, next: String(value) }
   }
 
