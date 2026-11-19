@@ -103,4 +103,11 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     package: "@wirecat/yandex-disk-cli",
     does: "Yandex Disk folders as local text, searchable with your other WireCat data",
   },
+  {
+    command: "wordpress",
+    appName: "wordpress-cli",
+    envPrefix: "WCWP",
+    package: "@wirecat/wordpress-cli",
+    does: "WordPress posts and pages, searchable with your other WireCat data",
+  },
 ]
