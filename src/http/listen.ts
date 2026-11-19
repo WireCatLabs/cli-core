@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
-import { Readable } from "node:stream"
+import { pipeline, Readable } from "node:stream"
 
 export type Handle = (request: Request) => Promise<Response>
 
@@ -47,8 +47,8 @@ const send = async (response: Response, outgoing: ServerResponse) => {
   outgoing.writeHead(response.status, Object.fromEntries(response.headers))
   if (!response.body) return void outgoing.end()
   const body = Readable.fromWeb(response.body as import("node:stream/web").ReadableStream)
-  outgoing.once("close", () => body.destroy())
-  body.pipe(outgoing)
+  // pipe() leaves the answer open when the body fails mid-way, and the client waits for bytes that never come.
+  pipeline(body, outgoing, () => undefined)
 }
 
 /**

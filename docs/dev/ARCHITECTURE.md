@@ -89,6 +89,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./content`, `/content/testing` | `src/content/` | content sites: the `ContentSource` and `ContentWriter` ports, the sync engine over `store.content`, posts commands with publishing behind `posts.publish`, the manifest source and writer, and the contract kits — see [Content](CONTENT.md) |
 | `./google` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
 | `./sftp` | `src/sftp/` | a read-only SFTP client and an SSH tunnel that only forwards: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
+| `./mount` | `src/mount/` | a read-only WebDAV server on 127.0.0.1 over a `MountSource` port (stat, list, read a range), behind a per-run secret, for the system's own client to mount — see [Read-only mount](../mount.md) |
 | `./sql` | `src/sql/` | a read-only SQL reader: `reader.ts` opens mysql2 or pg (optional peers, imported on first use) read-only, pages a host's table and maps driver errors — see [SQL](../sql.md) |
 
 Every document and every meeting of every account, as a page lists them, are [Listings](LISTINGS.md): services over
