@@ -875,7 +875,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
     )
     .argument("<query>", "what to look for, in your own words, in any language the model reads")
     .option(
-      "--reply <text>",
+      "--like <text>",
       "a made-up reply that would answer the query, one sentence: searched by meaning too, which finds an answer " +
         "worded unlike the question",
     )
@@ -903,7 +903,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
           chat?: string
           sinceTime?: string
           catchUp?: boolean
-          reply?: string
+          like?: string
           filter?: string
           source?: string
           timezone?: string
@@ -944,7 +944,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
               }
             : {}),
           limit,
-          ...(options.reply === undefined ? {} : { reply: options.reply }),
+          ...(options.like === undefined ? {} : { like: options.like }),
           ...(options.filter === undefined ? {} : { filter: options.filter }),
           ...(options.source === undefined ? {} : { source: options.source }),
           ...(options.timezone === undefined ? {} : { timezone: options.timezone }),

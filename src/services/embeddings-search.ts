@@ -179,13 +179,13 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
 
   const search: EmbeddingsService["search"] = async (
     query,
-    { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs, reply },
+    { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs, like },
   ) => {
     if (!query.trim()) searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
     if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
       searchError("query.too-large", { start: 0, end: query.length }, "query is longer than 8 KiB")
-    if (reply !== undefined && new TextEncoder().encode(reply).length > QUERY_LIMITS.bytes)
-      throw new CliError("validation_error", "--reply is longer than 8 KiB: one sentence is enough")
+    if (like !== undefined && new TextEncoder().encode(like).length > QUERY_LIMITS.bytes)
+      throw new CliError("validation_error", "--like is longer than 8 KiB: one sentence is enough")
     const refreshed = await refreshSearch(deps, {
       chat,
       limit,
@@ -239,7 +239,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         }
       },
     )
-    const texts = reply?.trim() ? [query, reply] : [query]
+    const texts = like?.trim() ? [query, like] : [query]
     const meaning: { hit: ConversationHit; lead: number }[][] = texts.map(() => [])
     const own: ConversationHit[] = []
     const sources = words.sources
@@ -260,7 +260,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
               query: vector as Float32Array,
               ...(eligibility ? { conversations: eligibility.conversations } : {}),
             })
-            // The reply only widens the text hits: pictures and the owner's block come from the query alone.
+            // The made-up text only widens the text hits: pictures and the owner's block come from the query alone.
             const images =
               at > 0
                 ? []
@@ -464,7 +464,7 @@ const shared = (hits: ConversationHit[], limit: number) => {
 }
 
 /**
- * Reciprocal rank fusion of the meaning lists (the query's, and a made-up reply's when given) and the word list: each
+ * Reciprocal rank fusion of the meaning lists (the query's, and `like`'s when given) and the word list: each
  * conversation scores 1 / (k + rank) in every list it is in, and keeps the chunk and cosine of the first list that
  * has it, so a score shown is the query's wherever the query found it.
  */

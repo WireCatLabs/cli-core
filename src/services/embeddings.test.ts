@@ -145,7 +145,7 @@ describe("embeddings", () => {
     await store.close()
   })
 
-  it("**shows each hit's lines**, the owner's marked, and a made-up reply finds what the query's words miss", async () => {
+  it("**shows each hit's lines**, the owner's marked, and a made-up answer (`like`) finds what the query's words miss", async () => {
     const { store, embeddings } = await setUp({
       messages: [message("1", "dog zebra"), message("40", "fish"), { ...message("80", "cat"), outgoing: true }],
     })
@@ -155,7 +155,7 @@ describe("embeddings", () => {
     expect(zebra.hits).toMatchObject([{ summary: { firstMessageId: "1" }, lines: ["dog zebra"] }])
     expect(zebra.own).toMatchObject([{ summary: { firstMessageId: "80" }, lines: ["you: cat"] }])
 
-    const answered = await embeddings.search("zebra", { model: "tiny", limit: 1, reply: "fish" })
+    const answered = await embeddings.search("zebra", { model: "tiny", limit: 1, like: "fish" })
     expect(answered.hits).toMatchObject([{ summary: { firstMessageId: "40" }, by: ["meaning"], lines: ["fish"] }])
     await store.close()
   })

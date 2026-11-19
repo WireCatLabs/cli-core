@@ -4275,6 +4275,7 @@
         "--filter": {
           "in": "all"
         },
+        "--like": "all",
         "--limit": "all",
         "--max-chats": {
           "in": "all"

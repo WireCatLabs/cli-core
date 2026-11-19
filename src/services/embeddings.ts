@@ -70,8 +70,8 @@ export interface EmbeddingsService {
       refresh?: RefreshOptions
       /** The word half's budget, from an explicit `--timeout`; the default limit otherwise. */
       timeLimitMs?: number
-      /** A made-up reply that would answer the query: searched by meaning too, and its list fused with the query's. */
-      reply?: string
+      /** A made-up text like the answer, such as a reply to the query: searched by meaning too, its list fused with the query's. */
+      like?: string
     },
   ): Promise<FoundConversations>
   /**
