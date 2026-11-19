@@ -83,7 +83,9 @@ describe("content commands", () => {
     expect(ids(await cli("posts", "list", "status:draft"))).toEqual(["11"])
     expect(ids(await cli("posts", "list", "status:draft", "status:published")).sort()).toEqual(["10", "11", "12"])
     expect(ids(await cli("posts", "list", "type:page"))).toEqual(["12"])
-    expect(ids(await cli("posts", "list", "term:tag-7"))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", "tag:tag-7"))).toEqual(["10"])
+    expect(ids(await cli("posts", "list", "published:2026-11-01")).sort()).toEqual(["10", "12"])
+    expect(ids(await cli("posts", "list", "published:[2026-10-01 TO 2026-10-31]"))).toEqual([])
     const shown = (await cli("posts", "show", "10")).item
     expect(shown).toMatchObject({
       title: "Version 2 is out",
@@ -95,7 +97,7 @@ describe("content commands", () => {
       untrusted: expect.arrayContaining(["title", "body"]),
     })
     expect(ids(await cli("posts", "search", "pricing"))).toEqual(["11"])
-    expect(ids(await cli("terms", "list")).sort()).toEqual(["cat-1", "tag-7"])
+    expect(ids(await cli("tags", "list")).sort()).toEqual(["cat-1", "tag-7"])
     expect((await cli("channels", "list")).items[0]).toMatchObject({ network: "fake-blog" })
   })
 
@@ -124,10 +126,13 @@ describe("content commands", () => {
     await cli("sync")
     const file = join(mkdtempSync(join(tmpdir(), "content-text-")), "post.md")
     writeFileSync(file, "# Hello\n\nA new post.")
-    const made = (await cli("posts", "create", "--title", "Hello", "--body-file", file, "--yes")).item as {
+    const made = (
+      await cli("posts", "create", "--title", "Hello", "--text-file", file, "--tags", "tag-7, cat-1", "--yes")
+    ).item as {
       post: { external_id: string; status: string }
     }
     expect(made.post.status).toBe("draft")
+    expect((await cli("posts", "show", made.post.external_id)).item).toMatchObject({ terms: ["tag-7", "cat-1"] })
     const id = made.post.external_id
     expect(((await cli("posts", "publish", id, "--yes")).item as { post: { status: string } }).post.status).toBe(
       "published",
@@ -143,7 +148,7 @@ describe("content commands", () => {
     const { cli, source } = await setup({ "posts.publish": "deny" })
     await cli("sync")
     await expect(cli("posts", "publish", "11", "--yes")).rejects.toThrow(/posts\.publish/)
-    await expect(cli("posts", "schedule", "11", "--at", "2026-12-01T09:00:00Z", "--yes")).rejects.toThrow(
+    await expect(cli("posts", "publish", "11", "--at-time", "2026-12-01T09:00:00Z", "--yes")).rejects.toThrow(
       /posts\.publish/,
     )
     await expect(cli("posts", "update", "10", "--title", "Public edit", "--yes")).rejects.toThrow(/posts\.publish/)
@@ -172,9 +177,9 @@ describe("content commands", () => {
     await cli("sync")
     const file = join(mkdtempSync(join(tmpdir(), "content-text-")), "flat.md")
     writeFileSync(file, "Flat text.")
-    await expect(cli("posts", "schedule", "11", "--at", "2020-01-01T00:00:00Z", "--yes")).rejects.toThrow()
+    await expect(cli("posts", "publish", "11", "--at-time", "2020-01-01T00:00:00Z", "--yes")).rejects.toThrow()
     await store.content.save(ACCOUNT, "post", [{ externalId: "10", status: "published", lossy: true }], NOW)
-    await expect(cli("posts", "update", "10", "--body-file", file, "--yes")).rejects.toThrow(/--replace-body/)
+    await expect(cli("posts", "update", "10", "--text-file", file, "--yes")).rejects.toThrow(/--replace-body/)
     expect(source.requests).toEqual([])
   })
 

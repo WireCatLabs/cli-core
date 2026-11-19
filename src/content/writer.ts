@@ -66,7 +66,6 @@ export const CONTENT_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
   "posts.create": "ask",
   "posts.update": "ask",
   [POSTS_PUBLISH_KEY]: "ask",
-  "posts.schedule": "ask",
   "posts.unpublish": "ask",
   "posts.delete": "ask",
   [POSTS_DELETE_FORCE_KEY]: "ask",
@@ -79,7 +78,6 @@ export const CONTENT_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
 export const contentAlsoChecks = (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
   const [noun, command] = path
   if (path.length !== 2 || noun !== "posts") return []
-  if (command === "schedule") return [POSTS_PUBLISH_KEY]
   if (command === "update") return [{ key: POSTS_PUBLISH_KEY, when: "the post is published or scheduled" }]
   if (command === "delete") return [{ key: POSTS_DELETE_FORCE_KEY, when: "--force" }]
   return []

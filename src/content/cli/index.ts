@@ -10,7 +10,16 @@ import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/c
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
-import { listQuery, nativeTermLists, termField, typedQuery, withQuery } from "../../cli/list-query.js"
+import {
+  listQuery,
+  nativeField,
+  nativeTermLists,
+  termField,
+  timeBounds,
+  typedQuery,
+  unfilteredQuery,
+  withQuery,
+} from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { CONTENT_KINDS, type ContentPost, POST_STATUSES, POST_TYPES, type PostStatus } from "../../domain/content.js"
 import { aheadOf } from "../../domain/moment.js"
@@ -75,8 +84,15 @@ const POSTS_QUERY = {
     }),
     termField("type", "enum", "type:page", { values: [...POST_TYPES] }),
     termField("channel", "kw", "channel:site", { relation: "the channel's id, as channels list shows it" }),
-    termField("term", "kw", "term:12", { relation: "a tag's or category's id, as terms list shows it" }),
-    termField("author", "kw", "author:3", { relation: "the author's id, as authors list shows it" }),
+    termField("tag", "kw", "tag:12", { relation: "a tag's or category's id, as tags list shows it" }),
+    termField("author", "kw", "author:3", { relation: "the author's id, as users list shows it" }),
+    nativeField({
+      name: "published",
+      type: "time",
+      operators: ["term", "range"],
+      example: "published:>=2026-01-01",
+      relation: "published in this time",
+    }),
   ],
 } as const satisfies QueryRegistry
 
@@ -107,6 +123,7 @@ const postBody = (post: ContentPost) => viewOf({ kind: "post", record: post, del
 
 const contentView = v.looseObject({ kind: v.picklist(CONTENT_KINDS), external_id: text, deleted: v.boolean() })
 const channelView = v.looseObject({ external_id: text, kind: text, network: text, name: text })
+const CHANNELS_QUERY = unfilteredQuery("content_channel", channelView)
 const contentWrite = v.looseObject({ operation_id: text, post: v.optional(contentView) })
 
 const contentSync = v.looseObject({
@@ -128,14 +145,6 @@ const contentSync = v.looseObject({
   ),
   gaps: v.array(v.looseObject({ kind: v.picklist(CONTENT_KINDS), message: text })),
 })
-
-const dayOrTime = (flag: string) => (typed: string) => {
-  const at = Date.parse(typed)
-  if (Number.isNaN(at)) throw new InvalidArgumentError(`${flag} takes a day (YYYY-MM-DD) or an ISO 8601 time`)
-  return at
-}
-
-const collect = (value: string, previous: string[]) => [...previous, value]
 
 const addContentCommandsDefinition = (program: Command, options: ContentCommandOptions): void => {
   const now = () => options.now?.() ?? Date.now()
@@ -224,13 +233,13 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     "the sites and social accounts this profile publishes on",
   )
   example(
-    answerEntity(
-      annotate(channels.command("list"), { effects: LOCAL_READ }),
-      "content_channel",
-      channelView,
+    withQuery(
+      answerEntity(annotate(channels.command("list"), { effects: LOCAL_READ }), "content_channel", channelView),
+      CHANNELS_QUERY,
     ).description("the channels copied by the last sync"),
     "channels list",
-  ).action(async (_opts: unknown, command: Command) => {
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    listQuery(typedQuery(words), CHANNELS_QUERY, "channels list")
     await within(command, true, async (run) => {
       const items = (await run.store.content.channels(run.account)).map((one) => ({
         ...Object.fromEntries(Object.entries(one).map(([name, value]) => [snake(name), value])),
@@ -248,49 +257,43 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
       withQuery(
         answerEntity(annotate(posts.command("list"), { effects: LOCAL_READ }), "content_post", contentView),
         POSTS_QUERY,
-      )
-        .description("posts copied from the source, newest change first; run sync to bring them up to date")
-        .option("--since <day>", "published on or after this day or time", dayOrTime("--since"))
-        .option("--until <day>", "published before this day or time", dayOrTime("--until")),
+      ).description("posts copied from the source, newest change first; run sync to bring them up to date"),
     ),
     "posts list status:draft",
-    "posts list type:page --since 2026-01-01",
-  ).action(
-    async (
-      words: string[],
-      opts: { limit: number; page: number; since?: number; until?: number },
-      command: Command,
-    ) => {
-      const lists = nativeTermLists(listQuery(typedQuery(words), POSTS_QUERY, "posts list"), "posts list", ["status"])
-      if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
-        throw new InvalidArgumentError("posts list takes field:value terms, each one whole value")
-      const statuses = (lists.get("status") ?? []).map((one) => String(one.value).toLowerCase() as PostStatus)
-      const terms = new Map(
-        [...lists].filter(([field]) => field !== "status").map(([field, [one]]) => [field, String(one?.value)]),
-      )
-      await within(command, true, async (run) => {
-        const filter: ContentFilter = {
-          ...(statuses.length ? { statuses } : {}),
-          ...(terms.has("type") ? { type: terms.get("type") as ContentFilter["type"] } : {}),
-          ...(terms.has("channel") ? { channel: terms.get("channel") as string } : {}),
-          ...(terms.has("term") ? { term: terms.get("term") as string } : {}),
-          ...(terms.has("author") ? { author: terms.get("author") as string } : {}),
-          ...(opts.since === undefined ? {} : { since: opts.since }),
-          ...(opts.until === undefined ? {} : { until: opts.until }),
-          limit: opts.limit,
-          offset: (opts.page - 1) * opts.limit,
-        }
-        const found = await run.store.content.list(run.account, "post", filter)
-        return listOf("posts list", {
-          items: found.items.map((one) => viewOf({ ...one, record: { ...one.record, body: undefined } })),
-          limit: opts.limit,
-          page: opts.page,
-          has_more: found.hasMore,
-          ...(words.length ? { args: { query: words } } : {}),
-        })
+    "posts list type:page published:>=2026-01-01",
+  ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+    const lists = nativeTermLists(listQuery(typedQuery(words), POSTS_QUERY, "posts list"), "posts list", ["status"])
+    const published = timeBounds(lists.get("published")?.[0])
+    lists.delete("published")
+    if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
+      throw new InvalidArgumentError("posts list takes field:value terms, each one whole value")
+    const statuses = (lists.get("status") ?? []).map((one) => String(one.value).toLowerCase() as PostStatus)
+    const terms = new Map(
+      [...lists].filter(([field]) => field !== "status").map(([field, [one]]) => [field, String(one?.value)]),
+    )
+    await within(command, true, async (run) => {
+      const filter: ContentFilter = {
+        ...(statuses.length ? { statuses } : {}),
+        ...(terms.has("type") ? { type: terms.get("type") as ContentFilter["type"] } : {}),
+        ...(terms.has("channel") ? { channel: terms.get("channel") as string } : {}),
+        ...(terms.has("tag") ? { term: terms.get("tag") as string } : {}),
+        ...(terms.has("author") ? { author: terms.get("author") as string } : {}),
+        ...(published.since === undefined ? {} : { since: published.since }),
+        // The store reads before `until`; the query's upper bound is the last moment it takes.
+        ...(published.until === undefined ? {} : { until: published.until + 1 }),
+        limit: opts.limit,
+        offset: (opts.page - 1) * opts.limit,
+      }
+      const found = await run.store.content.list(run.account, "post", filter)
+      return listOf("posts list", {
+        items: found.items.map((one) => viewOf({ ...one, record: { ...one.record, body: undefined } })),
+        limit: opts.limit,
+        page: opts.page,
+        has_more: found.hasMore,
+        ...(words.length ? { args: { query: words } } : {}),
       })
-    },
-  )
+    })
+  })
   example(
     answerEntity(annotate(posts.command("show"), { effects: LOCAL_READ }), "content_post_detail", contentView)
       .description("one post with its text, its authors and tags by name, its earlier versions and its last numbers")
@@ -355,16 +358,21 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
   })
 
   for (const [kind, plural, what] of [
-    ["author", "authors", "the source's authors, each with the person the store knows by the same e-mail"],
-    ["term", "terms", "the source's tags and categories"],
+    ["author", "users", "the source's users who write, each with the person the store knows by the same e-mail"],
+    ["term", "tags", "the source's tags and categories"],
   ] as const) {
     const group = annotate(program.command(plural), { effects: NO_EFFECTS }).description(what)
+    const query = unfilteredQuery(`content_${kind}`, contentView)
     example(
       paging(
-        answerEntity(annotate(group.command("list"), { effects: LOCAL_READ }), `content_${kind}`, contentView),
+        withQuery(
+          answerEntity(annotate(group.command("list"), { effects: LOCAL_READ }), `content_${kind}`, contentView),
+          query,
+        ),
       ).description(`${plural} copied from the source`),
       `${plural} list`,
-    ).action(async (opts: { limit: number; page: number }, command: Command) => {
+    ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+      listQuery(typedQuery(words), query, `${plural} list`)
       await within(command, true, async (run) => {
         const found = await run.store.content.list(run.account, kind, {
           limit: opts.limit,
@@ -393,25 +401,22 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     })
   }
 
-  const metrics = annotate(program.command("metrics"), { effects: NO_EFFECTS }).description(
-    "readings of a post's numbers, one per sync, each kept",
-  )
   example(
     answerEntity(
-      annotate(metrics.command("show"), { effects: LOCAL_READ }),
+      annotate(posts.command("stats"), { effects: LOCAL_READ }),
       "content_metric",
       v.looseObject({ post: text, at: text }),
     )
-      .description("a post's readings, the newest first")
+      .description("a post's readings of its numbers, one per sync, each kept, the newest first")
       .argument("<post>", "the post's id at the source"),
-    "metrics show 10",
+    "posts stats 10",
   ).action(async (id: string, _opts: unknown, command: Command) => {
     await within(command, true, async (run) => {
       const items = (await run.store.content.metrics(run.account, id)).map((one) => ({
         ...one,
         at: new Date(one.at).toISOString(),
       }))
-      return listOf("metrics show", { items, limit: items.length, page: 1, has_more: false })
+      return listOf("posts stats", { items, limit: items.length, page: 1, has_more: false })
     })
   })
 
@@ -431,8 +436,8 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
   const bodyOf = (run: ContentRun, path: string | undefined): string | undefined => {
     if (path === undefined) return undefined
     if (path !== "-" && refusedPlace(path, options.app, run.env ?? process.env))
-      throw new CliError("validation_error", `--body-file may not read ${path}: it holds sign-ins or state`, {
-        param: "--body-file",
+      throw new CliError("validation_error", `--text-file may not read ${path}: it holds sign-ins or state`, {
+        param: "--text-file",
       })
     return readFileSync(path === "-" ? 0 : path, "utf8")
   }
@@ -447,24 +452,23 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
   const fields = (command: Command) =>
     command
       .option("--title <title>", "the post's title")
-      .option("--body-file <path>", "the text as Markdown, from a file, or - for stdin")
-      .option("--excerpt <text>", "the short text lists show")
+      .option("--text-file <path>", "the text as Markdown, from a file, or - for stdin")
+      .option("--description <text>", "the short text lists show, the excerpt")
       .option("--slug <slug>", "the address's last part")
-      .option(
-        "--term <id>",
-        "a tag's or category's id, as terms list shows it; repeat it; replaces the list",
-        collect,
-        [],
-      )
-  type Typed = { title?: string; bodyFile?: string; excerpt?: string; slug?: string; term: string[] }
+      .option("--tags <ids>", "its tags and categories, by comma-separated ids as tags list shows them; replaces them")
+  type Typed = { title?: string; textFile?: string; description?: string; slug?: string; tags?: string }
   const fieldsOf = (run: ContentRun, typed: Typed): ContentFields => {
-    const body = bodyOf(run, typed.bodyFile)
+    const body = bodyOf(run, typed.textFile)
+    const tags = typed.tags
+      ?.split(",")
+      .map((one) => one.trim())
+      .filter(Boolean)
     return {
       ...(typed.title === undefined ? {} : { title: typed.title }),
       ...(body === undefined ? {} : { body }),
-      ...(typed.excerpt === undefined ? {} : { excerpt: typed.excerpt }),
+      ...(typed.description === undefined ? {} : { excerpt: typed.description }),
       ...(typed.slug === undefined ? {} : { slug: typed.slug }),
-      ...(typed.term.length ? { terms: typed.term } : {}),
+      ...(tags === undefined ? {} : { terms: tags }),
     }
   }
 
@@ -473,7 +477,7 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
       "--type <type>",
       `${POST_TYPES.join(" or ")}; post when left out`,
     ),
-    "posts create --title 'Version 3' --body-file notes.md",
+    "posts create --title 'Version 3' --text-file notes.md",
   ).action(async (typed: Typed & { type?: string }, command: Command) => {
     if (typed.type !== undefined && !(POST_TYPES as readonly string[]).includes(typed.type))
       throw new InvalidArgumentError(`--type is ${POST_TYPES.join(" or ")}`)
@@ -504,48 +508,53 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
       return answered(done.operationId, done.post)
     })
   })
-  for (const [name, description, act] of [
-    ["publish", "publish a post now; a published post is answered as it is", publishPost],
-    ["unpublish", "bring a published or scheduled post back to a draft", unpublishPost],
-  ] as const)
-    example(write(name, description).argument("<post>", "the post's id at the source"), `posts ${name} 11`).action(
-      async (id: string, _opts: unknown, command: Command) => {
-        await within(command, false, async (run) => {
-          const done = await act(contextOf(run, command), id)
-          return answered(done.operationId, done.post, done.unchanged ? { unchanged: true } : {})
-        })
-      },
-    )
   example(
-    write("schedule", "publish a post at a later time; checks posts.publish too")
+    write("publish", "publish a post now, or at a later time with --at-time; a published post is answered as it is")
       .argument("<post>", "the post's id at the source")
-      .requiredOption(
-        "--at <time>",
-        "when it goes out: an ISO 8601 time, a day, or 3d from now; it must be ahead",
-        (typed: string) => aheadOf(typed, "--at", Date.now()),
+      .option(
+        "--at-time <time>",
+        "when it goes out instead of now: an ISO 8601 time, a day, or 3d from now; it must be ahead",
+        (typed: string) => aheadOf(typed, "--at-time", Date.now()),
       ),
-    "posts schedule 11 --at 2026-12-01T09:00:00Z",
-  ).action(async (id: string, opts: { at: number }, command: Command) => {
+    "posts publish 11",
+    "posts publish 11 --at-time 2026-12-01T09:00:00Z",
+  ).action(async (id: string, opts: { atTime?: number }, command: Command) => {
     await within(command, false, async (run) => {
-      const done = await schedulePost(contextOf(run, command), id, opts.at)
-      return answered(done.operationId, done.post)
+      if (opts.atTime !== undefined) {
+        const scheduled = await schedulePost(contextOf(run, command), id, opts.atTime)
+        return answered(scheduled.operationId, scheduled.post)
+      }
+      const done = await publishPost(contextOf(run, command), id)
+      return answered(done.operationId, done.post, done.unchanged ? { unchanged: true } : {})
     })
   })
   example(
-    write("delete", "move a post to the source's trash, from which it comes back; --force deletes it for good")
-      .argument("<post>", "the post's id at the source")
-      .option("--force", "delete it for good, past the trash; checks posts.delete.force"),
-    "posts delete 11",
-  ).action(async (id: string, opts: { force?: boolean }, command: Command) => {
+    write("unpublish", "bring a published or scheduled post back to a draft").argument(
+      "<post>",
+      "the post's id at the source",
+    ),
+    "posts unpublish 11",
+  ).action(async (id: string, _opts: unknown, command: Command) => {
     await within(command, false, async (run) => {
-      const done = await deletePost(contextOf(run, command), id, opts.force ? { force: true } : {})
+      const done = await unpublishPost(contextOf(run, command), id)
+      return answered(done.operationId, done.post, done.unchanged ? { unchanged: true } : {})
+    })
+  })
+  example(
+    write("delete", "move a post to the source's trash, from which it comes back; --allow-delete deletes it for good")
+      .argument("<post>", "the post's id at the source")
+      .option("--allow-delete", "delete it for good, past the trash; checks posts.delete.force"),
+    "posts delete 11",
+  ).action(async (id: string, opts: { allowDelete?: boolean }, command: Command) => {
+    await within(command, false, async (run) => {
+      const done = await deletePost(contextOf(run, command), id, opts.allowDelete ? { force: true } : {})
       return answered(done.operationId, done.post, { deleted: done.deleted })
     })
   })
 }
 
 /**
- * The content commands: `sync`, `channels list`, `posts list|show|search`, `authors list`, `terms list`,
- * `metrics show`, and with `writes` `posts create|update|publish|schedule|unpublish|delete`.
+ * The content commands: `sync`, `channels list`, `posts list|show|search|stats`, `users list`, `tags list`, and with
+ * `writes` `posts create|update|publish|unpublish|delete`.
  */
 export const addContentCommands = honoursDryRun(sharedCommand(addContentCommandsDefinition))

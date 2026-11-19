@@ -207,7 +207,7 @@ export const schedulePost = async (
       reason: "content.already-published",
     })
   const operationId = newOperationId()
-  const post = await written(context, "posts.schedule", [POSTS_PUBLISH_KEY], operationId, (confirmed) =>
+  const post = await written(context, POSTS_PUBLISH_KEY, [], operationId, (confirmed) =>
     context.writes.writer.schedule(externalId, at, { operationId, version: copy.record.version ?? null, confirmed }),
   )
   return kept(context, post, operationId)
