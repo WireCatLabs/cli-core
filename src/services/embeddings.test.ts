@@ -265,6 +265,28 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**names no private chat by a word most of whose uses are in other chats**", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: Array.from({ length: 80 }, (_, at) => message(`${100 * (at + 1)}`, "Paris trip next week")),
+    })
+    await store.chats.saveChats(account, [
+      { id: "7", title: "Robert Stone", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      account,
+      "7",
+      ["Paris, hi", "Paris was fun", "Paris again"].map((text, at) => ({
+        ...message(`${100 * (at + 1)}`, text),
+        chatId: "7",
+      })),
+      { via: "history" },
+    )
+    await conversations.build("7")
+
+    expect((await embeddings.search("trip to Paris", { model: "e5-small", limit: 5 })).named).toBeUndefined()
+    await store.close()
+  })
+
   it("**answers by meaning when the word half runs out of time**, and says the words were not searched", async () => {
     const { store, embeddings } = await setUp({ messages: [message("1", "cat cat"), message("40", "dog zebra")] })
     await embeddings.embed("9", { model: "tiny", threads: 1 })
