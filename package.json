@@ -215,6 +215,10 @@
       "types": "./dist/sftp/index.d.ts",
       "default": "./dist/sftp/index.js"
     },
+    "./mount": {
+      "types": "./dist/mount/index.d.ts",
+      "default": "./dist/mount/index.js"
+    },
     "./sql": {
       "types": "./dist/sql/index.d.ts",
       "default": "./dist/sql/index.js"
