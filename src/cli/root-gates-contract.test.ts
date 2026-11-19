@@ -76,6 +76,7 @@ const ROOT_READS: Record<string, string> = {
   "cli/messenger/ask.ts yes": "the yes to an ask level; an agent's run goes ahead without it (NEED-773)",
   "cli/messenger/store-import-command.ts yes": "an agent's run is a yes (NEED-773); a person adds --yes",
   "cli/account-remove.ts yes": "account remove is no MCP tool: a person removes an account",
+  "cli/account-rename.ts yes": "account rename is no MCP tool: a person renames a profile",
   "cli/messenger/store-maintenance-command.ts yes": "store reset is no MCP tool: a person empties the store",
   "cli/messenger/backfill-command.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
   "cli/messenger/gaps-command.ts timeout": "the run's deadline; over MCP the 45 s cap holds",

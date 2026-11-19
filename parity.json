@@ -1324,6 +1324,17 @@
         "wa": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)"
       }
     },
+    "account rename": {
+      "in": [],
+      "options": {
+        "--dry-run": "all"
+      },
+      "planned": {
+        "max": "account rename: set accountRemoval.signIn (WireCat Desktop account edit)",
+        "tg": "account rename: set accountRemoval.signIn (WireCat Desktop account edit)",
+        "wa": "account rename: set accountRemoval.signIn (WireCat Desktop account edit)"
+      }
+    },
     "account sessions": {
       "in": "all"
     },
