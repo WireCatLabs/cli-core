@@ -1,5 +1,11 @@
 [
   {
+    "repo": "max-cli",
+    "pr": 3146,
+    "until": "2026-11-21",
+    "reason": "max-cli#984 fixes its tests, but its own CI runs the parity manifest check against cli-core on npm; it can merge only after a release carries this pull request's messages scheduled rows"
+  },
+  {
     "repo": "whatsapp-cli",
     "pr": 3139,
     "until": "2026-11-26",
