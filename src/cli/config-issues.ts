@@ -280,10 +280,19 @@ export const permissionIssues = (
   saved: readonly { key: string; at: readonly string[] }[],
   known: ReadonlySet<string>,
   context: { file: string; tool: string },
+  /** Old key → the key of the command it moved to, so the refusal names what to rename it to. */
+  renamed: ReadonlyMap<string, string> = new Map(),
 ): LocatedIssue[] =>
   saved
     .filter(({ key }) => !known.has(key))
-    .map(({ at }) => locate("unknown_permission", at, context, (key) => `${key} names no command`))
+    .map(({ key: name, at }) =>
+      locate("unknown_permission", at, context, (key) => {
+        const now = renamed.get(name)
+        return now === undefined
+          ? `${key} names no command`
+          : `${key} names no command: its command moved, so rename it to permissions.${now}`
+      }),
+    )
 
 const pathId = (path: readonly string[]) => path.join("\u0000")
 

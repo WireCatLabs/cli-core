@@ -29,7 +29,7 @@ import { NO_EFFECTS } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
 import { queryTerms, termField, withQuery } from "./list-query.js"
 import { terminalAsker } from "./messenger/ask.js"
-import type { ConditionalKey } from "./permission-keys.js"
+import { type ConditionalKey, markRenamedPermissionKeys } from "./permission-keys.js"
 import {
   manifestBaseUrl,
   nextPage,
@@ -119,9 +119,8 @@ const keyOf = (operation: ManifestOperation): PermissionKey => ["api", ...apiPat
 const pathOf = (operation: ManifestOperation): string => apiPathOf(operation).join(" ")
 
 /**
- * The key a grouped operation had while `api` was flat, `api.contacts-list`. A profile that still names it keeps its
- * hold on that one command: checked beside the new key, it only ever tightens. A group never takes an old command's
- * name (the generator refuses it), so the old key never reaches past its command.
+ * The key a grouped operation had while `api` was flat, `api.contacts-list`. It checks nothing now: a config that still
+ * names it is refused as an unknown key, and the refusal names the new key (WC-CMD-8).
  */
 const formerKeyOf = (operation: ManifestOperation): PermissionKey | undefined => {
   const former = `api.${operation.command}`
@@ -208,28 +207,18 @@ export const serviceApiPermissions = (
   extra: readonly PermissionKey[]
 } => {
   const checks = new Map<string, (PermissionKey | ConditionalKey)[]>()
-  const former: PermissionKey[] = []
   for (const operation of input.manifest.operations) {
-    const old = formerKeyOf(operation)
-    if (old) former.push(old)
     checks.set(pathOf(operation), [
       ...permissionsOf(operation).map((permission) => {
         const when = whenOf(permission)
         return when === undefined ? permission.key : { key: permission.key, when }
       }),
       ...(input.bodyPermissions?.[operation.command] ?? []).map(({ key, when }) => ({ key, when })),
-      ...(old ? [{ key: old, when: "while a profile still names this old key" }] : []),
     ])
   }
-  const keys = [
-    ...new Set(
-      [...checks.values()]
-        .flat()
-        .flatMap((one) => (typeof one === "string" ? [one] : former.includes(one.key) ? [] : [one.key])),
-    ),
-  ]
+  const keys = [...new Set([...checks.values()].flat().map((one) => (typeof one === "string" ? one : one.key)))]
   return {
-    extra: [...keys, ...former],
+    extra: keys,
     alsoChecks: (path) => (path[0] === "api" ? (checks.get(path.slice(1).join(" ")) ?? []) : []),
     defaults: {
       ...Object.fromEntries(keys.map((key) => [key, "ask" as const])),
@@ -404,26 +393,12 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     }
   }
 
-  /** The old flat key, when the profile names it: on a read only its refusal or its question applies. */
-  const formerKeys = (command: Command, operation: ManifestOperation): PermissionKey[] => {
-    const former = formerKeyOf(operation)
-    if (!former) return []
-    const { settings, renderer } = baseContext(command, configuration.resolveSettings)
-    const level = settings.permissions[former]
-    if (level === undefined) return []
-    renderer.warn(
-      `permissions name ${former}, the old key of api ${pathOf(operation)}: rename it to ${keyOf(operation)}`,
-    )
-    return operation.effect === "read" && level !== "deny" && level !== "ask" ? [] : [former]
-  }
-
-  return { operations, left, baseUrlOf, defaults, exchange, formerKeys, operationOf, readsFreely, signed, write }
+  return { operations, left, baseUrlOf, defaults, exchange, operationOf, readsFreely, signed, write }
 }
 
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
-  const { app, configuration } = options
-  const { operations, baseUrlOf, exchange, formerKeys, operationOf, readsFreely, signed, write } =
-    serviceApiCore(options)
+  const { app, configuration, manifest } = options
+  const { operations, baseUrlOf, exchange, operationOf, readsFreely, signed, write } = serviceApiCore(options)
   const send = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) =>
     (await exchange(command, operation, request)).answer
   let schemas: Readonly<Record<string, v.GenericSchema>> | undefined
@@ -510,7 +485,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
       command.hook("preAction", load)
     },
     execute: async (command, operation, input) => {
-      const extra = [...serviceApiKeys(options, operation, input), ...formerKeys(command, operation)]
+      const extra = serviceApiKeys(options, operation, input)
       const read = readsFreely(command, operation, extra)
       if (operation.pagination && command.opts<{ all?: unknown }>().all === true) {
         if (!read)
@@ -570,6 +545,15 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   )
   group.addCommand(list).addCommand(show)
   for (const child of [...generated.commands]) group.addCommand(child)
+  markRenamedPermissionKeys(
+    group,
+    new Map(
+      manifest.operations.flatMap((operation) => {
+        const former = formerKeyOf(operation)
+        return former ? [[former, keyOf(operation)] as const] : []
+      }),
+    ),
+  )
   return group
 }
 
@@ -607,7 +591,7 @@ const writerBody = (
  * can be asked. A read that no key guards goes through `serviceApiCall`.
  */
 export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite => {
-  const { baseUrlOf, formerKeys, operationOf, signed, write } = serviceApiCore(options)
+  const { baseUrlOf, operationOf, signed, write } = serviceApiCore(options)
   return async (command, name, input, { confirmed } = {}) => {
     const operation = operationOf(name)
     // The api group offers only declared parameters; code must not reach further, as WordPress's `_method` turns a
@@ -649,6 +633,6 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
       operation,
       httpApiRequest(operation, writerBody(operation, input, schemas), baseUrlOf(command)),
     )
-    return write(command, operation, [...extra, ...formerKeys(command, operation)], request, confirmed)
+    return write(command, operation, extra, request, confirmed)
   }
 }
