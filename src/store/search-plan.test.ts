@@ -4,7 +4,7 @@ import { migrate } from "./migrations.js"
 import { matchQuery } from "./sqlite/lucene.js"
 import { openSqlite } from "./sqlite/open.js"
 import { matching, newestHits } from "./sqlite/search.js"
-import { readiness } from "./sqlite/vectors.js"
+import { nearestChunks, readiness } from "./sqlite/vectors.js"
 
 const opened = async () => {
   const sqlite = await openSqlite(":memory:")
@@ -195,6 +195,56 @@ describe("the readiness a conversation search reports", () => {
       const plan = planOf(context, sql, params)
       expect(plan, plan.join("\n")).not.toContain("SEARCH k USING INDEX sqlite_autoindex_chunks_1 (chunkable_type=?)")
     }
+    context.database.close()
+  })
+})
+
+const BIG = ["chunks", "chunk_messages", "messages", "conversation_messages", "conversations", "embeddings"]
+
+/** What makes a plan slow on a big store, whatever its data: a big table walked, or the chunks led by their kind alone. */
+const slowLines = (plan: string[]) =>
+  plan.filter(
+    (line) =>
+      BIG.some((table) => new RegExp(`^SCAN ${table}\\b|^SCAN \\w+ .*\\b${table}\\b`).test(line)) ||
+      /USING (COVERING )?INDEX sqlite_autoindex_chunks_1 \(chunkable_type=\?\)$/.test(line),
+  )
+
+const ownerBlockOf = (context: Awaited<ReturnType<typeof opened>>) => {
+  const statements: { sql: string; params: unknown[] }[] = []
+  const dialect = (
+    context.orm as unknown as { dialect: { sqlToQuery: (query: unknown) => (typeof statements)[number] } }
+  ).dialect
+  const recording = {
+    ...context,
+    orm: {
+      all: (query: unknown) => {
+        statements.push(dialect.sqlToQuery(query))
+        return []
+      },
+    },
+  }
+  nearestChunks(recording as never, 1, { model: "e5-small", limit: 5, query: new Float32Array(4), fromOwner: true })
+  const found = statements.find(({ sql }) => /SELECT DISTINCT k\.id FROM/.test(sql))
+  if (!found) throw new Error("no owner block query")
+  return found
+}
+
+describe("the owner block of a meaning search", () => {
+  it("**has no planner statistics** to change its plan: what an empty store plans, a big one plans too", async () => {
+    const context = await opened()
+    const stats = context.database.prepare("SELECT 1 FROM sqlite_schema WHERE name = 'sqlite_stat1'").get()
+
+    expect(stats, "a store with ANALYZE stats needs them injected here before plans can be trusted").toBeUndefined()
+    context.database.close()
+  })
+
+  it("**finds the owner's chunks from the owner's messages**, never from every chunk of the store", async () => {
+    const context = await opened()
+    const { sql, params } = ownerBlockOf(context)
+    const plan = planOf(context, sql, params)
+
+    expect(slowLines(plan), plan.join("\n")).toEqual([])
+    expect(plan.join("\n")).toMatch(/SEARCH m USING (COVERING )?INDEX messages_by_sender_identity_id/)
     context.database.close()
   })
 })

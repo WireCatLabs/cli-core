@@ -329,6 +329,21 @@ describe("the vector index at its edges", () => {
     expect(indexed).toEqual(scanned)
     expect(indexed).toHaveLength(20)
   })
+
+  it("**asks once for vec0's most and keeps what they hold** with `nearestOnly`, never falling back to the scan", async () => {
+    const context = await open()
+    const account = crowd(context, [
+      ...Array.from({ length: 4_200 }, () => ({ hidden: true, vector: close })),
+      ...Array.from({ length: 30 }, () => ({ hidden: false, vector: unit })),
+    ])
+    const asked = knnQueries(context)
+    const none = () => ({ results: [], best: [] })
+    const filter = { kind: "message", account }
+
+    expect(searchIndex(context.database, MODEL, filter, query, 20, none, true)).toEqual([])
+    expect(asked()).toBe(1)
+    expect(searchIndex(context.database, MODEL, filter, query, 20, none)).toBeUndefined()
+  })
 })
 
 /** An account, two chats in it, a message in each, and a second account. */

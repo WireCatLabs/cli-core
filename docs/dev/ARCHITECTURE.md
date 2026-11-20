@@ -296,6 +296,10 @@ and the nesting depth is kept per connection. A statement that runs for every sa
 (`identities.ts`, `messages.ts`): built per call, Drizzle cost about a quarter of the load rate
 ([results](../../bench/search/results.md#the-real-store-after-the-message-writes-moved-to-drizzle)).
 `src/store/search-plan.test.ts` fails if search starts reading the text index once per message.
+It also fails if the owner block of a meaning search stops finding the owner's chunks through the sender index. The
+store runs no `ANALYZE`, so an empty test store plans as a big one does; the test checks that this still holds.
+`WIRECAT_SQL_SLOW_MS=<ms>` prints each statement slower than that to stderr, with its time, rows and shape (values
+replaced by `?`).
 
 Opening a store also fills `messages.normalized_text` where it is missing, when at most
 5,000 of them wait (`BACKFILL_ON_OPEN`, about 40 ms); a larger file keeps working and waits for the
