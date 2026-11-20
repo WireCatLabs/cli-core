@@ -991,6 +991,21 @@ describe("CRM stage tasks", () => {
       expect(await stageTasks(cli)).toBe(1)
     })
 
+    it("a move in the second the rules were set opens its task, though the CRM's history keeps whole seconds", async () => {
+      const second = Math.floor(NOW / 1000) * 1000 + 60_000
+      const { path, cli, source } = await withHistory([entry("51", "d9", "quote", second)])
+      const database = await openCache(path)
+      saveCrmSetting(
+        database,
+        crmSettingKey(PORTAL, "stage-tasks"),
+        { quote: { title: "Send the quote", due_days: 2 } },
+        second + 300,
+      )
+      database.close()
+      source.put("deal", exampleDeal("d9", { stage: "quote" }))
+      expect(await stageTasks(cli)).toBe(1)
+    })
+
     it("reads the history without rules, counts it in the funnel once its deal arrives, and opens no older task", async () => {
       const { path, cli, source, asked } = await withHistory([entry("1", "d9", "quote", NOW - HOUR)])
       source.setPipelines("lead", [])
