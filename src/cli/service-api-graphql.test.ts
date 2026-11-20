@@ -112,7 +112,7 @@ const setup = (answers: Answers = {}) => {
       error: err.startsWith("{") ? JSON.parse(err).error : undefined,
     }
   }
-  return { cli, fake, root }
+  return { cli, fake, root, definition }
 }
 
 const issue = (id: string) => ({
@@ -127,6 +127,12 @@ const issue = (id: string) => ({
   state: { id: "s1" },
   team: { id: "t1" },
   assignee: null,
+})
+
+it("the group names the GraphQL schema it was made from, not an OpenAPI document", () => {
+  expect(setup().definition.commands()[0]?.description()).toBe(
+    "the raw Tracker API, one command per operation of its GraphQL schema",
+  )
 })
 
 it("a query is one POST of its document; flags join --body as variables, read by their schema", async () => {
