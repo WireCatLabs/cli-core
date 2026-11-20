@@ -62,6 +62,24 @@ export const releaseLock = (path: string, pid = process.pid) => {
   if (readLock(path)?.pid === pid) rmSync(path, { force: true })
 }
 
+/**
+ * When serve last had the store current, beside the lock and kept after it stops: a messenger with no full sync (wa)
+ * has no other time to show. Written on connect and every minute after, so a serve that was killed still leaves one.
+ */
+export const currentPath = (lock: string) => lock.replace(/\.lock$/, ".current")
+
+export const markCurrent = (lock: string, at = new Date()) =>
+  writeSecurely(currentPath(lock), `${JSON.stringify({ at: at.toISOString() })}\n`, 0o600)
+
+export const readCurrent = (lock: string): string | undefined => {
+  try {
+    const { at } = JSON.parse(readFileSync(currentPath(lock), "utf8")) as { at?: unknown }
+    return typeof at === "string" ? at : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The profiles a serve is running for now — what an update must restart for its new code to run. */
 export const servingProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv): string[] => {
   const dir = dirname(lockPath(app, "default", env))
