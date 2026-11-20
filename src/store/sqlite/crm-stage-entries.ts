@@ -15,6 +15,7 @@ export const STAGE_ENTRY_DAYS = 90
 /** A stage entered longer ago than this opens no task: the copy missed the deal for more than a sync or two. */
 const STAGE_TASK_DAYS = 7
 const DAY = 86_400_000
+const SECOND = 1000
 
 /** One stage a deal or lead entered, from the CRM's own history (`exact`) or from the copy's diffs between syncs. */
 export interface StageEntry {
@@ -120,6 +121,8 @@ export const crmStageEntriesOver = (context: StoreContext) => {
   const pending = (key: AccountKey, since: number, at: number): CrmStageMove[] => {
     const accountId = findAccountPk(context, key)
     if (accountId === undefined) return []
+    // A CRM's history keeps whole seconds: a move in the second the rules were set would read as made before them.
+    const from = Math.max(Math.floor(since / SECOND) * SECOND, at - STAGE_TASK_DAYS * DAY)
     return database
       .prepare(
         "SELECT r.id, r.external_id, json_extract(r.fields, '$.kind') AS kind, coalesce(d.id, l.id) AS item_id, " +
@@ -134,7 +137,7 @@ export const crmStageEntriesOver = (context: StoreContext) => {
           "AND json_extract(r.fields, '$.handled') IS NULL AND json_extract(r.fields, '$.at') >= ? " +
           "ORDER BY json_extract(r.fields, '$.at'), r.id",
       )
-      .all(accountId, STAGE_ENTRY_RECORD, Math.max(since, at - STAGE_TASK_DAYS * DAY))
+      .all(accountId, STAGE_ENTRY_RECORD, from)
       .map((row) => {
         const ref = `${String(row.kind)}:${String(row.item_id)}`
         return {
