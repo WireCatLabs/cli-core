@@ -9,13 +9,14 @@ import { type SqlValue, TIME_LIMIT_FUNCTION, TimeLimitReached } from "../driver.
 import { emailHitsByPk } from "./emails.js"
 import { placeHits } from "./hit-places.js"
 import {
-  type Corpus,
   combine,
   FIELD_COMPILERS,
   type FieldScope,
   type Fragment,
   ftsMatch,
   type Leaf,
+  MAIL,
+  MESSAGES,
   present,
   quoted,
   SPEECH,
@@ -25,34 +26,11 @@ import type { StoreContext } from "./open.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
 import { type TranscriptPart, transcriptItems, transcriptTerms } from "./transcript-query.js"
+import { RARITY_ORDER, withRarity } from "./word-rarity.js"
 import type { ScoredHit } from "./words.js"
 
 export { type Corpus, prefixOf } from "./lucene-fields.js"
 export type { QueryGroup, QueryGrouping } from "./lucene-groups.js"
-
-const MESSAGES: Corpus = {
-  rows: "messages",
-  threads: "chats",
-  words: "message_words",
-  stems: "message_stems",
-  vocab: "message_words_vocab",
-  item: "message",
-  thread: "chat",
-}
-
-// The same column names as messages and chats, so every rule reads mail as it reads messages. The text is the
-// subject, a blank line, then the body, so `subject:` reads the subject back from it.
-const MAIL: Corpus = {
-  rows: `(SELECT id, account_id, email_thread_id AS chat_id, external_id, deleted_at, from_identity_id AS sender_identity_id,
-    outgoing, read, flagged, coalesce(sent_at, received_at) AS sent_at,
-    coalesce(subject, '') || char(10, 10) || coalesce(body_text, '') AS text FROM emails)`,
-  threads: "(SELECT id, account_id, external_id, subject AS title, 1 AS searchable FROM email_threads)",
-  words: "email_words",
-  stems: "email_stems",
-  vocab: "email_words_vocab",
-  item: "email",
-  thread: "email_thread",
-}
 
 export const matchQuery = (context: StoreContext, execution: QueryExecution): Promise<Page<ScoredHit>> =>
   runQuery(context, execution) as Promise<Page<ScoredHit>>
@@ -393,20 +371,31 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     ranked.params.push(places.join(" OR "), places.join(" OR "), ...parts.flatMap(({ params }) => params))
   }
   const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 6)," : ""
+  const rarity =
+    execution.rareWordsFirst &&
+    !execution.newest &&
+    !mail &&
+    withRarity(database, corpus.words, [...fragments.values()], ranked)
   if (exactTier) {
     ranked.sql.push(`x(id) AS MATERIALIZED (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)`)
     ranked.params.push(`normalized_text : (${exactTier})`)
   }
   const withRanking = ranked.sql.length ? `WITH ${ranked.sql.join(", ")} ` : ""
-  const rankedFrom = ranking && !execution.newest ? `${from} LEFT JOIN f ON f.id=m.id` : from
+  // Joined, not read by a subquery: inside a window SQLite scanned the whole set once per row.
+  const rankedFrom = `${ranking && !execution.newest ? `${from} LEFT JOIN f ON f.id=m.id` : from}${rarity ? " LEFT JOIN rarity ON rarity.id=m.id" : ""}`
   const exactColumn = exactTier ? ", m.id IN (SELECT id FROM x) AS exact" : ""
   const relevance = rankMatch ? "f.rank" : ranking && !execution.newest ? "f.rank" : "NULL"
-  const tiers = execution.newest
-    ? ""
-    : rankMatch
-      ? "f.rank,"
-      : `${exactTier ? "m.id IN (SELECT id FROM x) DESC," : ""}${ranking ? `f.rank IS NULL, ${placeTier}f.rank,` : placeTier}`
-  const order = `${tiers}m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC`
+  const tiers = (rare: string) =>
+    execution.newest
+      ? ""
+      : rankMatch
+        ? `${rare}f.rank,`
+        : `${exactTier ? "m.id IN (SELECT id FROM x) DESC," : ""}${ranking ? `f.rank IS NULL, ${placeTier}${rare}f.rank,` : `${placeTier}${rare}`}`
+  const ties = "m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC"
+  const order = `${tiers(rarity ? RARITY_ORDER : "")}${ties}`
+  // Rarity picks a chat's hits; today's order picks the chats. Rare words of big groups otherwise filled the page,
+  // and a small chat's answer fell past it.
+  const acrossChats = `${tiers("")}${ties}`
   const leaves = [...fragments.values()]
   const exact = leaves.filter(({ test }) => test === undefined)
   const projection = exact.map(({ fragment }, index) => `coalesce(${fragment.sql},0) AS q${index}`).join(",")
@@ -465,6 +454,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     rankedFrom,
     exactColumn,
     order,
+    acrossChats,
     placeTier,
     projection,
     projectionParams,
@@ -588,6 +578,7 @@ const runCompiled = async (
     rankedFrom,
     exactColumn,
     order,
+    acrossChats,
     placeTier,
     projection,
     projectionParams,
@@ -606,8 +597,8 @@ const runCompiled = async (
     return grouped(by, where.sql, [...ranked.params, ...where.params], from, withRanking)
   // Exact forms come first, so a page they fill needs neither the stems nor their bm25: for a word in a few
   // percent of messages that was most of the cost (PERF-9). The exact tier is ranked as exact search ranks it.
-  const { newest, perChat } = execution
-  if (stemmed && exactTier && driver && !newest && !perChat && leaves.every(({ test }) => !test)) {
+  const { newest, perChat, rareWordsFirst } = execution
+  if (stemmed && exactTier && driver && !newest && !perChat && !rareWordsFirst && leaves.every(({ test }) => !test)) {
     const exactRows = database
       .prepare(
         `SELECT m.id AS id, w.rank AS relevance ${baseFrom.replace(rowsFrom, `FROM ${corpus.words} w CROSS JOIN ${corpus.rows} m`)} WHERE ${corpus.words} MATCH ? AND w.rank MATCH 'bm25(1.0, 0.0)' AND m.id=w.rowid AND ${filtered.sql} ORDER BY w.rank, m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC LIMIT ?`,
@@ -644,7 +635,7 @@ const runCompiled = async (
       .prepare(
         perChat === undefined
           ? `${withRanking}SELECT m.id AS id, ${relevance} AS relevance${exactColumn} ${rankedFrom} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`
-          : `${withRanking}SELECT id, relevance${exactColumn ? ", exact" : ""} FROM (SELECT m.id AS id, ${relevance} AS relevance${exactColumn}, ROW_NUMBER() OVER (PARTITION BY m.chat_id ORDER BY ${order}) AS in_chat, ROW_NUMBER() OVER (ORDER BY ${order}) AS place ${rankedFrom} WHERE ${where.sql}) WHERE in_chat <= ${perChat} ORDER BY place LIMIT ?`,
+          : `${withRanking}SELECT id, relevance${exactColumn ? ", exact" : ""} FROM (SELECT m.id AS id, ${relevance} AS relevance${exactColumn}, ROW_NUMBER() OVER (PARTITION BY m.chat_id ORDER BY ${order}) AS in_chat, ROW_NUMBER() OVER (ORDER BY ${acrossChats}) AS place ${rankedFrom} WHERE ${where.sql}) WHERE in_chat <= ${perChat} ORDER BY place LIMIT ?`,
       )
       .all(...ranked.params, ...where.params, execution.limit + 1)
     await new Promise<void>((resolve) => setImmediate(resolve))

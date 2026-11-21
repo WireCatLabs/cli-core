@@ -89,6 +89,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     )
     const { items } = await store.queries.matchQuery({
       ...lexical.execution,
+      rareWordsFirst: true,
       ...(prepared.selectedChat ? {} : { perChat: PER_CHAT }),
       ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
       ...(conversations === undefined ? {} : { conversationIds: conversations }),

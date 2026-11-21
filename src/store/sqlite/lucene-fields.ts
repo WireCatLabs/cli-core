@@ -45,6 +45,30 @@ export interface Corpus {
   thread: string
 }
 
+export const MESSAGES: Corpus = {
+  rows: "messages",
+  threads: "chats",
+  words: "message_words",
+  stems: "message_stems",
+  vocab: "message_words_vocab",
+  item: "message",
+  thread: "chat",
+}
+
+// The same column names as messages and chats, so every rule reads mail as it reads messages. The text is the
+// subject, a blank line, then the body, so `subject:` reads the subject back from it.
+export const MAIL: Corpus = {
+  rows: `(SELECT id, account_id, email_thread_id AS chat_id, external_id, deleted_at, from_identity_id AS sender_identity_id,
+    outgoing, read, flagged, coalesce(sent_at, received_at) AS sent_at,
+    coalesce(subject, '') || char(10, 10) || coalesce(body_text, '') AS text FROM emails)`,
+  threads: "(SELECT id, account_id, external_id, subject AS title, 1 AS searchable FROM email_threads)",
+  words: "email_words",
+  stems: "email_stems",
+  vocab: "email_words_vocab",
+  item: "email",
+  thread: "email_thread",
+}
+
 /**
  * A voice note's transcript is its attachment's text, whoever wrote it: speech recognition (`speech:<model>`) or an
  * agent, which writes the text of a voice attachment as `agent`. The voice attachment is the one
