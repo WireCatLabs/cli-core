@@ -46,6 +46,10 @@ const mapType = (entity: { map: Readonly<Record<string, unknown>> }) => {
 /** `posts.delete.force` → `delete.force`: the action, whatever route it is on. */
 const actionOf = (key: string) => key.slice(key.indexOf(".") + 1)
 
+/** Publishing and unpublishing go out as an update, so a yes to either is a yes to the update route's key too. */
+const covers = (yes: string, key: string) =>
+  actionOf(yes) === actionOf(key) || (actionOf(key) === "update" && ["publish", "unpublish"].includes(actionOf(yes)))
+
 const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`
 
 /**
@@ -142,7 +146,7 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
     const operation = options.api.operations.find((one) => one.id === call.operation)
     const route = (operation?.permissions ?? [])
       .map((one) => one.key)
-      .filter((key) => confirmed?.some((yes) => actionOf(yes) === actionOf(key)) && !confirmed.includes(key))
+      .filter((key) => confirmed?.some((yes) => covers(yes, key)) && !confirmed.includes(key))
     const { result } = await options.write(
       options.command,
       call.operation,

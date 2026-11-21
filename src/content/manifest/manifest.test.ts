@@ -222,6 +222,40 @@ describe("WordPress from configuration", () => {
     expect(confirmed).toEqual([[], ["posts.publish", "pages.publish", own]])
   })
 
+  it("takes a yes to publish or unpublish as a yes to the update route's key, and a yes to update as no more", async () => {
+    const { fake, source } = wordpress()
+    const confirmed: (readonly string[])[] = []
+    const routed = {
+      ...api,
+      operations: api.operations.map((one) =>
+        one.id === "postWpV2PagesById"
+          ? {
+              ...one,
+              permissions: [{ key: "posts.update" }, { key: "pages.publish", values: { status: ["publish"] } }],
+            }
+          : one,
+      ),
+    }
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api: routed,
+      write: (command, operation, input, keys) => {
+        confirmed.push(keys)
+        return fake.write(command, operation, input)
+      },
+      command: new Command("wp"),
+      source,
+    })
+    await writer.unpublish("12", { operationId: "op-1", confirmed: ["posts.unpublish"] })
+    await writer.publish("12", { operationId: "op-2", confirmed: ["posts.publish"] })
+    await writer.update("12", { title: "t" }, { operationId: "op-3", confirmed: ["posts.update"] })
+    const own = `api.${api.operations.find((one) => one.id === "postWpV2PagesById")?.command}`
+    expect(confirmed).toEqual([
+      ["posts.unpublish", "posts.update", own],
+      ["posts.publish", "posts.update", "pages.publish", own],
+      ["posts.update", own],
+    ])
+  })
+
   // FIND-2816: one `writes` named the posts route, and a page could only be read.
   it("writes a page by the page calls, and keeps it a page in the answer", async () => {
     const { fake, writer } = wordpress()
