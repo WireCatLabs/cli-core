@@ -21,19 +21,31 @@ const list = (items: SchemaNode): SchemaNode => ({ type: "array", items })
 const ref = (name: string): SchemaNode => ({ type: "ref", ref: name })
 
 const definitions: Record<string, SchemaNode> = {
-  Value: obj(
-    {
-      active_from: str,
-      attribute_type: str,
-      value: str,
-      full_name: str,
-      first_name: str,
-      last_name: str,
-      email_address: str,
-      referenced_actor_id: str,
-    },
-    ["active_from", "attribute_type"],
-  ),
+  // One of many typed shapes, as Attio's values are: a field written into the wrong one breaks the answer (FIND-2748).
+  Value: {
+    type: "union",
+    of: [
+      obj({ active_from: str, attribute_type: str, value: bool }, ["active_from", "attribute_type", "value"]),
+      obj({ active_from: str, attribute_type: str, value: str }, ["active_from", "attribute_type", "value"]),
+      obj({ active_from: str, attribute_type: str, full_name: str, first_name: str, last_name: str }, [
+        "active_from",
+        "attribute_type",
+        "full_name",
+        "first_name",
+        "last_name",
+      ]),
+      obj({ active_from: str, attribute_type: str, email_address: str }, [
+        "active_from",
+        "attribute_type",
+        "email_address",
+      ]),
+      obj({ active_from: str, attribute_type: str, referenced_actor_id: str }, [
+        "active_from",
+        "attribute_type",
+        "referenced_actor_id",
+      ]),
+    ],
+  },
   Entry: obj(
     {
       id: obj({ workspace_id: str, object_id: str, record_id: str }, ["workspace_id", "object_id", "record_id"]),

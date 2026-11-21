@@ -8,19 +8,19 @@ export const MISSING = Symbol("missing")
 type Read = unknown | typeof MISSING
 
 /** A dotted path; a number steps into a list (`results.0.id`), and `.` is the value itself. */
-export const at = (value: unknown, path: string): unknown =>
-  path === "."
-    ? value
-    : path.split(".").reduce<unknown>(
-        (inner, key) =>
-          // Past the end of a list the service sent is "none", not "not sent": a removed link must leave the copy.
-          Array.isArray(inner) && /^\d+$/.test(key)
-            ? (inner[Number(key)] ?? null)
-            : isRaw(inner)
-              ? inner[key]
-              : undefined,
-        value,
-      )
+export const at = (value: unknown, path: string): unknown => {
+  if (path === ".") return value
+  let inner = value
+  for (const key of path.split(".")) {
+    if (Array.isArray(inner) && /^\d+$/.test(key)) {
+      // Past the end of a list the service sent is "none", not "not sent", to the end of the path: a removed link or
+      // a cleared `values.job_title.0.value` must leave the copy.
+      if (Number(key) >= inner.length) return null
+      inner = inner[Number(key)] ?? null
+    } else inner = isRaw(inner) ? inner[key] : undefined
+  }
+  return inner
+}
 
 const read = (raw: CrmRaw, path: string): Read => {
   const found = at(raw, path)

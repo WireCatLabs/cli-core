@@ -165,14 +165,51 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     return ["string", "unknown"].includes(type) ? String(value) : undefined
   }
 
+  /** Whether the rest of a path is a field of this schema, and its leaf takes the value. */
+  const holds = (
+    node: SchemaNode,
+    keys: readonly string[],
+    fits: (leaf: SchemaNode | undefined) => boolean,
+  ): boolean => {
+    if (keys.length === 0) return fits(node)
+    const next = step(node, keys[0] as string, definitions)
+    if (next === null) return false
+    return next === undefined ? fits(undefined) : holds(next, keys.slice(1), fits)
+  }
+
+  /** Of a union, the branch the rest of the path belongs to: a value written into another branch breaks the schema. */
+  const branchFor = (node: SchemaNode | undefined, keys: readonly string[], fits: (leaf?: SchemaNode) => boolean) => {
+    const found = node === undefined ? undefined : resolve(node, definitions)
+    if (found?.type !== "union") return undefined
+    return found.of.find((one) => holds(one, keys, fits))
+  }
+
+  // Values a union's branch was sampled for: a second field on the same path keeps what the first wrote.
+  const chosen = new WeakSet<object>()
+
   /** The object a dotted path ends in, with its last key and schema: what is missing is built from the schema's sample. */
-  const parentOf = (row: CrmRaw, path: string, node: SchemaNode | undefined) => {
+  const parentOf = (
+    row: CrmRaw,
+    path: string,
+    node: SchemaNode | undefined,
+    fits: (leaf?: SchemaNode) => boolean = () => true,
+  ) => {
     const keys = path.split(".")
     const key = keys.pop() as string
     let here: Record<string, unknown> = row
     let schema = node
     for (const [place, one] of keys.entries()) {
-      const inner = schema === undefined ? undefined : (step(schema, one, definitions) ?? undefined)
+      let inner = schema === undefined ? undefined : (step(schema, one, definitions) ?? undefined)
+      const branch = branchFor(inner, [...keys.slice(place + 1), key], fits)
+      const held = here[one]
+      if (branch && !(typeof held === "object" && held !== null && chosen.has(held))) {
+        const made = sample(branch)
+        if (typeof made === "object" && made !== null) {
+          chosen.add(made)
+          here[one] = made
+        }
+      }
+      if (branch) inner = branch
       if (typeof here[one] !== "object" || here[one] === null) {
         const made = sample(inner)
         here[one] = typeof made === "object" && made !== null ? made : /^\d+$/.test(keys[place + 1] ?? key) ? [] : {}
@@ -185,7 +222,7 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
 
   /** Writes a value as the schema at its place takes it; one it cannot take is left out. */
   const put = (row: CrmRaw, path: string, value: Value, node: SchemaNode | undefined) => {
-    const { here, key, node: inner } = parentOf(row, path, node)
+    const { here, key, node: inner } = parentOf(row, path, node, (leaf) => typed(leaf, value) !== undefined)
     const written = typed(inner, value)
     if (written !== undefined) here[key] = written
   }

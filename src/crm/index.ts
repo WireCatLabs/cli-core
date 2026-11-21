@@ -19,6 +19,7 @@ export {
   type CrmRule,
   parseCrmManifest,
 } from "./manifest/manifest.js"
+export { at as valueAt } from "./manifest/map.js"
 export { crmManifestProblems } from "./manifest/paths.js"
 export { type CrmManifestSourceOptions, crmSourceFromManifest } from "./manifest/source.js"
 export { type ProviderCallOptions, providerCall } from "./provider-call.js"
