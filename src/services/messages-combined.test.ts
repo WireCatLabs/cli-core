@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { implicitTextTerms, parseLucene } from "@wirecat/cli-base/query"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../domain/models.js"
@@ -329,6 +330,18 @@ it("refuses corrected AST expansion past the parser node budget", async () => {
   await expect(
     searchCombined(store, account, request(Array.from({ length: 130 }, () => "rolluot").join(" "))),
   ).rejects.toMatchObject({ details: { reason: "query.too-large", budget: "nodes" } })
+})
+
+it("answers a statement SQLite refuses as too deep as a query too large, not SQLite's own error", async () => {
+  const store = await opened()
+  const prepare = DatabaseSync.prototype.prepare
+  vi.spyOn(DatabaseSync.prototype, "prepare").mockImplementation(function (this: DatabaseSync, sql: string) {
+    if (sql.includes("message_words MATCH")) throw new Error("VIEWs and/or subqueries nested too deep")
+    return prepare.call(this, sql)
+  })
+  await expect(searchCombined(store, account, request("aurora decision"))).rejects.toMatchObject({
+    details: { reason: "query.too-large", budget: "nodes" },
+  })
 })
 
 describe("implicit term intent", () => {

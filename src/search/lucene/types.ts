@@ -46,6 +46,14 @@ export function outOfTime(limitMs: number = QUERY_LIMITS.milliseconds): never {
 /** A search limit that leaves the answer without a part, such as its total, rather than failing it. */
 export const isQueryLimit = (error: unknown): boolean =>
   isCliError(error) && (error.details.reason === "query.too-large" || error.details.reason === "query.time-limit")
+// SQLite's own size limits on one statement; SQLite 3.54 (Node 24.22) reaches its nesting limit at about 53 words.
+const SQLITE_TOO_LARGE =
+  /nested too deep|too many terms in compound SELECT|Expression tree is too large|parser stack overflow/
+/** The error to throw on: a statement SQLite refused for its size is the search's own query.too-large. */
+export const sqliteLimit = (error: unknown): unknown => {
+  if (error instanceof Error && SQLITE_TOO_LARGE.test(error.message)) exhausted("nodes")
+  return error
+}
 export function exhausted(budget: string): never {
   throw new CliError("validation_error", `search exceeded its ${budget} budget — narrow the chat or date range`, {
     reason: "query.too-large",
