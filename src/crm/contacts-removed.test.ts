@@ -129,3 +129,19 @@ it("forgets a proposed split that names a removed contact, since it holds the co
 
   expect((await store.people.splitProposals({ status: "all", limit: 10, offset: 0 })).items).toEqual([])
 })
+
+it("under mine keeps a contact the CRM assigns to a user in scope, on no deal, and removes one of another user", async () => {
+  const { store, source, set, personOf } = await portal()
+  source.put("person", examplePerson("6", { name: "Fay", assignee: "07" }))
+  source.put("person", examplePerson("8", { name: "Gus", assignee: "9" }))
+  await syncCrm(source, store, PORTAL)
+  await set("scope", "mine")
+  source.put("deal", exampleDeal("d1", { assignee: "9" }))
+  const narrowed = await syncCrm(source, store, PORTAL)
+  expect(narrowed.contactsRemoved?.contacts).toBeGreaterThan(0)
+  expect(await personOf("6")).toMatchObject({ name: "Fay" })
+  expect(await personOf("8")).toBeUndefined()
+
+  await syncCrm(source, store, PORTAL, { rescan: true })
+  expect(await personOf("6")).toMatchObject({ name: "Fay" })
+})
