@@ -77,6 +77,49 @@ these services never select the owner's store implicitly. Text changes/removal s
 memories while retaining owner notes and tags. Accepted facts change only through explicit fact
 operations.
 
+## A source from a manifest
+
+A `files` CLI made from `wirecat.config.ts` can describe its source there instead of writing one.
+`documentSourceFromManifest(source, { api, call, hooks })` (`@wirecat/cli-core/documents/cli`) reads the manifest,
+checks it against the generated API (`parseDocumentManifest`: each operation exists and only reads, each call places
+the value it needs, an unknown operation names the one most likely meant) and answers a `DocumentSource`:
+
+| Field | What it says | Needs |
+|---|---|---|
+| `identity` | the call that names the account, and the paths joined by `:` (`["bot.workspace_id", "id"]`) | |
+| `get` | one file by its id, and `map`: the paths of a row's id, name, parent or parents, URL, times, version, trashed, and which rows are folders | `"{id}"` |
+| `children` | a folder's children, a page at a time by the operation's `pagination` (`childrenPage`) | `"{id}"` |
+| `changes` | what changed since a time (`since`: `iso`, `ms` or `seconds`), with an overlap (`overlapMs`, ten minutes by default); a trashed row is a removal, and a row older than the since at `time` is left out | `"{since}"` |
+| `content` | the document's Markdown, at the path `markdown` of the answer | `"{id}"` |
+| `reread` | a saved document read again while its `providerMetadata` has no value at `missing` (see below) | |
+| `reads` | further calls by name, for the hooks | |
+
+`call` is the CLI's `serviceApiCall`: the source's requests take the `api` group's transport, sign-in, headers and
+refusals. A method the manifest does not describe, or that the provider does another way, comes from `hooks`: a
+function given `read(name, slots)`, which sends a call the manifest names, `file(row)`, which maps a row, and `base`,
+the source the manifest alone describes. Each method a hook gives wins over the manifest's. A source with no
+`identity`, `metadata`, `children` or `content` from either is refused when it is built, and so is a change feed
+with only one of `startToken` and `changes`. Every request the sync makes is then one the config names. A call paged by a next-page link is refused: a source
+carries a cursor, an offset or a page number between rounds. A round of `changes` reads at most 100 pages; past them
+it goes on next time from the newest row it read, which needs the call to list changes oldest first, and fails with
+`source.changes-too-many` otherwise. A call in `reads` takes a name of its own: `identity`,
+`get`, `children`, `changes` and `content` are the manifest's.
+
+The config also says what the `api` group and the source send with every request (`api.headers`, such as the API's
+version; a header that could hold a credential is refused) and how fast (`api.pace`, with a slower pace for one
+operation in `api.pace.operations`).
+
+**Reading a saved document again.** A source that learned to read something later (a page's authors) gives
+`reread(saved)`: the sync reads a saved document again though it did not change while `reread` says so, at most
+`REREAD_BATCH` (50) a pass, so new edits are not held back. `content()` must give what `reread` asks for, or the
+document is read again on every pass. So the manifest's `reread` is refused unless a hook gives `content`: the
+manifest's own content saves no `providerMetadata`. Re-reads come after every real edit in the plan, so a run that
+stops on its deadline spends it on the edits first.
+
+cli-core checks `api.headers` and `api.pace` but does not apply them yet: the CLI passes them to its transport and to
+`serviceApiCall` (notion-cli's `src/notion/client.ts`). An operation named in `api.pace.operations` is not checked
+against the generated API.
+
 ## Walks over several syncs
 
 A sync stops before its end and saves where it is; the next sync goes on from there. No size makes it fail.

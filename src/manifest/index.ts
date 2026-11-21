@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import type { DocumentManifest } from "../cli/documents/manifest/manifest.js"
 import type { ContentManifest } from "../content/manifest/manifest.js"
 import type { CrmManifest } from "../crm/manifest/manifest.js"
 import type { OAuthProvider } from "../oauth/provider.js"
@@ -88,12 +89,28 @@ export interface CliConfig {
   /** cli-template's `--category`; `other` is any API outside them. */
   category: CliCategory
   /**
-   * A crm, tracker or content CLI's source; checked against the generated API by `parseCrmManifest`,
-   * `parseTrackerManifest` or `parseContentManifest` once the api group exists.
+   * A crm, tracker, content or files CLI's source; checked against the generated API by `parseCrmManifest`,
+   * `parseTrackerManifest`, `parseContentManifest` or `parseDocumentManifest` once the api group exists. A files CLI may
+   * have none: its source is then code of its own.
    */
-  source?: CrmManifest | TrackerManifest | ContentManifest
+  source?: CrmManifest | TrackerManifest | ContentManifest | DocumentManifest
+  /** What every request of the `api` group and the source carries, and how fast they go. */
+  api?: CliApi
   /** The module of named hooks, relative to the config: `./src/hooks.ts`. */
   hooks?: string
+}
+
+/** One pace: requests a minute, and how many may go at once after a pause. */
+export interface CliPace {
+  perMinute: number
+  burst?: number
+}
+
+export interface CliApi {
+  /** Fixed headers, such as the API's version (`notion-version`); never a credential, which the sign-in sends. */
+  headers?: Readonly<Record<string, string>>
+  /** The pace of every request; `operations` gives one operation a slower pace of its own, kept beside it. */
+  pace?: CliPace & { operations?: Readonly<Record<string, CliPace>> }
 }
 
 /** Types the config in the editor; it returns what it is given. */
@@ -160,6 +177,11 @@ const verify = v.optional(
   }),
 )
 
+const pace = {
+  perMinute: v.pipe(v.number(), v.minValue(1), v.maxValue(60_000)),
+  burst: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+}
+
 const schema = v.strictObject({
   identity: v.strictObject({
     command: word,
@@ -195,6 +217,29 @@ const schema = v.strictObject({
   ]),
   category: v.picklist(CLI_CATEGORIES),
   source: v.optional(v.looseObject({})),
+  api: v.optional(
+    v.strictObject({
+      headers: v.optional(
+        v.record(
+          v.pipe(
+            v.string(),
+            v.regex(/^[A-Za-z0-9-]+$/, "a header name: letters, digits and dashes"),
+            v.check(
+              (name) => !/^(authorization|cookie|proxy-authorization)$/i.test(name) && !secretName(name),
+              "a header that holds no credential: the sign-in sends that, and the config is committed",
+            ),
+          ),
+          v.pipe(v.string(), v.minLength(1)),
+        ),
+      ),
+      pace: v.optional(
+        v.strictObject({
+          ...pace,
+          operations: v.optional(v.record(v.pipe(v.string(), v.minLength(1)), v.strictObject(pace))),
+        }),
+      ),
+    }),
+  ),
   hooks: v.optional(
     v.pipe(
       v.string(),
@@ -230,10 +275,10 @@ export const parseCliConfig = (input: unknown): CliConfig => {
   const output: Omit<CliConfig, "source"> & { source?: Readonly<Record<string, unknown>> } = parsed.output
   const config = output as CliConfig
   const sourced = config.category === "crm" || config.category === "tracker" || config.category === "content"
-  if (!sourced && config.source)
+  if (!sourced && config.category !== "files" && config.source)
     throw new CliError(
       "configuration_error",
-      "wirecat.config: source: only a crm, tracker or content CLI reads a source yet",
+      "wirecat.config: source: only a crm, tracker, content or files CLI reads a source yet",
       {
         reason: "manifest.invalid",
       },

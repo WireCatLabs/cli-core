@@ -7,6 +7,7 @@ import { catalogFiles } from "../../documents/catalog.js"
 import type {
   DocumentSource,
   FeedlessDocumentSource,
+  IndexedSource,
   SourceChange,
   SourceFile,
   SourceState,
@@ -18,6 +19,7 @@ import { documentSource } from "../document-source.js"
 import { searchNotesQuery } from "../notes-search.js"
 import { documentIngestion } from "./ingestion.js"
 import { documentKnowledge } from "./knowledge.js"
+import { REREAD_BATCH } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
 import { syncDocuments } from "./sync.js"
 
@@ -159,6 +161,32 @@ describe("provider-neutral document sync", () => {
       expect(f.state().lastSync).toBe("2026-10-16T00:00:00.000Z")
     },
   )
+  it("reads a saved document again while the source asks, at most a batch a pass, and no more once read", async () => {
+    const f = await setup()
+    await syncDocuments(f.options)
+    await syncDocuments(f.options)
+    const authors = (saved: IndexedSource) => (saved.metadata.providerMetadata as { authors?: string })?.authors
+    const source: DocumentSource = { ...f.source, reread: (saved) => authors(saved) === undefined }
+    vi.mocked(f.source.content).mockClear()
+    vi.mocked(f.source.content).mockImplementation(async (id) => ({
+      metadata: { ...must(f.files.get(id)), providerMetadata: { authors: "names" } },
+      markdown: "x",
+      text: "x",
+      tabs: [],
+    }))
+    await syncDocuments({ ...f.options, source })
+    expect(
+      vi
+        .mocked(f.source.content)
+        .mock.calls.map(([id]) => id)
+        .sort(),
+    ).toEqual(["a", "b"])
+    expect(Object.values(f.state().documents).map(authors)).toEqual(["names", "names"])
+    vi.mocked(f.source.content).mockClear()
+    await syncDocuments({ ...f.options, source })
+    expect(f.source.content).not.toHaveBeenCalled()
+    expect(REREAD_BATCH).toBeGreaterThan(0)
+  })
   it("without a change feed walks every pass, saves only what changed and removes what a finished pass lost", async () => {
     const f = await setup()
     const { startToken: _start, changes: _changes, ...rest } = f.source
