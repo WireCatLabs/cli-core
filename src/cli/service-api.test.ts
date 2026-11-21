@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { ManifestOperation } from "@wirecat/cli-base/codegen"
 import { hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -11,7 +11,7 @@ import { outputFor } from "./context.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { commandPermissions } from "./permission-keys.js"
 import { createProgram, run } from "./program.js"
-import { serviceApiPermissions, serviceApiWriter } from "./service-api.js"
+import { type ServiceApiOptions, serviceApiPermissions, serviceApiWriter } from "./service-api.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
 import { serviceApiCommand } from "./shared-command-exports.js"
@@ -291,7 +291,7 @@ type Sent = {
 const fixture = (
   saved: Record<string, string> = {},
   answer: (sent: Sent) => Response = () => Response.json({ object: "page", id: "p1" }),
-  over: Partial<typeof api> & { signsIn?: false } = {},
+  over: Partial<typeof api> & { signsIn?: false } & Pick<ServiceApiOptions, "failedAnswer"> = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "service-api-"))
   const env = {
@@ -887,6 +887,23 @@ describe("the shared service api group", () => {
     )
     expect(lost.error).toMatchObject({ code: "outcome_unknown" })
     for (const one of filesUnder(root)) expect(readFileSync(one).includes(marker), one).toBe(false)
+  })
+
+  it("**a 200 answer the CLI's failedAnswer names is its error**, for a read and a write; without it the answer prints", async () => {
+    const refused = () => Response.json({ ok: false, error: "channel_not_found" })
+    const failedAnswer = (answer: unknown) =>
+      (answer as { ok?: boolean }).ok === false ? new CliError("not_found", "Pages has no such channel") : undefined
+    const { cli } = fixture({ api: "allow" }, refused, { failedAnswer })
+    expect((await cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).error).toMatchObject({
+      code: "not_found",
+    })
+    const write = await cli("work", "api", "patch-page", "--page-id", "p1", "--body", "{}", "--json")
+    expect(write.error).toMatchObject({ code: "not_found", message: "Pages has no such channel" })
+    const plain = fixture({ api: "allow" }, refused)
+    expect((await plain.cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")).json.item).toEqual({
+      ok: false,
+      error: "channel_not_found",
+    })
   })
 
   it("**a flag counts unless it is plainly false**: `1` or `True` overwrites as `true` does", async () => {

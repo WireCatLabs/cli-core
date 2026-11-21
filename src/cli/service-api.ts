@@ -91,6 +91,8 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   /** Fields `api show` adds to every answer, such as the API version the commands send. */
   shown?: Readonly<Record<string, unknown>>
   failure?: (status: number, answer: unknown, operation: ManifestOperation) => CliError | undefined
+  /** The service's refusal inside a 2xx answer, such as Slack's `{"ok": false}`: see `HttpApiExecutorOptions`. */
+  failedAnswer?: (answer: unknown, operation: ManifestOperation) => CliError | undefined
 }
 
 /**
@@ -310,6 +312,7 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     service: options.service,
     fetch: options.fetch,
     ...(options.failure ? { failure: options.failure } : {}),
+    ...(options.failedAnswer ? { failedAnswer: options.failedAnswer } : {}),
   })
 
   const operationOf = (name: string): ManifestOperation => {
