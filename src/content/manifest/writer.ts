@@ -46,9 +46,12 @@ const mapType = (entity: { map: Readonly<Record<string, unknown>> }) => {
 /** `posts.delete.force` → `delete.force`: the action, whatever route it is on. */
 const actionOf = (key: string) => key.slice(key.indexOf(".") + 1)
 
-/** Publishing and unpublishing go out as an update, so a yes to either is a yes to the update route's key too. */
+const resourceOf = (key: string) => key.slice(0, key.indexOf("."))
+
+/** Publishing and unpublishing go out as an update, so a yes to either is a yes to the same resource's update key. */
 const covers = (yes: string, key: string) =>
-  actionOf(yes) === actionOf(key) || (actionOf(key) === "update" && ["publish", "unpublish"].includes(actionOf(yes)))
+  actionOf(yes) === actionOf(key) ||
+  (key === `${resourceOf(yes)}.update` && ["publish", "unpublish"].includes(actionOf(yes)))
 
 const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`
 
