@@ -43,6 +43,9 @@ const mapType = (entity: { map: Readonly<Record<string, unknown>> }) => {
   return rule && typeof rule === "object" && "value" in rule ? rule.value : "post"
 }
 
+/** `posts.delete.force` → `delete.force`: the action, whatever route it is on. */
+const actionOf = (key: string) => key.slice(key.indexOf(".") + 1)
+
 const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`
 
 /**
@@ -134,13 +137,19 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   ) => {
     const base = call.body === undefined ? {} : (fill(call.body, slots) as Record<string, unknown>)
     // The owner said yes to this write in the content command, so its one call is not asked about again; a key that
-    // command did not ask about, as the publish key for a post that is published at the source now, still is.
-    const own = options.api.operations.find((one) => one.id === call.operation)?.command
+    // command did not ask about, as the publish key for a post that is published at the source now, still is. A page's
+    // call checks its own route's keys (`pages.publish`): the one for the action the owner said yes to goes with it.
+    const operation = options.api.operations.find((one) => one.id === call.operation)
+    const route = (operation?.permissions ?? [])
+      .map((one) => one.key)
+      .filter((key) => confirmed?.some((yes) => actionOf(yes) === actionOf(key)) && !confirmed.includes(key))
     const { result } = await options.write(
       options.command,
       call.operation,
       inputOf(call, slots, body === undefined && call.body === undefined ? undefined : { ...base, ...body }),
-      !confirmed?.length ? [] : [...confirmed, ...(own === undefined ? [] : [`api.${own}`])],
+      !confirmed?.length
+        ? []
+        : [...confirmed, ...route, ...(operation?.command === undefined ? [] : [`api.${operation.command}`])],
     )
     return result
   }

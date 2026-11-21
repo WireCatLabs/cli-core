@@ -19,7 +19,8 @@
   that is a right the role lacks (`optional.requires`, `needs`, `fallback`; `ContentGap.lasting`) now lets the cursor
   move on, and the id pass reads each post it no longer lists once more by its id: only a 404 marks it deleted, a
   refusal keeps it. The cursor keeps the rights the role lacked; once it has one more, the kind is listed in full
-  again.
+  again. Only an entity with a `get` gives such a gap; without one it still holds the pass. A post's tags in a
+  manifest whose `writes.fields` has no `terms` are now refused instead of dropped without a word.
 - **A post's text keeps its `-` list marker.** `htmlToMarkdown` wrote `* one` for `- one`, so a body read back
-  differed from the file it was written from.
+  differed from the file it was written from. A stored post with a list gets one new revision the next time it is read.
 - **`content.schedule-past` names `--at-time`,** the option `posts publish` takes, not `--at`.

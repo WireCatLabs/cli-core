@@ -332,6 +332,33 @@ describe("a role refused some of a kind's calls", () => {
       signedIn.fake.refusals.length = 0
     })
 
+  it("holds the pass for a role that lacks a right where a row cannot be read by its id", async () => {
+    const [post, page] = WORDPRESS_CONTENT.entities.post as unknown as [object, { get?: unknown }]
+    const { get: _, ...unread } = page
+    const manifest = { ...WORDPRESS_CONTENT, entities: { ...WORDPRESS_CONTENT.entities, post: [post, unread] } }
+    const copy = await store()
+    const editor = over(manifest)
+    await syncContent(editor.source, copy, account, { now: editor.now() })
+    const author = over(manifest, ["capabilities.edit_pages"])
+    author.later(2 * DAY)
+    const report = await syncContent(author.source, copy, account, { now: author.now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ pass: "held", unlisted: 0 })
+    expect(await pagesOf(copy)).toEqual(["12"])
+  })
+
+  it("holds the cursor when a read is refused with the same words as a right the role lacks", async () => {
+    const copy = await store()
+    const signedIn = over(WORDPRESS_CONTENT, [], WORDPRESS_CONTENT, {
+      lacks: ["capabilities.edit_others_posts"],
+      denied: ["getWpV2Posts"],
+    })
+    const report = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+    const words = "the sign-in may not read every post: a contributor sees its own"
+    expect(report.gaps.filter((one) => one.message === words).map((one) => one.lasting ?? false)).toEqual([true, false])
+    const cursor = JSON.parse((await copy.sync.syncState(account, "content:post"))?.value ?? "null")
+    expect(cursor.token).toBeNull()
+  })
+
   it("lists everything again once the sign-in gains the right it lacked", async () => {
     const copy = await store()
     const author = over(WORDPRESS_CONTENT, ROLES.author)

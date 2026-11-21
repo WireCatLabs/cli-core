@@ -115,6 +115,12 @@ const pageOf = (page: string | undefined, now: number) => {
   return Number.isSafeInteger(call) && call >= 0 ? { call, token, started } : { call: -1, token: undefined, started }
 }
 
+/**
+ * A right the role lacks is a lasting gap only where each row the list leaves out can be read by its id: there a 404
+ * proves a row gone. A kind without that read keeps the gap a refusal, which holds its deletions.
+ */
+const lastingOf = (entity: ContentManifestEntity) => (entity.get ? { lasting: true as const } : {})
+
 const gone = (error: unknown) => isCliError(error) && error.code === "not_found"
 const forbidden = (error: unknown) =>
   isCliError(error) && (error.code === "permission_error" || error.details.inner_status === 403)
@@ -221,7 +227,12 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
   ) => {
     const { needs, requires } = entity.optional ?? {}
     if (needs && !(await has(needs, send))) {
-      context?.gap({ kind, message: needs.message, ...(needs.scope ? { scope: needs.scope } : {}), lasting: true })
+      context?.gap({
+        kind,
+        message: needs.message,
+        ...(needs.scope ? { scope: needs.scope } : {}),
+        ...lastingOf(entity),
+      })
       return false
     }
     if (requires && !(await has(requires, send)))
@@ -229,7 +240,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
         kind,
         message: entity.optional?.message ?? "",
         ...(entity.optional?.scope ? { scope: entity.optional.scope } : {}),
-        lasting: true,
+        ...lastingOf(entity),
       })
     return true
   }
@@ -257,7 +268,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
         kind,
         message: fallback.message,
         ...(fallback.scope ? { scope: fallback.scope } : {}),
-        lasting: true,
+        ...lastingOf(entity),
       })
       return read()
     }

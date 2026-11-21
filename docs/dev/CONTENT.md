@@ -44,7 +44,8 @@ stays as it is, with a gap.
 
 Once a day an id pass lists every id. It is held, marking nothing, when the list is empty, when it would mark more than
 half of a kind of ten rows or more, when a page of it was refused (in this run or the run it resumes), or when the site
-moved. A right the role lacks does not hold it: an author's list is complete for what the author may see. Otherwise each stored row the list lacks is read once more with `get`, and only a row the source says is gone
+moved. A right the role lacks does not hold it where the entity has a `get`: an author's list is complete for what
+the author may see, and each row it lacks is read by its id. An entity without a `get` keeps such a gap a refusal. Otherwise each stored row the list lacks is read once more with `get`, and only a row the source says is gone
 is marked deleted: a list paged by number skips a row when an earlier one is deleted between pages. A source that
 cannot read one row by id throws `content.get-unsupported`, and then absence from a complete list marks it. A budget
 stops a run between requests; the next run goes on from the page it reached.

@@ -196,6 +196,32 @@ describe("WordPress from configuration", () => {
     expect(confirmed).toEqual([["posts.publish", own], []])
   })
 
+  it("passes the page route's own key for the action the owner said yes to", async () => {
+    const { fake, source } = wordpress()
+    const confirmed: (readonly string[])[] = []
+    const routed = {
+      ...api,
+      operations: api.operations.map((one) =>
+        one.id === "postWpV2PagesById"
+          ? { ...one, permissions: [{ key: "pages.publish", values: { status: ["publish", "future"] } }] }
+          : one,
+      ),
+    }
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api: routed,
+      write: (command, operation, input, keys) => {
+        confirmed.push(keys)
+        return fake.write(command, operation, input)
+      },
+      command: new Command("wp"),
+      source,
+    })
+    await writer.unpublish("12", { operationId: "op-1" })
+    await writer.publish("12", { operationId: "op-2", confirmed: ["posts.publish"] })
+    const own = `api.${api.operations.find((one) => one.id === "postWpV2PagesById")?.command}`
+    expect(confirmed).toEqual([[], ["posts.publish", "pages.publish", own]])
+  })
+
   // FIND-2816: one `writes` named the posts route, and a page could only be read.
   it("writes a page by the page calls, and keeps it a page in the answer", async () => {
     const { fake, writer } = wordpress()

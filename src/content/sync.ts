@@ -414,7 +414,8 @@ export const syncContent = async (
         report.progress.requests += 1
       },
       gap: (gap) => {
-        const key = `${gap.kind} ${gap.message}`
+        // A refusal with the same words as a right the role lacks still holds the cursor and the pass.
+        const key = `${gap.kind} ${gap.message}${gap.lasting ? " lasting" : ""}`
         if (said.has(key)) return
         said.add(key)
         report.gaps.push(gap)
@@ -444,7 +445,7 @@ export const syncContent = async (
   if (resumed)
     for (const gap of await contentGapsOf(store, account))
       if (done.has(gap.kind)) {
-        said.add(`${gap.kind} ${gap.message}`)
+        said.add(`${gap.kind} ${gap.message}${gap.lasting ? " lasting" : ""}`)
         report.gaps.push(gap)
       }
   for (const kind of kinds.filter((one) => !done.has(one))) {
