@@ -734,6 +734,35 @@ describe("the shared service api group", () => {
     expect(sent).toEqual([])
   })
 
+  it("**a denied key refuses a call before its body is read**, even a required body left out", async () => {
+    const erase: Operation = {
+      id: "erase-person",
+      command: "erase-person",
+      binding: { kind: "http", method: "POST", path: "/people/erase" },
+      effect: "write",
+      tags: ["People"],
+      parameters: [],
+      request: { required: true, confidence: "contract" },
+      permissions: [{ key: "people.erase" }],
+    }
+    const over = { manifest: { ...manifest, operations: [...operations, erase] } }
+    const byOwn = fixture({ "api.erase-person": "deny" }, undefined, over)
+    const refused = await byOwn.cli("work", "api", "erase-person", "--json")
+    expect(refused.code).toBe(5)
+    expect(refused.error).toMatchObject({ code: "permission_error", details: { permission: "api.erase-person" } })
+    const byKey = fixture({ "people.erase": "deny", api: "allow" }, undefined, over)
+    const erased = await byKey.cli("work", "api", "erase-person", "--json")
+    expect(erased.code).toBe(5)
+    expect(erased.error).toMatchObject({ code: "permission_error", details: { permission: "people.erase" } })
+    const readOnly = fixture({ "people.erase": "readonly", api: "allow" }, undefined, over)
+    expect((await readOnly.cli("work", "api", "erase-person", "--json")).code).toBe(5)
+    const allowed = fixture({ "people.erase": "allow", api: "allow" }, undefined, over)
+    expect((await allowed.cli("work", "api", "erase-person", "--json")).error).toMatchObject({
+      code: "validation_error",
+    })
+    expect([...byOwn.sent, ...byKey.sent, ...readOnly.sent, ...allowed.sent]).toEqual([])
+  })
+
   it("**names the manifest's keys for --dry-run and discovery**, and starts them at ask", () => {
     const { alsoChecks, defaults, extra } = serviceApiPermissions(api)
     expect(alsoChecks(["api", "delete-a-block"])).toEqual(["documents.delete"])
