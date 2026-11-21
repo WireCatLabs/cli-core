@@ -1,8 +1,1 @@
-[
-  {
-    "repo": "whatsapp-cli",
-    "pr": 3139,
-    "until": "2026-11-26",
-    "reason": "#3139 added cancelScheduled, editScheduled and sendScheduled to COMMAND_NEEDS; whatsapp-cli's messenger.test.ts expects WHATSAPP.lacks to name exactly the methods its adapter misses, and lacks does not name these three yet"
-  }
-]
+[]
