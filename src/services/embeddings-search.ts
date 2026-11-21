@@ -48,6 +48,8 @@ const SHOWN_CHARS = 200
 const SHOWN_HEAD = 80
 /** Messages of a chunk read to pick the shown ones: a chunk is ~1,200 characters. */
 const CHUNK_READ = 60
+/** Replies from outside a hit's chunk read per hit; the best one is shown with its lines. */
+const REPLIES_READ = 60
 /** Reciprocal rank fusion's usual constant (phase 5 E9). */
 const RRF_K = 60
 
@@ -374,9 +376,32 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     // The query's own words count twice: the made-up answer's words would otherwise pick its lines over the answer's.
     const asked = wordStems(query)
     const stems = [...asked, ...wordStems(texts.join(" "))]
+    // The answer to a chunk's question is often a reply sent later, which chunking put in another chunk.
+    const replies = (async () => {
+      const found = new Map<FoundConversation, Awaited<ReturnType<typeof store.conversations.chunkReplies>>[number]>()
+      const bySource = new Map<string, { source: AccountKey; hits: FoundConversation[] }>()
+      for (const hit of [...hits, ...ownHits, ...ownSpare]) {
+        const source = hit.source ?? account
+        const group = bySource.get(JSON.stringify(source)) ?? { source, hits: [] }
+        group.hits.push(hit)
+        bySource.set(JSON.stringify(source), group)
+      }
+      for (const { source, hits: group } of bySource.values()) {
+        const read = await store.conversations.chunkReplies(
+          source,
+          group.map(({ summary, chunk }) => ({ conversationId: summary.id, ...chunk })),
+          REPLIES_READ,
+        )
+        for (const [index, hit] of group.entries()) found.set(hit, read[index] ?? [])
+      }
+      return found
+    })()
     const withLines = async <T extends FoundConversation>(hit: T, ownFirst: boolean): Promise<T> => {
       const read = await store.conversations.chunkMessages(hit.source ?? account, hit.summary.id, hit.chunk, CHUNK_READ)
-      const lines = shownLines(read, stems, ownFirst, asked)
+      const lines = [
+        ...shownLines(read, stems, ownFirst, asked),
+        ...shownLines((await replies).get(hit) ?? [], stems, false, [], 1),
+      ]
       return lines.length ? { ...hit, lines } : hit
     }
     return {
@@ -540,7 +565,7 @@ const fused = (
 const wordStems = (text: string) => [...new Set(queryWords(text).map((word) => word.slice(0, 5)))]
 
 /**
- * The messages that share most of `stems`, at most `SHOWN_LINES`, oldest first, each cut by `cutAround`. With
+ * The messages that share most of `stems`, at most `count`, oldest first, each cut by `cutAround`. With
  * `ownFirst` the owner's own messages come first: the owner block is there for them.
  */
 const shownLines = (
@@ -548,6 +573,7 @@ const shownLines = (
   stems: string[],
   ownFirst: boolean,
   asked: string[],
+  count = SHOWN_LINES,
 ) => {
   const scored = read.map(({ text, ...line }, at) => {
     const flat = text.replace(/\s+/g, " ").trim()
@@ -556,7 +582,7 @@ const shownLines = (
     const first = found.reduce((least, stem) => Math.min(least, lower.indexOf(stem)), Number.POSITIVE_INFINITY)
     return { ...line, flat, at, score: found.length + (ownFirst && line.outgoing ? 100 : 0), first }
   })
-  const picked = [...scored].sort((a, b) => b.score - a.score || a.at - b.at).slice(0, SHOWN_LINES)
+  const picked = [...scored].sort((a, b) => b.score - a.score || a.at - b.at).slice(0, count)
   // A question is answered by the message after it, which rarely repeats the question's words.
   const matches = (flat: string) => asked.filter((stem) => flat.toLowerCase().includes(stem)).length
   const asking = scored.reduce<(typeof scored)[number] | undefined>(

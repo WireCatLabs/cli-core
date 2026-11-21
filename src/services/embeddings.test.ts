@@ -183,6 +183,23 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**shows the best reply from outside the hit's chunk**, one per hit: a later answer lands in another chunk", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", "zebra"),
+        message("2", "dog ".repeat(400).trim()),
+        message("3", "fish", "1"),
+        message("4", "cat", "1"),
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("zebra", { model: "tiny", limit: 1 })
+    expect(found.hits[0]?.chunk).toEqual({ firstMessageId: "1", lastMessageId: "1" })
+    expect(found.hits[0]?.lines).toEqual(["zebra", "fish"])
+    await store.close()
+  })
+
   it("**keeps the owner's chunk in the block when a named chat's hits push its conversation off the page**", async () => {
     const { store, embeddings, conversations } = await setUp({
       messages: [{ ...message("80", "fish"), outgoing: true }],

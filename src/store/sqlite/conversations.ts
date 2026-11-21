@@ -538,6 +538,49 @@ export const chunkMessagesOf = (
     )
     .map(({ outgoing, ...line }) => ({ ...line, outgoing: Boolean(outgoing) }))
 
+/**
+ * Per chunk, in the same order: replies (the messenger's own reply links) to its messages that are not in it, oldest
+ * first. One query serves a whole page: one per hit added up to two seconds to a search.
+ */
+export const chunkRepliesOf = (
+  { orm }: StoreContext,
+  accountPk: number,
+  chunks: { conversationId: string; firstMessageId: Id; lastMessageId: Id }[],
+  limit: number,
+): { id: Id; sender: string | null; text: string; outgoing: boolean }[][] => {
+  const found = chunks.map((): { id: Id; sender: string | null; text: string; outgoing: boolean }[] => [])
+  const wanted = chunks.map(({ conversationId, firstMessageId, lastMessageId }) => ({
+    c: Number(conversationId),
+    f: firstMessageId,
+    l: lastMessageId,
+  }))
+  if (!wanted.length) return found
+  const rows = orm.all<{ n: number; id: string; sender: string | null; text: string; outgoing: number }>(
+    sql`WITH want(n, conv, first, last) AS (SELECT key, json_extract(value, '$.c'), json_extract(value, '$.f'),
+          json_extract(value, '$.l') FROM json_each(${JSON.stringify(wanted)})),
+        inside(n, id) AS MATERIALIZED (SELECT w.n, m.id
+          FROM want w
+          JOIN conversations c ON c.id = w.conv
+          JOIN chats ch ON ch.id = c.chat_id AND ch.account_id = ${accountPk}
+          JOIN messages f ON f.chat_id = c.chat_id AND f.external_id = w.first
+          JOIN messages l ON l.chat_id = c.chat_id AND l.external_id = w.last
+          JOIN conversation_messages cm ON cm.conversation_id = c.id
+          JOIN messages m ON m.id = cm.message_id
+          WHERE (m.sent_at, m.id) >= (f.sent_at, f.id) AND (m.sent_at, m.id) <= (l.sent_at, l.id))
+      SELECT DISTINCT i.n, r.external_id AS id, r.sender_name AS sender, r.text, r.outgoing, r.sent_at, r.id AS pk
+      FROM inside i
+      JOIN message_links k ON k.parent_id = i.id AND k.kind = 'reply' AND k.stale_at IS NULL
+      JOIN messages r ON r.id = k.message_id
+      WHERE r.deleted_at IS NULL AND r.text != '' AND NOT EXISTS (SELECT 1 FROM inside o WHERE o.n = i.n AND o.id = r.id)
+      ORDER BY i.n, r.sent_at, r.id`,
+  )
+  for (const { n, id, sender, text, outgoing } of rows) {
+    const list = found[n]
+    if (list && list.length < limit) list.push({ id, sender, text, outgoing: Boolean(outgoing) })
+  }
+  return found
+}
+
 const staleLink = (chatKey: number) => sql<boolean>`(${messageLinks.staleAt} IS NOT NULL
   OR EXISTS (SELECT 1 FROM message_revisions r WHERE r.message_id IN (${messageLinks.messageId}, ${messageLinks.parentId})
     AND r.created_at >= ${messageLinks.createdAt})
