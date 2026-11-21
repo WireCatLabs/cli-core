@@ -45,7 +45,9 @@ stops keeps its ids and the page it reached.
   more but gives no next page fails the kind.
 - **The owner's tasks.** After the kinds, a sync whose tracker has `self` and issues brings the owner's tasks in line
   with the copy (`syncTrackerTasks`, below) and answers what it did in `tasks`. The user's id is read once and kept as
-  `tracker:self` in the account's sync state: an account is one sign-in. Without `self` the answer has no `tasks`.
+  `tracker:self` in the account's sync state and never read again, so a tracker CLI must key the account by the user
+  it signs in as (its sign-in check names the user, as linear-cli's `viewer`), not by the workspace. Without `self`,
+  or in a cancelled run, the answer has no `tasks`.
   When the budget is spent before the id is read, or the id or a task cannot be read or written, the tasks are left as
   they were and `tasks.skipped` says why; the copy is saved either way.
 - **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a gap held it. A
@@ -69,7 +71,9 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
   issue assigned to `self` whose state type is open work (`triage`, `backlog`, `unstarted`, `started`) a task of origin
   `rule`. memo and Desktop list it with the other tasks; nothing is written to the tracker.
 - **Picked by hand.** `trackerIssueTask(store, account, issue)` and `issues assign <issue>` make any issue the owner's
-  task, whoever holds it (origin `owner`). An issue the sync already made a task of answers that task.
+  task, whoever holds it (origin `owner`). An issue the sync already made a task of answers that task, opened again
+  when closed. That task is the owner's pick from then on (`tracker:owner-picks` in sync state): the issue going to
+  someone else no longer closes it.
 - **The title is stored**, not resolved when read: lists, the board, search and filters read the task's stored title
   and its folded copy, as they do for a task found in a message. Each sync writes the issue's current key and title
   over it when they changed.
@@ -77,9 +81,14 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
   (`dismissed`), and a task of origin `rule` also when the issue is assigned to someone else or to no one. The reason
   says which, such as `the issue was completed in linear`. Tasks of any other `sourceKind` are never touched.
 - **Reopening.** A task the sync closed, with one of those reasons, opens again when its issue's state is open work
-  again (and, for origin `rule`, assigned to `self` again); a state the copy does not hold yet reopens nothing. A task
-  the owner closed stays closed, as a dismissed one does, and one the owner opened again after a sync closed it is not
-  closed again.
+  again (and, for origin `rule`, assigned to `self` again), in the status it had before; a state the copy does not
+  hold yet reopens nothing. A task the owner closed stays closed, as a dismissed one does.
+- **The owner's reopen.** Any status change of the owner after the sync's own close (its bot, `rule`; an agent's
+  close is not the sync's) is the owner's call. It holds against the issue going to someone else or to no one for
+  good. Against any other close it holds until a sync sees nothing closing the task (the issue open work and the
+  owner's); the issue's next close then closes the task again. The sync keeps those ends in
+  `tracker:owner-reopens-released`. To know them it reads the status events of every open task from an issue on
+  each sync: one local query a task.
 - **Limits.** The sync reads the tasks in the account's inbox: a task the owner moved into a project keeps its title
   and state. The issue's title wins over a title the owner gave the task.
 
@@ -113,7 +122,8 @@ result.
 `trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor
 read again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an
 archived row still listed, a deleted row leaving `ids()`, a list cut after its first page, a spent budget ending a
-call that pages inside, and `self()`, when the tracker has it, naming one of its users. `fakeTrackerSource` and `exampleTrackerRows` are an in-memory tracker for tests.
+call that pages inside, and `self()`, when the tracker has it, naming one of its users. `fakeTrackerSource` and
+`exampleTrackerRows` are an in-memory tracker for tests.
 
 A source built from a manifest runs the contract with no code for the service, as a CLI made from `wirecat.config.ts`
 does in its generated test:

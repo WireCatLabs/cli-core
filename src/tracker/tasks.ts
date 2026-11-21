@@ -63,7 +63,15 @@ export const trackerIssueTask = async (
   if (!found || found.deletedAt !== null)
     throw new CliError("not_found", `no issue ${issue} in the copy of ${account.provider}; run sync, then try again`)
   const { task, created } = await addIssueTask(store, account, found.record, "owner", now, dueAt)
-  return { task, created }
+  if (created) return { task, created }
+  // A task the sync made, picked by hand, is the owner's whoever holds the issue: the sync no longer closes it when
+  // the issue goes to someone else, and opens it again if it had closed it.
+  const picked = new Set(JSON.parse((await store.sync.syncState(account, PICKED))?.value ?? "[]") as string[])
+  if (task.origin === "rule" && !picked.has(task.id))
+    await store.sync.setSyncState(account, PICKED, JSON.stringify([...picked, task.id]))
+  if (!isClosedState(task.state)) return { task, created }
+  await store.tasks.edit(task.id, { status: "open" }, "owner")
+  return { task: (await store.tasks.get(task.id)) ?? task, created }
 }
 
 /** What a sync did to the owner's tasks from issues assigned to the signed-in user. */
@@ -85,16 +93,30 @@ const closing: Record<Why, { as: ClosedState; reason: (provider: string) => stri
   unassigned: { as: "dismissed", reason: (provider) => `the issue was unassigned in ${provider}` },
 }
 
-/** The owner opened the task again after a sync closed it: the owner's call wins over the issue's state. */
-const ownerReopened = async (store: MessageStore, id: string) => {
+/**
+ * The owner's reopens the sync has seen end: a task id and the time of its reopen, recorded once the issue was open work
+ * again, after which the issue's next close closes the task again.
+ */
+const RELEASED = "tracker:owner-reopens-released"
+/** Tasks the sync made that the owner then picked with `issues assign`: theirs whoever holds the issue. */
+const PICKED = "tracker:owner-picks"
+
+/**
+ * What the task's events say of the sync's last close: the status it closed from, and the time of the owner's first
+ * status change after it, when there is one.
+ */
+const lastClose = async (store: MessageStore, id: string) => {
   const statuses = (await store.tasks.events(id)).filter((event) => event.kind === "status")
-  const [closed, opened] = statuses.slice(-2)
-  return (
-    closed?.actor?.type === "bot" &&
-    opened !== undefined &&
-    opened.actor?.type !== "bot" &&
-    !isClosedState(String(opened.changes?.status?.[1]))
+  const at = statuses.findLastIndex(
+    (event) =>
+      event.actor?.type === "bot" && event.actor.name === SYNC.bot && isClosedState(String(event.changes?.status?.[1])),
   )
+  if (at < 0) return undefined
+  const from = statuses[at]?.changes?.status?.[0]
+  return {
+    from: typeof from === "string" && !isClosedState(from) ? (from as Task["state"]) : "open",
+    owner: statuses.slice(at + 1).find((event) => event.actor?.type !== "bot")?.at,
+  }
 }
 
 /**
@@ -132,6 +154,9 @@ export const syncTrackerTasks = async (
     tasks = tasks.concat(page)
     if (page.length < PAGE) break
   }
+  const before = JSON.parse((await store.sync.syncState(account, RELEASED))?.value ?? "{}") as Record<string, string>
+  const released: Record<string, string> = {}
+  const picked = new Set(JSON.parse((await store.sync.syncState(account, PICKED))?.value ?? "[]") as string[])
   const states = new Map<string, StateType | undefined>()
   const typeOf = async (state: string | null | undefined) => {
     if (!state) return undefined
@@ -149,7 +174,7 @@ export const syncTrackerTasks = async (
           ? "archived"
           : type === "completed" || type === "canceled"
             ? type
-            : task.origin === "rule" && issue?.assignee !== self
+            : task.origin === "rule" && !picked.has(task.id) && issue?.assignee !== self
               ? issue?.assignee
                 ? "reassigned"
                 : "unassigned"
@@ -163,7 +188,15 @@ export const syncTrackerTasks = async (
       task.closedBy === "rule" &&
       reasons.has(task.reason ?? "")
     const named = issue ? trackerIssueTitle(issue) : title
-    if (!closed && why !== undefined && !(await ownerReopened(store, task.id))) {
+    const last = reopen || !closed ? await lastClose(store, task.id) : undefined
+    // The owner's reopen after a close of the sync holds against the issue going to someone else for good, and
+    // against any other close until the issue is open work again.
+    const owner = !closed ? last?.owner : undefined
+    // A release stays while the same reopen applies, whatever the issue did since.
+    if (owner && (why === undefined || before[task.id] === owner)) released[task.id] = owner
+    const ownerHolds =
+      owner !== undefined && (why === "reassigned" || why === "unassigned" || before[task.id] !== owner)
+    if (!closed && why !== undefined && !ownerHolds) {
       const { as, reason } = closing[why]
       await serviceOf(store, now).close(task.id, { as, by: "rule", reason: reason(account.provider) })
       changes.closed += 1
@@ -171,11 +204,15 @@ export const syncTrackerTasks = async (
     if (reopen || named !== title)
       await store.tasks.edit(
         task.id,
-        { ...(named === title ? {} : { title: named }), ...(reopen ? { status: "open" } : {}) },
+        {
+          ...(named === title ? {} : { title: named }),
+          ...(reopen ? { status: last?.from ?? "open" } : {}),
+        },
         SYNC,
       )
     if (reopen) changes.reopened += 1
     if (named !== title) changes.renamed += 1
   }
+  await store.sync.setSyncState(account, RELEASED, JSON.stringify(released))
   return changes
 }
