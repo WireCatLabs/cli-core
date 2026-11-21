@@ -72,12 +72,13 @@ interface Hooks {
   write?: () => void
   read?: HttpApiExecutorOptions["read"]
   failure?: HttpApiExecutorOptions["failure"]
+  failedAnswer?: HttpApiExecutorOptions["failedAnswer"]
   path?: string
 }
 
 const call = async (
   words: string[],
-  { reply = () => Response.json({ object: "page", id: "p1" }), write, read, failure, path }: Hooks = {},
+  { reply = () => Response.json({ object: "page", id: "p1" }), write, read, failure, failedAnswer, path }: Hooks = {},
 ) => {
   const streams = captureStreams()
   const sent: Sent[] = []
@@ -120,6 +121,7 @@ const call = async (
             },
             ...(read ? { read } : {}),
             ...(failure ? { failure } : {}),
+            ...(failedAnswer ? { failedAnswer } : {}),
           }),
         }),
       ],
@@ -317,6 +319,31 @@ describe("the generated HTTP API executor", () => {
     })
     expect(JSON.parse(broken.err).error.code).toBe("outcome_unknown")
     expect(seen).toHaveLength(1)
+  })
+
+  it("asks the failed-answer hook about a 2xx answer, and never the failure hook", async () => {
+    const statuses: number[] = []
+    const failure: HttpApiExecutorOptions["failure"] = (status) => {
+      statuses.push(status)
+      return undefined
+    }
+    const failedAnswer: HttpApiExecutorOptions["failedAnswer"] = (answer) =>
+      (answer as { ok?: boolean }).ok === false ? new CliError("not_found", "Example has no such channel") : undefined
+    const reply = () => Response.json({ ok: false, error: "channel_not_found" })
+    const read = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], { failure, failedAnswer, reply })
+    expect(JSON.parse(read.err).error).toMatchObject({ code: "not_found", message: "Example has no such channel" })
+    const written = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], {
+      failure,
+      failedAnswer,
+      reply,
+    })
+    expect(JSON.parse(written.err).error.code).toBe("not_found")
+    expect(statuses).toEqual([])
+    const fine = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], { failedAnswer })
+    expect(fine.code).toBe(0)
+    const unhooked = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], { reply })
+    expect(unhooked.code).toBe(0)
+    expect(JSON.parse(unhooked.out).item).toMatchObject({ ok: false, error: "channel_not_found" })
   })
 
   it("runs a read inside the read hook, and refuses a redirect to an undeclared host", async () => {

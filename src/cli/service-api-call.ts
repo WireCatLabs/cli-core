@@ -30,6 +30,7 @@ export interface ServiceApiCallOptions {
   /** Headers beside the sign-in, such as the API version. */
   headers?: (operation: ManifestOperation) => Record<string, string>
   failure?: HttpApiSendOptions["failure"]
+  failedAnswer?: HttpApiSendOptions["failedAnswer"]
 }
 
 /**
@@ -57,7 +58,12 @@ export const serviceApiCall = (
 ): ServiceApiCall & { withHeaders: ServiceApiCallWithHeaders } => {
   const baseUrl = manifestBaseUrl(options.manifest, options.baseUrl, options.serverVariables)
   const operations = new Map(options.manifest.operations.map((one) => [one.id, one]))
-  const exchange = httpApiExchange({ service: options.service, fetch: () => options.fetch, failure: options.failure })
+  const exchange = httpApiExchange({
+    service: options.service,
+    fetch: () => options.fetch,
+    failure: options.failure,
+    failedAnswer: options.failedAnswer,
+  })
   const withHeaders: ServiceApiCallWithHeaders = async (id, input) => {
     const operation = operations.get(id)
     if (!operation) throw new CliError("configuration_error", `no ${options.service} API operation ${id}`)

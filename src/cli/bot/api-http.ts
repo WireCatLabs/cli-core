@@ -39,6 +39,11 @@ export interface HttpApiExecutorOptions {
    * write that failed on the service's side: that is always `outcome_unknown`.
    */
   failure?: (status: number, answer: unknown, operation: ManifestOperation) => CliError | undefined
+  /**
+   * The service's refusal inside a 2xx answer of an HTTP operation, such as Slack's `{"ok": false}`; `undefined` keeps
+   * the answer. A write it refuses is that error, not `outcome_unknown`: the service said it did nothing.
+   */
+  failedAnswer?: (answer: unknown, operation: ManifestOperation) => CliError | undefined
   maxBytes?: number
 }
 
@@ -191,7 +196,10 @@ const answerOf = async (response: Response, maxBytes: number): Promise<unknown> 
 }
 
 /** What one exchange needs: the service's name, the fetch, its own refusals and the answer's size limit. */
-export type HttpApiSendOptions = Pick<HttpApiExecutorOptions, "service" | "fetch" | "failure" | "maxBytes">
+export type HttpApiSendOptions = Pick<
+  HttpApiExecutorOptions,
+  "service" | "fetch" | "failure" | "failedAnswer" | "maxBytes"
+>
 
 /**
  * Sends one request, records it in the run by its path template, never an id, and gives the parsed answer with the
@@ -246,6 +254,8 @@ export const httpApiExchange =
     }
     try {
       const result = graphqlAnswer(options, operation, answer)
+      const refused = operation.binding.kind === "http" ? options.failedAnswer?.(answer, operation) : undefined
+      if (refused) throw refused
       end({ status })
       return { answer: result, headers: response.headers }
     } catch (error) {
