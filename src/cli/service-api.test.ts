@@ -533,7 +533,6 @@ describe("the shared service api group", () => {
     expect(paths).toContain("patch-page")
     expect(group?.commands.map((one) => one.name())).not.toContain("call")
     expect(group?.description()).toBe("the raw Pages API, one command per operation of its OpenAPI document")
-    // FIND-2851: a WordPress CLI is made from the site's own index, not an OpenAPI document.
     expect(serviceApiCommand({ ...fixture().options, spec: "its index at /wp-json" }).description()).toBe(
       "the raw Pages API, one command per operation of its index at /wp-json",
     )
