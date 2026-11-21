@@ -93,7 +93,8 @@ export interface CliConfig {
    * `parseTrackerManifest`, `parseContentManifest` or `parseDocumentManifest` once the api group exists. A files CLI may
    * have none: its source is then code of its own.
    */
-  source?: CrmManifest | TrackerManifest | ContentManifest | DocumentManifest
+  // A documents source has no kinds; `kinds?: undefined` keeps `source.kinds` readable on the union, as the kit reads it.
+  source?: CrmManifest | TrackerManifest | ContentManifest | (DocumentManifest & { readonly kinds?: undefined })
   /** What every request of the `api` group and the source carries, and how fast they go. */
   api?: CliApi
   /** The module of named hooks, relative to the config: `./src/hooks.ts`. */
