@@ -3010,6 +3010,7 @@ describe("three tools in place of one per command", () => {
     expect(fetched).toMatchObject({ writes: false })
   })
 
+  // One search per command, each over every command: 7 s alone, over 15 s on a loaded CI runner (2026-11-21).
   it("finds every command by its own name, with its arguments and its full answer", async () => {
     const { raw } = await connect(scripted())
     const text = async (args: Record<string, unknown>) => {
@@ -3026,7 +3027,7 @@ describe("three tools in place of one per command", () => {
 
     expect(every.length).toBeGreaterThan(100)
     expect(unreachable).toEqual([])
-  })
+  }, 60_000)
 
   it("runs reads with read and writes with write, and says which when given the other", async () => {
     const { raw } = await connect(scripted())
