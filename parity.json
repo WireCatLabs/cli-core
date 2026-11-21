@@ -541,6 +541,10 @@
     "--left": {
       "meaning": "only the chats this account has left"
     },
+    "--like": {
+      "value": "<text>",
+      "meaning": "a made-up example of the text sought, such as a reply that would answer the question, searched by meaning beside the query"
+    },
     "--limit": {
       "value": "<n>",
       "meaning": "how many: rows to show, or messages one run fetches",
