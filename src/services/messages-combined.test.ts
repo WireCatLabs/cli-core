@@ -375,7 +375,8 @@ describe("prefixes combined search makes of typed words", () => {
     )
     await store.searchIndex.fillSearchIndex({})
 
-    const found = await searchCombined(store, account, request("про zorbex"))
+    // The budget under test is expansions. On SQLite 3.54 a CI runner needs about 2 s for this search.
+    const found = await searchCombined(store, account, { ...request("про zorbex"), timeLimitMs: 30_000 })
 
     expect(ids(found)).toEqual(["1"])
   })
