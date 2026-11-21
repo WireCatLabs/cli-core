@@ -8,6 +8,7 @@ import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
 import { commandAt } from "../steps.js"
+import { CHAT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { groupCommands } from "./admin-commands.js"
 import { foldersCommand } from "./admin-folders-command.js"
 import { moderateCommand, rulesCommand } from "./admin-moderation-command.js"
@@ -37,7 +38,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          annotate(new Command("list"), { effects: storedRead(messenger) })
+          marksUntrusted(annotate(new Command("list"), { effects: storedRead(messenger) }), CHAT_UNTRUSTED)
             .summary("chats, newest first, archived ones included")
             .description(
               "chats, newest first, archived ones included; the query is answered from the local store, " +
@@ -66,11 +67,14 @@ export const chatsCommand = (messenger: Messenger): Command => {
   chats.addCommand(
     withQuery(
       annotate(
-        annotate(new Command("events"), {
-          effects: storedRead(messenger),
-          // Where the history is pushed, the store answers, --offline too.
-          ...(messenger.history === "store" ? {} : { offline: false }),
-        })
+        marksUntrusted(
+          annotate(new Command("events"), {
+            effects: storedRead(messenger),
+            // Where the history is pushed, the store answers, --offline too.
+            ...(messenger.history === "store" ? {} : { offline: false }),
+          }),
+          CHAT_UNTRUSTED,
+        )
           .summary("stored membership and title changes")
           .description(
             "who joined, left, was added or removed, and by whom — from the chat's service messages; " +
@@ -106,7 +110,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
 
   chats.addCommand(
     annotate(
-      annotate(new Command("show"), { effects: storedRead(messenger) })
+      marksUntrusted(annotate(new Command("show"), { effects: storedRead(messenger) }), CHAT_UNTRUSTED)
         .description("one chat: its kind, unread count, last message time and who is in it")
         .argument("<chat>", messenger.chatArgument),
       { output: { entity: "chat" } },

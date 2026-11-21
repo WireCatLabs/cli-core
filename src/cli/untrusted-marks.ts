@@ -91,6 +91,12 @@ export const MESSAGE_UNTRUSTED = [
   "reply_addresses.name",
 ] as const
 
+/** Other people's text in a chat, its events or a forum topic: the title and the description or topic they set. */
+export const CHAT_UNTRUSTED = ["title", "description"] as const
+
+/** Other people's text in a contact: what the person says about themselves and the titles of the chats shared. */
+export const CONTACT_UNTRUSTED = ["description", "chats.title"] as const
+
 const DECLARED = new WeakMap<Command, readonly string[]>()
 
 /** Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. */

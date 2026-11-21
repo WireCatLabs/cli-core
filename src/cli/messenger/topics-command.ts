@@ -7,6 +7,7 @@ import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { window, withPaging } from "../paging.js"
+import { CHAT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { lines, pageOf, topicAnswer, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { TOPICS_QUERY, topicTitle } from "./list-result-queries.js"
@@ -44,7 +45,7 @@ const listed = (messenger: Messenger) =>
 /** `search topics`: a forum group's topics whose title matches, asked of the messenger. */
 export const topicsSearchCommand = (messenger: Messenger): Command =>
   withPaging(
-    annotate(new Command("topics"), { effects: REMOTE_READ, offline: false })
+    marksUntrusted(annotate(new Command("topics"), { effects: REMOTE_READ, offline: false }), CHAT_UNTRUSTED)
       .description("a forum group's topics whose title matches")
       .argument("<chat>", messenger.chatArgument)
       .argument("<text>", "words from the topic's title"),
@@ -57,7 +58,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
   topics.addCommand(
     withQuery(
       withPaging(
-        annotate(new Command("list"), { effects: REMOTE_READ })
+        marksUntrusted(annotate(new Command("list"), { effects: REMOTE_READ }), CHAT_UNTRUSTED)
           .description("a forum group's topics, newest activity first")
           .argument("<chat>", messenger.chatArgument),
       ),
@@ -66,7 +67,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
   )
 
   if (messenger.topicShow)
-    annotate(topics.command("show"), { effects: REMOTE_READ })
+    marksUntrusted(annotate(topics.command("show"), { effects: REMOTE_READ }), CHAT_UNTRUSTED)
       .description("one forum topic: its title, state and last activity")
       .argument("<chat>", messenger.chatArgument)
       .argument("<topic>", "the topic id, from `topics list`")
