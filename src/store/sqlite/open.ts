@@ -2,6 +2,7 @@
 import type { DecisionPolicy } from "../decisions.js"
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
 import { refuseOwnerStoreInTests } from "../path.js"
+import { timeQueries } from "../slow-queries.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"
 import { countWrites, shareCounts } from "../write-events.js"
 import type { SQLiteAsyncDatabase } from "./drizzle/core.js"
@@ -51,6 +52,7 @@ const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSql
   const client = await nodeClient(path, { readOnly })
   try {
     if (!readOnly) countWrites(client, ["prepare"], () => client.isTransaction)
+    timeQueries(client, ["prepare"])
     const database = cacheOverNodeSqlite(client)
     shareCounts(client, database)
     return { database, orm: drizzle({ client }) as unknown as Orm }
@@ -69,6 +71,7 @@ const openUnderBun = async (path: string, readOnly: boolean): Promise<OpenedSqli
   try {
     if (!readOnly)
       countWrites(client, ["prepare", "query"], () => (client as unknown as { inTransaction: boolean }).inTransaction)
+    timeQueries(client, ["prepare", "query"])
     const database = cacheOverBunSqlite(client)
     shareCounts(client, database)
     return { database, orm: drizzle({ client }) as Orm }

@@ -191,6 +191,8 @@ const knn = (database: CacheDatabase, index: VectorIndex, filter: IndexFilter, q
  * candidate by more than `NEAR_TIE`: every row nearer than that is among the candidates, and the rest cannot outrank
  * them even where float32 and float64 disagree. A text many
  * chunks share has one vector, so a tie that crosses the last candidate asks for more, as the scan's order decides it.
+ * With `nearestOnly` the most candidates are asked for at once and what they hold is the answer: across all chats the
+ * exact answer was rarely within them, and the scan that followed read every vector of the store (15 s cold).
  */
 export const searchIndex = <T>(
   database: CacheDatabase,
@@ -199,10 +201,11 @@ export const searchIndex = <T>(
   query: Float32Array,
   limit: number,
   survivors: (candidates: Candidate[]) => { results: T[]; best: number[] },
+  nearestOnly = false,
 ): T[] | undefined => {
   const index = vectorIndexOf(database, model)
   if (!index?.ready || index.dims !== query.length) return undefined
-  let k = Math.min(MAX_K, Math.max(100, limit * 4))
+  let k = nearestOnly ? MAX_K : Math.min(MAX_K, Math.max(100, limit * 4))
   for (;;) {
     const candidates = knn(database, index, filter, query, k)
     const { results, best } = survivors(candidates)
@@ -212,7 +215,7 @@ export const searchIndex = <T>(
     // A last candidate with no distance is a zero vector: nothing is known to be nearer yet.
     const nearer = (id: number) => edge !== null && (distance.get(id) ?? edge) < edge - NEAR_TIE
     if (best.length >= limit && best.every(nearer)) return results
-    if (k === MAX_K) return undefined
+    if (k === MAX_K) return nearestOnly ? results : undefined
     k = Math.min(MAX_K, k * 4)
   }
 }

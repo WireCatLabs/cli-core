@@ -373,23 +373,36 @@ export const nearestChunks = (
         const results = ranked([...best.values()])
         return { results, best: results.map(({ id }) => id) }
       },
+      chatKey === undefined,
     )
   if (indexed) return plain(indexed)
   if (fromOwner) {
-    // The owner's chunks are few: find them by the owner's messages, then score only those.
-    const ids = orm
-      .all<{ id: number }>(
-        sql`SELECT DISTINCT k.id FROM messages m
-          JOIN conversation_messages om ON om.message_id = m.id
-          JOIN conversations c ON c.id = om.conversation_id
-          JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
-          JOIN chats ch ON ch.id = c.chat_id
-          JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
-          JOIN chunk_messages r ON r.chunk_id = k.id AND m.id BETWEEN r.first_message_id AND r.last_message_id
-          WHERE m.outgoing = 1 AND ch.account_id = ${accountPk}
-            ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}`,
-      )
-      .map(({ id }) => id)
+    // The owner's chunks are few: find them by the owner's messages, then score only those. The owner's own identity
+    // (the account's provider and id) leads, through the sender index: led by the chunks, SQLite read every message
+    // row of the account (0.7 GB, 17 s from a cold disk on a 954k-message store). An owner with no identity yet falls
+    // back to that.
+    const owned = (byIdentity: boolean) =>
+      orm
+        .all<{ id: number }>(
+          sql`SELECT DISTINCT k.id FROM messages m
+            CROSS JOIN conversation_messages om ON om.message_id = m.id
+            CROSS JOIN conversations c ON c.id = om.conversation_id
+            JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
+            JOIN chats ch ON ch.id = c.chat_id
+            CROSS JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
+            CROSS JOIN chunk_messages r ON r.chunk_id = k.id AND m.id BETWEEN r.first_message_id AND r.last_message_id
+            WHERE m.outgoing = 1 AND ch.account_id = ${accountPk}
+              ${
+                byIdentity
+                  ? sql`AND m.sender_identity_id IN (SELECT i.id FROM identities i JOIN accounts a
+                      ON a.provider = i.provider AND a.external_id = i.external_id WHERE a.id = ${accountPk})`
+                  : sql``
+              }
+              ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}`,
+        )
+        .map(({ id }) => id)
+    const found = owned(true)
+    const ids = found.length ? found : owned(false)
     const best = new Map<number, NearestChunk & { id: number }>()
     for (const row of rows({ ids })) keepBest(best, row)
     return plain(ranked([...best.values()]))
