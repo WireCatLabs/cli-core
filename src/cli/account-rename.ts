@@ -106,7 +106,7 @@ export const accountRenameCommand = (
         throw new CliError(
           "not_found",
           `no profile ${profile} on this computer — ${settings.profilesHere.join(", ") || "there is none"}`,
-          { reason: "account-rename.unknown-profile", profiles: settings.profilesHere },
+          { reason: "profile.unknown", profiles: settings.profilesHere },
         )
       if (next === profile) throw new CliError("validation_error", `${profile} already has that name`)
       if (known(next) || (settings.botProfiles ?? []).includes(next))

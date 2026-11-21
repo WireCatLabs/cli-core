@@ -67,7 +67,6 @@ const SIGN_IN: Entry[] = [
     "configuration_error",
     "the tool named a folder of its own outside the home folder",
   ],
-  ["account-rename.unknown-profile", "not_found", "no profile by this name on this computer"],
   ["account-rename.taken", "conflict", "the new name, or a file or keyring entry under it, already exists"],
   ["account-rename.busy", "conflict", "a serve, a background service, a schedule or a sync uses this profile"],
   ["account-rename.bot", "conflict", "the profile is also a bot profile, which keeps its name"],

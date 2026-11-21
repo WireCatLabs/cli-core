@@ -161,7 +161,7 @@ describe("account rename", () => {
   it("names the profiles there are when the old one is unknown", async () => {
     const given = await setup()
     const { error } = await call(["nobody", "account", "rename", "home", "--yes", "--json"], given, renamingOf(given))
-    expect(error.reason).toBe("account-rename.unknown-profile")
+    expect(error.reason).toBe("profile.unknown")
     expect(error.message).toContain("personal, work")
   })
 
