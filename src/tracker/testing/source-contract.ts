@@ -164,6 +164,18 @@ export const trackerSourceContract = (
     },
   },
   {
+    name: "self: names the signed-in user as an id among the tracker's users, the id an issue's assignee holds",
+    async run() {
+      const { source, held } = await make()
+      if (!source.self) return
+      const self = await source.self()
+      assert.ok(typeof self === "string" && self.trim(), "self() answers an id")
+      if (!source.traits.kinds.includes("user")) return
+      const users = held?.user ?? idsOf((await listAll(source, "user", null)).items)
+      assert.ok(users.includes(self), `self() answers ${self}, which no user of the tracker holds`)
+    },
+  },
+  {
     name: "changes: a dead cursor answers reset",
     async run() {
       const { source, deadCursor } = await make()

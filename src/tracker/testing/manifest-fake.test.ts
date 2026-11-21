@@ -1,8 +1,13 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import { FAKE_MANIFEST_TOKEN } from "../../crm/testing/index.js"
+import { openStore } from "../../store/store.js"
 import { ALL, api, definitions, MANIFEST, PAGE_INFO } from "../../testing/tracker-graphql.js"
 import type { TrackerManifest } from "../manifest/manifest.js"
+import { syncTracker } from "../sync.js"
 import { trackerManifestContract, trackerManifestFake, trackerManifestFixture } from "./manifest-fake.js"
 
 type Row = Record<string, unknown>
@@ -201,5 +206,21 @@ describe("a source the contract catches over the fake", () => {
     const { faults, held } = trackerManifestFixture(MANIFEST, { api, definitions })
     expect(Object.keys(faults ?? {}).sort()).toEqual(["archive", "change", "remove", "skewed"])
     expect(held?.comment).toEqual(["comment-1", "comment-2", "comment-3"])
+  })
+})
+
+describe("a sync over the fake", () => {
+  it("names the first user as the signed-in one, whose open issues become the owner's tasks", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-fake-")), "store.db") })
+    try {
+      const { source, fake } = trackerManifestFixture(MANIFEST, { api, definitions })
+      const report = await syncTracker(source, store, { provider: "tracker", account: "workspace" })
+      expect(report.tasks).toEqual({ opened: 3, closed: 0, reopened: 0, renamed: 0 })
+      const tasks = await store.tasks.query("tracker:workspace", undefined, { limit: 10, offset: 0 })
+      expect(tasks.map((one) => one.title).sort()).toEqual(["key 1 title 1", "key 2 title 2", "key 3 title 3"])
+      expect(fake.refusals).toEqual([])
+    } finally {
+      await store.close()
+    }
   })
 })

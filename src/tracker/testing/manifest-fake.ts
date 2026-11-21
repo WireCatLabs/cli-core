@@ -395,6 +395,16 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     return { data: project(body, selection) }
   }
 
+  /** The signed-in user is the first user, whom every row that points at a user names. */
+  const answerSelf = (call: GraphqlFakeCall): GraphqlFakeAnswer => {
+    const self = manifest.self as NonNullable<TrackerManifest["self"]>
+    const selection = call.selection ?? {}
+    const made = sampled(responseOf(self.call), selection)
+    const body = crmValues.isRaw(made) ? made : {}
+    put(body, self.path, pointed("assignee"))
+    return { data: project(body, selection) }
+  }
+
   const scheme = Object.values(api.securitySchemes ?? {})[0] as
     | { type?: string; in?: string; name?: string }
     | undefined
@@ -410,7 +420,10 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
               : { header: "Authorization", value: `Bearer ${FAKE_MANIFEST_TOKEN}` },
         }
       : {}),
-    answers: Object.fromEntries(routes.map((route) => [route.call.operation, answer])),
+    answers: {
+      ...Object.fromEntries(routes.map((route) => [route.call.operation, answer])),
+      ...(manifest.self ? { [manifest.self.call.operation]: answerSelf } : {}),
+    },
   })
 
   return {

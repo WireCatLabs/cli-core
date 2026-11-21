@@ -21,7 +21,7 @@ whatever each team named its states.
 | `traits.kinds` | the kinds this tracker has, in `TRACKER_KINDS` order |
 | `changes(kind, cursor, page?, context?)` | what changed since `cursor`, a page at a time; `cursor: null` lists everything. A tracker without a change feed reads by its modified time less an overlap and gives that time back as the last page's `cursor`. A dead cursor answers `{ reset: true }` |
 | `ids(kind, page?, context?)` | every id the tracker holds of the kind, archived ones too, a page at a time |
-| `self?(context?)` | the sign-in's own user id |
+| `self?(context?)` | the sign-in's own user id, which decides whose issues become the owner's tasks |
 
 Archived rows are listed, with `archivedAt`, and the copy keeps them marked. A row deleted outright is found only by
 `ids()`. A source that pages inside one call asks `context.spend()` before each further request, and names what the
@@ -43,6 +43,11 @@ stops keeps its ids and the page it reached.
   gap for the kind is held even then: what it could not read is not gone.
 - **Failures.** A kind that fails is named in its result's `error` and the others still sync. A page that says there is
   more but gives no next page fails the kind.
+- **The owner's tasks.** After the kinds, a sync whose tracker has `self` and issues brings the owner's tasks in line
+  with the copy (`syncTrackerTasks`, below) and answers what it did in `tasks`. The user's id is read once and kept as
+  `tracker:self` in the account's sync state: an account is one sign-in. Without `self` the answer has no `tasks`.
+  When the budget is spent before the id is read, or the id or a task cannot be read or written, the tasks are left as
+  they were and `tasks.skipped` says why; the copy is saved either way.
 - **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a gap held it. A
   rescan that stops goes on as one in the next run.
 
@@ -57,9 +62,26 @@ identity linked to a person has, joined when read. Nothing is written to the peo
 
 ## An issue as the owner's task
 
-`trackerIssueTask(store, account, issue)` and `issues assign <issue>` make an issue the owner's task: `source` is
-`tracker:issue/<externalId>`, `sourceKind` is `tracker_issue`, and the title is the issue's key only. The task links
-to the issue and copies none of its text. The same issue again answers the task it already has.
+A task from an issue has `source` `tracker:issue/<externalId>`, `sourceKind` `tracker_issue`, kind `request`, and the
+issue's key and title as its title (`ENG-12 Fix login`). The same issue never makes a second task.
+
+- **Assigned to the owner.** `syncTrackerTasks(store, account, self)`, run by every sync, makes each live, unarchived
+  issue assigned to `self` whose state type is open work (`triage`, `backlog`, `unstarted`, `started`) a task of origin
+  `rule`. memo and Desktop list it with the other tasks; nothing is written to the tracker.
+- **Picked by hand.** `trackerIssueTask(store, account, issue)` and `issues assign <issue>` make any issue the owner's
+  task, whoever holds it (origin `owner`). An issue the sync already made a task of answers that task.
+- **The title is stored**, not resolved when read: lists, the board, search and filters read the task's stored title
+  and its folded copy, as they do for a task found in a message. Each sync writes the issue's current key and title
+  over it when they changed.
+- **Closing.** A sync closes the task when its issue is completed (`done`), canceled, archived or deleted
+  (`dismissed`), and a task of origin `rule` also when the issue is assigned to someone else or to no one. The reason
+  says which, such as `the issue was completed in linear`. Tasks of any other `sourceKind` are never touched.
+- **Reopening.** A task the sync closed, with one of those reasons, opens again when its issue's state is open work
+  again (and, for origin `rule`, assigned to `self` again); a state the copy does not hold yet reopens nothing. A task
+  the owner closed stays closed, as a dismissed one does, and one the owner opened again after a sync closed it is not
+  closed again.
+- **Limits.** The sync reads the tasks in the account's inbox: a task the owner moved into a project keeps its title
+  and state. The issue's title wins over a title the owner gave the task.
 
 ## Commands
 
@@ -90,8 +112,8 @@ result.
 
 `trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor
 read again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an
-archived row still listed, a deleted row leaving `ids()`, a list cut after its first page, and a spent budget ending a
-call that pages inside. `fakeTrackerSource` and `exampleTrackerRows` are an in-memory tracker for tests.
+archived row still listed, a deleted row leaving `ids()`, a list cut after its first page, a spent budget ending a
+call that pages inside, and `self()`, when the tracker has it, naming one of its users. `fakeTrackerSource` and `exampleTrackerRows` are an in-memory tracker for tests.
 
 A source built from a manifest runs the contract with no code for the service, as a CLI made from `wirecat.config.ts`
 does in its generated test:
@@ -123,5 +145,5 @@ for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions }
   on the issue kind, else the last kind with `changes`: `skewed` and `change`, `archive` when the map reads
   `archivedAt`, and `remove`. `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose
   calls the fake refused, with the refusals as its message.
-- It answers GraphQL operations paged by a cursor only. `self` is not part of the contract, so the fake leaves its call
-  to `graphqlFake`'s sample.
+- It answers GraphQL operations paged by a cursor only. It answers `self` with the first user, the one every row that
+  points at a user names, so a sync over it makes the owner's tasks from its open issues.

@@ -4,6 +4,7 @@ import { TRACKER_KINDS, type TrackerKind } from "../domain/tracker.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import type { TrackerCallContext, TrackerGap, TrackerSource } from "./source.js"
+import { syncTrackerTasks, type TrackerTaskChanges } from "./tasks.js"
 
 const DAY = 86_400_000
 /** An id pass that would mark more than this share of a kind deleted is held: a tracker that lost rights lists none. */
@@ -50,6 +51,8 @@ export const trackerCursorName = (kind: TrackerKind): string => `tracker:${kind}
 const passName = (kind: TrackerKind) => `tracker:${kind}:pass`
 const GAPS = "tracker:gaps"
 const RESUME = "tracker:resume"
+/** The signed-in user's id: an account is one sign-in, so it never changes once read. */
+const SELF = "tracker:self"
 
 export interface TrackerSyncOptions {
   now?: number
@@ -94,6 +97,11 @@ export interface TrackerSyncReport {
   state: "partial" | "complete"
   stopped?: BudgetStop
   progress: { requests: number; saved: number; steps: number }
+  /**
+   * The owner's tasks from issues assigned to the signed-in user, brought in line with the copy. Absent when the
+   * tracker cannot name its user or the run was cancelled; `skipped` says why they were left as they were.
+   */
+  tasks?: TrackerTaskChanges | { skipped: string }
 }
 
 /** Thrown by `TrackerCallContext.spend` when the budget is spent; the engine turns it into a `partial` stop. */
@@ -333,7 +341,34 @@ export const syncTracker = async (
     report.stopped ? JSON.stringify({ v: 1, done: [...done], ...(mode.full ? { rescan: true } : {}) }) : "null",
   )
   await store.sync.setSyncState(account, GAPS, JSON.stringify(report.gaps))
+  if (source.self && source.traits.kinds.includes("issue") && report.stopped !== "cancelled")
+    report.tasks = await ownTasks(run, source.self.bind(source))
   return report
+}
+
+const ownTasks = async (
+  run: Run,
+  self: (context?: TrackerCallContext) => Promise<string>,
+): Promise<TrackerTaskChanges | { skipped: string }> => {
+  const { store, account, budget, report } = run
+  let id = (await store.sync.syncState(account, SELF))?.value
+  if (!id) {
+    const spent = `the run's budget was spent before ${run.source.provider} named the signed-in user`
+    if (budget.take()) return { skipped: spent }
+    report.progress.requests += 1
+    try {
+      id = await self(run.context)
+    } catch (error) {
+      return { skipped: error instanceof BudgetSpent ? spent : error instanceof Error ? error.message : String(error) }
+    }
+    await store.sync.setSyncState(account, SELF, id)
+  }
+  try {
+    return await syncTrackerTasks(store, account, id, { now: run.now })
+  } catch (error) {
+    // The copy is saved by now: a task that cannot be written must not fail the sync that saved it.
+    return { skipped: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 /** The gaps the account's last sync recorded; none before its first. */

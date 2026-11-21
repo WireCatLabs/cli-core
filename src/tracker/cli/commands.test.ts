@@ -29,7 +29,7 @@ type Answer = Record<string, unknown> & { items: Record<string, unknown>[]; item
 const setup = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-cli-")), "store.db") })
   opened.push(store)
-  const source = fakeTrackerSource({ rows: exampleTrackerRows() })
+  const source = fakeTrackerSource({ rows: exampleTrackerRows(), self: "user-1" })
   const cli = async (...args: string[]): Promise<Answer> => {
     let data = ""
     const root = new Command("tracker")
@@ -53,7 +53,11 @@ const ids = (answer: Answer) => answer.items.map((one) => one.external_id)
 describe("tracker commands", () => {
   it("syncs, then lists, shows, searches and assigns an issue to the owner as a task", async () => {
     const { cli, store } = await setup()
-    expect((await cli("sync")).item).toMatchObject({ state: "complete", provider: "fake-tracker" })
+    expect((await cli("sync")).item).toMatchObject({
+      state: "complete",
+      provider: "fake-tracker",
+      tasks: { opened: 1, closed: 0, reopened: 0, renamed: 0 },
+    })
 
     expect(ids(await cli("issues", "list", "type:started"))).toEqual(["issue-1"])
     expect(ids(await cli("issues", "list", "type:unstarted"))).toEqual(["issue-2"])
@@ -83,9 +87,13 @@ describe("tracker commands", () => {
     const task = (await cli("issues", "assign", "ENG-2", "--due", "2026-12-01")).item
     expect(task).toMatchObject({ issue: "tracker:issue/issue-2", created: true })
     expect((await cli("issues", "assign", "issue-2")).item).toMatchObject({ task_id: task.task_id, created: false })
-    const [stored] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 10, offset: 0 })
-    expect(stored).toMatchObject({ title: "ENG-2", task: { source: "tracker:issue/issue-2" } })
-    expect(stored?.task).not.toHaveProperty("description")
+    const stored = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 10, offset: 0 })
+    expect(stored.map((one) => [one.title, one.task.source, one.task.origin])).toEqual([
+      ["ENG-1 Invoices fail for EUR accounts", "tracker:issue/issue-1", "rule"],
+      ["ENG-2 Write the migration guide", "tracker:issue/issue-2", "owner"],
+    ])
+    expect(stored[1]?.task).not.toHaveProperty("description")
+    expect((await cli("sync")).item).toMatchObject({ tasks: { opened: 0, closed: 0, reopened: 0, renamed: 0 } })
 
     expect(ids(await cli("states", "list", "--limit", "10"))).toHaveLength(6)
     await expect(cli("issues", "list", "team:a", "team:b")).rejects.toThrow()

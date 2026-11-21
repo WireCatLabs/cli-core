@@ -129,6 +129,12 @@ const trackerSync = v.strictObject({
   ),
   gaps: v.array(v.strictObject({ kind: v.picklist(TRACKER_KINDS), message: text, scope: v.optional(text) })),
   progress: v.strictObject({ requests: count, saved: count, steps: count }),
+  tasks: v.optional(
+    v.union([
+      v.strictObject({ opened: count, closed: count, reopened: count, renamed: count }),
+      v.strictObject({ skipped: text }),
+    ]),
+  ),
 })
 
 const trackerTask = v.strictObject({ task_id: text, key: v.optional(text), issue: text, created: v.boolean() })
@@ -195,7 +201,9 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     ).description(
       "bring the tracker's copy in the local store up to date: teams, users, states, labels, projects, issues and " +
         "comments that changed since the last sync, or everything with --rescan; once a day it also finds what the " +
-        "tracker deleted. A run stops before its deadline or --max-pages and the next one goes on from there",
+        "tracker deleted. Open issues assigned to you become your tasks, and close when the issue is done, " +
+        "canceled, deleted or goes to someone else. A run stops before its deadline or --max-pages and the next " +
+        "one goes on from there",
     ),
     "sync",
     "sync --rescan",
@@ -340,8 +348,8 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
   example(
     answerEntity(annotate(issues.command("assign"), { effects: LOCAL_WRITE }), "tracker_issue_task", trackerTask)
       .description(
-        "make an issue the owner's task: the task points at the issue and copies none of its text; the same issue " +
-          "again answers its existing task",
+        "make an issue the owner's task, whoever it is assigned to: the task points at the issue and shows its key and " +
+          "title, which each sync keeps current; the same issue again answers its existing task",
       )
       .argument("<issue>", "the issue's key (ENG-12) or id")
       .option(
