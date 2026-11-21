@@ -19,6 +19,7 @@ import { listQuery, nativeField, nativeTerms, termField, timeBounds, typedQuery,
 import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
 import { commandAt, nextStep } from "../steps.js"
+import { CONTACT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
 import { contactAnswer, contactShown, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -51,7 +52,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          annotate(new Command("list"), { effects: REMOTE_READ })
+          marksUntrusted(annotate(new Command("list"), { effects: REMOTE_READ }), CONTACT_UNTRUSTED)
             .summary("people you have a one-to-one chat with")
             .description(
               "people you have a one-to-one chat with; name: matches the name, your local alias or the @username, " +
@@ -101,7 +102,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
 
   contacts.addCommand(
     annotate(
-      annotate(new Command("show"), { effects: REMOTE_READ })
+      marksUntrusted(annotate(new Command("show"), { effects: REMOTE_READ }), CONTACT_UNTRUSTED)
         .summary("one person's profile, your alias and notes, and the chats you share")
         .description(
           "one person: what the messenger says about them — handles, flags, last seen, phone, when they registered — " +
