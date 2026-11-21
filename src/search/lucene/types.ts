@@ -1,5 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { QUERY_LIMITS as PARSER_LIMITS, type QueryContext, queryError, type Span } from "@wirecat/cli-base/query"
+import { sqliteCode } from "../../errors/failures.js"
+import { TimeLimitReached } from "../../store/driver.js"
 
 export const QUERY_VERSION = 1
 export const QUERY_LIMITS = {
@@ -53,6 +55,29 @@ export function exhausted(budget: string): never {
     complete: false,
   })
 }
+
+const TOO_LONG = /nested too deep|Expression tree is too large|too many terms in compound SELECT/u
+/**
+ * SQLite's own limits on one statement, which a query can reach below the node budget (SQLite 3.54 refuses a search of
+ * about 60 words): the words, not the chats or dates, are what to cut.
+ */
+const refuseTooLong = (error: unknown): void => {
+  if (sqliteCode(error) !== 1 || !TOO_LONG.test((error as Error).message)) return
+  throw new CliError("validation_error", "the query has too many words to search at once — use fewer words", {
+    reason: "query.too-large",
+    budget: "nodes",
+    complete: false,
+  })
+}
+
+/** A search's failure as its answer: out of time, or too long for SQLite; any other error as it is. */
+export const timeLimited =
+  (limitMs?: number) =>
+  (error: unknown): never => {
+    if (error instanceof TimeLimitReached) outOfTime(limitMs)
+    refuseTooLong(error)
+    throw error
+  }
 
 /** A pattern checked word by word over more messages than a search may read: what to write instead. */
 export function tooWideTerm([term]: string[], budget: string): never {

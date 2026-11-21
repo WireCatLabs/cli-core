@@ -331,6 +331,15 @@ it("refuses corrected AST expansion past the parser node budget", async () => {
   ).rejects.toMatchObject({ details: { reason: "query.too-large", budget: "nodes" } })
 })
 
+it("answers a query longer than SQLite runs as one statement with its size, not SQLite's error", async () => {
+  const store = await opened()
+  const words = Array.from({ length: 250 }, (_, n) => `word${n}`).join(" OR ")
+  await expect(searchStore(store, account, request(words))).rejects.toMatchObject({
+    message: expect.stringMatching(/too many words/),
+    details: { reason: "query.too-large", budget: "nodes" },
+  })
+})
+
 describe("implicit term intent", () => {
   it("does not mistake filter values, quotes, escaped operator words or ranges for explicit operators", () => {
     expect([...implicitTextTerms('aurora chat:101 "AND OR" date:[2026-10-01 TO *] roll')]).toEqual([0, 48])

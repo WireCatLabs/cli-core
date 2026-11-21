@@ -1,6 +1,19 @@
 import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../../search/account-list.js"
 import type { CacheDatabase } from "../driver.js"
 
+/**
+ * A value migration 31 stored as JSON text inside the object, as it did under SQLite 3.54, which drops the JSON type of
+ * a subquery's result: read back as the object or list it holds.
+ */
+const unquoted = (value: unknown): unknown => {
+  if (typeof value !== "string" || !/^\s*[[{]/u.test(value)) return value
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
 /** None saved, or a value this build cannot read, is no groups: a search naming one then says it does not exist. */
 export const accountGroupsOf = (database: CacheDatabase): AccountGroups => {
   const row = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(ACCOUNT_GROUPS)
@@ -9,10 +22,12 @@ export const accountGroupsOf = (database: CacheDatabase): AccountGroups => {
     const value = JSON.parse(String(row.value)) as unknown
     if (typeof value !== "object" || value === null || Array.isArray(value)) return {}
     return Object.fromEntries(
-      Object.entries(value).filter(
-        (entry): entry is [string, string[]] =>
-          Array.isArray(entry[1]) && entry[1].every((member) => typeof member === "string"),
-      ),
+      Object.entries(value)
+        .map(([name, members]) => [name, unquoted(members)] as const)
+        .filter(
+          (entry): entry is [string, string[]] =>
+            Array.isArray(entry[1]) && entry[1].every((member) => typeof member === "string"),
+        ),
     )
   } catch {
     return {}
@@ -26,7 +41,8 @@ export const profilesOf = (database: CacheDatabase): Profiles => {
   if (!row) return {}
   try {
     const value = JSON.parse(String(row.value)) as unknown
-    return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Profiles) : {}
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).map(([app, profiles]) => [app, unquoted(profiles)])) as Profiles
   } catch {
     return {}
   }

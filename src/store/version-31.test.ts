@@ -144,3 +144,18 @@ it("leaves a stand-in folder whose files the google-drive account already holds"
   })
   after.close()
 })
+
+it("reads back profiles and groups that migration 31 wrote as JSON text under SQLite 3.54", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "version-31-")), "wirecat.db")
+  await (await openStore({ path })).close()
+  const database = await openCache(path)
+  const save = database.prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+  save.run("profiles", JSON.stringify({ drive: JSON.stringify({ work: drive }), tg: { default: drive } }))
+  save.run("accountGroups", JSON.stringify({ docs: JSON.stringify(["tg:default"]), odd: "not json" }))
+  database.close()
+
+  const store = await openStore({ path })
+  expect(await store.accounts.profiles()).toEqual({ drive: { work: drive }, tg: { default: drive } })
+  expect(await store.accounts.accountGroups()).toEqual({ docs: ["tg:default"] })
+  await store.close()
+})
