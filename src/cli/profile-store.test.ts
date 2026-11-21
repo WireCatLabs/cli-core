@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { openContentStore } from "../content/index.js"
+import { openCrmStore } from "../crm/cli/index.js"
 import { openStore } from "../store/store.js"
 import { openProfileStore } from "./profile-store.js"
 
@@ -58,4 +60,9 @@ describe("the store a CRM command opens", () => {
     await store.close()
     expect(existsSync(path)).toBe(true)
   })
+})
+
+it("is the store a CRM command and a content command open", () => {
+  expect(openCrmStore).toBe(openProfileStore)
+  expect(openContentStore).toBe(openProfileStore)
 })
