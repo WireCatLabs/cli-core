@@ -349,6 +349,83 @@ describe("syncTracker and the owner's tasks", () => {
     expect(await tasks()).toMatchObject([{ state: "open" }])
   })
 
+  it("keeps the owner's reopen past the owner's next change, and closes again after the issue was open work", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    const [task] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    const id = task?.task.id as string
+    change("issue-1", { state: "state-done" })
+    await sync()
+    await store.tasks.edit(id, { status: "open" }, "owner")
+    await store.tasks.edit(id, { title: "Invoices, my words" }, "owner")
+    await store.tasks.edit(id, { status: "in_progress" }, "owner")
+    expect(await sync()).toMatchObject({ closed: 0 })
+    expect(await tasks()).toMatchObject([{ state: "in_progress" }])
+
+    change("issue-1", { state: "state-doing" })
+    expect(await sync()).toMatchObject({ closed: 0, reopened: 0 })
+    change("issue-1", { state: "state-done" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([{ state: "done" }])
+    change("issue-1", { state: "state-doing" })
+    expect(await sync()).toMatchObject({ reopened: 1 })
+    expect(await tasks()).toMatchObject([{ state: "in_progress" }])
+  })
+
+  it("opens a task the sync closed as reassigned when the owner picks the issue, and keeps it open", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    change("issue-1", { assignee: "user-2" })
+    await sync()
+    expect(await tasks()).toMatchObject([{ state: "dismissed" }])
+    const picked = await trackerIssueTask(store, account, "ENG-1")
+    expect(picked).toMatchObject({ created: false, task: { state: "open" } })
+    expect(await sync()).toMatchObject({ closed: 0 })
+    change("issue-1", { assignee: "user-3" })
+    expect(await sync()).toMatchObject({ closed: 0 })
+    expect(await tasks()).toMatchObject([{ state: "open" }])
+  })
+
+  it("keeps a task the owner closed and then picked, whoever holds the issue", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    const [task] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    await createTaskService({ store: store.tasks }).close(task?.task.id as string, { as: "dismissed", by: "owner" })
+    change("issue-1", { assignee: "user-2" })
+    await sync()
+    expect(await trackerIssueTask(store, account, "ENG-1")).toMatchObject({ task: { state: "open" } })
+    expect(await sync()).toMatchObject({ closed: 0 })
+    expect(await tasks()).toMatchObject([{ state: "open" }])
+  })
+
+  it("closes a reopened task once the issue was open work, though it went to someone else in between", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    const [task] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    change("issue-1", { state: "state-done" })
+    await sync()
+    await store.tasks.edit(task?.task.id as string, { status: "open" }, "owner")
+    change("issue-1", { state: "state-doing" })
+    await sync()
+    change("issue-1", { assignee: "user-2" })
+    expect(await sync()).toMatchObject({ closed: 0 })
+    change("issue-1", { assignee: "user-1", state: "state-done" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([{ state: "done" }])
+  })
+
+  it("takes only its own close for one the owner can overrule: an agent's close is not the sync's", async () => {
+    const { store, sync, change, tasks } = await setup()
+    await sync()
+    const [task] = await store.tasks.query("fake-tracker:workspace", undefined, { limit: 1, offset: 0 })
+    const id = task?.task.id as string
+    await store.tasks.edit(id, { status: "done" }, { bot: "claude-code", kind: "agent" })
+    await store.tasks.edit(id, { status: "open" }, "owner")
+    change("issue-1", { state: "state-done" })
+    expect(await sync()).toMatchObject({ closed: 1 })
+    expect(await tasks()).toMatchObject([{ state: "done" }])
+  })
+
   it("says an issue left with no one was unassigned, and keeps a title of odd spaces stable", async () => {
     const { sync, change, tasks } = await setup()
     await sync()
