@@ -5,6 +5,68 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.718.0 — 21.11.2026
+
+### Added
+
+- **A `files` CLI's source can come from its config.** `documentSourceFromManifest` (`@wirecat/cli-core/documents/cli`)
+  answers a `DocumentSource` from the calls `wirecat.config.ts` names: the account, one file, a folder's children a
+  page at a time, the changes since a time and a document's Markdown. Hooks give what the manifest cannot say, through
+  the same calls. `parseCliConfig` takes a source for the `files` category, which stays optional there
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#a-source-from-a-manifest)).
+- **`wirecat.config.ts` says the API's fixed headers and its paces**: `api.headers` (a header that could hold a
+  credential is refused) and `api.pace`, with a slower pace for one operation in `api.pace.operations`. cli-core
+  checks them; the CLI passes them to its transport.
+- **A documents source can ask for a saved document to be read again** though it did not change: `reread(saved)`,
+  at most 50 a pass, for a source that learned to read something later, such as a page's authors.
+- **`search conversations` shows what each hit says.** Every hit carries `lines`: up to three of its chunk's messages,
+  the ones sharing most words with the query, as "sender: text" cut to 200 characters; a longer one keeps its first 80
+  and the part around the match. An agent sees the answer in the first call instead of opening one hit after another;
+  the owner's own messages are marked "(you)", and in the block of the owner's conversations they come first.
+- **`search conversations --like <text>`**: a made-up one-sentence reply that would answer the query, searched by
+  meaning beside the query and fused with it. It finds an answer worded unlike the question, in one call.
+- `WIRECAT_SQL_SLOW_MS=<ms>` prints each store statement slower than that to stderr, with its time, rows and shape.
+
+### Fixed
+
+- **A content `publish` or `unpublish` asks one question, not two.** A CLI that gives its raw update route the
+  content command's own key (WC-PERM-22, as wordpress-cli gives `api posts-update` the key `posts.update`) asked
+  `posts.publish`, then `posts.update` again when the write went out. Publishing is sent as an update, so a yes to
+  `posts.publish` or `posts.unpublish` now counts for `posts.update` on that route, and for no other resource's
+  update key. A yes to `update` still does not count for a publish key, so updating a published post asks for it as
+  before.
+- **A capitalised word that is not a name no longer sends a search into one dialog.** A place or a brand written a few
+  times in one private chat made the search treat it as that person's name, and that chat's hits filled the page. The
+  chat must now hold at least 5% of the word's uses across all chats, groups included.
+- **A big group no longer hides its answers behind its own size.** When one group held most of the candidates of a
+  search across chats, its 20th best was nearly as close as its best, so nothing in it ranked high. Such a group (100
+  or more of the 500 candidates) is now measured against its 100th best, and its entries past the usual 20 come after
+  every other chat's, so private dialogs keep their places.
+- **A hit's lines show the message after the one that asks.** An answer rarely repeats the question's words, so the
+  line after the best match on them is shown too, and the question's own words count twice against a made-up answer's
+  (`--like`) when lines are picked.
+- **A hit's lines show a reply that sits outside its chunk.** A later answer to a message of the chunk is often put in
+  another chunk, so the best such reply (by the query's words, else the oldest) is shown after the hit's lines, one per
+  hit.
+- **The owner's block keeps a conversation the named-chat step pushed off the page.** Its chunk was left out of the
+  block because the list showed that conversation, and then the named chat's hits pushed it out of the list.
+- **A question searched by words is ranked by relevance again when one of its words cannot rank.** A word shorter than
+  three letters next to longer ones, or a word start no indexed word has, dropped the relevance score of the whole
+  question, and its matches came newest first. The ranking now uses the words it can; which messages match is
+  unchanged.
+- **A conversation search by words ranks a chat's messages by how rare the words they hold are.** A common word has
+  many forms, and each form was weighed on its own, so short messages holding one rare form of it came before the
+  message holding the rarer words of the question. Each chat's matches are now ranked by how few messages hold each
+  word they share with the question; which chats fill the list is decided as before, so a small chat's answer is not
+  pushed out by large groups.
+- **A meaning search over all chats no longer reads every vector of the store.** The vector index rarely held the
+  exact answer among its most candidates across all chats, and the search then fell back to a scan of every vector:
+  15 seconds and more when the store was not in memory. Across all chats it now keeps what the index's 4,096 nearest
+  chunks hold.
+- **The owner's block finds the owner's chunks through the owner's own messages.** Without planner statistics SQLite
+  walked every message of the account to find them: 17 seconds from a cold disk on a store of a million messages,
+  0.35 seconds now.
+
 ## 0.717.0 — 21.11.2026
 
 ### Changed — may break callers
