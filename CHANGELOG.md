@@ -5,6 +5,55 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.715.0 — 21.11.2026
+
+### Added
+
+- **`<tool> <profile> account rename <new>` gives a profile another name and keeps it signed in.** It moves the
+  profile's keyring entries (cli-core's `token:<profile>` and the tool's own), its config sections, its files, the
+  store's record of which account it is, and its entries in account groups; the account's messages stay where they
+  are. It reuses the `account remove` hooks, asked for the old and the new name, plus one new optional hook,
+  `signIn`, that names where the sign-in lives. `--dry-run` lists the moves; it asks first, or `--yes`. It refuses a
+  taken name, a profile a serve, service, schedule or sync uses, a bot profile, and a run with moved folders.
+  A messenger gets it by setting `accountRemoval.signIn`; another CLI mounts `accountRenameCommand(app, removal)`
+  beside `account remove` ([guide](docs/dev/ACCOUNT-REMOVAL.md#renaming-a-profile)).
+- **`server status` says when the store was last current (`current_at`).** `serve` writes the time beside its lock
+  when it connects, every minute while it runs and as it stops, and the file stays after it stops. A messenger with
+  no full sync, such as WhatsApp, now has a time to show once serve is off; the text answer says "The store was
+  current at …". `account remove` and `account rename` take the file with the profile.
+- **Issues assigned to you become your tasks.** A tracker sync (Linear first) now makes each open issue assigned to the
+  signed-in user a task, so it shows in memo's and Desktop's task lists with no new screen. The task's title is the
+  issue's key and title (`ENG-12 Fix login`) and follows later renames. It closes, with a reason, when the issue is
+  completed, canceled, archived, deleted, unassigned or assigned to someone else, and opens again when the issue comes
+  back to you. A task you closed yourself stays closed, one you reopened is not closed again, and nothing is written
+  back to the tracker. `issues assign` tasks now carry the title too. The sync's answer says what it did in `tasks`
+  ([TRACKER.md](docs/dev/TRACKER.md#an-issue-as-the-owners-task)).
+- **`trackerSourceContract` checks `self()`**: when a tracker has it, it names one of the tracker's users.
+  `fakeTrackerSource` takes `self`, and `trackerManifestFake` answers `self` with its first user.
+
+### Fixed
+
+- **A `deny` on a service `api` call refuses it before its body is read.** A call whose key is `deny` (or
+  `readonly`, for a write) answered `validation_error` (exit 2) when a required body was left out or did not match
+  the schema, because every key was checked only when the call was sent. Now `api.<operation>` and each manifest key
+  that does not depend on the body refuse first, with `permission_error` (exit 5) and the key in
+  `details.permission`; an MCP call runs the same command, so it refuses alike. A key that depends on the body is
+  still checked once the body is read, and `ask` still asks there. A CLI's `before` hook on `generatedApiCommand` now
+  runs before the flag values are validated too.
+- **The `api` group of a GraphQL service names its schema.** Its help said "one command per operation of its OpenAPI
+  document" for Linear too; a group whose every operation is GraphQL now says "of its GraphQL schema". An OpenAPI
+  CLI's help is unchanged.
+- **max-cli is off the parity known-broken list.** max-cli#984 adopted cli-core 0.714.0, so a release fails again when
+  max-cli breaks. Only whatsapp-cli stays listed.
+- **SQLite 3.54 (Node 24.22) no longer breaks store version 31, combined search or the admin byte counts.** SQLite
+  3.54 stopped passing a subquery's JSON subtype up, so version 31 wrote each app's profiles and each account group as
+  a string inside the setting, and a profile or group search then lost them; version 31 now wraps both in `json()`. A
+  store that already ran version 31 on SQLite 3.54 is read as if it had not, and its next profile or group save writes
+  the setting whole again. The admin statistics' message byte count wraps its attachments the same way.
+- **A search SQLite refuses as too large answers `query.too-large`.** On SQLite 3.54 a combined message search of
+  about 53 words or more stopped with SQLite's own "nested too deep" error; it now gets the same refusal as a query
+  over the node budget, so a caller tells the person to search for less.
+
 ## 0.714.0 — 19.11.2026
 
 ### Fixed
