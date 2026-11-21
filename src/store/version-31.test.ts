@@ -5,6 +5,7 @@ import { expect, it } from "vitest"
 import { rollBackTo } from "../testing/older-store.js"
 import { MIGRATIONS, migrate } from "./migrations.js"
 import { openCache } from "./open.js"
+import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import { openStore } from "./store.js"
 
 const drive = { provider: "google-drive", account: "owner-1" }
@@ -143,4 +144,26 @@ it("leaves a stand-in folder whose files the google-drive account already holds"
     held: 1,
   })
   after.close()
+})
+
+it("reads profiles and groups that version 31 wrote as strings on SQLite 3.54, and the next save writes them whole", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "version-31-")), "wirecat.db")
+  await (await openStore({ path })).close()
+  const database = await openCache(path)
+  const write = (key: string, value: unknown) =>
+    database
+      .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+      .run(key, JSON.stringify(value))
+  write("profiles", { drive: JSON.stringify({ work: drive }) })
+  write("accountGroups", { docs: JSON.stringify(["tg:default"]) })
+
+  expect(profilesOf(database)).toEqual({ drive: { work: drive } })
+  expect(accountGroupsOf(database)).toEqual({ docs: ["tg:default"] })
+  saveProfile(database, "tg", "default", { provider: "telegram", account: "100" }, 2)
+  const saved = database.prepare("SELECT value FROM store_settings WHERE key = 'profiles'").get()?.value
+  expect(JSON.parse(String(saved))).toEqual({
+    drive: { work: drive },
+    tg: { default: { provider: "telegram", account: "100" } },
+  })
+  database.close()
 })

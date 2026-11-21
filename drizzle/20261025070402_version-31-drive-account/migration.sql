@@ -142,8 +142,9 @@ UPDATE mentions SET target_id = (SELECT account_id FROM temp.drive_moves WHERE f
 WHERE target_type = 'account' AND target_id IN (SELECT folder_id FROM temp.drive_moves);
 --> statement-breakpoint
 -- A profile that named the folder names the account: `{ provider: "google-drive", account: <principal> }`.
+-- json() keeps the inner object an object: SQLite 3.54 (Node 24.22) no longer passes a subquery's JSON subtype up.
 UPDATE store_settings SET value = (
-  SELECT json_group_object(app.key, CASE WHEN app.type = 'object' THEN (
+  SELECT json_group_object(app.key, CASE WHEN app.type = 'object' THEN json((
     SELECT json_group_object(profile.key, CASE
       WHEN profile.type = 'object' AND json_extract(profile.value, '$.provider') = 'folder'
         AND json_extract(profile.value, '$.account') IN (SELECT 'google-drive:' || principal FROM temp.drive_moves)
@@ -151,7 +152,7 @@ UPDATE store_settings SET value = (
       WHEN profile.type IN ('object', 'array') THEN json(profile.value)
       ELSE profile.value END)
     FROM json_each(app.value) profile
-  ) WHEN app.type = 'array' THEN json(app.value) ELSE app.value END)
+  )) WHEN app.type = 'array' THEN json(app.value) ELSE app.value END)
   FROM json_each(store_settings.value) app
 )
 WHERE key = 'profiles' AND json_valid(value) AND json_type(value) = 'object'
@@ -159,12 +160,12 @@ WHERE key = 'profiles' AND json_valid(value) AND json_type(value) = 'object'
 --> statement-breakpoint
 -- A group member `notes:<folder id>` follows the documents to `notes:<account id>`.
 UPDATE store_settings SET value = (
-  SELECT json_group_object(grp.key, CASE WHEN grp.type = 'array' THEN (
+  SELECT json_group_object(grp.key, CASE WHEN grp.type = 'array' THEN json((
     SELECT json_group_array(coalesce(
       (SELECT 'notes:' || m.account_id FROM temp.drive_moves m WHERE 'notes:' || m.folder_id = member.value),
       member.value))
     FROM json_each(grp.value) member
-  ) WHEN grp.type = 'object' THEN json(grp.value) ELSE grp.value END)
+  )) WHEN grp.type = 'object' THEN json(grp.value) ELSE grp.value END)
   FROM json_each(store_settings.value) grp
 )
 WHERE key = 'accountGroups' AND json_valid(value) AND json_type(value) = 'object'

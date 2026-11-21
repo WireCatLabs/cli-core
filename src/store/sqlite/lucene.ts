@@ -4,7 +4,7 @@ import { type Automaton, compileAutomaton, type MatchBudget } from "../../search
 import { isPresence, PRESENCE } from "../../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
-import { exhausted, outOfTime, QUERY_LIMITS, searchError, tooWideTerm } from "../../search/lucene/types.js"
+import { exhausted, outOfTime, QUERY_LIMITS, searchError, sqliteLimit, tooWideTerm } from "../../search/lucene/types.js"
 import { type SqlValue, TIME_LIMIT_FUNCTION, TimeLimitReached } from "../driver.js"
 import { emailHitsByPk } from "./emails.js"
 import { placeHits } from "./hit-places.js"
@@ -90,7 +90,7 @@ const timeLimited =
   (limitMs?: number) =>
   (error: unknown): never => {
     if (error instanceof TimeLimitReached) outOfTime(limitMs)
-    throw error
+    throw sqliteLimit(error)
   }
 const inTime = <T>(work: () => T, limitMs?: number): T => {
   try {

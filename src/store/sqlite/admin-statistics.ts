@@ -60,8 +60,9 @@ function fail(message: string, reason = "query.too-large"): never {
 }
 const joined =
   "FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id LEFT JOIN identities i ON i.id=m.sender_identity_id"
-const attachmentSnapshot = `(SELECT json_group_array(json_object('position',position,'kind',kind,'mime',mime,'name',name,'title',title,'url',url,'size',size,'width',width,'height',height,'duration',duration,'localPath',local_path)) FROM attachments WHERE attachable_type='message' AND attachable_id=m.id)`
-const snapshot = `json_object('edited',m.edited_at,'senderName',m.sender_name,'reply',m.reply_to,'forward',m.forward,'reactions',m.reactions,'outgoing',m.outgoing,'thread',m.thread_external_id,'attachments',${attachmentSnapshot},'counterObservations',(SELECT json_group_array(json_object('counter',counter,'value',value,'at',created_at,'source',source)) FROM message_counter_observations WHERE message_id=m.id))`
+// json() keeps a subquery's array an array: SQLite 3.54 (Node 24.22) no longer passes its JSON subtype up.
+const attachmentSnapshot = `json((SELECT json_group_array(json_object('position',position,'kind',kind,'mime',mime,'name',name,'title',title,'url',url,'size',size,'width',width,'height',height,'duration',duration,'localPath',local_path)) FROM attachments WHERE attachable_type='message' AND attachable_id=m.id))`
+const snapshot = `json_object('edited',m.edited_at,'senderName',m.sender_name,'reply',m.reply_to,'forward',m.forward,'reactions',m.reactions,'outgoing',m.outgoing,'thread',m.thread_external_id,'attachments',${attachmentSnapshot},'counterObservations',json((SELECT json_group_array(json_object('counter',counter,'value',value,'at',created_at,'source',source)) FROM message_counter_observations WHERE message_id=m.id)))`
 
 export const adminStatisticsQuery = (
   context: StoreContext,
