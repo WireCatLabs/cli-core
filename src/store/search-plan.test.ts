@@ -99,6 +99,63 @@ describe("the search query plan", () => {
     context.database.close()
   })
 
+  it("**joins the word rarity scores** in a search across chats, never scans them once per row", async () => {
+    const context = await opened()
+    const statements: { sql: string; params: unknown[] }[] = []
+    const recording = {
+      ...context,
+      database: {
+        ...context.database,
+        prepare: (sql: string) => {
+          const statement = context.database.prepare(sql)
+          return {
+            ...statement,
+            get: (...params: never[]) => statement.get(...params),
+            all: (...params: never[]) => {
+              statements.push({ sql, params })
+              return statement.all(...params)
+            },
+          }
+        },
+      },
+    }
+    const span = { start: 0, end: 0 }
+    const word = (value: string) => ({
+      kind: "predicate" as const,
+      field: "text",
+      operator: "term" as const,
+      value,
+      span,
+    })
+    const root = {
+      kind: "boolean" as const,
+      clauses: ["квартира", "сдали"].map((value) => ({ occur: "should" as const, node: word(value) })),
+      span,
+    }
+    const account = { provider: "telegram", account: "1" }
+    const stemmer = createStemmer()
+    await matchQuery(recording as never, {
+      root,
+      accounts: [account],
+      limit: 20,
+      perChat: 20,
+      rareWordsFirst: true,
+      stemmer,
+    })
+
+    const ranked = statements.filter(({ sql }) => sql.includes("PARTITION BY m.chat_id"))
+    expect(ranked).toHaveLength(1)
+    const [{ sql, params }] = ranked as [(typeof statements)[number]]
+    expect(sql).toContain("rarity")
+    // A scalar subquery inside the second window read the whole set once per row: 18 minutes on 954k messages.
+    const plan = planOf(context, sql, params)
+    expect(
+      plan.filter((line) => /\bSCAN rarity\b/.test(line)),
+      plan.join("\n"),
+    ).toEqual([])
+    context.database.close()
+  })
+
   it("would notice the slow shape", async () => {
     const context = await opened()
     const forced = `SELECT m.id FROM chats c CROSS JOIN messages m CROSS JOIN messages_fts f

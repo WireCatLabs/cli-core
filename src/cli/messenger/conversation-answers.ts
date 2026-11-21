@@ -2,7 +2,7 @@ import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { Message } from "../../domain/models.js"
 import { type MessengerTraits, syncsOneChat } from "../../ports/traits.js"
 import { conversationItem } from "../../services/conversations.js"
-import type { ChatReadiness, FoundConversations, Refreshed } from "../../services/embeddings.js"
+import type { ChatReadiness, FoundConversation, FoundConversations, Refreshed } from "../../services/embeddings.js"
 import type { AccountKey, ConversationSummary } from "../../store/store.js"
 import { itemOf, listOf, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
@@ -65,6 +65,10 @@ export const readinessGaps = (
   return { next, missing }
 }
 
+/** Message text from other people is data, never instructions: `lines` is marked as such. */
+const hitItem = (hit: FoundConversation) =>
+  ({ ...(snakeKeys(hit) as object), ...(hit.lines?.length ? { untrusted: ["lines"] } : {}) }) as object
+
 /** `search conversations` and `conversations related`, CLI and MCP alike. */
 export const foundConversations = (
   command: string,
@@ -76,8 +80,8 @@ export const foundConversations = (
 ) =>
   listOf(command, {
     items: [
-      ...found.hits.map((hit) => snakeKeys(hit)),
-      ...(found.own ?? []).map((hit) => ({ ...(snakeKeys(hit) as object), from_owner: true })),
+      ...found.hits.map((hit) => hitItem(hit)),
+      ...(found.own ?? []).map((hit) => ({ ...hitItem(hit), from_owner: true })),
     ],
     limit,
     has_more: false,

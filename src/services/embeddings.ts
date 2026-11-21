@@ -70,6 +70,8 @@ export interface EmbeddingsService {
       refresh?: RefreshOptions
       /** The word half's budget, from an explicit `--timeout`; the default limit otherwise. */
       timeLimitMs?: number
+      /** A made-up text like the answer, such as a reply to the query: searched by meaning too, its list fused with the query's. */
+      like?: string
     },
   ): Promise<FoundConversations>
   /**
@@ -137,6 +139,8 @@ export interface FoundConversations {
   hits: FoundConversation[]
   /** The owner's own conversations nearest in meaning that `hits` left out. */
   own?: FoundConversation[]
+  /** Owner chunks `own` left out because `hits` showed their conversation: the named-chat step may drop those. */
+  ownSpare?: FoundConversation[]
   readiness: SearchReadiness
   /** Kept for callers of 0.141.0 and before; `readiness.wordsOnly` says more. */
   embeddedOnlyElsewhere: Id[]
@@ -190,6 +194,8 @@ export interface FoundConversation {
   by: ("meaning" | "words")[]
   /** The chunk's text changed after it was embedded: the score is for what it said then (NEED-550 B). */
   stale: boolean
+  /** The chunk's messages that share most words with the query, as "sender: text", so a reader need not open it. */
+  lines?: string[]
 }
 
 export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => ({

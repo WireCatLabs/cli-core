@@ -12,6 +12,12 @@ const LEAST_USES = 3
 const SAMPLE = 50
 /** The share of those uses written with a capital letter that makes the word a name there. */
 const CAPITALISED = 0.8
+/**
+ * The least share of the word's uses across every chat, groups too, that its private chat must hold. A place or a
+ * brand is capitalised too, but spread over many chats: a few uses in one dialog must not make it a name there. The
+ * count takes every word sharing the stem, so a real name's share reads low; under 1% is a word spread over chats.
+ */
+const NAMED_SHARE = 0.05
 
 export interface NamedChat {
   word: string
@@ -22,9 +28,9 @@ export interface NamedChat {
 
 /**
  * The private chat a query names by a word the two people there write as a name («Петька, привет»), learned from the
- * messages: the one private chat holding most of the word's uses, at least twice as many as any other private chat,
- * where it is capitalised nearly every time. An ordinary word («счёт») is spread over many chats and written in
- * lower case, so it names none.
+ * messages: the one private chat holding most of the word's uses, at least twice as many as any other private chat
+ * and `NAMED_SHARE` of them all, where it is capitalised nearly every time. An ordinary word («счёт») is spread over
+ * many chats and written in lower case, so it names none.
  */
 export const namedChat = async (
   store: MessageStore,
@@ -43,6 +49,7 @@ export const namedChat = async (
       messenger,
     )
     const groups = (await store.queries.countQuery(execution, "chat")).sort((a, b) => b.count - a.count)
+    const total = groups.reduce((sum, { count }) => sum + count, 0)
     const dialogs: (NamedChat & { count: number })[] = []
     for (const group of groups) {
       if (dialogs.length === 2) break
@@ -52,6 +59,7 @@ export const namedChat = async (
     }
     const [best, next] = dialogs
     if (!best || best.count < LEAST_USES || (next && next.count * 2 > best.count)) continue
+    if (best.count < total * NAMED_SHARE) continue
     const { items } = await store.queries.matchQuery({
       ...execution,
       chat: { account: best.source, chatId: best.chatId },

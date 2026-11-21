@@ -145,6 +145,88 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**shows each hit's lines**, the owner's marked, and a made-up answer (`like`) finds what the query's words miss", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", `${"dog ".repeat(60)}zebra`),
+        message("40", "fish"),
+        { ...message("80", "cat"), outgoing: true },
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const zebra = await embeddings.search("zebra", { model: "tiny", limit: 1 })
+    expect(zebra.hits).toMatchObject([{ summary: { firstMessageId: "1" } }])
+    const long = `${"dog ".repeat(60)}zebra`
+    expect(zebra.hits[0]?.lines).toEqual([`${long.slice(0, 80)}…${long.slice(-120)}`])
+    expect(zebra.own).toMatchObject([{ summary: { firstMessageId: "80" }, lines: ["you: cat"] }])
+
+    const answered = await embeddings.search("zebra", { model: "tiny", limit: 1, like: "fish" })
+    expect(answered.hits).toMatchObject([{ summary: { firstMessageId: "40" }, by: ["meaning"], lines: ["fish"] }])
+    await store.close()
+  })
+
+  it("**shows the message after the one that asks**: an answer rarely repeats the question's words", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", "cat zebra"),
+        message("2", "fish", "1"),
+        message("3", "cat", "2"),
+        message("4", "cat", "3"),
+        message("5", "cat", "4"),
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("cat zebra", { model: "tiny", limit: 1 })
+    expect(found.hits[0]?.lines).toEqual(["cat zebra", "fish", "cat", "cat"])
+    await store.close()
+  })
+
+  it("**shows the best reply from outside the hit's chunk**, one per hit: a later answer lands in another chunk", async () => {
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", "zebra"),
+        message("2", "dog ".repeat(400).trim()),
+        message("3", "fish", "1"),
+        message("4", "cat", "1"),
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("zebra", { model: "tiny", limit: 1 })
+    expect(found.hits[0]?.chunk).toEqual({ firstMessageId: "1", lastMessageId: "1" })
+    expect(found.hits[0]?.lines).toEqual(["zebra", "fish"])
+    await store.close()
+  })
+
+  it("**keeps the owner's chunk in the block when a named chat's hits push its conversation off the page**", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: [{ ...message("80", "fish"), outgoing: true }],
+    })
+    await store.chats.saveChats(account, [
+      { id: "7", title: "Kit", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      account,
+      "7",
+      ["Kitten dog", "Kitten cat", "Kitten fish"].map((text, at) => ({
+        ...message(`${100 * (at + 1)}`, text),
+        chatId: "7",
+      })),
+      { via: "history" },
+    )
+    await conversations.build("7")
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const found = await embeddings.search("fish kitten", { model: "tiny", limit: 1 })
+    expect(found.named).toMatchObject({ chatId: "7" })
+    expect(found.hits.map(({ summary }) => summary.chatId)).toEqual(["7"])
+    expect(found.own?.map(({ summary }) => [summary.chatId, summary.firstMessageId])).toEqual([["9", "80"]])
+    expect(found).not.toHaveProperty("ownSpare")
+    await store.close()
+  })
+
   it("names a chat embedded only with another model, which the search finds by words alone", async () => {
     const { store, embeddings } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
@@ -241,6 +323,28 @@ describe("embeddings", () => {
     expect((await embeddings.search("invoice for Bobby", { model: "e5-small", limit: 5, chat: "9" })).named).toBe(
       undefined,
     )
+    await store.close()
+  })
+
+  it("**names no private chat by a word most of whose uses are in other chats**", async () => {
+    const { store, embeddings, conversations } = await setUp({
+      messages: Array.from({ length: 80 }, (_, at) => message(`${100 * (at + 1)}`, "Paris trip next week")),
+    })
+    await store.chats.saveChats(account, [
+      { id: "7", title: "Robert Stone", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      account,
+      "7",
+      ["Paris, hi", "Paris was fun", "Paris again"].map((text, at) => ({
+        ...message(`${100 * (at + 1)}`, text),
+        chatId: "7",
+      })),
+      { via: "history" },
+    )
+    await conversations.build("7")
+
+    expect((await embeddings.search("trip to Paris", { model: "e5-small", limit: 5 })).named).toBeUndefined()
     await store.close()
   })
 

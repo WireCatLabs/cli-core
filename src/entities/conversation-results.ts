@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import { conversation } from "./conversation.js"
 import { chatEmbedding, conversationBuild, conversationPreparation } from "./conversation-preparation.js"
-import { count, id, reference, text, time } from "./fields.js"
+import { count, id, reference, text, time, untrusted } from "./fields.js"
 import { message } from "./message.js"
 
 /** JSON returns the conversation with its messages; JSONL streams the messages themselves. */
@@ -94,4 +94,9 @@ export const conversationHit = v.strictObject({
   matched_in: v.optional(v.literal("context")),
   by: v.array(v.picklist(["meaning", "words"])),
   stale: v.boolean(),
+  /** Up to three of the chunk's messages as "sender: text": what the hit says, without opening it. */
+  lines: v.optional(v.array(text)),
+  /** In the block of the owner's own conversations, which the hits before it left out. */
+  from_owner: v.optional(v.literal(true)),
+  untrusted,
 })

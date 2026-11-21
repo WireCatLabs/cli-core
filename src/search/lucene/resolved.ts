@@ -38,6 +38,8 @@ export interface QueryExecution {
   unstemmed?: boolean
   /** `mail` searches the mail tables; the default is messages. */
   corpus?: "messages" | "mail"
+  /** Rank each chat's hits by how rare the query words they hold are (`wordRarity`); today's order picks the chats. */
+  rareWordsFirst?: boolean
 }
 /** A leaf that reads the word index: every `text` and `exact` leaf, stemmed or not. */
 export const hasText = (node: QueryNode): boolean =>
