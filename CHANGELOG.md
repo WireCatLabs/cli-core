@@ -5,6 +5,28 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.717.0 — 21.11.2026
+
+### Changed — may break callers
+
+- **`account rename` of a profile that is not here fails with `profile.unknown`.** It had its own reason,
+  `account-rename.unknown-profile`, with the same code and message as `account remove`'s, and the family audit
+  counts one failure under two names as a new finding, which blocked `cli-dev audit --family` of every CLI on
+  cli-core. `profile.unknown` is what the rest of the tool gives for a profile that is not here, with the same
+  `details.profiles`; `account remove` keeps `account-remove.unknown-profile`, which WireCat Desktop matches. An
+  agent that matched `account-rename.unknown-profile` matches `profile.unknown` instead.
+
+### Fixed
+
+- **`session` help names the sign-in the CLI keeps,** as its prompt does: "application password" for a WordPress
+  CLI, "API token" when the CLI names none, "password" for a sign-in with `--login`. It said "token" for all.
+  A CLI's generated command pages change with it at its next bump.
+- **`api` help names what the commands were made from.** `serviceApiCommand` takes `spec`, such as
+  "its index at /wp-json"; left out, it is still "its OpenAPI document", or "its GraphQL schema" when every
+  operation is GraphQL.
+- **whatsapp-cli is off the parity known-broken list.** whatsapp-cli#418 adopted cli-core 0.714.0 and names the
+  scheduled-message methods WhatsApp never has, so a release fails again when whatsapp-cli breaks. The list is empty.
+
 ## 0.716.0 — 21.11.2026
 
 ### Added
