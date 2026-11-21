@@ -391,7 +391,7 @@ const fixture = (
     }
   }
   const bare = (one: Sent) => ({ method: one.method, url: one.url, ...(one.body ? { body: one.body } : {}) })
-  return { cli, sent, bare: () => sent.map(bare), loads, root, env, definition }
+  return { cli, sent, bare: () => sent.map(bare), loads, root, env, definition, options }
 }
 
 const filesUnder = (dir: string): string[] =>
@@ -533,6 +533,9 @@ describe("the shared service api group", () => {
     expect(paths).toContain("patch-page")
     expect(group?.commands.map((one) => one.name())).not.toContain("call")
     expect(group?.description()).toBe("the raw Pages API, one command per operation of its OpenAPI document")
+    expect(serviceApiCommand({ ...fixture().options, spec: "its index at /wp-json" }).description()).toBe(
+      "the raw Pages API, one command per operation of its index at /wp-json",
+    )
     expect(paths).not.toContain("create-a-token")
     expect(paths).not.toContain("store-token")
     expect(paths).not.toMatch(/Bot API/)

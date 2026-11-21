@@ -64,6 +64,11 @@ export interface ServiceApiOptions extends ServiceApiPermissionsInput {
   /** In place of the manifest's first server. */
   baseUrl?: string
   /**
+   * What the operations were made from, for the group's help: "its index at /wp-json". Left out, "its OpenAPI
+   * document", or "its GraphQL schema" when every operation is GraphQL.
+   */
+  spec?: string
+  /**
    * The values of the server's free variables for this run, such as `{ site }` from the profile's sign-in
    * (`recalledSite`). Read only when a call is sent, so `api list` and `api show` work before sign-in.
    */
@@ -592,9 +597,9 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
     })
 
   const graphql = operations.length > 0 && operations.every((one) => one.binding.kind === "graphql")
-  const described = graphql ? "GraphQL schema" : "OpenAPI document"
+  const described = options.spec ?? (graphql ? "its GraphQL schema" : "its OpenAPI document")
   const group = annotate(new Command("api"), { effects: NO_EFFECTS }).description(
-    `the raw ${options.service} API, one command per operation of its ${described}`,
+    `the raw ${options.service} API, one command per operation of ${described}`,
   )
   group.addCommand(list).addCommand(show)
   for (const child of [...generated.commands]) group.addCommand(child)
