@@ -143,7 +143,7 @@ describe("WordPress from configuration", () => {
     expect(await store.content.count(account, "post")).toBe(3)
   })
 
-  it("holds the deletions when a contributor is refused the trash, and says why", async () => {
+  it("keeps the posts a contributor may not read, each read once more by its id, and says why", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "wp-content-")), "wirecat.db") })
     opened.push(store)
     await syncContent(wordpress().source, store, account, { now: Date.UTC(2026, 10, 17) })
@@ -153,9 +153,12 @@ describe("WordPress from configuration", () => {
     expect(report.gaps.map((one) => one.scope)).toEqual(expect.arrayContaining(["edit_others_posts", "edit_pages"]))
     expect(report.synced.find((one) => one.kind === "post")).toMatchObject({
       state: "complete",
-      pass: "held",
+      pass: "complete",
       unlisted: 0,
     })
+    expect(report.gaps.map((one) => one.message)).toContainEqual(
+      expect.stringContaining("would not give this sign-in every post"),
+    )
     expect(await store.content.count(account, "post")).toBe(3)
   })
 
@@ -193,6 +196,74 @@ describe("WordPress from configuration", () => {
     expect(confirmed).toEqual([["posts.publish", own], []])
   })
 
+  it("passes the page route's own key for the action the owner said yes to", async () => {
+    const { fake, source } = wordpress()
+    const confirmed: (readonly string[])[] = []
+    const routed = {
+      ...api,
+      operations: api.operations.map((one) =>
+        one.id === "postWpV2PagesById"
+          ? { ...one, permissions: [{ key: "pages.publish", values: { status: ["publish", "future"] } }] }
+          : one,
+      ),
+    }
+    const writer = contentWriterFromManifest(WORDPRESS_CONTENT, {
+      api: routed,
+      write: (command, operation, input, keys) => {
+        confirmed.push(keys)
+        return fake.write(command, operation, input)
+      },
+      command: new Command("wp"),
+      source,
+    })
+    await writer.unpublish("12", { operationId: "op-1" })
+    await writer.publish("12", { operationId: "op-2", confirmed: ["posts.publish"] })
+    const own = `api.${api.operations.find((one) => one.id === "postWpV2PagesById")?.command}`
+    expect(confirmed).toEqual([[], ["posts.publish", "pages.publish", own]])
+  })
+
+  // FIND-2816: one `writes` named the posts route, and a page could only be read.
+  it("writes a page by the page calls, and keeps it a page in the answer", async () => {
+    const { fake, writer } = wordpress()
+    const made = await writer.createDraft(
+      { type: "page", title: "Contact", body: "Write to us." },
+      { operationId: "a" },
+    )
+    expect(made).toMatchObject({ type: "page", title: "Contact", status: "draft" })
+    const updated = await writer.update(made.externalId, { title: "Contact us" }, { operationId: "b" })
+    expect(updated).toMatchObject({ type: "page", title: "Contact us" })
+    expect(await writer.publish("12", { operationId: "c" })).toMatchObject({ type: "page", status: "published" })
+    expect(await writer.unpublish("12", { operationId: "d" })).toMatchObject({ type: "page", status: "draft" })
+    expect(await writer.trash("12", { operationId: "e" })).toMatchObject({ type: "page", status: "trashed" })
+    expect(await writer.trash(made.externalId, { operationId: "f", force: true })).toBeNull()
+    expect(fake.writes).toEqual([
+      "postWpV2Pages",
+      "postWpV2PagesById",
+      "postWpV2PagesById",
+      "deleteWpV2PagesById",
+      "deleteWpV2PagesById",
+    ])
+    await expect(writer.update("12", { terms: ["7"] }, { operationId: "g" })).rejects.toMatchObject({
+      details: { reason: "content.write-unsupported" },
+    })
+  })
+
+  it("refuses a page write when the manifest names no page calls", async () => {
+    const { page: _, ...writes } = WORDPRESS_CONTENT.writes
+    const { fake, source } = wordpress()
+    const writer = contentWriterFromManifest(
+      { ...WORDPRESS_CONTENT, writes },
+      { api, write: fake.write, command: new Command("wp"), source },
+    )
+    await expect(writer.update("12", { title: "t" }, { operationId: "a" })).rejects.toMatchObject({
+      details: { reason: "content.write-unsupported" },
+    })
+    await expect(writer.createDraft({ type: "page", title: "t" }, { operationId: "b" })).rejects.toMatchObject({
+      details: { reason: "content.write-unsupported" },
+    })
+    expect(fake.writes).toEqual([])
+  })
+
   it("names the place of a mistake in the manifest, with the nearest operation", () => {
     const wrong = structuredClone(WORDPRESS_CONTENT)
     const [posts] = wrong.entities.post
@@ -207,5 +278,8 @@ describe("WordPress from configuration", () => {
     const [, pages] = needing.entities.post
     if (pages) pages.optional.needs.operation = "postWpV2Posts"
     expect(() => parseContentManifest(needing, api)).toThrow(/entities\.post\.1\.optional\.needs.*is a write/)
+    const paging = structuredClone(WORDPRESS_CONTENT) as unknown as { writes: { page: { update: { path: object } } } }
+    paging.writes.page.update.path = {}
+    expect(() => parseContentManifest(paging, api)).toThrow(/writes\.page\.update.*\{id\}/)
   })
 })

@@ -140,7 +140,17 @@ export const WORDPRESS_CONTENT = {
         list: { operation: "getWpV2Users", query: { context: "edit", per_page: per, orderby: "id" } },
         get: { operation: "getWpV2UsersById", path: { id: "{id}" }, query: { context: "edit" } },
         map: { externalId: "id", name: "name", email: "email", slug: "slug" },
-        optional: { message: "only an editor or administrator lists the users", scope: "list_users" },
+        optional: {
+          message: "only an editor or administrator lists the users",
+          scope: "list_users",
+          // Without list_users WordPress refuses context=edit, and lists in context=view the authors with published
+          // posts, without their e-mail.
+          fallback: {
+            query: { context: "view" },
+            message: "only an administrator lists every user: these are the authors with published posts",
+            scope: "list_users",
+          },
+        },
       },
     ],
     term: [
@@ -172,6 +182,13 @@ export const WORDPRESS_CONTENT = {
     publish: { status: "publish" },
     schedule: { status: "future", date_gmt: "{at}" },
     unpublish: { status: "draft" },
+    page: {
+      create: { operation: "postWpV2Pages", body: { status: "draft" } },
+      update: { operation: "postWpV2PagesById", path: { id: "{id}" } },
+      trash: { operation: "deleteWpV2PagesById", path: { id: "{id}" } },
+      delete: { operation: "deleteWpV2PagesById", path: { id: "{id}" }, query: { force: true } },
+      fields: { title: "title.raw", body: "content.raw", excerpt: "excerpt.raw", slug: "slug" },
+    },
   },
 }
 
@@ -250,6 +267,8 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
     post(12, "page", "publish", "About", "<p>Who we are.</p>", T0 + 30_000, { categories: [] }),
   ]
   const typeOf = (operation: string) => (operation.includes("Pages") ? "page" : "post")
+  const published = (user: Row) => rows.some((one) => one.author === user.id && one.status === "publish")
+  const viewed = ({ email: _, ...user }: Row) => structuredClone(user)
   const visible = (row: Row) => options.contributor === undefined || row.author === options.contributor
   const notFound = () => new CliError("not_found", "Invalid post ID.", { reason: "rest_post_invalid_id" })
   const forbidden = () => new CliError("permission_error", "Sorry, you are not allowed to do that.")
@@ -269,8 +288,9 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
   }
   const read = (operation: string, input: ApiCommandInput): { body: unknown; headers: Headers } => {
     if (operation === "getWpV2Users") {
-      if (options.contributor !== undefined) throw forbidden()
-      return page(users, input)
+      if (options.contributor === undefined) return page(users, input)
+      if (input.query.context === "edit") throw forbidden()
+      return page(users.filter(published).map(viewed), input)
     }
     if (operation === "getWpV2UsersMe") {
       // WordPress leaves a capability the role lacks out, rather than false.
@@ -288,6 +308,10 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
       const list = operation.includes("Users") ? users : operation.includes("Tags") ? tags : categories
       const found = list.find((one) => String(one.id) === input.path.id)
       if (!found) throw notFound()
+      if (operation.includes("Users") && options.contributor !== undefined && found.id !== options.contributor) {
+        if (input.query.context === "edit" || !published(found)) throw forbidden()
+        return { body: viewed(found), headers: new Headers() }
+      }
       return { body: structuredClone(found), headers: new Headers() }
     }
     if (operation === "getWpV2PostsById" || operation === "getWpV2PagesById") {
@@ -340,22 +364,23 @@ export const wordpressFake = (options: WordpressFakeOptions = {}) => {
       stamp(row)
     }
     let answer: unknown
-    if (operation === "postWpV2Posts") {
+    const type = typeOf(operation)
+    if (operation === "postWpV2Posts" || operation === "postWpV2Pages") {
       made += 1
-      const row = post(made, "post", "draft", "", "", clock(), { categories: [] })
+      const row = post(made, type, "draft", "", "", clock(), { categories: [] })
       apply(row)
       rows.push(row)
       answer = structuredClone(row)
     } else {
-      const row = rows.find((one) => String(one.id) === input.path.id && one.type === "post")
+      const row = rows.find((one) => String(one.id) === input.path.id && one.type === type)
       if (!row) throw notFound()
-      if (operation === "postWpV2PostsById") {
+      if (operation === "postWpV2PostsById" || operation === "postWpV2PagesById") {
         apply(row)
         answer = structuredClone(row)
-      } else if (operation === "deleteWpV2PostsById" && input.query.force === "true") {
+      } else if (operation.startsWith("delete") && input.query.force === "true") {
         rows.splice(rows.indexOf(row), 1)
         answer = { deleted: true, previous: structuredClone(row) }
-      } else if (operation === "deleteWpV2PostsById") {
+      } else if (operation === "deleteWpV2PostsById" || operation === "deleteWpV2PagesById") {
         row.status = "trash"
         stamp(row)
         answer = structuredClone(row)

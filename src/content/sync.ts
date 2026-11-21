@@ -20,9 +20,14 @@ interface Mode {
 interface ContentCursor {
   v: 1
   token: string | null
-  /** `gapped`: a read of this round was refused, so its end keeps the cursor it started from. */
-  round: { from: string | null; page: string | null; gapped?: true } | null
+  /**
+   * `gapped`: a read of this round was refused, so its end keeps the cursor it started from. `lacks`: the rights the
+   * sign-in lacked in this round (lasting gaps), which its end keeps beside the cursor.
+   */
+  round: { from: string | null; page: string | null; gapped?: true; lacks?: string[] } | null
   passAt: number
+  /** The rights the sign-in lacked when the cursor was taken: one it has now shows rows older than the cursor. */
+  lacks?: string[]
 }
 
 interface ContentPass {
@@ -37,6 +42,12 @@ interface ContentPass {
 /** The sign-in may not read it, which proves nothing about the row; WordPress also refuses with 400 and 403 inside. */
 const refusedRead = (error: unknown): error is CliError =>
   isCliError(error) && (error.code === "permission_error" || error.details.inner_status === 403)
+
+const lackOf = (gap: ContentGap) => gap.scope ?? gap.message
+/** A refusal of this kind in this run, which proves nothing about the rows it left out; a right the role lacks does. */
+const refusedIn = (run: Run, kind: ContentKind) => run.report.gaps.some((gap) => gap.kind === kind && !gap.lasting)
+const lackedIn = (run: Run, kind: ContentKind) =>
+  run.report.gaps.flatMap((gap) => (gap.kind === kind && gap.lasting ? [lackOf(gap)] : []))
 
 const fresh = (): ContentCursor => ({ v: 1, token: null, round: null, passAt: 0 })
 
@@ -121,7 +132,11 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
   let round: NonNullable<ContentCursor["round"]> = mode.drop
     ? { from: null, page: null }
     : (cursor.round ?? { from: mode.full ? null : cursor.token, page: null })
-  const gapped = () => run.report.gaps.some((gap) => gap.kind === kind)
+  const noted = () => {
+    if (refusedIn(run, kind)) round = { ...round, gapped: true }
+    const lacks = [...new Set([...(round.lacks ?? []), ...lackedIn(run, kind)])].sort()
+    if (lacks.length) round = { ...round, lacks }
+  }
   const save = (patch: Partial<ContentCursor>) => {
     cursor = { ...cursor, ...patch }
     return store.sync.setSyncState(account, name, JSON.stringify(cursor))
@@ -136,7 +151,7 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
     }
     run.report.progress.requests += 1
     const page = await source.changes(kind, round.from, round.page ?? undefined, run.context)
-    if (gapped()) round = { ...round, gapped: true }
+    noted()
     if (run.signal?.aborted) {
       await save({ round })
       return "cancelled" as const
@@ -155,8 +170,20 @@ const syncChanges = async (run: Run, kind: ContentKind, result: ContentSyncResul
     }
     run.report.progress.steps += 1
     if (!page.hasMore) {
+      const lacks = round.lacks ?? []
+      // A right gained shows rows changed before the cursor, which a read of changes never reaches: list them all.
+      if (round.from !== null && (cursor.lacks ?? []).some((one) => !lacks.includes(one))) {
+        result.reset = true
+        round = { from: null, page: null }
+        pages.clear()
+        continue
+      }
       // Changes made while a read was refused would be past a new cursor: the next run reads from the old one again.
-      await save({ token: round.gapped ? round.from : (page.cursor ?? null), round: null })
+      await save({
+        token: round.gapped ? round.from : (page.cursor ?? null),
+        round: null,
+        lacks: lacks.length ? lacks : undefined,
+      })
       return null
     }
     if (page.nextCursor === undefined)
@@ -194,7 +221,7 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
       return "cancelled" as const
     }
     pass = { ...pass, ids: [...pass.ids, ...page.items] }
-    if (run.report.gaps.some((gap) => gap.kind === kind)) pass = { ...pass, gapped: true }
+    if (refusedIn(run, kind)) pass = { ...pass, gapped: true }
     if (page.hasMore) {
       if (page.nextCursor === undefined || page.nextCursor === pass.page)
         throw new CliError("invalid_response", `${source.provider} gave no new page of ${kind} ids`)
@@ -205,7 +232,8 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
     const stored = await store.content.count(account, kind)
     const missing = await store.content.unlisted(account, kind, pass.ids, pass.started)
     const unlisted = missing.length
-    const unread = pass.gapped === true || run.report.gaps.some((gap) => gap.kind === kind)
+    // A role that sees only part lists less, the same each run: each row its list lacks is read once more below.
+    const unread = pass.gapped === true || refusedIn(run, kind)
     const moved = (run.report.moved?.length ?? 0) > 0
     const emptied = pass.ids.length === 0 && unlisted > 0
     const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
@@ -386,7 +414,8 @@ export const syncContent = async (
         report.progress.requests += 1
       },
       gap: (gap) => {
-        const key = `${gap.kind} ${gap.message}`
+        // A refusal with the same words as a right the role lacks still holds the cursor and the pass.
+        const key = `${gap.kind} ${gap.message}${gap.lasting ? " lasting" : ""}`
         if (said.has(key)) return
         said.add(key)
         report.gaps.push(gap)
@@ -416,7 +445,7 @@ export const syncContent = async (
   if (resumed)
     for (const gap of await contentGapsOf(store, account))
       if (done.has(gap.kind)) {
-        said.add(`${gap.kind} ${gap.message}`)
+        said.add(`${gap.kind} ${gap.message}${gap.lasting ? " lasting" : ""}`)
         report.gaps.push(gap)
       }
   for (const kind of kinds.filter((one) => !done.has(one))) {

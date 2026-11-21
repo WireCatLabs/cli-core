@@ -29,6 +29,11 @@ export interface ContentGap {
   kind: ContentKind
   message: string
   scope?: string
+  /**
+   * A right the sign-in's role lacks, the same each run: what it reads is whole for what it may see. The cursor moves
+   * on, and a row a complete id list lacks is read once more by its id, so only a source's "gone" deletes it.
+   */
+  lasting?: true
 }
 
 export interface ContentCallContext {

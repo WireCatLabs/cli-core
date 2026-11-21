@@ -8,8 +8,8 @@ import { serviceApiCall } from "../../cli/service-api-call.js"
 import { openStore } from "../../store/store.js"
 import { contentSourceFromManifest, contentWriterFromManifest } from "../manifest/index.js"
 import { syncContent } from "../sync.js"
-import { contentSourceContract, contentWriteContract } from "./index.js"
-import { type ContentManifestFake, contentManifestFake } from "./manifest-fake.js"
+import { contentSourceContract, contentWriteContract, exampleContentRows } from "./index.js"
+import { type ContentManifestFake, type ContentManifestFakeOptions, contentManifestFake } from "./manifest-fake.js"
 
 const api = wordpressApi()
 const fakes: ContentManifestFake[] = []
@@ -218,13 +218,19 @@ const ROLES = {
 
 describe("a role refused some of a kind's calls", () => {
   const DAY = 86_400_000
-  const over = (manifest: unknown, lacks: readonly string[] = [], read: unknown = manifest) => {
+  const over = (
+    manifest: unknown,
+    lacks: readonly string[] = [],
+    read: unknown = manifest,
+    extra: Partial<ContentManifestFakeOptions> = {},
+  ) => {
     let now = Date.parse("2026-11-17T00:00:00Z")
     const fake = contentManifestFake(manifest, {
       api,
       clock: () => (now += 1000),
       lacks,
       denied: lacks.length ? ["getWpV2Users"] : [],
+      ...extra,
     })
     fakes.push(fake)
     const call = serviceApiCall({
@@ -247,6 +253,8 @@ describe("a role refused some of a kind's calls", () => {
     return one
   }
   const account = { provider: "wordpress", account: "blog.example.test" }
+  const pagesOf = async (copy: Awaited<ReturnType<typeof openStore>>) =>
+    (await copy.content.list(account, "post", { type: "page" })).items.map((one) => one.record.externalId)
 
   for (const [role, lacks] of Object.entries(ROLES))
     it(`syncs the ${role}'s posts, never sends the pages list, and marks no stored page deleted`, async () => {
@@ -260,7 +268,8 @@ describe("a role refused some of a kind's calls", () => {
       const signedIn = over(WORDPRESS_CONTENT, lacks)
       signedIn.later(2 * DAY)
       const first = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
-      expect(first.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "held" })
+      // The page the role no longer lists is read by its id, and a refusal keeps it.
+      expect(first.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "complete" })
       expect(first.gaps.map((one) => one.scope)).toEqual(
         expect.arrayContaining(["edit_pages", "edit_others_posts", "list_users"]),
       )
@@ -268,6 +277,9 @@ describe("a role refused some of a kind's calls", () => {
         "only an editor or administrator reads the pages",
       )
       expect(await pages()).toEqual(["12"])
+      expect((await copy.content.get(account, "post", "12"))?.deletedAt).toBeNull()
+      expect(signedIn.fake.refusals).toEqual(["getWpV2PagesById"])
+      signedIn.fake.refusals.length = 0
 
       // The live symptom: an edit after the first sync never reached the copy.
       const row = signedIn.fake.rows.post?.[0]?.find((one) => String(one.id) === "10") as Record<string, unknown>
@@ -278,6 +290,113 @@ describe("a role refused some of a kind's calls", () => {
       expect(second.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete" })
       expect((await copy.content.get(account, "post", "10"))?.record.title).toBe("Edited elsewhere")
     })
+
+  // DEBT-372: a role that sees only its own posts read every post on every sync, and never saw one deleted for good.
+  for (const [role, lacks] of Object.entries(ROLES))
+    it(`reads only the ${role}'s changes after the first sync, and marks deleted only what a read answers gone`, async () => {
+      const copy = await store()
+      // One more post of this role's own: a list of none would hold the pass for its own sake.
+      const rows = () => {
+        const all = exampleContentRows()
+        const [own] = all.post ?? []
+        return { ...all, post: [...(all.post ?? []), { ...(own as NonNullable<typeof own>), externalId: "13" }] }
+      }
+      const editor = over(WORDPRESS_CONTENT, [], WORDPRESS_CONTENT, { rows: rows() })
+      await syncContent(editor.source, copy, account, { now: editor.now() })
+
+      // Post 11 is another author's draft: this role's lists leave it out, and a read of it is refused.
+      const signedIn = over(WORDPRESS_CONTENT, lacks, WORDPRESS_CONTENT, { rows: rows(), hidden: { post: ["11"] } })
+      signedIn.later(2 * DAY)
+      const first = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+      expect(first.synced.find((one) => one.kind === "post")).toMatchObject({ state: "complete", pass: "complete" })
+      signedIn.fake.refusals.length = 0
+
+      signedIn.later(60_000)
+      const second = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+      expect(second.synced.find((one) => one.kind === "post")).toMatchObject({ round: "changes", state: "complete" })
+
+      signedIn.fake.remove("post", "10")
+      signedIn.later(2 * DAY)
+      const third = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+      expect(third.synced.find((one) => one.kind === "post")).toMatchObject({
+        round: "changes",
+        pass: "complete",
+        unlisted: 1,
+      })
+      expect((await copy.content.get(account, "post", "10"))?.deletedAt).not.toBeNull()
+      expect((await copy.content.get(account, "post", "11"))?.deletedAt).toBeNull()
+      expect((await copy.content.get(account, "post", "12"))?.deletedAt).toBeNull()
+      expect(third.gaps.map((one) => one.message)).toContainEqual(
+        expect.stringContaining("would not give this sign-in every post"),
+      )
+      signedIn.fake.refusals.length = 0
+    })
+
+  it("holds the pass for a role that lacks a right where a row cannot be read by its id", async () => {
+    const [post, page] = WORDPRESS_CONTENT.entities.post as unknown as [object, { get?: unknown }]
+    const { get: _, ...unread } = page
+    const manifest = { ...WORDPRESS_CONTENT, entities: { ...WORDPRESS_CONTENT.entities, post: [post, unread] } }
+    const copy = await store()
+    const editor = over(manifest)
+    await syncContent(editor.source, copy, account, { now: editor.now() })
+    const author = over(manifest, ["capabilities.edit_pages"])
+    author.later(2 * DAY)
+    const report = await syncContent(author.source, copy, account, { now: author.now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ pass: "held", unlisted: 0 })
+    expect(await pagesOf(copy)).toEqual(["12"])
+  })
+
+  it("holds the cursor when a read is refused with the same words as a right the role lacks", async () => {
+    const copy = await store()
+    const signedIn = over(WORDPRESS_CONTENT, [], WORDPRESS_CONTENT, {
+      lacks: ["capabilities.edit_others_posts"],
+      denied: ["getWpV2Posts"],
+    })
+    const report = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+    const words = "the sign-in may not read every post: a contributor sees its own"
+    expect(report.gaps.filter((one) => one.message === words).map((one) => one.lasting ?? false)).toEqual([true, false])
+    const cursor = JSON.parse((await copy.sync.syncState(account, "content:post"))?.value ?? "null")
+    expect(cursor.token).toBeNull()
+  })
+
+  it("lists everything again once the sign-in gains the right it lacked", async () => {
+    const copy = await store()
+    const author = over(WORDPRESS_CONTENT, ROLES.author)
+    await syncContent(author.source, copy, account, { now: author.now() })
+    author.later(60_000)
+    const again = await syncContent(author.source, copy, account, { now: author.now() })
+    expect(again.synced.find((one) => one.kind === "post")).toMatchObject({ round: "changes" })
+
+    const promoted = over(WORDPRESS_CONTENT)
+    promoted.later(author.now() - promoted.now() + 60_000)
+    const report = await syncContent(promoted.source, copy, account, { now: promoted.now() })
+    expect(report.synced.find((one) => one.kind === "post")).toMatchObject({ round: "full", reset: true })
+    expect(await pagesOf(copy)).toEqual(["12"])
+  })
+
+  // FIND-2815: without list_users the users list is refused with context=edit, and answered with context=view.
+  it("reads the authors in the simpler form a role is answered, a gap that marks none deleted", async () => {
+    const copy = await store()
+    const editor = over(WORDPRESS_CONTENT)
+    await syncContent(editor.source, copy, account, { now: editor.now() })
+
+    const signedIn = over(WORDPRESS_CONTENT, [], WORDPRESS_CONTENT, {
+      denied: ["getWpV2Users"],
+      hidden: { author: ["2"] },
+    })
+    signedIn.later(2 * DAY)
+    const report = await syncContent(signedIn.source, copy, account, { now: signedIn.now() })
+    expect(report.synced.find((one) => one.kind === "author")).toMatchObject({ state: "complete", pass: "complete" })
+    expect(report.gaps.find((one) => one.kind === "author")).toMatchObject({
+      message: "only an administrator lists every user: these are the authors with published posts",
+      scope: "list_users",
+    })
+    const authors = (await copy.content.list(account, "author")).items
+    expect(authors.map((one) => [one.record.externalId, one.deletedAt])).toEqual([
+      ["1", null],
+      ["2", null],
+    ])
+  })
 
   it("holds a scheduled page an editor stored, once its time passed, for a role that may not read it", async () => {
     const copy = await store()

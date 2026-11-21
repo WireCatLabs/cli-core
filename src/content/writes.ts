@@ -198,8 +198,9 @@ export const schedulePost = async (
   if (!Number.isFinite(at) || at <= now)
     throw new CliError(
       "validation_error",
-      "--at is in the past, and the source would publish the post at once; give a later time, or use posts publish",
-      { reason: "content.schedule-past", param: "--at" },
+      "--at-time is in the past, and the source would publish the post at once; give a later time, or leave " +
+        "--at-time out to publish now",
+      { reason: "content.schedule-past", param: "--at-time" },
     )
   const copy = await copyOf(context, externalId)
   if (copy.record.status === "published")

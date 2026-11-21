@@ -28,8 +28,13 @@ export interface ContentManifestFakeOptions {
    * `refusals`.
    */
   lacks?: readonly string[]
-  /** Operations refused with 403 to this sign-in, as WordPress refuses an author the users list. */
+  /**
+   * Operations refused with 403 to this sign-in, as WordPress refuses an author the users list with `context=edit`. A
+   * kind's `optional.fallback` form of the same call is answered.
+   */
   denied?: readonly string[]
+  /** Rows this sign-in may not see, by kind: left out of every list, and a read of one refused with 403. */
+  hidden?: Partial<Record<ContentKind, readonly string[]>>
 }
 
 export interface ContentManifestFake {
@@ -231,18 +236,34 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
     index: number
     role: "list" | "changes" | "get" | "rights"
     call: CrmOperationCall
+    /** The kind's `optional.fallback` form of the call, which `denied` does not refuse. */
+    simpler?: true
   }
   const routes: Route[] = manifest.kinds.flatMap((kind) =>
-    entities(kind).flatMap((entity, index) => [
-      ...(entity.changes ? [{ kind, index, role: "changes" as const, call: entity.changes }] : []),
-      ...(entity.get ? [{ kind, index, role: "get" as const, call: entity.get }] : []),
-      { kind, index, role: "list" as const, call: entity.list },
-      ...(entity.ids ? [{ kind, index, role: "list" as const, call: entity.ids }] : []),
-      ...[entity.optional?.requires, entity.optional?.needs].flatMap((call) =>
-        call ? [{ kind, index, role: "rights" as const, call }] : [],
-      ),
-    ]),
+    entities(kind).flatMap((entity, index) => {
+      const own: Route[] = [
+        ...(entity.changes ? [{ kind, index, role: "changes" as const, call: entity.changes }] : []),
+        ...(entity.get ? [{ kind, index, role: "get" as const, call: entity.get }] : []),
+        { kind, index, role: "list" as const, call: entity.list },
+        ...(entity.ids ? [{ kind, index, role: "list" as const, call: entity.ids }] : []),
+      ]
+      const fallback = entity.optional?.fallback
+      return [
+        ...own,
+        ...(fallback
+          ? own.map((route) => ({
+              ...route,
+              call: { ...route.call, query: { ...route.call.query, ...fallback.query } },
+              simpler: true as const,
+            }))
+          : []),
+        ...[entity.optional?.requires, entity.optional?.needs].flatMap((call) =>
+          call ? [{ kind, index, role: "rights" as const, call }] : [],
+        ),
+      ]
+    }),
   )
+  const hidden = (kind: ContentKind, id: string) => options.hidden?.[kind]?.includes(id) === true
   const lacks = new Set(options.lacks ?? [])
   const checks = manifest.kinds.flatMap((kind) =>
     entities(kind).flatMap((entity) =>
@@ -316,7 +337,7 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       refusals.push(operation)
       throw new CliError("configuration_error", `the content fake answers no ${operation} call like this`)
     }
-    if (options.denied?.includes(operation))
+    if (options.denied?.includes(operation) && !route.simpler)
       throw new CliError("permission_error", `the content fake denies ${operation} to this sign-in`)
     const entity = entities(route.kind)[route.index] as ContentManifestEntity
     const held = rows[route.kind]?.[route.index] ?? []
@@ -329,23 +350,29 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
       return { body, headers: new Headers() }
     }
     const needs = entity.optional?.needs
-    if (needs && lacks.has(needs.check)) {
-      refusals.push(operation)
-      if (route.role === "get")
+    const lacked = needs !== undefined && lacks.has(needs.check)
+    if (route.role === "get") {
+      const place = placeOf(route.call, "{id}")
+      const id = place ? request[place.in][place.name] : undefined
+      const row = held.find((one) => idOf(entity, one) === String(id))
+      // A missing row is a 404 whoever asks; only a row that is there is refused to a role.
+      if (!row) throw new CliError("not_found", `no ${route.kind} ${id}`)
+      if (lacked || hidden(route.kind, String(id))) {
+        if (lacked) refusals.push(operation)
         throw new CliError("permission_error", `the content fake denies ${operation} to this sign-in`)
+      }
+      return { body: wrapped(route.call.items, structuredClone(row)), headers: new Headers() }
+    }
+    if (lacked) {
+      refusals.push(operation)
       throw new CliError("validation_error", `the content fake refuses ${operation} to this sign-in`, {
         status: 400,
         inner_status: 403,
       })
     }
-    if (route.role === "get") {
-      const place = placeOf(route.call, "{id}")
-      const id = place ? request[place.in][place.name] : undefined
-      const row = held.find((one) => idOf(entity, one) === String(id))
-      if (!row) throw new CliError("not_found", `no ${route.kind} ${id}`)
-      return { body: wrapped(route.call.items, structuredClone(row)), headers: new Headers() }
-    }
-    let list = [...held].sort((a, b) => Number(digits(idOf(entity, a))) - Number(digits(idOf(entity, b))))
+    let list = [...held]
+      .filter((row) => !hidden(route.kind, idOf(entity, row)))
+      .sort((a, b) => Number(digits(idOf(entity, a))) - Number(digits(idOf(entity, b))))
     if (route.role === "changes" && entity.changes) {
       const place = placeOf(entity.changes, "{since}") as NonNullable<ReturnType<typeof placeOf>>
       const raw = String(request[place.in][place.name])
@@ -353,17 +380,24 @@ export const contentManifestFake = (input: unknown, options: ContentManifestFake
         entity.changes.since === "iso" ? Date.parse(raw) : Number(raw) * (entity.changes.since === "seconds" ? 1000 : 1)
       if (Number.isNaN(since)) throw new CliError("validation_error", `${raw} is not a time`)
       list = held
-        .filter((row) => changedOf(entity, row) > since)
+        .filter((row) => changedOf(entity, row) > since && !hidden(route.kind, idOf(entity, row)))
         .sort((a, b) => changedOf(entity, a) - changedOf(entity, b))
     }
     return page(found, route.call, structuredClone(list), request)
   }
 
   const write = (operation: string, request: ApiCommandInput): unknown => {
-    const ours = manifest.writes
-    const [entity] = entities("post")
-    const held = rows.post?.[0]
-    if (!ours || !entity || !held) throw new CliError("configuration_error", "the source manifest writes no posts")
+    const writes_ = manifest.writes
+    if (!writes_) throw new CliError("configuration_error", "the source manifest writes no posts")
+    const touches = (calls: NonNullable<ContentManifest["writes"]>["page"]) =>
+      calls !== undefined &&
+      [calls.create, calls.update, calls.trash, calls.delete].some((call) => call?.operation === operation)
+    const type = touches(writes_.page) && !touches(writes_) ? "page" : "post"
+    const ours = type === "page" && writes_.page ? writes_.page : writes_
+    const index = entityIndex("post", { type })
+    const entity = entities("post")[index]
+    const held = rows.post?.[index]
+    if (!entity || !held) throw new CliError("configuration_error", `the source manifest reads no ${type}s`)
     const matches = (call: CrmOperationCall | undefined) =>
       call?.operation === operation &&
       fixedOf(call.query ?? {}).every(([key, value]) => String(request.query[key]) === value)

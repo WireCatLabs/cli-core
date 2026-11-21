@@ -18,6 +18,7 @@ export {
   type TermKind,
 } from "../domain/content.js"
 export { addContentCommands, type ContentCommandOptions, type ContentRun } from "./cli/index.js"
+export { type ContentStoreOptions, openContentStore } from "./cli/store.js"
 export * from "./manifest/index.js"
 export type {
   ContentCallContext,

@@ -38,34 +38,61 @@ export interface ContentManifestEntity {
    * The sign-in may be refused this call (a role without the right): a gap with this text, and the rest syncs. A
    * source that leaves rows out without an error names `requires`: a read whose value at `check` is true when the
    * sign-in sees every row; false or missing is the same gap. A source that refuses the call outright to a role names
-   * `needs`: unless its `check` is true the call is never sent, and the gap says its own `message`.
+   * `needs`: unless its `check` is true the call is never sent, and the gap says its own `message`. A source that
+   * answers a simpler form of a refused call names `fallback`: the same calls with these query values over their own
+   * (WordPress: `context=view` for a role that may not edit users), and the gap says its `message`.
    */
   optional?: {
     message: string
     scope?: string
     requires?: ContentRightsCall
     needs?: ContentRightsCall & { message: string; scope?: string }
+    fallback?: ContentFallback
   }
+}
+
+/** The simpler form of a kind's calls, sent once the first was refused; it reads part of the rows, or fewer fields. */
+export interface ContentFallback {
+  query: Readonly<Record<string, string | number | boolean>>
+  message: string
+  scope?: string
 }
 
 /** A read of the sign-in's rights, true at `check` when it has the right (WordPress: `users/me`'s capabilities). */
 export type ContentRightsCall = CrmOperationCall & { check: string }
 
-/** A post's writes, as calls and values over the update call. `"{id}"` and `"{at}"` are filled by the engine. */
+/** Where each of our fields goes in a write's body, a dotted path (`title.raw`); `terms` by the term's kind. */
+export interface ContentWriteFields {
+  title?: string
+  body?: string
+  excerpt?: string
+  slug?: string
+  terms?: Partial<Record<(typeof TERM_KINDS)[number], string>>
+}
+
+/** The calls that write one type of post. */
+export interface ContentTypeWrites {
+  create: CrmOperationCall
+  update: CrmOperationCall
+  trash: CrmOperationCall
+  /** Deleting for good, past the trash; absent, the source has no such write. */
+  delete?: CrmOperationCall
+  /** Absent, the post's own `fields`. */
+  fields?: ContentWriteFields
+}
+
+/**
+ * A post's writes, as calls and values over the update call. `"{id}"` and `"{at}"` are filled by the engine. A page is
+ * written by `page`'s calls, with the same publish, schedule and unpublish values; absent, pages are not written.
+ */
 export interface ContentManifestWrites {
   create: CrmOperationCall
   update: CrmOperationCall
   trash: CrmOperationCall
   /** Deleting for good, past the trash; absent, the source has no such write. */
   delete?: CrmOperationCall
-  /** Where each of our fields goes in a write's body, a dotted path (`title.raw`); `terms` by the term's kind. */
-  fields: {
-    title?: string
-    body?: string
-    excerpt?: string
-    slug?: string
-    terms?: Partial<Record<(typeof TERM_KINDS)[number], string>>
-  }
+  fields: ContentWriteFields
+  page?: ContentTypeWrites
   /** Body values over `update` that publish now, schedule at `"{at}"` (ISO in UTC), and bring back to a draft. */
   publish: Readonly<Record<string, unknown>>
   schedule: Readonly<Record<string, unknown>>
@@ -96,6 +123,14 @@ const call = v.strictObject({
 
 const format = v.picklist(BODY_FORMATS)
 
+const writeFields = v.strictObject({
+  title: v.optional(v.string()),
+  body: v.optional(v.string()),
+  excerpt: v.optional(v.string()),
+  slug: v.optional(v.string()),
+  terms: v.optional(v.record(v.picklist(TERM_KINDS), v.optional(v.string()))),
+})
+
 const entity = v.strictObject({
   list: call,
   changes: v.optional(
@@ -124,6 +159,13 @@ const entity = v.strictObject({
           scope: v.optional(v.string()),
         }),
       ),
+      fallback: v.optional(
+        v.strictObject({
+          query: v.record(v.string(), v.union([v.string(), v.number(), v.boolean()])),
+          message: v.pipe(v.string(), v.minLength(1)),
+          scope: v.optional(v.string()),
+        }),
+      ),
     }),
   ),
 })
@@ -140,13 +182,16 @@ const schema = v.strictObject({
       update: call,
       trash: call,
       delete: v.optional(call),
-      fields: v.strictObject({
-        title: v.optional(v.string()),
-        body: v.optional(v.string()),
-        excerpt: v.optional(v.string()),
-        slug: v.optional(v.string()),
-        terms: v.optional(v.record(v.picklist(TERM_KINDS), v.optional(v.string()))),
-      }),
+      fields: writeFields,
+      page: v.optional(
+        v.strictObject({
+          create: call,
+          update: call,
+          trash: call,
+          delete: v.optional(call),
+          fields: v.optional(writeFields),
+        }),
+      ),
       publish: v.record(v.string(), v.unknown()),
       schedule: v.record(v.string(), v.unknown()),
       unpublish: v.record(v.string(), v.unknown()),
@@ -229,13 +274,17 @@ export const parseContentManifest = (input: unknown, api: ServiceApiManifest): C
   if (writes) {
     if (!manifest.entities.post?.some((one) => one.get))
       throw invalid("writes", "a write checks the post's version first, and no post entity has a get")
-    for (const name of ["create", "update", "trash", "delete"] as const) {
-      const one = writes[name]
-      if (!one) continue
-      checkCall(`writes.${name}`, one, false)
-      if (name !== "create" && !holds([one.path, one.query], "{id}"))
-        throw invalid(`writes.${name}`, 'no "{id}" in its path or query')
-    }
+    for (const [where, calls] of [
+      ["writes", writes],
+      ["writes.page", writes.page],
+    ] as const)
+      for (const name of ["create", "update", "trash", "delete"] as const) {
+        const one = calls?.[name]
+        if (!one) continue
+        checkCall(`${where}.${name}`, one, false)
+        if (name !== "create" && !holds([one.path, one.query], "{id}"))
+          throw invalid(`${where}.${name}`, 'no "{id}" in its path or query')
+      }
     if (!holds(writes.schedule, "{at}")) throw invalid("writes.schedule", 'no "{at}" for the time it goes out')
   }
   return manifest

@@ -2,8 +2,10 @@ import { existsSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { openStore } from "../../store/store.js"
-import { openCrmStore } from "./store.js"
+import { openContentStore } from "../content/index.js"
+import { openCrmStore } from "../crm/cli/index.js"
+import { openStore } from "../store/store.js"
+import { openProfileStore } from "./profile-store.js"
 
 const app = { command: "crm", appName: "crm-cli", envPrefix: "CRM", description: "x", version: "1.0.0" }
 const PORTAL = { provider: "example-crm", account: "portal.example.com" }
@@ -18,7 +20,7 @@ const setup = (extra: NodeJS.ProcessEnv = {}) => {
     return openStore({ env: at, ...(options?.readOnly ? { readOnly: true } : {}) })
   }
   const crmStore = (readOnly: boolean) =>
-    openCrmStore({ app, env, profile: "work", readOnly, provider: PORTAL.provider, open, account })
+    openProfileStore({ app, env, profile: "work", readOnly, provider: PORTAL.provider, open, account })
   return { path, account, opened, crmStore }
 }
 
@@ -58,4 +60,9 @@ describe("the store a CRM command opens", () => {
     await store.close()
     expect(existsSync(path)).toBe(true)
   })
+})
+
+it("is the store a CRM command and a content command open", () => {
+  expect(openCrmStore).toBe(openProfileStore)
+  expect(openContentStore).toBe(openProfileStore)
 })
