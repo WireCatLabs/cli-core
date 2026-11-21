@@ -417,12 +417,37 @@ const serviceApiCore = (options: ServiceApiOptions) => {
     return operation.effect === "read" && level !== "deny" && level !== "ask" ? [] : [former]
   }
 
-  return { operations, left, baseUrlOf, defaults, exchange, formerKeys, operationOf, readsFreely, signed, write }
+  /**
+   * The refusal `execute` would give, before the body is read: a `deny` stops a call whatever its input, and a missing
+   * body must not answer `validation_error` in its place. Only the keys known without the body; the rest, and an old
+   * flat key (which warns), wait for `execute`.
+   */
+  const refuseBeforeBody = (command: Command, operation: ManifestOperation) => {
+    const extra = permissionsOf(operation)
+      .filter((permission) => whenOf(permission) === undefined)
+      .map(({ key }) => key)
+    if (operation.effect === "read" && extra.length === 0) return
+    guardOf(command, extra).refuse({ chatId: null, kind: "edit", key: keyOf(operation), operationId: newOperationId() })
+  }
+
+  return {
+    operations,
+    left,
+    baseUrlOf,
+    defaults,
+    exchange,
+    formerKeys,
+    operationOf,
+    readsFreely,
+    refuseBeforeBody,
+    signed,
+    write,
+  }
 }
 
 export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const { app, configuration } = options
-  const { operations, baseUrlOf, exchange, formerKeys, operationOf, readsFreely, signed, write } =
+  const { operations, baseUrlOf, exchange, formerKeys, operationOf, readsFreely, refuseBeforeBody, signed, write } =
     serviceApiCore(options)
   const send = async (command: Command, operation: ManifestOperation, request: HttpApiRequest) =>
     (await exchange(command, operation, request)).answer
@@ -495,6 +520,7 @@ export const serviceApiCommand = (options: ServiceApiOptions): Command => {
   const generated = generatedApiCommand({
     operations,
     checkParameter: (name, schema, raw) => checkApiParameter(name, schema, raw, loaded()),
+    before: refuseBeforeBody,
     checkBody: (operation, text) => checkApiBody(operation, text, loaded()),
     readBody: (command, body) => {
       if (body.bodyFile !== undefined) refuseOwnFiles(command, body.bodyFile)

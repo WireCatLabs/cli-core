@@ -105,6 +105,8 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       effects: { remote: operation.effect === "read" ? "read" : "write", local: "none" },
     })
     command.action(async function (this: Command) {
+      // First: a refusal by the profile holds whatever the flags and the body say.
+      await api.before?.(this, operation)
       const options = this.opts<Record<string, string | undefined>>()
       const input: ApiCommandInput = { path: {}, query: {}, headers: {}, fields: {} }
       const tokenProfile = group.opts<{ storeToken?: string }>().storeToken
@@ -134,7 +136,6 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
           parameter.in === "body" ? input.fields : parameter.in === "header" ? input.headers : input[parameter.in]
         target[parameter.name] = raw
       }
-      await api.before?.(this, operation)
       if (sendsBytes(operation)) {
         const path = options.bodyFile
         if (path === undefined && operation.request?.required)
