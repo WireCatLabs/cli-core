@@ -116,6 +116,8 @@ const pageOf = (page: string | undefined, now: number) => {
 }
 
 const gone = (error: unknown) => isCliError(error) && error.code === "not_found"
+const forbidden = (error: unknown) =>
+  isCliError(error) && (error.code === "permission_error" || error.details.inner_status === 403)
 // A service may refuse a role with a 400 whose details say 403 (WordPress, for a status the role may not read).
 const refused = (error: unknown) =>
   isCliError(error) &&
@@ -219,7 +221,7 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
   ) => {
     const { needs, requires } = entity.optional ?? {}
     if (needs && !(await has(needs, send))) {
-      context?.gap({ kind, message: needs.message, ...(needs.scope ? { scope: needs.scope } : {}) })
+      context?.gap({ kind, message: needs.message, ...(needs.scope ? { scope: needs.scope } : {}), lasting: true })
       return false
     }
     if (requires && !(await has(requires, send)))
@@ -227,8 +229,38 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
         kind,
         message: entity.optional?.message ?? "",
         ...(entity.optional?.scope ? { scope: entity.optional.scope } : {}),
+        lasting: true,
       })
     return true
+  }
+
+  const simpler = new Set<ContentManifestEntity>()
+  /** The call as this sign-in is answered: in its `fallback` form once the first form was refused. */
+  const formOf = <C extends CrmOperationCall>(entity: ContentManifestEntity, call: C): C => {
+    const fallback = entity.optional?.fallback
+    return fallback && simpler.has(entity) ? { ...call, query: { ...call.query, ...fallback.query } } : call
+  }
+  /** Sends a read of the entity; refused, once more in its simpler form, which is a gap of its own. */
+  const reading = async <T>(
+    kind: ContentKind,
+    entity: ContentManifestEntity,
+    read: () => Promise<T>,
+    context?: ContentCallContext,
+  ): Promise<T> => {
+    try {
+      return await read()
+    } catch (error) {
+      const fallback = entity.optional?.fallback
+      if (!fallback || simpler.has(entity) || !forbidden(error)) throw error
+      simpler.add(entity)
+      context?.gap({
+        kind,
+        message: fallback.message,
+        ...(fallback.scope ? { scope: fallback.scope } : {}),
+        lasting: true,
+      })
+      return read()
+    }
   }
 
   const gapOf = (kind: ContentKind, entity: ContentManifestEntity, error: unknown, context?: ContentCallContext) => {
@@ -274,18 +306,24 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     try {
       read = !(await checkRights(kind, entity, send, context))
         ? { rows: [], next: undefined }
-        : changes?.keyset && since !== null
-          ? await keysetPage(
-              { ...changes, keyset: changes.keyset },
-              spot.token === undefined ? since - overlap : Number(spot.token),
-              send,
-            )
-          : await readPage(
-              changes ?? entity.list,
-              changes && since !== null ? { since: SINCE[changes.since](since - overlap) } : {},
-              spot.token,
-              send,
-            )
+        : await reading<typeof read>(
+            kind,
+            entity,
+            () =>
+              changes?.keyset && since !== null
+                ? keysetPage(
+                    formOf(entity, { ...changes, keyset: changes.keyset }),
+                    spot.token === undefined ? since - overlap : Number(spot.token),
+                    send,
+                  )
+                : readPage(
+                    formOf(entity, changes ?? entity.list),
+                    changes && since !== null ? { since: SINCE[changes.since](since - overlap) } : {},
+                    spot.token,
+                    send,
+                  ),
+            context,
+          )
     } catch (error) {
       if (!gapOf(kind, entity, error, context)) throw error
       read = { rows: [], next: undefined }
@@ -307,7 +345,12 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     const send = metered(context)
     try {
       read = (await checkRights(kind, entity, send, context))
-        ? await readPage(entity.ids ?? entity.list, {}, spot.token, send)
+        ? await reading(
+            kind,
+            entity,
+            () => readPage(formOf(entity, entity.ids ?? entity.list), {}, spot.token, send),
+            context,
+          )
         : { rows: [], next: undefined }
     } catch (error) {
       // Refused, the ids read so far would mark every unread row deleted: the gap holds the pass.
@@ -333,8 +376,14 @@ export const contentSourceFromManifest = (input: unknown, options: ContentManife
     for (const entity of callsOf(kind)) {
       if (!entity.get) continue
       let answer: unknown
+      const get = entity.get
       try {
-        answer = await send(entity.get.operation, inputOf(entity.get, { id: externalId }))
+        answer = await reading(
+          kind,
+          entity,
+          () => send(get.operation, inputOf(formOf(entity, get), { id: externalId })),
+          context,
+        )
       } catch (error) {
         // A post and a page share one id space; a 404 from one call may be the other's row.
         if (gone(error)) continue

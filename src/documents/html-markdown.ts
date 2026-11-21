@@ -68,7 +68,8 @@ const makeSafe = (tree: Root): Root => {
 export const htmlToMarkdown = async (html: string): Promise<string> => {
   const { fromHtml, toMdast, toMarkdown, gfmToMarkdown } = await loaded()
   const tree = makeSafe(toMdast(fromHtml(html, { fragment: true })) as Root)
-  return toMarkdown(tree, { extensions: [gfmToMarkdown()] })
+  // `-` as most Markdown is written: a body read back then compares equal to the file it was written from.
+  return toMarkdown(tree, { bullet: "-", extensions: [gfmToMarkdown()] })
 }
 
 /**

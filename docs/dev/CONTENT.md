@@ -36,13 +36,15 @@ is where posts go out: for WordPress, the site the profile signed in to, its add
 Channels first: a channel whose address changed is reported in `moved` and holds every id pass, in this run and the
 next ones, until `sync --rescan`. Then each kind's changes since its cursor, with an overlap, page by page; a round in
 which a read was refused (a gap) keeps the cursor it started from, so what changed meanwhile is read once access
-returns. Then the scheduled posts whose time has passed are read again one by one (up to 50, the longest unread
+returns. A gap that is a right the role lacks (`lasting`: `optional.requires`, `optional.needs`, `optional.fallback`)
+moves the cursor on, as the round read all the role may see; the cursor keeps the rights it lacked, and a round that
+lacks fewer lists the kind in full again, since a right gained shows rows changed before the cursor. Then the scheduled posts whose time has passed are read again one by one (up to 50, the longest unread
 first), so a post that went out is published in the copy, and one deleted is marked so; one the sign-in may not read
 stays as it is, with a gap.
 
 Once a day an id pass lists every id. It is held, marking nothing, when the list is empty, when it would mark more than
 half of a kind of ten rows or more, when a page of it was refused (in this run or the run it resumes), or when the site
-moved. Otherwise each stored row the list lacks is read once more with `get`, and only a row the source says is gone
+moved. A right the role lacks does not hold it: an author's list is complete for what the author may see. Otherwise each stored row the list lacks is read once more with `get`, and only a row the source says is gone
 is marked deleted: a list paged by number skips a row when an earlier one is deleted between pages. A source that
 cannot read one row by id throws `content.get-unsupported`, and then absence from a complete list marks it. A budget
 stops a run between requests; the next run goes on from the page it reached.
@@ -58,7 +60,9 @@ and `posts stats <post>` (the metric readings). `posts list` narrows by query fi
 ## Writes and permissions
 
 `addContentCommands(program, { app, open, writes: true })` adds `posts create|update|publish|unpublish|delete`;
-`posts publish --at-time <time>` schedules.
+`posts publish --at-time <time>` schedules. A CLI's `open` opens the store with `openContentStore` (the same as the CRM's
+`openCrmStore`, from `openProfileStore`): a read takes the account an earlier run saved, and under `<PREFIX>_READ_ONLY`
+a read with no store reads an empty one in a temporary folder.
 Every write is checked and journaled through `guardedWrite`, its operation id kept, a lost answer `outcome_unknown`.
 
 | Key | Default | Checked for |
@@ -93,11 +97,18 @@ command, source, site })` (`src/content/manifest/`) build both ports from config
   is skipped and the gap says the `needs` message; the kind's other calls sync, and the gap holds its deletions. Each
   rights read is sent once per source, whatever it checks. A read refused with a 400 whose details name 403 is a
   refusal too, so `optional` reports it as a gap.
+- `optional.fallback` names the query values a refused call is sent again with (WordPress: `context: "view"` for the
+  users, as only an administrator lists them with `context=edit`; an editor or an author is then answered the authors
+  with published posts, without their e-mail). Once refused, the source sends the kind's calls in that form, and the
+  gap says the fallback's message. A row read then has fewer fields: an author without an e-mail is not joined to a
+  person.
 - The one channel's id is `site`, whatever the address: a profile pointed at another address is a moved channel.
 - Write fields are dotted paths into the body: WordPress takes `title.raw`, `content.raw` and `excerpt.raw`.
-- The writer writes posts. Pages are read; a write to a page is refused as `content.write-unsupported`.
 - `writes` names the create, update, trash and delete calls, where each of our fields goes, and the values over the
-  update call that publish, schedule at `"{at}"` and unpublish. A write goes only through `write`, the `api` group's
+  update call that publish, schedule at `"{at}"` and unpublish. `writes.page` names a page's own create, update, trash
+  and delete calls, and its `fields` when they differ (WordPress pages have no tags); the publish values are shared.
+  Without it a write to a page is refused as `content.write-unsupported`, and so are tags on a type whose fields have
+  none. The answer is read by the post entity of the type written. A write goes only through `write`, the `api` group's
   `serviceApiWriter` bound to the invoking command, which checks the profile's keys as a raw call would.
 
 The WordPress manifest in `test/fixtures/wordpress-content.ts` is configuration only, no hook, and the source and write
@@ -114,5 +125,8 @@ operation's pagination (a page count header and a refused page past the end incl
 `call` and `write` feed `contentSourceFromManifest` and `contentWriterFromManifest`; `fetch` answers the CLI's own
 commands over HTTP. A call the manifest does not make lands in `refusals`. `lacks` names the rights a sign-in lacks,
 as `check` paths: its rights reads answer false, and a call whose `needs` it lacks is refused (a list with HTTP 400 and
-403 in the details, one row with 403, as WordPress refuses an author) and lands in `refusals`. `denied` names operations refused with 403, as WordPress refuses an author the
-users list.
+403 in the details, one row with 403, as WordPress refuses an author) and lands in `refusals`; a row that is not
+there answers 404 to every role. `denied` names operations refused with 403, as WordPress refuses an author the users
+list with `context=edit`; the kind's `optional.fallback` form of the call is answered. `hidden` names rows, by kind,
+the sign-in may not see: left out of every list, and a read of one refused with 403, as WordPress hides another
+author's draft.

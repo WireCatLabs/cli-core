@@ -14,7 +14,7 @@ describe("htmlToMarkdown on real posts", () => {
     const markdown = await htmlToMarkdown(fixture(name))
     expect(markdown).toContain("## Why we moved")
     expect(markdown).toContain("[our notes](https://example.com/notes?a=1\\&b=2)")
-    expect(markdown).toMatch(/\* Second point with a \[relative link\]\([^)]*\/relative\)\n {2}\* Nested/)
+    expect(markdown).toMatch(/- Second point with a \[relative link\]\([^)]*\/relative\)\n {2}- Nested/)
     expect(markdown).toContain("1. One\n2. Two")
     expect(markdown).toContain("![The old rack](https://blog.example/wp-content/uploads/2026/11/rack.jpg)")
     expect(markdown).toContain('```\ndocker compose up -d\necho "a < b && c"\n```')
@@ -52,6 +52,11 @@ describe("an untrusted body", () => {
     expect(await markdownToHtml("[a][r] [b][R]\n\n[r]: javascript:x\n[R]: https://ok.example\n")).toBe(
       "<p>[a][r] [b][R]</p>",
     )
+  })
+
+  it("keeps a list's `-` marker, so a body read back matches the file it was written from", async () => {
+    const markdown = "- one\n- two"
+    expect(await htmlToMarkdown(await markdownToHtml(markdown))).toBe(`${markdown}\n`)
   })
 
   it("writes no raw HTML from Markdown", async () => {

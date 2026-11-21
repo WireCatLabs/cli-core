@@ -3,8 +3,9 @@ import type { Command } from "commander"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import { crmValues } from "../../crm/index.js"
+import type { CrmOperationCall } from "../../crm/manifest/manifest.js"
 import { markdownToHtml } from "../../documents/html-markdown.js"
-import type { ContentPost, TermKind } from "../../domain/content.js"
+import type { ContentPost, PostType, TermKind } from "../../domain/content.js"
 import type { PermissionKey } from "../../sends/permissions.js"
 import type { ContentSource } from "../source.js"
 import { type ContentFields, type ContentWriteOptions, type ContentWriter, contentConflict } from "../writer.js"
@@ -33,9 +34,14 @@ export interface ContentManifestWriterOptions {
   source: ContentSource
 }
 
-// The manifest's writes name the post calls; a page is read, and written in the source's own editor for now.
+// A manifest without `writes.page` reads pages, and they are written in the source's own editor.
 const pagesUnwritten = () =>
   new CliError("validation_error", "this CLI writes posts, not pages", { reason: "content.write-unsupported" })
+
+const mapType = (entity: { map: Readonly<Record<string, unknown>> }) => {
+  const rule = entity.map.type
+  return rule && typeof rule === "object" && "value" in rule ? rule.value : "post"
+}
 
 const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`
 
@@ -47,19 +53,33 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   const manifest = parseContentManifest(input, options.api)
   const writes = manifest.writes
   if (!writes) throw new CliError("configuration_error", "the source manifest has no writes")
-  const [entity] = manifest.entities.post ?? []
-  if (!entity) throw new CliError("configuration_error", "the source manifest has no post entity")
-  const html = entity.body !== undefined && entity.body.format !== "markdown"
-
-  const postOf = async (answer: unknown): Promise<ContentPost | null> => {
-    const raw = crmValues.isRaw(answer) && crmValues.isRaw(answer.previous) && answer.deleted === true ? null : answer
-    if (!crmValues.isRaw(raw)) return null
-    const post = mapContentRecord("post", entity.map, raw)
-    if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a write with no post`)
-    return Object.assign(post, { channel: SITE_CHANNEL }, await postBodyOf(entity, raw))
+  const entities = manifest.entities.post ?? []
+  const [first] = entities
+  if (!first) throw new CliError("configuration_error", "the source manifest has no post entity")
+  const callsOf = (type: PostType | undefined) => {
+    if (type === undefined || type === "post") return writes
+    if (!writes.page) throw pagesUnwritten()
+    return { ...writes.page, fields: writes.page.fields ?? writes.fields }
   }
 
-  const bodyOf = async (fields: ContentFields): Promise<Record<string, unknown>> => {
+  const postOf = async (answer: unknown, type: PostType): Promise<ContentPost | null> => {
+    const raw = crmValues.isRaw(answer) && crmValues.isRaw(answer.previous) && answer.deleted === true ? null : answer
+    if (!crmValues.isRaw(raw)) return null
+    // Posts and pages map alike but for their type: the answer is read by the entity of the type written.
+    for (const entity of entities) {
+      const post = mapContentRecord("post", entity.map, raw)
+      if (post && (post.type ?? "post") === type)
+        return Object.assign(post, { channel: SITE_CHANNEL }, await postBodyOf(entity, raw))
+    }
+    const post = mapContentRecord("post", first.map, raw)
+    if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a write with no post`)
+    return Object.assign(post, { channel: SITE_CHANNEL }, await postBodyOf(first, raw))
+  }
+
+  const bodyOf = async (fields: ContentFields, type: PostType): Promise<Record<string, unknown>> => {
+    const to = callsOf(type).fields
+    const entity = entities.find((one) => mapType(one) === type) ?? first
+    const html = entity.body !== undefined && entity.body.format !== "markdown"
     const out: Record<string, unknown> = {}
     const put = (path: string, value: unknown) => {
       const keys = path.split(".")
@@ -71,11 +91,14 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
       }
       inner[last] = value
     }
-    const to = writes.fields
     if (fields.title !== undefined && to.title) put(to.title, fields.title ?? "")
     if (fields.excerpt !== undefined && to.excerpt) put(to.excerpt, fields.excerpt ?? "")
     if (fields.slug !== undefined && to.slug) put(to.slug, fields.slug ?? "")
     if (fields.body !== undefined && to.body) put(to.body, html ? await markdownToHtml(fields.body) : fields.body)
+    if (fields.terms?.length && !to.terms)
+      throw new CliError("validation_error", `${manifest.provider} takes no tags or categories on a ${type}`, {
+        reason: "content.write-unsupported",
+      })
     if (fields.terms !== undefined && to.terms) {
       const kinds = new Map<TermKind, string[]>()
       for (const term of fields.terms) {
@@ -99,12 +122,12 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
     const found = await options.source.get("post", externalId)
     if (!found) throw new CliError("not_found", `${manifest.provider} has no post ${externalId}; sync, then try again`)
     if (version != null && found.version != null && found.version !== version) throw contentConflict()
-    if (found.type === "page") throw pagesUnwritten()
-    return found
+    const type = found.type ?? "post"
+    return { found, type, calls: callsOf(type) }
   }
 
   const send = async (
-    call: typeof writes.update,
+    call: CrmOperationCall,
     slots: { id?: string; at?: string },
     confirmed: readonly PermissionKey[] | undefined,
     body?: Record<string, unknown>,
@@ -123,11 +146,12 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   }
 
   const updated = async (
+    { type, calls }: Awaited<ReturnType<typeof current>>,
     externalId: string,
     body: Record<string, unknown>,
     confirmed: readonly PermissionKey[] | undefined,
   ) => {
-    const post = await postOf(await send(writes.update, { id: externalId }, confirmed, body))
+    const post = await postOf(await send(calls.update, { id: externalId }, confirmed, body), type)
     if (!post) throw new CliError("invalid_response", `${manifest.provider} answered an update with no post`)
     return post
   }
@@ -135,43 +159,45 @@ export const contentWriterFromManifest = (input: unknown, options: ContentManife
   return {
     provider: manifest.provider,
     async createDraft(draft, options_) {
-      if (draft.type === "page") throw pagesUnwritten()
-      const post = await postOf(await send(writes.create, {}, options_.confirmed, await bodyOf(draft)))
+      const type = draft.type ?? "post"
+      const calls = callsOf(type)
+      const post = await postOf(await send(calls.create, {}, options_.confirmed, await bodyOf(draft, type)), type)
       if (!post) throw new CliError("invalid_response", `${manifest.provider} answered a create with no post`)
       return post
     },
     async update(externalId, patch, options_) {
-      await current(externalId, options_)
-      return updated(externalId, await bodyOf(patch), options_.confirmed)
+      const now = await current(externalId, options_)
+      return updated(now, externalId, await bodyOf(patch, now.type), options_.confirmed)
     },
     async publish(externalId, options_) {
-      const found = await current(externalId, options_)
-      if (found.status === "published") return found
-      return updated(externalId, { ...writes.publish }, options_.confirmed)
+      const now = await current(externalId, options_)
+      if (now.found.status === "published") return now.found
+      return updated(now, externalId, { ...writes.publish }, options_.confirmed)
     },
     async schedule(externalId, when, options_) {
-      await current(externalId, options_)
+      const now = await current(externalId, options_)
       return updated(
+        now,
         externalId,
         fill(writes.schedule, { at: iso(when) }) as Record<string, unknown>,
         options_.confirmed,
       )
     },
     async unpublish(externalId, options_) {
-      await current(externalId, options_)
-      return updated(externalId, { ...writes.unpublish }, options_.confirmed)
+      const now = await current(externalId, options_)
+      return updated(now, externalId, { ...writes.unpublish }, options_.confirmed)
     },
     async trash(externalId, options_) {
-      await current(externalId, options_)
+      const { type, calls } = await current(externalId, options_)
       if (options_.force) {
-        if (!writes.delete)
+        if (!calls.delete)
           throw new CliError("validation_error", `${manifest.provider} takes no deletion past the trash`, {
             reason: "content.write-unsupported",
           })
-        await send(writes.delete, { id: externalId }, options_.confirmed)
+        await send(calls.delete, { id: externalId }, options_.confirmed)
         return null
       }
-      return postOf(await send(writes.trash, { id: externalId }, options_.confirmed))
+      return postOf(await send(calls.trash, { id: externalId }, options_.confirmed), type)
     },
   }
 }
