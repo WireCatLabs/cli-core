@@ -219,3 +219,19 @@ it("hostsFetch reaches only its hosts, over the network when no fetch is given",
   const fake = async () => new Response("ok")
   expect(await (await hostsFetch(["api.acme.test"], fake)("https://api.acme.test/x")).text()).toBe("ok")
 })
+
+// FIND-2851: a sign-in by application password said "WordPress token" in its help.
+it("names the sign-in it keeps in the group's help", () => {
+  const session = (extra: Partial<TokenSessionOptions>) =>
+    tokenSessionCommand({
+      app,
+      service: "Pages",
+      resolveSettings: settingsFor(app).resolveSettings,
+      verify: async () => ({ id: "w", account: {} }),
+      ...extra,
+    }).description()
+  expect(session({})).toBe("keep this profile's Pages API token in the OS keyring")
+  expect(session({ token: "application password" })).toBe(
+    "keep this profile's Pages application password in the OS keyring",
+  )
+})

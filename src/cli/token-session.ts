@@ -258,7 +258,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     })
 
   return annotate(new Command("session"), { effects: LOCAL_READ })
-    .description(`keep this profile's ${service} token in the OS keyring`)
+    .description(`keep this profile's ${service} ${word} in the OS keyring`)
     .addCommand(start)
     .addCommand(status)
     .addCommand(end)
