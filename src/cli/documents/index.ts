@@ -87,3 +87,16 @@ export {
   documentLibraryCommands,
   documentProfile,
 } from "./library.js"
+export {
+  type DocumentCall,
+  type DocumentFileMap,
+  type DocumentManifest,
+  parseDocumentManifest,
+} from "./manifest/manifest.js"
+export {
+  type DocumentManifestSourceOptions,
+  type DocumentManifestTools,
+  type DocumentSlots,
+  documentSourceFromManifest,
+  type ManifestDocumentSource,
+} from "./manifest/source.js"

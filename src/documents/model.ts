@@ -54,6 +54,12 @@ export interface FeedlessDocumentSource<M extends SourceFile = SourceFile> {
   childrenPage?(id: string, cursor?: string, folder?: M): Promise<{ files: M[]; cursor?: string }>
   content(id: string, maxChars?: number, file?: M): Promise<SourceContent<M>>
   bytes(id: string, file?: M): Promise<Uint8Array>
+  /**
+   * Whether a saved document is read again though it did not change: one saved before the source learned to read
+   * something (a page's authors). The sync reads at most `REREAD_BATCH` of them a pass, so new edits are not held back;
+   * `content()` must give what this asks for, or the document is read again on every pass.
+   */
+  reread?(saved: IndexedSource<M>): boolean
 }
 /** A provider with a change feed: after the first walk, a sync reads only what the feed names. */
 export interface DocumentSource<M extends SourceFile = SourceFile> extends FeedlessDocumentSource<M> {

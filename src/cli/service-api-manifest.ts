@@ -179,7 +179,7 @@ export const underBase = (url: URL, baseUrl: string): boolean => {
 }
 
 /** `""` is the answer itself: WordPress answers the list. */
-const at = (value: unknown, path: string): unknown =>
+export const answerAt = (value: unknown, path: string): unknown =>
   path === ""
     ? value
     : path
@@ -231,12 +231,12 @@ export const nextPage = (
   answer: unknown,
   headers?: Headers,
 ): PageStep => {
-  const listed = pagination.items === undefined ? [answer] : at(answer, pagination.items)
+  const listed = pagination.items === undefined ? [answer] : answerAt(answer, pagination.items)
   const items = Array.isArray(listed) ? listed : []
   switch (pagination.style) {
     case "cursor": {
-      const cursor = at(answer, pagination.next)
-      const more = pagination.hasMore === undefined || at(answer, pagination.hasMore) !== false
+      const cursor = answerAt(answer, pagination.next)
+      const more = pagination.hasMore === undefined || answerAt(answer, pagination.hasMore) !== false
       return more && typeof cursor === "string" && cursor !== ""
         ? { items, next: { input: withValue(input, pagination.cursor, cursor) } }
         : { items }
@@ -244,7 +244,7 @@ export const nextPage = (
     case "offset":
     case "page": {
       const parameter = pagination.style === "offset" ? pagination.offset : pagination.page
-      const total = pagination.total === undefined ? undefined : numberOf(at(answer, pagination.total))
+      const total = pagination.total === undefined ? undefined : numberOf(answerAt(answer, pagination.total))
       const current =
         numberOf(parameterValue(input, parameter)) ?? (pagination.style === "offset" ? 0 : (pagination.start ?? 1))
       const next = pagination.style === "offset" ? current + items.length : current + 1
@@ -261,7 +261,7 @@ export const nextPage = (
       return last ? { items } : { items, next: { input: withValue(input, parameter, next) } }
     }
     case "link": {
-      const url = at(answer, pagination.next)
+      const url = answerAt(answer, pagination.next)
       return typeof url === "string" && url !== "" ? { items, next: { url } } : { items }
     }
   }

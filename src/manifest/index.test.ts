@@ -55,7 +55,7 @@ describe("parseCliConfig", () => {
     expect(() => parseCliConfig({ ...config, category: "crm" })).toThrow("a crm CLI needs its source")
     expect(() => parseCliConfig({ ...config, category: "tracker" })).toThrow("a tracker CLI needs its source")
     expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow(
-      "only a crm, tracker or content CLI",
+      "only a crm, tracker, content or files CLI",
     )
     for (const from of [
       "/etc/spec.json",
@@ -73,7 +73,7 @@ describe("parseCliConfig", () => {
       "identity.owner",
     )
     expect(() => parseCliConfig({ ...config, source: { provider: "acme" } })).toThrow(
-      "only a crm, tracker or content CLI",
+      "only a crm, tracker, content or files CLI",
     )
     expect(() => parseCliConfig({ ...config, extra: true })).toThrow(
       "wirecat.config: extra: not a field of wirecat.config",
@@ -95,6 +95,28 @@ describe("parseCliConfig", () => {
       expect(() => parseCliConfig({ ...config, auth: { preset: "token", verify: { operation: "me", id } } })).toThrow(
         "auth.verify.id: a dot path",
       )
+  })
+
+  it("takes a files CLI with a source or without one, and no source for a mail CLI", () => {
+    const files = { ...config, category: "files" as const }
+    expect(parseCliConfig({ ...files, source: { provider: "acme" } }).source).toEqual({ provider: "acme" })
+    expect(parseCliConfig(files).source).toBeUndefined()
+    expect(() => parseCliConfig({ ...config, category: "mail", source: { provider: "acme" } })).toThrow(
+      "only a crm, tracker, content or files CLI reads a source yet",
+    )
+  })
+
+  it("takes the API's fixed headers and its paces, never a credential in a header", () => {
+    const api = {
+      headers: { "notion-version": "2026-03-11" },
+      pace: { perMinute: 150, burst: 3, operations: { "post-database-query": { perMinute: 60 } } },
+    }
+    expect(parseCliConfig({ ...config, api }).api).toEqual(api)
+    for (const name of ["Authorization", "x-api-key", "Cookie"])
+      expect(() => parseCliConfig({ ...config, api: { headers: { [name]: "x" } } })).toThrow(
+        "a header that holds no credential",
+      )
+    expect(() => parseCliConfig({ ...config, api: { pace: { perMinute: 0 } } })).toThrow("api.pace.perMinute")
   })
 
   it("refuses a URL that would put a secret, a space or no host into the CLI's files", () => {

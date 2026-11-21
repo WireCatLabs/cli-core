@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import {
   type FeedlessDocumentSource,
   feedOf,
+  type IndexedSource,
   type SourceFile,
   type SourceState,
   type SourceWalk,
@@ -28,6 +29,8 @@ export const changedSince = (previous: SourceFile, file: SourceFile) =>
   JSON.stringify(previous.parents) !== JSON.stringify(file.parents)
 
 const SAVE_EVERY_MS = 2000
+/** Saved documents a source asks to read again, at most, in one pass. */
+export const REREAD_BATCH = 50
 interface WalkStore<M extends SourceFile> {
   read: (scope: string) => SourceWalk<M> | undefined
   save: (walk: SourceWalk<M>) => void
@@ -344,6 +347,10 @@ export const planDocuments = async <M extends SourceFile>(
   }
   const jobs: SourceWork<M>[] = []
   const skipped: SourceState<M>["skipped"] = []
+  const again: SourceWork<M>[] = []
+  let rereads = 0
+  const reread = (known: IndexedSource<M> | undefined) =>
+    known !== undefined && !known.notRead && rereads < REREAD_BATCH && source.reread?.(known) === true && ++rereads > 0
   for (const root of roots)
     if (folders[root]?.trashed) skipped.push({ id: root, reason: "selected folder is unavailable" })
   for (const [id, file] of files) {
@@ -373,8 +380,11 @@ export const planDocuments = async <M extends SourceFile>(
         (!feed && moved(known.metadata, file))
       )
         jobs.push({ id, kind: "save", file })
-    }
+      else if (reread(known)) again.push({ id, kind: "save", file })
+    } else if (reread(known)) again.push({ id, kind: "save", file })
   }
+  // After every real edit, so a run that stops on its deadline spends it on those first.
+  for (const job of again) jobs.push(job)
   for (const id of Object.keys(state.documents)) {
     const file = files.get(id)
     if (!file || !inScope(file, roots, folders, matched, scoped)) jobs.push({ id, kind: "remove" })
