@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { outputFor } from "./context.js"
 import { changesAuthority } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
-import { previewBody } from "./preview.js"
+import { previewBody, previewsItself } from "./preview.js"
 import { shareShadowedOptions } from "./shadowed-options.js"
 
 const descendants = (command: Command, into = new Set<Command>()): Set<Command> => {
@@ -24,7 +24,7 @@ const previewWrites = (messenger: boolean) => (hooked: Command, action: Command)
   // `run` hands a global flag to the command's own option of that name; another host's program does not.
   shareShadowedOptions(action)
   if (action.optsWithGlobals<{ dryRun?: boolean }>().dryRun !== true) return
-  if (action.options.some((option) => option.long === "--dry-run")) return
+  if (previewsItself(action)) return
   if (!writes(metaOf(action).effects) && !changesAuthority(action)) return
   // Commander reads the handler after the hooks, so swapping it here stops the write; each run builds its program anew.
   action.action(function (this: Command) {
