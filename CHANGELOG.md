@@ -5,6 +5,37 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.719.0 — 22.11.2026
+
+### Added
+
+- **`threadReplies`: `messages sync` saves the thread replies a chat's history leaves out.** Slack's channel history
+  holds top-level messages only, so a new reply to an old thread never reached the store. A messenger adapter may
+  now offer `threadReplies(chatId, { since })`: after a chat's history pages the sync asks it for the replies sent
+  since its last read of them (`since` is left out on the first), and saves them without marking a stretch of the
+  history held, so the history's resume point does not move. `messages sync --all` no longer passes such a chat as
+  already held to its newest message, since a reply moves neither the newest stored message nor, on every
+  messenger, the chat's last message.
+- **`failedAnswer`: a service's refusal inside an HTTP 200 answer.** Slack's Web API answers every failure with 200
+  and `{"ok": false, "error": …}`, so its failures printed as successes. A CLI now passes
+  `failedAnswer(answer, operation)` to `serviceApiCommand`, `serviceApiCall` or `httpApiExecutor`; the error it
+  returns for a 2xx answer of an HTTP operation is the run's error, for a write too, since the service said it did
+  nothing. `failure` is still asked only for a non-2xx answer and a GraphQL `errors[]`.
+
+### Fixed
+
+- **`messages sync --dry-run` previews and names its permission key where it cannot estimate.** Its own estimate
+  needs one chat named, no `--all`, `--last` or `--since-time`, and message ids that count messages. Any other
+  dry run, such as the command's own example with `--last 100` or a messenger whose ids are ordered by time, was
+  refused, so the deny-keys contract could not learn its key. It now gets run's preview: the permission key, and no
+  connection or sign-in.
+- **Chat titles, descriptions and a contact's own text reach a scheduled agent marked as untrusted.** Other people
+  set a group's title and description, a forum topic's title and their own contact description, yet only messages
+  were marked. In a scheduled agent's run, `chats list`, `chats show`, `chats events`, `topics list`, `topics show`,
+  `search topics`, `contacts list` and `contacts show` now put `title`, `description` and a contact's shared
+  `chats.title` between the run's markers, as `messages list` marks a message's text. Outside such a run nothing
+  changes.
+
 ## 0.718.0 — 21.11.2026
 
 ### Added
