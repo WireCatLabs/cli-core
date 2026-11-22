@@ -112,8 +112,7 @@ const call = async (
     if (entity) for (const item of body.items ?? [body.item]) v.parse(ENTITIES[entity] as v.GenericSchema, item)
   }
 
-  if (code === 0 && argv[0] === "messages" && argv[1] === "sync" && body?.item && !body.item.preview)
-    v.parse(messageSync, body.item)
+  if (code === 0 && argv[0] === "messages" && argv[1] === "sync" && body?.item) v.parse(messageSync, body.item)
   return {
     code,
     body,
@@ -164,8 +163,7 @@ describe("messages sync", () => {
     const estimate = await call(["messages", "sync", "7", "--dry-run", "--json"], timedChatOf(7, []), env, {
       fetching,
     })
-    expect(estimate.code).toBe(0)
-    expect(estimate.answer).toMatchObject({ preview: true, permission: { key: expect.any(String) } })
+    expect(estimate.code).toBe(2)
   })
 
   it("**keeps both of two messages sent in one millisecond when a page ends between them**", async () => {
@@ -386,12 +384,9 @@ describe("messages sync", () => {
     })
     expect(state.asked).toEqual([undefined])
     expect((await call(["messages", "sync", "7", "--since-time", "7"], chatOf(state), setup())).code).not.toBe(0)
-    const previewed = await call(
-      ["messages", "sync", "7", "--since-time", since, "--dry-run", "--json"],
-      chatOf(state),
-      setup(),
-    )
-    expect(previewed.answer).toMatchObject({ preview: true, permission: { key: expect.any(String) } })
+    expect(
+      (await call(["messages", "sync", "7", "--since-time", since, "--dry-run"], chatOf(state), setup())).code,
+    ).not.toBe(0)
   })
 
   it("**holds an unanswered question of the first sync for the owner**, once: the next sync starts where this one stopped", async () => {
@@ -966,26 +961,6 @@ describe("store fetch --dry-run", () => {
       runs: 3,
       seconds: 4,
     })
-  })
-
-  it("**an estimate it cannot make is run's preview with the key**, signed out and asking nothing", async () => {
-    const signedOut = {
-      history: async () => {
-        throw new Error("a preview asked the messenger")
-      },
-    } as unknown as MessengerAdapter
-    for (const argv of [
-      ["messages", "sync", "Book club", "--last", "100"],
-      ["messages", "sync", "--all"],
-    ]) {
-      const { code, answer } = await call([...argv, "--dry-run", "--json", "--no-input"], signedOut, setup())
-      expect(code).toBe(0)
-      expect(answer).toMatchObject({
-        preview: true,
-        permission: { key: expect.any(String) },
-        effects: { messenger_contacted: false },
-      })
-    }
   })
 
   it("a chat held from its first message costs nothing more", async () => {

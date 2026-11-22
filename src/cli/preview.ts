@@ -10,21 +10,6 @@ import type { Settings } from "./settings.js"
 
 export class PreviewComplete extends Error {}
 
-const OWN_PREVIEW = new WeakMap<Command, (command: Command) => boolean>()
-
-/**
- * A command whose own `--dry-run` answers only the calls `when` accepts, such as an estimate that needs a chat named;
- * run's preview, with the permission key and no connection, answers the rest.
- */
-export const ownPreviewWhen = <T extends Command>(command: T, when: (command: T) => boolean): T => {
-  OWN_PREVIEW.set(command, when as (command: Command) => boolean)
-  return command
-}
-
-/** Whether this call's `--dry-run` is the command's own rather than run's preview. */
-export const previewsItself = (command: Command): boolean =>
-  command.options.some((option) => option.long === "--dry-run") && (OWN_PREVIEW.get(command)?.(command) ?? true)
-
 export const preview = (
   command: Command,
   settings: Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "profile">,
