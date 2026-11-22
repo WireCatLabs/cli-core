@@ -19,7 +19,6 @@ import { destroysNothing, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
-import { ownPreviewWhen } from "../preview.js"
 import { lineOf, nextStep } from "../steps.js"
 import {
   finishJob,
@@ -81,17 +80,7 @@ const limitedLines = (result: Fetched | FetchedAll, status: string): string[] =>
 
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
-  const estimates = (command: Command) => {
-    const { all, last, sinceTime } = command.opts<{ all?: boolean; last?: number; sinceTime?: string }>()
-    return (
-      command.processedArgs[0] !== undefined &&
-      all !== true &&
-      last === undefined &&
-      sinceTime === undefined &&
-      fetching.orderBy !== "time"
-    )
-  }
-  const sync = annotate(new Command("sync"), {
+  return annotate(new Command("sync"), {
     output: { entity: "message_sync" },
     examples: [`${messenger.app.command} personal messages sync "Book club" --last 100`],
     effects: FETCH,
@@ -367,7 +356,6 @@ export const syncCommand = (messenger: Messenger): Command => {
         stop.release()
       }
     })
-  return ownPreviewWhen(sync, estimates)
 }
 
 /** At most this often a progress line, so a run of fast pages or of chats already current does not flood the window. */

@@ -65,7 +65,7 @@ import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { tooLargeSteps } from "./output-budget.js"
 import type { CommandPermissions } from "./permission-keys.js"
-import { PreviewComplete, preview, previewsItself } from "./preview.js"
+import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, isProfileName, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import {
@@ -459,8 +459,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       signal: control.signal,
     })
     if (flags.input === false || (headless && !options.answer)) environment.answer = () => null
+    const localPreview = action.options.some((option) => option.long === "--dry-run")
     shareShadowedOptions(action)
-    const localPreview = previewsItself(action)
     refuseOfflineCommand(action, definition.app, flags.offline === true, flags.dryRun === true && localPreview)
     const path = commandPathOf(action)
     await enterCommandServer(action, command)
