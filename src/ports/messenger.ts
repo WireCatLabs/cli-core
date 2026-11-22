@@ -334,6 +334,15 @@ export interface TopicHistory {
   topicHistory(chat: string, threadId: Id, window: { limit: number; before?: string }): Promise<Page<Message>>
 }
 
+export interface ThreadReplies {
+  /**
+   * Replies `history` leaves out, such as Slack's thread replies: those sent after `since` (epoch milliseconds, left
+   * out on the chat's first read) to the roots the adapter picks, oldest first. `messages sync` asks after the chat's
+   * history and saves them without marking a stretch held.
+   */
+  threadReplies(chatId: Id, window: { since?: number }): Promise<Message[]>
+}
+
 export interface MessageButtons {
   /** The keyboard one message carries, row by row; a message without one answers `[]`. */
   buttons(chatId: Id, messageId: Id): Promise<Button[][]>
@@ -756,6 +765,7 @@ export interface MessengerAdapter
     Partial<BotChats>,
     Partial<ThreadAddressing>,
     Partial<TopicHistory>,
+    Partial<ThreadReplies>,
     Partial<ForumControl>,
     Partial<TopicEditing>,
     Partial<LiveUpdates>,

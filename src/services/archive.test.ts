@@ -208,6 +208,58 @@ describe("fetching every chat", () => {
     expect(asked).toEqual(["newest", "newest"])
   })
 
+  it("saves the thread replies history leaves out, holding no stretch, and never passes a chat that has them", async () => {
+    const store = await emptyStore()
+    const history = [1, 2, 3].map(messageAt)
+    const reply = (id: number): Message => ({ ...messageAt(id), threadId: "2" })
+    let pending = [reply(50)]
+    const since: (number | undefined)[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, lastMessageAt: history[2]?.timestamp ?? null }], hasMore: false }),
+      history: async (reference: string, { limit, before }: { limit: number; before?: string }) => {
+        const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
+        const items = older.slice(-limit)
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
+        return { items, hasMore: older.length > items.length }
+      },
+      threadReplies: async (_chat: string, window: { since?: number }) => {
+        since.push(window.since)
+        const answer = pending
+        pending = []
+        return answer
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+    })
+    const run = () =>
+      service.fetchAll({
+        limit: 100,
+        pageSize: 100,
+        pauseMs: 0,
+        note: () => {},
+        stop: new AbortController().signal,
+        onPage: () => {},
+      })
+    const held = async () => (await store.messages.messages(account, "7", { limit: 100 })).items.map((one) => one.id)
+
+    expect((await run()).items).toEqual([{ chat: "7", title: "Book club", fetched: 4, complete: true }])
+    expect(await held()).toEqual(["1", "2", "3", "50"])
+    expect(await store.sync.ranges(account, "7")).toEqual([{ from: 1, to: 3 }])
+    await run()
+    expect(await held()).toEqual(["1", "2", "3", "50"])
+    pending = [reply(51)]
+    await run()
+    expect(await held()).toEqual(["1", "2", "3", "50", "51"])
+    expect(await store.sync.ranges(account, "7")).toEqual([{ from: 1, to: 3 }])
+    expect(since).toHaveLength(3)
+    expect(since[0]).toBeUndefined()
+    expect(since.slice(1).every((one) => typeof one === "number")).toBe(true)
+  })
+
   it("still asks for a chat whose stored history does not reach back as far as the run wants", async () => {
     const store = await emptyStore()
     await store.messages.saveMessages(account, "7", [messageAt(5)], { via: "history" })

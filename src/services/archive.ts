@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import type { Chat, ChatKind, Id, Message } from "../domain/models.js"
 import type { ActionableError } from "../domain/recovery.js"
-import { capability } from "../ports/messenger.js"
+import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import type { Fetching } from "../ports/traits.js"
 import { typedCommand } from "../runs/scope.js"
 import type { LeftChats } from "../store/chats.js"
@@ -280,8 +280,10 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         ...options,
         ...(windowed ? { sinceMs: limit.keepFrom } : {}),
       })
-      const result: Fetched =
-        windowed && fetched.reachedSince ? { ...fetched, limited: "older_than_window" as const } : fetched
+      const replies =
+        fetched.chat && !options.window ? await savedReplies(connection, store, account, fetched.chat, options.stop) : 0
+      const read = replies > 0 ? { ...fetched, fetched: fetched.fetched + replies } : fetched
+      const result: Fetched = windowed && read.reachedSince ? { ...read, limited: "older_than_window" as const } : read
       if (result.limited && limit?.keepFrom !== undefined)
         await recordSkip(store, account, result.chat ?? limit.chatId, {
           reason: "older_than_window",
@@ -318,6 +320,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const upToDate = heldToNewest(await deps.store(), await deps.account(), deps.messenger.fetching ?? FETCHING, {
         ...options,
         catchUp: catchingUp ? (options.catchUp ?? {}) : false,
+        threads: connection.threadReplies !== undefined,
       })
       const finished = () =>
         options.onChat?.({ chats: chats.length, done: answer.items.length, fetched: answer.fetched })
@@ -600,9 +603,10 @@ export const fetchInto = async ({
  * either way; `serve` records those.
  */
 const heldToNewest =
-  (store: MessageStore, account: AccountKey, fetching: Fetching, options: FetchOptions) =>
+  (store: MessageStore, account: AccountKey, fetching: Fetching, options: FetchOptions & { threads: boolean }) =>
   async (chat: Chat): Promise<boolean> => {
-    if (options.window || options.catchUp || options.last !== undefined) return false
+    // A new reply to an old thread moves neither the newest stored message nor, on every messenger, the chat's last.
+    if (options.threads || options.window || options.catchUp || options.last !== undefined) return false
     const lastAt = Date.parse(chat.lastMessageAt ?? "")
     if (Number.isNaN(lastAt)) return false
     const [newest] = (await store.messages.messages(account, chat.id, { limit: 1 }).catch(() => ({ items: [] }))).items
@@ -620,6 +624,29 @@ const heldToNewest =
     const startedAt = Date.parse(await timeOfKey(store, account, chat.id, top.from, fetching.orderBy === "time", ""))
     return !Number.isNaN(startedAt) && startedAt < options.sinceMs
   }
+
+const threadsKey = (chatId: Id): string => `threads:${chatId}`
+
+/**
+ * The replies a messenger's history pages leave out, saved without a held stretch: they say nothing of the history
+ * around them. `since` is when the last read of them started.
+ */
+const savedReplies = async (
+  connection: MessengerAdapter,
+  store: MessageStore,
+  account: AccountKey,
+  chatId: Id,
+  stop: AbortSignal,
+): Promise<number> => {
+  if (!connection.threadReplies || stop.aborted) return 0
+  const startedAt = Date.now()
+  const point = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
+  const replies = await connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
+  if (replies.length > 0)
+    await store.messages.saveMessages(account, chatId, replies, { via: "history", seenAt: startedAt })
+  await store.sync.setSyncState(account, threadsKey(chatId), String(startedAt))
+  return replies.length
+}
 
 /** When the message a held stretch starts at was sent: by time the key is the time; by id, the stored message says. */
 const timeOfKey = async (
