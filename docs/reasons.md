@@ -117,7 +117,7 @@ headings.
 | `crm.stage-history-failed` | `validation_error` | the CRM's stage history could not be read; stage tasks wait for the next sync |  |
 | `crm.stage-unknown` | `validation_error` | a CRM item stands in a stage the store does not hold; it was not kept |  |
 | `crm.unassigned-dropped` | `validation_error` | the CRM does not let this sign-in choose a user in unassigned; that user's deals are not copied |  |
-| `crm.unlisted-held` | `validation_error` | a list of every id would mark most of a kind deleted; nothing was, until --rescan |  |
+| `crm.unlisted-held` | `validation_error` | a list of every id would mark most of a kind deleted, or the sign-in read only part; nothing was |  |
 | `crm.write-unsupported` | `validation_error` | the CRM does not take this write, or does not recognise a repeated one |  |
 | `db.failed` | `provider_error` | the database server failed the query |  |
 | `db.no-database` | `not_found` | the database server has no such database |  |
@@ -622,7 +622,7 @@ headings.
 | `tracker.no-record` | `invalid_response` | the tracker answered a write with no record and no error; sync and look |  |
 | `tracker.reference` | `validation_error` | a team, state, label, project or user no single row of the copy has by that name |  |
 | `tracker.team-required` | `validation_error` | a new issue needs its team: name one, or sync a copy that holds one |  |
-| `tracker.unlisted-held` | `validation_error` | a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan |  |
+| `tracker.unlisted-held` | `validation_error` | a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was |  |
 | `tracker.write-unsupported` | `validation_error` | the tracker does not take this write, or does not recognise a repeated one |  |
 | `transaction.field` | `validation_error` | a field of the transaction is not valid |  |
 | `transaction.no-split` | `not_found` | the transaction has no split at that position |  |
