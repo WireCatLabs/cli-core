@@ -734,8 +734,10 @@ sha256 out, so an agent has nothing to pass to `update`; an Office file is edite
 | --- | --- | --- |
 | `sheets show <path> [range]` | remote read | the stored cells of an .xlsx (value, type, formula, format), with the file's `sha256` |
 | `sheets update <path> <range> --values <json> --expected-fingerprint <sha256> [--replace]` | remote write | writes JSON rows of values from the range's first cell |
+| `sheets create <path> --values <json> [--name <name>]` | remote write | a new .xlsx with one sheet holding the rows from A1 |
 | `documents show <path>` | remote read | a .docx's paragraphs by index, with style, `editable` and `reason`, and the `sha256` |
 | `documents update <path> --payload <json> --expected-fingerprint <sha256>` | remote write | replaces, inserts or deletes paragraphs |
+| `documents create <path> --payload <json>` | remote write | a new .docx from `[{text, style?}]` paragraphs |
 | `history <path>` | remote read | what this profile's writes and syncs replaced in the file, from the version store |
 | `restore <path> [version] [--expected-fingerprint <sha256>]` | remote write | puts a kept version back; with no version, the CLI's trash restore |
 
@@ -756,6 +758,25 @@ uploaded. The answer is the update's (`path`, `sha256`, `replaced`) plus `change
 or `paragraphs` (`replaced`, `inserted`, `deleted`) for a document, and `warnings`: a replaced paragraph whose mixed
 formatting became its first run's, or a replaced formula after which Excel rebuilds its calculation order. A file over
 64 MiB is refused (`file.too-large`): the editors hold it in memory.
+
+<a id="create-office-files"></a>
+
+#### New Office files
+
+`sheets create` and `documents create` build the file with `createXlsx` or `createDocx` from
+[`@wirecat/cli-core/office`](../../src/office/create.ts) and write it with `guardedFileWrite` as a new file: no
+fingerprint, and the write asks only the command's own permission key, as `update` of a new file and a provider's
+`upload` without `--replace` do. A file already there is refused before anything is uploaded (`conflict`,
+`office.file-exists`, naming the `show` and the `update` that change it), and the provider's absent-file check catches
+one that appears during the write. The path must end in `.xlsx` or `.docx` (`office.wrong-format`).
+
+`sheets create` takes `--values` as `sheets update` does (rows from A1, `null` leaves a cell empty) and `--name` for
+the sheet, `Sheet1` without it; numbers and booleans are typed, and a text stays text even when it starts with `=`.
+`documents create` takes `--payload`, a list of `{text, style?}` where the style is `Title`, `Heading1`, `Heading2`,
+`Heading3`, `Normal` (the default) or `ListBullet` (a bullet list); `\t` and `\n` become a tab and a line break. The
+answer is `path` and `sha256`, the one `update` takes next, with `sheets` (name and row count) or `paragraphs` (the
+count). The API takes several sheets and a bold header row (`boldHeader`); the commands make one sheet and no bold
+row, since cli-base's vocabulary has no flag for either.
 
 `history` lists `versions.list(path)`: each entry's `version` is the sha256 of what it replaced, and `available` says
 whether the store still holds it. `restore <path> <version>` copies that version from the store and writes it with
@@ -821,6 +842,7 @@ its original refusal guard for store changes that have not completed this operat
 
 ## Edit an Office file in place
 
+A new workbook or Word document comes from `createXlsx` or `createDocx` (see [New Office files](#create-office-files)).
 A provider with no document API, such as Yandex Disk, changes a workbook or a Word document by downloading the
 file, editing it and uploading it whole. `@wirecat/cli-core/office` does the edit: `editXlsxCells` by cell address,
 `editDocxParagraphs` by paragraph, each spliced into the original XML with every other zip entry copied byte for

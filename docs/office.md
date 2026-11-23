@@ -3,7 +3,8 @@
 `@wirecat/cli-core/office` changes cells of an Excel workbook (`.xlsx`) and paragraph text of a Word document
 (`.docx`) without rebuilding the file. It is for a service with no document API, such as Yandex Disk: the CLI
 downloads the whole file, edits it here and uploads the whole file back. Fonts, styles, images, comments, tracked
-changes and every part the editor does not read come back as they were.
+changes and every part the editor does not read come back as they were. It also makes a new workbook or document from values
+(see [New files](#new-files)).
 
 ```ts
 import { editDocxParagraphs, editXlsxCells, readDocxParagraphs, readXlsxCells } from "@wirecat/cli-core/office"
@@ -92,6 +93,44 @@ object, a footnote or endnote reference, a comment, a hyperlink, a content contr
 a page or column break, or any element the editor does not know. A paragraph inside a locked or data-bound content
 control is refused too. One call refuses two edits of the same paragraph. Text with a character XML cannot store (a
 control character other than tab and newline) is refused; `\r\n` becomes `\n`.
+
+## New files
+
+`createXlsx` and `createDocx` build a new file from values, with the fewest parts Excel, Word, LibreOffice and the
+readers above take. The same input gives the same bytes: the zip has a fixed time and no document properties (no
+author, no creation time).
+
+```ts
+import { createDocx, createXlsx } from "@wirecat/cli-core/office"
+
+const workbook = createXlsx({
+  sheets: [{ name: "Budget", rows: [["Item", "Cost"], ["Rent", 950], [null, true]] }],
+  boldHeader: true,
+})
+const document = createDocx({
+  paragraphs: [
+    { text: "Quarterly report", style: "Title" },
+    { text: "Revenue", style: "Heading1" },
+    { text: "Revenue grew 12%." },
+    { text: "Rent", style: "ListBullet" },
+  ],
+})
+```
+
+- **Workbook.** One worksheet per sheet, rows from A1. A string goes into the shared strings part (a repeated text
+  once), a number and a boolean are typed, `null` leaves the cell out. A string that starts with `=` stays text: there
+  is no formula. `boldHeader` puts the first row of every sheet in a bold font. A sheet name must have 1 to 31
+  characters, none of `[ ] : * ? / \`, must not start or end with `'`, and must differ from the others ignoring
+  case (`office.invalid-sheet-name`). A number must be finite and a text at most 32,767 characters
+  (`office.invalid-value`); the sheet holds at most 1,048,576 rows and 16,384 columns (`office.invalid-cell`).
+- **Document.** One paragraph per entry, on an A4 page. The styles part defines `Normal` (the default, Calibri 11),
+  `Title`, `Heading1` to `Heading3` and `ListBullet`, under Word's own names (`heading 1`, `List Bullet`), so Word,
+  LibreOffice and mammoth treat them as built in: mammoth gives `h1` to `h3` and a `ul` list. A tab is `\t`, a line
+  break `\n`. No paragraphs give one empty paragraph, which a body needs.
+- Text with a character XML cannot store (a control character other than tab and newline) is refused.
+
+Not made: formulas, column widths, number formats (a date is a number or a text), merged cells, tables, images,
+headers and footers, numbered lists, inline bold or links.
 
 ## Limits
 
