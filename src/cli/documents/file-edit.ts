@@ -93,7 +93,7 @@ const columnName = (column: number) => {
 const cornerOf = (address: string) => {
   const match = ADDRESS.exec(address.toUpperCase())
   if (!match)
-    throw new CliError("validation_error", `${address} is not a cell like B7`, { reason: "office.invalid_cell" })
+    throw new CliError("validation_error", `${address} is not a cell like B7`, { reason: "office.invalid-cell" })
   const letters = match[1] as string
   return {
     column: [...letters].reduce((sum, letter) => sum * 26 + letter.charCodeAt(0) - 64, 0),
@@ -296,7 +296,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     const wanted = sheetRangeOf(range)
     if (wanted.range === undefined)
       throw new CliError("validation_error", `${range} names no cell; give one like Sheet1!B2`, {
-        reason: "office.invalid_cell",
+        reason: "office.invalid-cell",
       })
     cellEditsOf("", wanted.range, values)
     await editInPlace(this, "sheets", input, args.expectedFingerprint, async (bytes) => {
@@ -307,7 +307,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
           throw new CliError(
             "validation_error",
             `the workbook has ${names.length} sheets (${names.map((name) => `"${name}"`).join(", ")}); name one, like ${names[0] ?? "Sheet1"}!${wanted.range}`,
-            { reason: "office.no_sheet" },
+            { reason: "office.no-sheet" },
           )
         sheet = names[0] as string
       }
@@ -326,7 +326,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
           },
         }
       } catch (error) {
-        if (isCliError(error) && error.details?.reason === "office.formula_cell")
+        if (isCliError(error) && error.details?.reason === "office.formula-cell")
           throw new CliError(
             "validation_error",
             error.message.replace("pass overwriteFormulas", "pass --replace"),

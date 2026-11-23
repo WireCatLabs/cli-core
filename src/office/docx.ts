@@ -107,9 +107,9 @@ class Document {
     const root = this.part.root
     this.ns = root.ns
     if (root.local !== "document" || !WORD_NAMESPACES.includes(this.ns))
-      throw refuse("the file is not a Word document", "office.wrong_format")
+      throw refuse("the file is not a Word document", "office.wrong-format")
     const body = childrenOf(root, this.ns, "body")[0]
-    if (!body) throw refuse("the document has no body", "office.wrong_format")
+    if (!body) throw refuse("the document has no body", "office.wrong-format")
     this.walk(body, "body", false)
     const styles = pack.related(this.part.path, "styles")
     if (styles && pack.has(styles[1].path)) {
@@ -243,7 +243,7 @@ class Document {
     const properties = childrenOf(element, this.ns, "pPr")[0]
     if (!properties) return ""
     if (hasTracked(properties))
-      throw refuse("the paragraph to copy the style from holds a tracked change", "office.tracked_change")
+      throw refuse("the paragraph to copy the style from holds a tracked change", "office.tracked-change")
     let raw = this.raw(properties)
     for (const section of childrenOf(properties, this.ns, "sectPr").reverse())
       raw = raw.slice(0, section.start - properties.start) + raw.slice(section.end - properties.start)
@@ -297,18 +297,18 @@ export const editDocxParagraphs = async (bytes: Uint8Array, edits: readonly Docx
     if (!Number.isInteger(index) || index < 0 || index >= found.length)
       throw refuse(
         `${what} ${index} does not exist; the document has ${found.length} paragraphs`,
-        "office.no_paragraph",
+        "office.no-paragraph",
       )
     return found[index] as Found
   }
   const editable = (index: number, action: string) => {
     const info = infos[index] as DocxParagraph
     if (!info.editable)
-      throw refuse(`paragraph ${index} cannot be ${action}: ${info.reason}`, "office.unsafe_paragraph")
+      throw refuse(`paragraph ${index} cannot be ${action}: ${info.reason}`, "office.unsafe-paragraph")
   }
   const touched = new Set<number>()
   const once = (index: number) => {
-    if (touched.has(index)) throw refuse(`paragraph ${index} is changed twice in one call`, "office.duplicate_edit")
+    if (touched.has(index)) throw refuse(`paragraph ${index} is changed twice in one call`, "office.duplicate-edit")
     touched.add(index)
   }
   const splices: Splice[] = []
@@ -327,7 +327,7 @@ export const editDocxParagraphs = async (bytes: Uint8Array, edits: readonly Docx
       if (properties && childrenOf(properties, document.ns, "sectPr").length)
         throw refuse(
           `paragraph ${edit.delete} ends a section; deleting it would merge two sections`,
-          "office.section_break",
+          "office.section-break",
         )
       if (target.element.children.some((child) => MARKERS.has(child.local)))
         throw refuse(`paragraph ${edit.delete} holds a bookmark that a cross-reference may point at`, "office.bookmark")
@@ -349,10 +349,10 @@ export const editDocxParagraphs = async (bytes: Uint8Array, edits: readonly Docx
       expected[edit.index] = text
     } else {
       if (edit.insertAfter !== -1) check(edit.insertAfter, "paragraph")
-      if (!found.length) throw refuse("the document has no paragraph to insert next to", "office.no_paragraph")
+      if (!found.length) throw refuse("the document has no paragraph to insert next to", "office.no-paragraph")
       const neighbour = found[Math.max(0, edit.insertAfter)] as Found
       if (neighbour.lockedControl)
-        throw refuse(`paragraph ${edit.insertAfter} sits in a locked content control`, "office.unsafe_paragraph")
+        throw refuse(`paragraph ${edit.insertAfter} sits in a locked content control`, "office.unsafe-paragraph")
       const source = check(edit.styleFrom ?? Math.max(0, edit.insertAfter), "styleFrom paragraph").element
       const element = neighbour.element
       const text = normalized(edit.text)
@@ -377,7 +377,7 @@ export const editDocxParagraphs = async (bytes: Uint8Array, edits: readonly Docx
     if (!addsAtEnd && remaining.at(-1)?.local !== "p")
       throw refuse(
         `${container.local === "tc" ? "a table cell" : "the document"} must end with a paragraph; this delete would leave it without one`,
-        "office.last_paragraph",
+        "office.last-paragraph",
       )
   }
   if (!edits.length) return { bytes: bytes.slice(), replaced, inserted, deleted, collapsed }

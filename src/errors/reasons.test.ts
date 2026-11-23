@@ -57,12 +57,17 @@ describe("error reasons", () => {
     const known = new Set([...REASONS, ...BASE_REASONS].map((entry) => entry.reason))
     const raised = sources(join(import.meta.dirname, "..")).flatMap((path) =>
       [
-        ...readFileSync(path, "utf8").matchAll(/(?:reason: |queryError\(|fail\([^)]*, )"([a-z][a-z-]*\.[a-z.-]+)"/g),
+        ...readFileSync(path, "utf8").matchAll(
+          /(?:reason: |queryError\(|fail\([^)]*, |refuse\([^)]*, )"([a-z][a-z-]*\.[a-z_.-]+)"/g,
+        ),
         ...readFileSync(path, "utf8").matchAll(/(?:searchError|queryError)\(\s*"([^"]+)"/g),
       ].map((match) => match[1] ?? ""),
     )
+    // An unregistered reason renders as its code's default (input.invalid), and the registry refuses an underscore.
+    // config.invalid_json is in the docs of every CLI already, so it waits for a rename of its own.
+    const unregistered = new Set(["config.invalid_json"])
     expect(raised.length).toBeGreaterThan(30)
-    expect([...new Set(raised.filter((reason) => !known.has(reason)))]).toEqual([])
+    expect([...new Set(raised.filter((reason) => !known.has(reason) && !unregistered.has(reason)))]).toEqual([])
   })
 
   it.each(REASONS.map((entry) => [entry.reason, entry]))(

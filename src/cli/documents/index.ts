@@ -23,7 +23,7 @@ export {
   type DocumentCatalogStores,
 } from "./catalog.js"
 export { addLocalDocumentCommands, type ImportedDocument, type LocalDocumentCommands } from "./documents.js"
-export { type FileConflictCommands, fileConflictsCommand } from "./file-conflicts.js"
+export { type FileConflictCommands, type FileConflictConnection, fileConflictsCommand } from "./file-conflicts.js"
 export { addFileEditCommands, type FileEditCommands } from "./file-edit.js"
 export { addFileUpdateCommand, type FileUpdateCommands, type FileUpdatePort } from "./file-update.js"
 export { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"

@@ -165,6 +165,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `lookup` | ask the messenger who is behind a phone number |  |
 | `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
 | `send` | send a message |  |
+| `reply` | answer in a comment thread at the source, under the comment that started it |  |
 | `call` | call one provider API method by its own name, generated from the provider's method list |  |
 | `edit` | change a sent message |  |
 | `forward` | send an existing message on to another chat |  |
@@ -228,6 +229,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `stats` | a thing's own numbers, such as a post's views, as read at each sync |
 | `logs` | the log of a running process |
 | `events` | what happened in a thing over time |
+| `changes` | what a sync changed in the local copy since a time: added, changed, deleted or no longer visible |
 | `scheduled` | what is scheduled to happen |
 | `context` | what surrounds one thing |
 | `path` | where a thing is on this machine |
@@ -238,6 +240,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `transcript` | the text of speech: a voice message or a meeting recording |
 | `evidence` | the stored messages or lines a result or a reference rests on |
 | `passage` | a cited transcript line with bounded surrounding lines from the same revision |
+| `summary` | the summary a service wrote of a meeting, with its sections and next steps |
+| `people` | the people found across stored meetings by name or email, with the meetings they were in |
 | `invitation` | the text that invites people to a meeting: how to join it and when |
 | `agenda` | what needs a look today |
 | `busy` | when calendars or people are taken, without what takes them |
@@ -327,6 +331,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
 | `roles` | collection | the parts a person plays in a relationship, built in or the owner's own |  |
 | `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
+| `databases` | collection | a source's databases, such as Notion's, each a set of rows with typed properties; the local store's are tables |  |
+| `rows` | collection | the records of a database at the source, each with typed values; an order's or an invoice's are lines |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `mirrors` | collection | saved pairings of a local folder and a folder in the source, which sync keeps the same both ways |  |
 | `conflicts` | collection | files a mirror's sync found changed on both sides and could not merge, each waiting for a side or a final file |  |
@@ -837,6 +843,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--tab` | `<id>` | id | one tab of a document, by its id: only its text is read |  |
 | `--tag` | `<name>` | string | a tag, by its name or an alias: only what carries it is read |  |
 | `--matching` | `<query>` | string | every stored thing a search with this query finds, in its query language; the command acts on each |  |
+| `--since` | `<time>` | time | from this time on: a time, or a duration ago such as 1d |  |
+| `--event` | `<events>` | list | only these kinds of event, comma separated; the command lists them |  |
 | `--email` | `<address>` | string | an e-mail address to give it; repeat it for more |  |
 | `--phone` | `<phone>` | string | a phone number to give it, in international form starting with +; repeat it for more |  |
 | `--pipeline` | `<pipeline>` | string | a CRM pipeline: pipeline:<id>, or a name only one pipeline has |  |
@@ -871,6 +879,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--slug` | `<slug>` | string | the last part of its web address |  |
 | `--tags` | `<ids>` | list | its tags and categories, by comma-separated ids; replaces the ones it has |  |
 | `--replace-body` |  | switch | write the new text over a body the tool cannot fully read back, losing what it could not show |  |
+| `--from-template` | `<template>` | string | start the new page from one of the source's page templates, by name or id; not a message --template |  |
+| `--cover` | `<link>` | string | the page's cover image, by an https link, or none to take it away; a local image file is --photo |  |
+| `--allow-deleting-content` |  | switch | let an update delete the child pages and databases its new text leaves out; the source keeps them in its trash, unlike --allow-delete |  |
 | `--like` | `<text>` | string | a made-up example of the text sought, such as a reply that would answer the question, searched by meaning beside the query |  |
 | `--keep` | `<side>` | choice | settle a conflict with one side: local, the remote by its own name (disk, drive), or both, the other kept as a conflict copy |  |
 | `--allow-deletions` | `<count>` | count | let this run delete up to this many files when the mirror's guard stops it; owner only |  |

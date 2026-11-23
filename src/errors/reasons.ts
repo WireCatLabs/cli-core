@@ -137,6 +137,28 @@ const SQL: Entry[] = [
   ["db.failed", "provider_error", "the database server failed the query"],
 ]
 
+/** In-place Office edits (`./office`, `files sheets|documents update`); the names are documented in office.md. */
+const OFFICE: Entry[] = [
+  ["office.wrong-format", "the file is not the Office format the command edits, or its parts cannot be read"],
+  ["office.invalid-cell", "a cell is not an address like B7"],
+  ["office.invalid-value", "a cell value cannot be written: a number must be finite"],
+  ["office.no-sheet", "the workbook has no such sheet, or several when none is named"],
+  ["office.duplicate-edit", "the same cell or paragraph is changed twice in one call"],
+  ["office.formula-cell", "the cell holds a formula; --replace writes the value over it"],
+  ["office.shared-formula", "the cell holds a formula other cells share; replacing it would break theirs"],
+  ["office.array-formula", "the cell is part of an array formula; change it in Excel"],
+  ["office.rich-value", "the cell holds a picture or a linked data type, which the editor does not replace"],
+  ["office.table-header", "the cell is a table's header or total, whose part repeats the text; change it in Excel"],
+  ["office.implicit-rows", "the sheet has rows without numbers, so a row cannot be added"],
+  ["office.implicit-cells", "the row has cells without addresses, so a cell cannot be added"],
+  ["office.no-paragraph", "the document has no paragraph at that index"],
+  ["office.unsafe-paragraph", "the paragraph cannot be edited safely; documents show gives the reason"],
+  ["office.tracked-change", "the paragraph holds a tracked change"],
+  ["office.section-break", "the paragraph ends a section; deleting it would merge two sections"],
+  ["office.bookmark", "the paragraph holds a bookmark a cross-reference may point at"],
+  ["office.last-paragraph", "the delete would leave the document or a table cell without a paragraph"],
+].map(([reason, message]) => validation(reason as string, message as string))
+
 const OTHERS: Entry[] = [
   validation("doctor.report-exists", "the report's file exists; a problem report never overwrites a file"),
   validation("usage.unknown-command", "no command by this name; the CLI's help lists them"),
@@ -846,7 +868,7 @@ const DETAILED: Record<string, readonly string[]> = {
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...SQL, ...OTHERS].map(([reason, code, message]) => ({
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...SQL, ...OFFICE, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
     message,

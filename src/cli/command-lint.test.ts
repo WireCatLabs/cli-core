@@ -13,6 +13,7 @@ import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
 import { fileConflictsCommand } from "./documents/file-conflicts.js"
 import { addFileEditCommands } from "./documents/file-edit.js"
+import { addDocumentHistoryCommands } from "./documents/history.js"
 import { LOCAL_READ } from "./effects.js"
 import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
@@ -160,6 +161,33 @@ it("a files host's shared update, Office edits, history and restore pass the com
           read: refuse,
           write: refuse,
           restoreFromTrash: refuse,
+        })
+        return [...holder.commands, runsCommand(app)]
+      },
+    },
+    ["--allow-stale"],
+  )
+
+  expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
+  expect(lint.status).toBe(0)
+})
+
+// Every documents CLI (drive, ydisk, notion) mounts them beside its own documents group.
+it("a documents host's history and change log pass the command lint with no overrides", async () => {
+  const refuse = async (): Promise<never> => {
+    throw new Error("not read in a lint")
+  }
+  const app = { command: "disk", appName: "disk-cli", envPrefix: "DISK", description: "synthetic", version: "1.0.0" }
+  const lint = await lintOf(
+    {
+      app,
+      commands: () => {
+        const holder = new Command("disk").addCommand(commandsCommand(app))
+        addDocumentHistoryCommands(holder, {
+          words: { app: "disk", remote: "disk", provider: "Disk", source: "disk" },
+          output: () => undefined,
+          run: refuse,
+          id: (input) => input,
         })
         return [...holder.commands, runsCommand(app)]
       },

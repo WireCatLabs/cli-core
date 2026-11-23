@@ -39,7 +39,13 @@ const setup = async () => {
     },
   }
   port.save(state)
-  const target = { identity: async () => "alpha" } as unknown as FileTarget
+  const runs = { open: 0, done: 0 }
+  const target = {
+    identity: async () => {
+      if (runs.open === 0) throw new Error("the remote is reached outside the app's run")
+      return "alpha"
+    },
+  } as unknown as FileTarget
   const bodies: Body[] = []
   const program = new Command("host").option("--json").exitOverride()
   provide(program, { streams: captureStreams(), env: {}, tty: false })
@@ -59,13 +65,21 @@ const setup = async () => {
         pathOf: (_mirror, input) => input,
         stateOf: () => port,
         versionsOf: () => versions,
-        connect: async () => ({
-          target,
-          principal: "alpha",
-          guard: (_attempt, act) => act(),
-          operationId: () => "op1",
-          lock: async () => ({ assertHeld: () => {}, release: () => {} }),
-        }),
+        connect: async (_command, _mirror, body) => {
+          runs.open += 1
+          try {
+            return await body({
+              target,
+              principal: "alpha",
+              guard: (_attempt, act) => act(),
+              operationId: () => "op1",
+              lock: async () => ({ assertHeld: () => {}, release: () => {} }),
+            })
+          } finally {
+            runs.open -= 1
+            runs.done += 1
+          }
+        },
       }),
     ),
   )
@@ -73,12 +87,12 @@ const setup = async () => {
     await program.parseAsync(["mirrors", "conflicts", ...args], { from: "user" })
     return bodies.at(-1) as Body & { item?: Record<string, unknown>; items?: Record<string, unknown>[] }
   }
-  return { root, port, run }
+  return { root, port, run, runs }
 }
 
 describe("mirrors conflicts", () => {
   it("lists a conflict, shows its versions and merge, and resolves it by keeping the disk's side", async () => {
-    const { root, port, run } = await setup()
+    const { root, port, run, runs } = await setup()
     expect((await run("list")).items).toEqual([expect.objectContaining({ id: "m1", path: "plan.md", kept: true })])
     const shown = (await run("show", "m1", "plan.md")).item
     expect(shown).toMatchObject({ local_changed: false, remote: { sha256: sha("a\ntheirs\n"), text: "a\ntheirs\n" } })
@@ -86,6 +100,7 @@ describe("mirrors conflicts", () => {
     expect((await run("resolve", "m1", "plan.md", "--keep", "disk")).item).toMatchObject({ resolution: "disk" })
     expect(readFileSync(join(root, "plan.md"), "utf8")).toBe("a\ntheirs\n")
     expect(port.read().conflicts).toBeUndefined()
+    expect(runs.done).toBe(1)
   })
 
   it("refuses a final file from the app's own folders, which hold sign-ins and state", async () => {

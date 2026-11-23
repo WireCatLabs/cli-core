@@ -147,11 +147,11 @@ describe("editDocxParagraphs", () => {
       '<w:p><w:pPr><w:pStyle w:val="BodyText"/></w:pPr><w:r><w:t xml:space="preserve">Next section</w:t></w:r></w:p>',
     )
     await expect(editDocxParagraphs(sectioned, [{ delete: 3 }])).rejects.toMatchObject({
-      details: { reason: "office.section_break" },
+      details: { reason: "office.section-break" },
     })
     await expect(editDocxParagraphs(letter, [{ delete: 5 }])).rejects.toMatchObject({
       message: expect.stringContaining("the document must end with a paragraph"),
-      details: { reason: "office.last_paragraph" },
+      details: { reason: "office.last-paragraph" },
     })
   })
 
@@ -160,7 +160,7 @@ describe("editDocxParagraphs", () => {
     expect(await texts(result.bytes)).toContain("Cell 2")
     expect(documentOf(result.bytes)).toMatch(/<w:tc>(?:(?!<\/w:tc>).)*Cell 2<\/w:t><\/w:r><\/w:p><\/w:tc>/)
     await expect(editDocxParagraphs(letter, [{ delete: 3 }])).rejects.toMatchObject({
-      details: { reason: "office.last_paragraph" },
+      details: { reason: "office.last-paragraph" },
     })
     const kept = await editDocxParagraphs(letter, [{ insertAfter: 3, text: "More" }, { delete: 3 }])
     expect(await texts(kept.bytes)).toContain("More")
@@ -172,14 +172,14 @@ describe("editDocxParagraphs", () => {
     )
     await expect(editDocxParagraphs(tracked, [{ index: 3, text: "x" }])).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "office.unsafe_paragraph" },
+      details: { reason: "office.unsafe-paragraph" },
       message: "paragraph 3 cannot be replaced: it holds a tracked change",
     })
     const image = addParagraph("<w:p><w:r><w:drawing/></w:r></w:p>")
     await expect(editDocxParagraphs(image, [{ delete: 3 }])).rejects.toThrow(/image or a drawing/)
     await expect(editDocxParagraphs(letter, [{ index: 9, text: "x" }])).rejects.toThrow(/has 6 paragraphs/)
     await expect(editDocxParagraphs(letter, [{ index: 1, text: "x" }, { delete: 1 }])).rejects.toMatchObject({
-      details: { reason: "office.duplicate_edit" },
+      details: { reason: "office.duplicate-edit" },
     })
     await expect(editDocxParagraphs(letter, [{ index: 1, text: "nul\u0000" }])).rejects.toThrow(/control character/)
   })

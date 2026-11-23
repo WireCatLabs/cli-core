@@ -31,12 +31,18 @@ export interface FileConflictCommands {
   pathOf(mirror: Mirror, input: string): string
   stateOf(command: Command, mirror: Mirror): FileMirrorStatePort
   versionsOf(command: Command, mirror: Mirror): FileVersions
-  /** The remote signed in for the mirror's account, the write guard and the mirrors' sync lock. */
-  connect(
-    command: Command,
-    mirror: Mirror,
-  ): Promise<Pick<FileConflictResolveOptions, "target" | "principal" | "guard" | "operationId" | "lock" | "signal">>
+  /**
+   * Runs `body` inside the app's run (its `--timeout`, run record and request log) with the remote signed in for the
+   * mirror's account, the write guard and the mirrors' sync lock; answers what `body` answered.
+   */
+  connect<T>(command: Command, mirror: Mirror, body: (connection: FileConflictConnection) => Promise<T>): Promise<T>
 }
+
+/** What `connect` hands `mirrors conflicts resolve`. */
+export type FileConflictConnection = Pick<
+  FileConflictResolveOptions,
+  "target" | "principal" | "guard" | "operationId" | "lock" | "signal"
+>
 
 const ID = "mirror id from mirrors list"
 const PATH = "the file's path inside the mirror, like notes/plan.md"
@@ -134,16 +140,19 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
             })
           const mirror = one(this, id)
           const keep = (args.keep === remote ? "remote" : args.keep) as Keep | undefined
-          const resolved = await resolveFileConflict({
-            ...(await helpers.connect(this, mirror)),
-            root: mirror.path,
-            folder: mirror.folder,
-            path: helpers.pathOf(mirror, input),
-            state: helpers.stateOf(this, mirror),
-            versions: helpers.versionsOf(this, mirror),
-            remote,
-            choice: keep ? { keep } : { file: file as string },
-          })
+          const path = helpers.pathOf(mirror, input)
+          const resolved = await helpers.connect(this, mirror, (connection) =>
+            resolveFileConflict({
+              ...connection,
+              root: mirror.path,
+              folder: mirror.folder,
+              path,
+              state: helpers.stateOf(this, mirror),
+              versions: helpers.versionsOf(this, mirror),
+              remote,
+              choice: keep ? { keep } : { file: file as string },
+            }),
+          )
           const resolution = resolved.resolution === "remote" ? remote : resolved.resolution
           helpers.output(this, itemOf(snakeKeys({ id, ...resolved, resolution })))
         }),

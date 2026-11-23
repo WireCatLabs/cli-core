@@ -3,12 +3,13 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, errorObjectOf } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 import { describe, expect, it } from "vitest"
 import type { FileTarget } from "../../documents/file-mirror-model.js"
+import { failureContext } from "../../errors/reasons.js"
 import { readDocxParagraphs, readXlsxCells } from "../../office/index.js"
 import { fileVersions } from "../../services/files/versions.js"
 import { commandPathOf } from "../command-contract.js"
@@ -163,9 +164,11 @@ describe("files sheets", () => {
     const refused = disk.run(...args)
     await expect(refused).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "office.formula_cell" },
+      details: { reason: "office.formula-cell" },
     })
     await expect(refused).rejects.toThrow("pass --replace")
+    const shown = errorObjectOf(await refused.catch((error: unknown) => error), failureContext())
+    expect(shown.error).toMatchObject({ code: "validation_error", reason: "office.formula-cell" })
     expect(disk.uploads).toEqual([])
     await disk.run(...args, "--replace")
     expect(disk.item()).toMatchObject({ changed: [{ cell: "B4", after: 5 }] })
