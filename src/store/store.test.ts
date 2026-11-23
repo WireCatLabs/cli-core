@@ -64,6 +64,21 @@ describe("the message store", () => {
     await store.close()
   })
 
+  it("keeps what a server search hit leaves out of a held message's metadata, while a later fetch replaces it", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(ME, [chat])
+    await store.messages.saveMessages(ME, chat.id, [message({ providerMetadata: { reply_count: 2, views: 10 } })], {
+      via: "history",
+    })
+    await store.messages.saveMessages(ME, chat.id, [message({ providerMetadata: { views: 12 } })], { via: "search" })
+    const held = async () => (await store.messages.messages(ME, chat.id, { limit: 1 })).items[0]?.providerMetadata
+    expect(await held()).toEqual({ reply_count: 2, views: 12 })
+
+    await store.messages.saveMessages(ME, chat.id, [message({ providerMetadata: { views: 13 } })], { via: "history" })
+    expect(await held()).toEqual({ views: 13 })
+    await store.close()
+  })
+
   it("**gives back exactly the chat and the message it was given**", async () => {
     const store = await openStore({ path: fresh() })
     await store.chats.saveChats(ME, [chat])

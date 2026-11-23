@@ -20,10 +20,20 @@ export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "chats folders create": ["createFolder", "create a folder"],
   "chats folders update": ["updateFolder", "change a folder"],
   "chats folders delete": ["deleteFolder", "delete a folder"],
+  "chats links show": ["group", "read a group"],
+  "chats links reset": ["resetInviteLink", "replace an invite link"],
+  "chats requests list": ["joinRequests", "read join requests"],
+  "chats requests confirm": ["answerJoinRequest", "answer join requests"],
+  "chats requests reject": ["answerJoinRequest", "answer join requests"],
+  "chats admins add": ["addAdmin", "make someone an admin"],
+  "chats admins remove": ["removeAdmin", "take admin rights back"],
   "contacts add": ["addContact", "add a contact"],
   "contacts remove": ["removeContact", "remove a contact"],
   "contacts rename": ["renameContact", "rename a contact"],
   "contacts import": ["importContacts", "import contacts"],
+  "contacts block": ["block", "block a person"],
+  "contacts unblock": ["unblock", "unblock a person"],
+  "messages forward": ["forward", "forward a message"],
   "messages comments": ["comments", "read comments on a channel post"],
   "messages pin": ["pin", "pin a message"],
   "messages unpin": ["unpin", "unpin a message"],
@@ -58,17 +68,22 @@ export const refuseLacking = (messenger: Lacking | undefined, path: readonly str
   if (need) throw new CliError("validation_error", `this messenger cannot ${need[1]}`)
 }
 
+type Hideable = Command & { _hidden: boolean }
+
 /**
  * Hides under `group` each command whose one method this messenger can `never` have, from help, `commands` and MCP;
- * typed anyway, it still refuses. A method it only `lacks` keeps its command in sight, since it may come.
+ * typed anyway, it still refuses. A group left with nothing in sight is hidden too, since an empty group lists
+ * nothing to run. A method it only `lacks` keeps its command in sight, since it may come.
  */
 export const hideNever = <T extends Command>(messenger: Lacking, group: T): T => {
   const walk = (command: Command, path: readonly string[]) => {
     for (const child of command.commands) {
       const at = [...path, child.name()]
       const need = COMMAND_NEEDS[at.join(" ")]
-      if (need && messenger.never?.includes(need[0])) (child as Command & { _hidden: boolean })._hidden = true
+      if (need && messenger.never?.includes(need[0])) (child as Hideable)._hidden = true
       walk(child, at)
+      if (child.commands.length > 0 && child.commands.every((one) => (one as Hideable)._hidden))
+        (child as Hideable)._hidden = true
     }
   }
   walk(group, [group.name()])
