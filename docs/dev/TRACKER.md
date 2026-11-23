@@ -151,6 +151,18 @@ tracker is named in the row's `untrusted`. Each list narrows by its query, as `d
   it, never write it again. The answer is the issue or comment as the read commands show it, its fields from the
   tracker named in `untrusted` (`issue.title`, `comment.body`). The owner's tasks follow the change at the next sync.
 
+## `search all`
+
+The `tracker` lane of `search all` (`RESOURCES_SEARCHED`) reads the copies of every account of a provider the registry
+marks `tracker`, or those
+`--source` names, through `store.tracker.find`: issues, projects and comments by the words of their title and text,
+as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 Fix login`), a `project` or an
+`issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue under the same
+id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane with the
+reason. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
+tracker, since linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by
+`issues.list` and projects by `projects.list`.
+
 ## A tracker described as data
 
 `trackerSourceFromManifest(manifest, { api, call, hooks? })` builds a `TrackerSource` from the generated API manifest

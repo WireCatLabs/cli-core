@@ -5,7 +5,8 @@ import { count, reference, text, time, untrusted } from "./fields.js"
 
 /**
  * One result of `search all`: a message, a mail, a note, a calendar event, a meeting passage, a deal, a lead, the text
- * of a downloaded CRM file, or an invoice, payment, order, contract, subscription, product or wallet.
+ * of a downloaded CRM file, a tracker's issue, project or issue comment, or an invoice, payment, order, contract,
+ * subscription, product or wallet.
  */
 export const hit = v.strictObject({
   kind: v.picklist([
@@ -18,6 +19,9 @@ export const hit = v.strictObject({
     "deal",
     "lead",
     "crm_file",
+    "issue",
+    "project",
+    "issue_comment",
     ...BUSINESS_KINDS,
   ]),
   ref: reference,
