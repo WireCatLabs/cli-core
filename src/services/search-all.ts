@@ -91,6 +91,8 @@ export interface SearchAllRecordItem {
   email?: MailFields
   /** A message's or a mail's files, as `search messages` names them. */
   attachments?: HitFile[]
+  /** A tracker hit that more than one sign-in holds: every account it was found in, `account` first. */
+  accounts?: string[]
   /** Which search found it: words, meaning or both; a deal or a lead by `title`, or `words` of its company or contacts. */
   foundBy: ("title" | "words" | "meaning")[]
   /** A deal's or a lead's: `corrected` when it matched only once a misspelt query word was corrected. */
@@ -368,6 +370,31 @@ const trackerMeaningWords = (text: string): string | undefined => {
 
 const trackerExcerpt = ({ kind, record }: TrackerItem, query: string): string =>
   excerpt([trackerTitleOf(kind, record), trackerBodyOf(kind, record)].filter(Boolean).join("\n"), query)
+
+/**
+ * One hit per tracker item, best first: the copies other sign-ins to the same workspace hold (same provider, kind and
+ * id) join the best-placed one, which names every account and takes the best cosine and every way any was found.
+ */
+const oneHitPerItem = (ordered: SearchAllRecordItem[], cosines: Map<string, number>): SearchAllRecordItem[] => {
+  const kept = new Map<string, SearchAllRecordItem>()
+  for (const hit of ordered) {
+    const item = hit.ref.split("/").slice(2).join("/")
+    const key = `${hit.provider}\u0000${item}`
+    const held = kept.get(key)
+    if (!held) {
+      kept.set(key, hit)
+      continue
+    }
+    held.accounts = [...(held.accounts ?? [held.account]), hit.account]
+    held.foundBy = (["words", "meaning"] as const).filter((by) =>
+      [held, hit].some(({ foundBy }) => foundBy.includes(by)),
+    )
+    const cosine = cosines.get(hit.ref)
+    if (cosine !== undefined && cosine > (cosines.get(held.ref) ?? Number.NEGATIVE_INFINITY))
+      cosines.set(held.ref, cosine)
+  }
+  return [...kept.values()]
+}
 
 /** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
@@ -656,12 +683,15 @@ export const searchAll = async (
             request.text,
             "issues, projects and comments are found by the words and meaning of their title and text only",
           )
+          // Two sign-ins to one workspace hold each item twice, and the copies fold into one hit: read deep enough
+          // that the folded list still fills the page.
+          const deep = Math.min(depth * read.length, 500)
           const found = await store.tracker.find({
             words,
             anyWord: anyWord || discover,
             ...(request.exact ? { exact: true } : {}),
             kinds: ["issue", "project", "comment"],
-            limit: Math.min(depth, 500),
+            limit: deep,
             accounts: read,
           })
           hasMore ||= found.hasMore
@@ -691,7 +721,7 @@ export const searchAll = async (
           else
             try {
               near = await nearestTracker(store, plain, {
-                limit: Math.min(depth, 500),
+                limit: deep,
                 accounts: read,
                 embedders,
                 ...(command === undefined ? {} : { command }),
@@ -705,7 +735,7 @@ export const searchAll = async (
             by: near === undefined ? "words" : "words and meaning",
             ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
           }
-          if (near === undefined) lists.push(byWords)
+          if (near === undefined) lists.push(oneHitPerItem(byWords, cosines))
           else {
             // As notes and messages fuse theirs: one list for the lane, a question's hit voting once.
             const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
@@ -721,7 +751,12 @@ export const searchAll = async (
               if (held && discover) held.score = Math.max(held.score, vote)
               else fused.set(hit.ref, { item: held?.item ?? hit, score: (held?.score ?? 0) + vote })
             })
-            lists.push([...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item))
+            lists.push(
+              oneHitPerItem(
+                [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item),
+                cosines,
+              ),
+            )
           }
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {

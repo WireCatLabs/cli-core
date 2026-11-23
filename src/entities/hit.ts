@@ -29,6 +29,8 @@ export const hit = v.strictObject({
   url: v.optional(text),
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
   account: text,
+  /** A tracker hit that more than one sign-in holds: every account it was found in, `account` first. */
+  accounts: v.optional(v.array(text)),
   /** The chat, the mail thread's subject, the note's, the event's or the meeting's title. */
   title: v.nullable(text),
   /** Null for a meeting whose start is unknown. */

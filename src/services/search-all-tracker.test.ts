@@ -8,7 +8,7 @@ import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
 import { groupGuardOf } from "./group-guard.js"
-import { searchAll } from "./search-all.js"
+import { type SearchAllItem, searchAll } from "./search-all.js"
 import { listContextOf } from "./search-kind.js"
 
 const stores: MessageStore[] = []
@@ -19,6 +19,8 @@ afterEach(async () => {
 const ME = { provider: "telegram", account: "100" }
 const LINEAR = { provider: "linear", account: "user-1" }
 const OTHER = { provider: "linear", account: "user-2" }
+
+const accountsOf = (item: SearchAllItem) => ("accounts" in item ? item.accounts : undefined)
 
 const withIssues = async (...accounts: { provider: string; account: string }[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-search-")), "store.db") })
@@ -56,11 +58,36 @@ it("finds issues, projects and comments by their words, titled as people say an 
 it("reads every tracker account, and only the ones --source names", async () => {
   const store = await withIssues(LINEAR, OTHER)
   const all = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"] })
-  expect(new Set(all.items.map(({ account }) => account))).toEqual(new Set(["user-1", "user-2"]))
+  expect(all.items.map((item) => accountsOf(item)?.slice().sort())).toEqual([
+    ["user-1", "user-2"],
+    ["user-1", "user-2"],
+  ])
   expect(all.accounts.map(({ account }) => account).sort()).toEqual(["user-1", "user-2"])
 
   const one = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"], scope: { tracker: [OTHER] } })
   expect(new Set(one.items.map(({ account }) => account))).toEqual(new Set(["user-2"]))
+})
+
+it("shows an item two sign-ins hold once, naming both accounts, and fills the page with other items", async () => {
+  const store = await withIssues(LINEAR, OTHER)
+  await store.tracker.save(
+    LINEAR,
+    "issue",
+    [{ externalId: "issue-9", key: "ENG-9", title: "Invoices of the old provider", team: "team-1", updatedAt: 1 }],
+    Date.UTC(2026, 10, 17),
+  )
+  const found = await searchAll(store, ME, { text: "invoices", limit: 2, only: ["tracker"] })
+  const ids = found.items.map(({ ref }) => ref.split("/").slice(2).join("/"))
+  expect(new Set(ids).size).toBe(2)
+  const all = await searchAll(store, ME, { text: "invoices", limit: 10, only: ["tracker"] })
+  expect(all.items).toHaveLength(3)
+  const shared = all.items.find(({ ref }) => ref.endsWith("/issue/issue-1"))
+  expect(shared && accountsOf(shared)).toEqual([shared?.account, shared?.account === "user-1" ? "user-2" : "user-1"])
+  const alone = await searchAll(store, ME, { text: "old provider", limit: 10, only: ["tracker"] })
+  expect(alone.items.map((item) => [item.ref, accountsOf(item)])).toEqual([
+    ["tracker:linear/user-1/issue/issue-9", undefined],
+  ])
+  expect(found.accounts.map(({ account }) => account).sort()).toEqual(["user-1", "user-2"])
 })
 
 it("is one of the lanes a plain search all reads, beside the others", async () => {

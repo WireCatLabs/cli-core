@@ -6,6 +6,12 @@
   CRM deals are matched. A word starts others from four letters, not three as before: `bug` no longer finds `bugfix`,
   only `bug` and `bugs`. `--exact` keeps the words as written. See [TRACKER.md](../docs/dev/TRACKER.md#storetracker).
 
+- **`search all` shows an issue, project or comment two sign-ins hold once.** Two tracker accounts on one workspace
+  showed every item twice side by side, so ten results held about five items. The copies (same provider, kind and id)
+  now fold into the best-placed one, whose new `accounts` field names every account that holds it; `account` and `ref`
+  are that copy's. A page holds more distinct items, so a caller counting hits per account sees fewer. See
+  [TRACKER.md](../docs/dev/TRACKER.md#search-all).
+
 ### Fixed
 
 - **A comment is found by meaning together with its issue.** Its embedded text starts with the issue's key and title

@@ -127,6 +127,21 @@ describe("issues, projects and comments by meaning", () => {
     expect(found.items.find(({ ref }) => ref.endsWith("/comment/c2"))?.foundBy).toEqual(["words"])
   })
 
+  it("folds the copies two sign-ins hold into one hit, found both ways", async () => {
+    download()
+    const store = await trackerStore()
+    await store.tracker.save(OTHER, "issue", [issue("i1", "cat")], NOW)
+    await embedTracker(store, { threads: 1 })
+    const found = await tracker(store, "cat")
+    const copies = found.items.filter(({ ref }) => ref.endsWith("/issue/i1"))
+    expect(copies).toHaveLength(1)
+    expect(copies[0] && "accounts" in copies[0] ? copies[0].accounts?.slice().sort() : undefined).toEqual([
+      "user-1",
+      "user-2",
+    ])
+    expect(copies[0]?.foundBy).toEqual(["words", "meaning"])
+  })
+
   it("searches an OR query by meaning too", async () => {
     download()
     const store = await trackerStore()
