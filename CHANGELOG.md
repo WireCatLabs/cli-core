@@ -5,6 +5,24 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.737.0 — 23.11.2026
+
+### Added
+
+- **`tokenSessionCommand` takes a `guide`**: how a person who never made one gets the token, step by step with its
+  links. `session start` prints it before the question at a terminal and at the end of `session start --help`, never
+  before piped input.
+- **`plainSetupText`**: a setup text for a terminal, with `**`, code marks and `[words](link)` turned into plain words
+  and the address. The terminal walk-through `<profile> setup` shows its texts that way, so a person no longer sees
+  raw Markdown.
+
+### Fixed
+
+- **A release passes parity again while four CLIs adopt `schedule exec` leaving MCP.** #3258 stopped offering
+  `schedule exec` to agents; cli-memo, mail-cli and bitrix24-cli test that it is offered, and max-cli's docs/mcp.md
+  does not list it among the commands kept off MCP. They are on the parity known-broken list until 2026-11-30 and
+  update those tests and docs when they bump cli-core.
+
 ## 0.736.0 — 23.11.2026
 
 ### Added
