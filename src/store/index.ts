@@ -436,6 +436,7 @@ export {
   type PersonDoubts,
   type TestDataPerson,
 } from "./sqlite/person-doubts.js"
+export type { PersonErasure } from "./sqlite/person-erase.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export {
   ALWAYS_SHOWN,
