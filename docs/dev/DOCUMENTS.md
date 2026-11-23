@@ -572,6 +572,24 @@ as it is, and the next sync sends it. A conflict's resolution does the same with
     state and stores as its helpers. Its `connect(command, mirror, body)` runs `body` inside the app's run (its
     `--timeout`, run record and request log) with the connected target, so `resolve` writes only inside it.
 
+    `fileMirrorsCommand` (`@wirecat/cli-core/documents/cli`) is the whole `mirrors` group over this engine, so a
+    file CLI mounts one command instead of writing its own: `add <folder> <path> [--ignore <path>]`, `list`,
+    `status [id]`, `preview [id] [--keep]`, `sync [id] [--keep] [--allow-deletions <count>]
+    [--allow-replacements <count> | --replace] [--repin]`, `watch [id] [--every]`, `update <id> [--ignore] [--clear]`,
+    `remove <id>`, `versions list|restore` and the conflicts above. The app gives its identity, the service's name,
+    the remote's word (`disk`, `notion`), what a mirror pairs a folder with (`place`: `Yandex Disk folder`,
+    `Notion page`), the text and examples of `add`'s remote argument, the profile, its state
+    folder, `keepForDays` (`keepVersionsForDays(settings)`), `connect(command, body, { unbounded })` (the app's run
+    with the target and `root(input)`, which turns `add`'s argument into the folder the mirror saves and its id, and
+    refuses anything else), `writeGuard(command, extra, ask)` and `keysOf({ action, side })`, the keys each write
+    checks beside the command's own. The group keeps one guard per set of keys and asks once for a key the owner
+    allowed in the run. The files stay where ydisk kept them: `mirrors.json` in the profile's state folder (`id`,
+    `path`, `folder`, `account`, `exclude`), and `mirrors/<id>.json`, `mirrors/<id>.versions/` and `mirrors/sync.lock`.
+    A target that `rewrites` writes the remote's form into the local file through `guard` as a local `update`, the
+    same attempt a download over a local file makes: an app whose keys for a local update would ask at every upload
+    maps that write to no key. A target without `revision` is listed at every `watch` poll, so such an app sets a
+    longer `every`.
+
 `versions` (`fileVersions(dir, now, keepForDays)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
 `<dir>/objects/<sha256>`: the local file before a pull, `keep: "remote"` or a crossed deletion, and the remote file

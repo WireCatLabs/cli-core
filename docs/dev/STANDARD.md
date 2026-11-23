@@ -336,6 +336,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `mirrors` | collection | saved pairings of a local folder and a folder in the source, which sync keeps the same both ways |  |
 | `conflicts` | collection | files a mirror's sync found changed on both sides and could not merge, each waiting for a side or a final file |  |
+| `versions` | collection | earlier contents of a file that a write replaced or deleted, kept on this computer to be put back |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
 | `calls` | collection | phone calls a phone system recorded, stored as meetings with their transcripts |  |

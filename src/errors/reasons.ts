@@ -292,6 +292,11 @@ const OTHERS: Entry[] = [
     "the email could not be read again, so its skipped attachments have no text",
   ],
   ["mirror.partial", "provider_error", "some mirrored files were not synced"],
+  [
+    "mirror.stopped",
+    "timeout",
+    "the mirror's run reached its deadline before it was done; run it again with more time",
+  ],
   ["mirror.none", "not_found", "the profile has no mirrors; add one with mirrors add"],
   ["mirror.not-found", "not_found", "no such mirror in this profile; see mirrors list"],
   validation("mirror.not-folder", "the path to mirror is not a folder"),
