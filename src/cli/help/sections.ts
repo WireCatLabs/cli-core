@@ -1,5 +1,6 @@
 import type { Command } from "commander"
 
+/** @experimental */
 export const SECTIONS = {
   read: "Read",
   write: "Write",

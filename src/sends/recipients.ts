@@ -21,6 +21,7 @@ export interface RecipientFilter {
 /**
  * A state file, not a setting: the configuration schema has deliberately no place for a chat id,
  * and this list is data about a profile rather than a preference.
+ * @experimental
  */
 export const recipientsPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(

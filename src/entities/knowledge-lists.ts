@@ -1,6 +1,7 @@
 import * as v from "valibot"
 import { id, reference, text, time } from "./fields.js"
 
+/** @experimental */
 export const organization = v.strictObject({
   id,
   ref: reference,
@@ -9,6 +10,7 @@ export const organization = v.strictObject({
   scope: v.picklist(["personal", "work"]),
   created_at: time,
 })
+/** @experimental */
 export const project = v.strictObject({
   id,
   ref: reference,
@@ -20,6 +22,7 @@ export const project = v.strictObject({
   scope: v.picklist(["personal", "work"]),
   created_at: time,
 })
+/** @experimental */
 export const reminder = v.strictObject({
   id,
   task: text,

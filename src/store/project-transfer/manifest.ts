@@ -7,6 +7,7 @@ import { canonicalMeetingReference } from "../../meetings/index.js"
 import { type ProjectAnnotations, projectAnnotationsSchema } from "./schema.js"
 
 export type { ProjectAnnotations } from "./schema.js"
+/** @experimental */
 export const PROJECT_ANNOTATIONS_MAX_BYTES = 4 * 1024 * 1024
 const invalid = (field: string): never => {
   throw new CliError("validation_error", `invalid project annotations.${field}`)
@@ -92,7 +93,7 @@ export const validateProjectAnnotationsGraph = (manifest: ProjectAnnotations, ad
   for (const ref of external) if (!used.has(ref)) invalid("external.unused")
 }
 
-/** Decode bounded JSON, never a row/column importer or an implicit whole-project backup. */
+/** Decode bounded JSON, never a row/column importer or an implicit whole-project backup. @experimental */
 export const decodeProjectAnnotations = (json: string): ProjectAnnotations => {
   if (typeof json !== "string" || Buffer.byteLength(json) > PROJECT_ANNOTATIONS_MAX_BYTES) invalid("bytes")
   let input: unknown
@@ -110,6 +111,7 @@ export const decodeProjectAnnotations = (json: string): ProjectAnnotations => {
   return manifest
 }
 
+/** @experimental */
 export const projectAnnotationsFingerprint = (json: string): string => {
   const manifest = decodeProjectAnnotations(json)
   const normalized = {

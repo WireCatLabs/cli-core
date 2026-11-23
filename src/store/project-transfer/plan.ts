@@ -13,7 +13,9 @@ const targetSchema = v.strictObject({
   annotation_count: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
   external: v.pipe(v.array(v.strictObject({ ref, content_sha256: v.nullable(hash) })), v.maxLength(1000)),
 })
+/** @experimental */
 export type ProjectAnnotationsTarget = v.InferOutput<typeof targetSchema>
+/** @experimental */
 export interface ProjectAnnotationsPlan {
   fingerprint: string
   manifest_fingerprint: string
@@ -127,7 +129,7 @@ export const planBoundProjectAnnotations = (
   }
 }
 
-/** Pure planning over an adapter's complete target snapshot; a ready plan is not write authorization. */
+/** Pure planning over an adapter's complete target snapshot; a ready plan is not write authorization. @experimental */
 export const planProjectAnnotations = (
   json: string,
   target: ProjectAnnotationsTarget,

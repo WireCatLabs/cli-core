@@ -9,8 +9,10 @@ import { outputFor } from "./context.js"
 import { LOCAL_READ, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, renderAnswer } from "./envelope.js"
 
+/** @experimental */
 export type CallStatsRead = (request: Omit<CallStatsRequest, "accountId">) => Promise<CallStatsAnswer>
 
+/** @experimental */
 export interface CallStatsCommandDeps {
   /** The calls of the profile's own account; opened when the command runs. */
   read: () => Promise<CallStatsRead>
@@ -39,6 +41,7 @@ const positive = (value: string) => {
 /**
  * `stats calls show`, for a host whose meetings are phone calls: it mounts the command, so a host of video meetings
  * never shows it. Numbers over the stored calls only; nothing is read from the phone system.
+ * @experimental
  */
 export const addCallStatsCommand = (program: Command, deps: CallStatsCommandDeps): void => {
   const stats =

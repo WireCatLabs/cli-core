@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 /**
  * Minor-unit digits per ISO 4217 for the currencies the store keeps money in. A currency outside the list is refused
  * rather than guessed: a wrong scale would store every amount 100 times off.
+ * @experimental
  */
 export const CURRENCY_SCALES: Readonly<Record<string, number>> = {
   AED: 2,
@@ -41,7 +42,10 @@ export const CURRENCY_SCALES: Readonly<Record<string, number>> = {
   VND: 0,
 }
 
-/** An exact amount as callers read and write it: a decimal string with the currency's scale, never a float. */
+/**
+ * An exact amount as callers read and write it: a decimal string with the currency's scale, never a float.
+ * @experimental
+ */
 export interface Money {
   amount: string
   currency: string
@@ -60,6 +64,7 @@ export const parseDecimal = (text: string, scale: number): bigint | undefined =>
   return BigInt(`${match[1]}${(match[2] ?? "").padEnd(scale, "0")}`)
 }
 
+/** @experimental */
 export const formatDecimal = (units: bigint | number, scale: number): string => {
   const value = BigInt(units)
   if (value < 0n) return `-${formatDecimal(-value, scale)}`
@@ -74,6 +79,7 @@ export const groupDigits = (decimal: string): string => {
   return fraction === undefined ? grouped : `${grouped}.${fraction}`
 }
 
+/** @experimental */
 export const currencyOf = (text: unknown): string => {
   const code = typeof text === "string" ? text.trim().toUpperCase() : ""
   if (CURRENCY_SCALES[code] === undefined)
@@ -87,7 +93,10 @@ export const currencyOf = (text: unknown): string => {
 
 export const scaleOf = (currency: string): number => CURRENCY_SCALES[currencyOf(currency)] as number
 
-/** Minor units of `currency` for a decimal string such as "50000.00"; refuses more decimals than the currency has. */
+/**
+ * Minor units of `currency` for a decimal string such as "50000.00"; refuses more decimals than the currency has.
+ * @experimental
+ */
 export const minorUnits = (amount: unknown, currency: string, what = "an amount"): number => {
   const scale = scaleOf(currency)
   const units = typeof amount === "string" ? parseDecimal(amount, scale) : undefined
@@ -100,19 +109,20 @@ export const minorUnits = (amount: unknown, currency: string, what = "an amount"
   return Number(units)
 }
 
-/** Minor units for a decimal that may be negative, such as an opening balance of "-1200.50". */
+/** Minor units for a decimal that may be negative, such as an opening balance of "-1200.50". @experimental */
 export const signedMinorUnits = (amount: unknown, currency: string, what = "an amount"): number => {
   if (typeof amount !== "string" || !amount.trim().startsWith("-")) return minorUnits(amount, currency, what)
   const units = minorUnits(amount.trim().slice(1), currency, what)
   return units === 0 ? 0 : -units
 }
 
+/** @experimental */
 export const moneyOf = (units: number, currency: string): Money => ({
   amount: formatDecimal(units, scaleOf(currency)),
   currency,
 })
 
-/** "50 000.00 RUB". */
+/** "50 000.00 RUB". @experimental */
 export const moneyLabel = (units: number, currency: string): string =>
   `${groupDigits(formatDecimal(units, scaleOf(currency)))} ${currency}`
 

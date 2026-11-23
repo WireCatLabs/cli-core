@@ -1,7 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Message, Reactions } from "./models.js"
 
+/** @experimental */
 export const COUNTER_FIELDS = ["views", "reactions", "comments"] as const
+/** @experimental */
 export type CounterField = (typeof COUNTER_FIELDS)[number]
 export interface CounterObservation {
   value: number
@@ -9,6 +11,7 @@ export interface CounterObservation {
   source: "remote_fetch" | "remote_update"
   reactions?: Reactions
 }
+/** @experimental */
 export type CounterObservations = Partial<Record<CounterField, CounterObservation>>
 export interface CounterState {
   counter: CounterField
@@ -20,6 +23,7 @@ export interface CounterState {
 }
 export const validCounter = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0
+/** @experimental */
 export const counterValue = (
   message: Pick<Message, "reactions" | "providerMetadata">,
   field: CounterField,

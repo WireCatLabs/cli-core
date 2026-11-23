@@ -9,7 +9,7 @@ export interface WireCatTool {
   does: string
 }
 
-/** Every WireCat tool, as "Works with" names it; a tool's own entry is left out of its screen. */
+/** Every WireCat tool, as "Works with" names it; a tool's own entry is left out of its screen. @experimental */
 export const WIRECAT_TOOLS: readonly WireCatTool[] = [
   {
     command: "tg",

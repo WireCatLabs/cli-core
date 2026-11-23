@@ -4,7 +4,7 @@ export const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u
 /** Whether a lower-cased, trimmed value is an email address. */
 export const isEmailAddress = (value: string): boolean => EMAIL_ADDRESS.test(value)
 
-/** Local parts that name a mailbox, not a person; the no-reply family names no one at all. */
+/** Local parts that name a mailbox, not a person; the no-reply family names no one at all. @experimental */
 export const ROLE_ADDRESS_WORDS = {
   noReply: ["noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon", "bounce", "bounces"],
   shared: [
@@ -63,7 +63,10 @@ const localWord = (address: string): string => {
   return bare(local.split("+")[0] ?? "")
 }
 
-/** Whether the whole local part, `+tag` and `.`/`-`/`_` aside, is a role word: `info@`, `Hello+news@`, `no_reply@`. */
+/**
+ * Whether the whole local part, `+tag` and `.`/`-`/`_` aside, is a role word: `info@`, `Hello+news@`, `no_reply@`.
+ * @experimental
+ */
 export const isRoleAddress = (address: string): boolean => ROLE.has(localWord(address))
 
 /**
@@ -75,5 +78,5 @@ const PERSON_LIKE = new Set(["hr"])
 /** Whether the address is a role address that one person often reads alone, such as `hr@`. */
 export const isPersonLikeRoleAddress = (address: string): boolean => PERSON_LIKE.has(localWord(address))
 
-/** Whether the address is a no-reply one, which belongs to no person. */
+/** Whether the address is a no-reply one, which belongs to no person. @experimental */
 export const isNoReplyAddress = (address: string): boolean => NO_REPLY.has(localWord(address))

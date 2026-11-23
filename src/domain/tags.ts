@@ -1,6 +1,8 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 
+/** @experimental */
 export const TAG_TYPES = ["chat", "contact", "message", "task"] as const
+/** @experimental */
 export type TagType = (typeof TAG_TYPES)[number]
 
 const TAG = /^[a-z0-9-]{1,32}$/

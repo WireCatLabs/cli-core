@@ -134,7 +134,7 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta, limit: number): 
   ]
 }
 
-/** `limit` is a search's page without `--limit`: the profile's `defaults.limit`. */
+/** `limit` is a search's page without `--limit`: the profile's `defaults.limit`. @experimental */
 export const prepareMeetingBatch = (input: string, reader: MeetingBatchReader, meta: () => Meta, limit: number) =>
   prepareBatch(input, handlers(reader, meta, limit))
 
@@ -153,6 +153,7 @@ const textResult = (result: BatchResult, format: "text" | "markdown") => {
       .join("\n")
   return `${title}\n${hits.map(hitText).join("\n\n")}\nCoverage: ${JSON.stringify({ page: "page" in body ? body.page : undefined, missing: body.missing, meta: body.meta })}\n`
 }
+/** @experimental */
 export const formatMeetingBatch = (report: BatchReport, format: "text" | "markdown") =>
   report.items.map((result) => textResult(result, format)).join("\n")
 

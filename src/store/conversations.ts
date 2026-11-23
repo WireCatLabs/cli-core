@@ -10,6 +10,7 @@ import type { Where } from "./sqlite/query-filter.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, AgentAnswer, ConversationBuild, ConversationSummary, LinkBatch, StoredLink } from "./types.js"
 
+/** @experimental */
 export interface ConversationsStore {
   /** A chat's live messages for the conversation rules, oldest first; pass `next` back as `after`. */
   linkInputs(

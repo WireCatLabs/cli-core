@@ -19,7 +19,7 @@ import {
 } from "./sqlite/reply-times.js"
 import type { ScoredHit } from "./sqlite/words.js"
 
-/** A resolved Lucene query run over the store: hits, counts, rankings and the statistics behind them. */
+/** A resolved Lucene query run over the store: hits, counts, rankings and the statistics behind them. @experimental */
 export interface QueriesStore {
   matchQuery(execution: QueryExecution): Promise<Page<ScoredHit>>
   /** The same matches as `matchQuery`, each counted once, grouped by chat, sender or quarter hour. */

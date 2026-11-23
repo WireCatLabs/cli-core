@@ -6,6 +6,7 @@ import type { SendGuard } from "./guard.js"
 import { guardedWrite, type Operated } from "./guarded.js"
 import { newOperationId, newSendId } from "./send-id.js"
 
+/** @experimental */
 export interface Pressed {
   chatId: Id
   messageId: Id
@@ -41,7 +42,7 @@ export const pickButton = (keyboard: Button[][], typed: string): { row: number; 
   return named[0] as (typeof named)[number]
 }
 
-/** A press reaches only the bot, like a vote reaches only the poll: guarded as a reaction. */
+/** A press reaches only the bot, like a vote reaches only the poll: guarded as a reaction. @experimental */
 export const guardedPress = async (
   guard: SendGuard,
   connection: MessengerAdapter,
@@ -73,7 +74,7 @@ export const guardedPress = async (
   return { operationId, chatId, messageId: message, button: shown }
 }
 
-/** Starting a bot sends it a message — its start command — so it is guarded like one. */
+/** Starting a bot sends it a message — its start command — so it is guarded like one. @experimental */
 export const guardedStart = async (
   guard: SendGuard,
   connection: MessengerAdapter,
@@ -92,7 +93,10 @@ export const guardedStart = async (
   return { operationId: id, chatId, started: true }
 }
 
-/** The mini app's address signs the owner in, so asking for it is guarded like a press, and it is printed only here. */
+/**
+ * The mini app's address signs the owner in, so asking for it is guarded like a press, and it is printed only here.
+ * @experimental
+ */
 export const guardedApp = async (
   guard: SendGuard,
   connection: MessengerAdapter,

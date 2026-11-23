@@ -6,6 +6,7 @@ import { QUOTE_LIMIT } from "./sqlite/evidence-signature.js"
 import type { EvidenceSource } from "./sqlite/evidence-sources.js"
 import { entryAmount } from "./sqlite/payment-entries.js"
 
+/** @experimental */
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
 
 const reference = (raw: string) => {
@@ -16,6 +17,7 @@ const reference = (raw: string) => {
     throw new CliError("validation_error", "finding evidence is a msg:, document: or note: reference")
   }
 }
+/** @experimental */
 export const validateEvidenceFindings = (input: FindingsInput): FindingsInput => {
   const valid = validateFindings(input, {
     plural: "evidence findings",
@@ -31,12 +33,14 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
   return valid
 }
 
-/** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
+/** Who decided: the owner, or an agent the host let decide for the owner, with its reason. @experimental */
 export type EvidenceFindingsDecider = Decider
 
+/** @experimental */
 export interface EvidenceFindingsReceipt extends FindingsReceipt {
   decision: { by: "owner"; reason?: string } | { by: "agent"; bot: string; model: string | null; reason: string }
 }
+/** @experimental */
 export interface EvidenceFindingsBatch {
   id: string
   /** `null` when its findings name no one project. */
@@ -62,13 +66,17 @@ export interface EvidenceFindingsBatch {
  * Cited facts and follow-ups about one project from stored messages, mail and documents, staged by an agent for
  * review. A sibling of meeting findings: the same rules, evidence checked against the current stored text.
  */
-/** A stored record as a findings batch cites it: the text a quote must be in, and the fingerprint staging checks. */
+/**
+ * A stored record as a findings batch cites it: the text a quote must be in, and the fingerprint staging checks.
+ * @experimental
+ */
 export interface CitableRecord {
   reference: string
   fingerprint: string
   title: string | null
   text: string
 }
+/** @experimental */
 export interface EvidenceFindingsStore {
   /** `ownerOnly` keeps every agent from deciding the batch, whatever `agent_decisions` says. */
   stage(

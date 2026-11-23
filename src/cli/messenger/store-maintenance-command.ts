@@ -189,6 +189,7 @@ const result = (command: Command, value: unknown, next: NextStep[] = []) =>
 /**
  * Who mounts the store file's commands: a messenger, or any CLI on the shared store. Without a `provider` nothing is
  * said about chats.
+ * @experimental
  */
 export type StoreOwner = { app: AppIdentity } & Partial<Pick<Messenger, "provider" | "history" | "historyOnDemand">>
 

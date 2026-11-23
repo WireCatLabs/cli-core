@@ -24,7 +24,7 @@ export const pollVoters = async (
   return { chatId, messageId: message, ...page }
 }
 
-/** A vote is shown to the others like a reaction, and counts toward nothing. */
+/** A vote is shown to the others like a reaction, and counts toward nothing. @experimental */
 export const guardedVote = async (
   guard: SendGuard,
   connection: MessengerAdapter,
@@ -41,7 +41,7 @@ export const guardedVote = async (
   return { operationId, poll }
 }
 
-/** Closing changes the owner's own message for everyone in the chat, like an edit. */
+/** Closing changes the owner's own message for everyone in the chat, like an edit. @experimental */
 export const guardedClose = async (
   guard: SendGuard,
   connection: MessengerAdapter,
@@ -58,7 +58,10 @@ export const guardedClose = async (
   return { operationId, poll }
 }
 
-/** A new poll is a new message: the recipient list and the hourly limit apply, and a send id makes a retry safe. */
+/**
+ * A new poll is a new message: the recipient list and the hourly limit apply, and a send id makes a retry safe.
+ * @experimental
+ */
 export const guardedCreatePoll = async (
   guard: SendGuard,
   connection: MessengerAdapter,

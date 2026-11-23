@@ -33,10 +33,10 @@ export interface ProviderEntry {
 }
 
 const MESSENGER_OPENS = { chat: "messages list", message: "messages show", contact: "contacts show" } as const
-/** What a CRM CLI's entry gives as `opens`: the read commands `addCrmCommands` mounts. */
+/** What a CRM CLI's entry gives as `opens`: the read commands `addCrmCommands` mounts. @experimental */
 export const CRM_OPENS = { deal: "deals show", lead: "leads show", pipeline: "pipelines show" } as const
 
-/** The seed: what cli-core knows before any CLI has written its entry into the store. */
+/** The seed: what cli-core knows before any CLI has written its entry into the store. @experimental */
 export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "telegram", kind: "messages", aliases: ["tg"], command: "tg", opens: MESSENGER_OPENS },
   { name: "telegram-bot", kind: "messages", aliases: ["tg-bot"] },
@@ -93,6 +93,7 @@ export const providerLabel = (provider: Provider): string => LABELS[provider] ??
  * A notes folder is an `accounts` row of one of these providers; people call every one `notes`. `obsidian` is a vault,
  * `local` a plain folder (store version 32). `folder` is what they were before, and what Drive's stand-in folders and
  * profile keys saved before that still say.
+ * @experimental
  */
 export const FOLDER_PROVIDERS = ["local", "obsidian", "folder"] as const
 export const isFolderProvider = (provider: string): boolean =>
@@ -122,8 +123,10 @@ export const documentAccountProvidersSql = (): string =>
 /**
  * What the owner adds by hand (`saveAddedSource`): one account, `owner`. Neither a folder nor a documents account, so no
  * folder can be bound to it and no sync deletes a source whose file is gone.
+ * @experimental
  */
 export const ADDED_PROVIDER = "added"
+/** @experimental */
 export const ADDED_ACCOUNT = "owner"
 /** Documents `d` outside the added sources: a folder file joined to one would delete it when the file goes. */
 export const notAdded = `d.account_id NOT IN (SELECT id FROM accounts WHERE provider = '${ADDED_PROVIDER}')`
@@ -133,7 +136,7 @@ export const filesAccountSql = (column = "provider"): string =>
 /** Notes written in memo have no account row; this is their account. */
 export const INTERNAL_NOTES = "internal"
 
-/** The reason a search gives for an account whose provider no entry names. */
+/** The reason a search gives for an account whose provider no entry names. @experimental */
 export const UNKNOWN_PROVIDER = "unknown provider — run its CLI once"
 
 const WORD = /^[a-z0-9][a-z0-9_-]*$/
@@ -232,12 +235,16 @@ const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): Provider
 
 let registry: readonly ProviderEntry[] = PROVIDERS
 
-/** The built-ins and the entries the store or the CLI running gave; what `kindOf` and `providerNamed` read. */
+/**
+ * The built-ins and the entries the store or the CLI running gave; what `kindOf` and `providerNamed` read.
+ * @experimental
+ */
 export const providers = (): readonly ProviderEntry[] => registry
 
 /**
  * Replaces the entries beyond the built-ins. Opening the store calls it with the stored entries; a test or a CLI
  * with no store may call it too. Two entries that disagree on a kind, or one word naming two providers, throw.
+ * @experimental
  */
 export const useProviders = (entries: readonly ProviderEntry[]): void => {
   registry = entries.map(providerEntryOf).reduce(joined, PROVIDERS)
@@ -266,6 +273,7 @@ export const addProvider = (entry: ProviderEntry): void => {
   registry = joined(registry, providerEntryOf(entry))
 }
 
+/** @experimental */
 export const isKind = (word: string): word is Kind => (KINDS as readonly string[]).includes(word.toLowerCase())
 
 /** The registry's provider a name or alias stands for. */
@@ -274,13 +282,17 @@ export const providerNamed = (word: string): ProviderEntry | undefined => {
   return registry.find((entry) => wordsOf(entry).includes(wanted))
 }
 
-/** The kind of a provider the registry knows; `undefined` for one no entry names, which a search skips. */
+/**
+ * The kind of a provider the registry knows; `undefined` for one no entry names, which a search skips.
+ * @experimental
+ */
 export const kindIn = (provider: Provider): Kind | undefined =>
   isFolderProvider(provider) ? "notes" : registry.find(({ name }) => name === provider)?.kind
 
 /**
  * Every kind a provider's accounts hold, its `kind` first; empty for one no entry names. An import-only provider's
  * accounts hold documents too: a records import writes them beside its calls and SMS.
+ * @experimental
  */
 export const kindsIn = (provider: Provider): readonly Kind[] => {
   if (isFolderProvider(provider)) return ["notes"]
@@ -321,12 +333,15 @@ export const isImportedProvider = (provider: Provider): boolean =>
 export const alsoListedByKey = (provider: Provider): boolean =>
   isDocumentAccountProvider(provider) && kindsIn(provider).some((kind) => kind !== "documents")
 
-/** Whether a provider's accounts hold `kind`: what a search lane picks its accounts by. */
+/** Whether a provider's accounts hold `kind`: what a search lane picks its accounts by. @experimental */
 export const holdsKind = (provider: Provider, kind: Kind): boolean => kindsIn(provider).includes(kind)
 
 /** `holdsKind`, with a provider no entry names counted as a messenger, as `kindOf` counts it. */
 export const holdsKindOf = (provider: Provider, kind: Kind): boolean =>
   kindIn(provider) === undefined ? kind === "messages" : holdsKind(provider, kind)
 
-/** A provider the registry does not list counts as a messenger here; a search asks `kindIn` and skips it. */
+/**
+ * A provider the registry does not list counts as a messenger here; a search asks `kindIn` and skips it.
+ * @experimental
+ */
 export const kindOf = (provider: Provider): Kind => kindIn(provider) ?? "messages"

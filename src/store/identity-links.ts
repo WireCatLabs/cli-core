@@ -2,21 +2,27 @@ import type { Decider, Proposer } from "./decisions.js"
 import type { Author } from "./sqlite/memories.js"
 import type { IdentityRef } from "./types.js"
 
+/** @experimental */
 export const IDENTITY_LINK_KIND = "identity_link"
 
 /**
  * Why two people may be one: an agent said so, they share a phone or an address with others, a meeting guest typed
  * an address another person has, they have one name and share a phone, an address, a chat or a company's domain, or
  * an account the owner connected carries another name than the owner's (`account`).
+ * @experimental
  */
 export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email", "name", "account"] as const
 
+/** @experimental */
 export type IdentityLinkSignal = (typeof IDENTITY_LINK_SIGNALS)[number]
 
-/** A mailbox more than one person reads: a role address such as `info@`, or a company's line (`sharedLine`). */
+/**
+ * A mailbox more than one person reads: a role address such as `info@`, or a company's line (`sharedLine`).
+ * @experimental
+ */
 export type SharedMailbox = "role" | "line"
 
-/** An `identity_link` proposal's payload. */
+/** An `identity_link` proposal's payload. @experimental */
 export interface IdentityLinkPayload {
   /** `provider:id` of the identity that would move. */
   identity: string
@@ -49,6 +55,7 @@ export interface IdentityLinkPayload {
  * Why a shared phone or address is not strong enough for an agent to merge on: an office's number, more people have
  * it, a company's line or mailbox, a role or no-reply address, only one source gives it, or for a phone no source that
  * keeps its user's own number (a CRM's or a card's is someone's word).
+ * @experimental
  */
 export const LINK_WEAKNESSES = [
   "landline",
@@ -60,9 +67,10 @@ export const LINK_WEAKNESSES = [
   "not-own-number",
 ] as const
 
+/** @experimental */
 export type LinkWeakness = (typeof LINK_WEAKNESSES)[number]
 
-/** A phone or address both people hold. */
+/** A phone or address both people hold. @experimental */
 export interface LinkFact {
   kind: "phone" | "email"
   /** E.164 for a phone, lower case for an address. */
@@ -79,6 +87,7 @@ export interface LinkFact {
  * Why an agent's link did not merge at once: the evidence is weak (`LinkWeakness`), they share no phone or address
  * (`nothing-shared`), one is the owner's person, the owner rejected the pair before, or the owner's setting says
  * agents only propose.
+ * @experimental
  */
 export type LinkHold = LinkWeakness | "nothing-shared" | "owner" | "rejected" | "propose-only"
 

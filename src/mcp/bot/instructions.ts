@@ -1,4 +1,7 @@
-/** What a client keeps in context when it defers the tools; the first lines are the ones that must survive. */
+/**
+ * What a client keeps in context when it defers the tools; the first lines are the ones that must survive.
+ * @experimental
+ */
 export const botInstructions = ({
   command,
   name,

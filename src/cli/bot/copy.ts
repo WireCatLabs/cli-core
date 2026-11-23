@@ -135,4 +135,5 @@ export const botCopy = (provider: Provider) => {
   }
 }
 
+/** @experimental */
 export type BotCopy = ReturnType<typeof botCopy>

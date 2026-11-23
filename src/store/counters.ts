@@ -6,6 +6,7 @@ import type { StoreContext } from "./sqlite/open.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export interface AccountCounters {
   counterStates(
     key: AccountKey,
@@ -21,6 +22,7 @@ export interface AccountCounters {
   ): Promise<number>
 }
 
+/** @experimental */
 export interface CountersStore extends AccountCounters {
   counterTargets(
     execution: QueryExecution,

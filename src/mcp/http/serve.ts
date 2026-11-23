@@ -16,6 +16,7 @@ import { activityRecorder, calledTools, httpActivityFile } from "./activity.js"
 import { ownerLogin } from "./oauth.js"
 import { httpLock } from "./state.js"
 
+/** @experimental */
 export const MCP_PATH = "/mcp"
 const AS_METADATA = "/.well-known/oauth-authorization-server"
 const LOCAL = ["localhost", "127.0.0.1"]
@@ -101,6 +102,7 @@ const toolsIn = async (request: Request): Promise<string[]> => {
   }
 }
 
+/** @experimental */
 export interface HttpOptions {
   /**
    * The tunnel's address, as the browser apps reach it — `https://name.ts.net`, or under a path when tools share
@@ -130,6 +132,7 @@ export interface HttpOptions {
  * MCP over Streamable HTTP on 127.0.0.1, behind the owner's tunnel. Every MCP request needs
  * a token from the owner login; the Host header must be the tunnel's or this machine's, so a page in
  * the owner's browser cannot reach the port through a rebound DNS name.
+ * @experimental
  */
 export const serveOverHttp = async (build: () => McpServer, options: HttpOptions): Promise<Listening> => {
   const { publicUrl, port, tokenFile, appName, reaches, onCode, onError, now, lockFile, version } = options

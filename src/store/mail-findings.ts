@@ -3,8 +3,10 @@ import type { FindingOutcome, FindingsReceipt } from "../meetings/index.js"
 import type { Decider } from "./decisions.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export const MAIL_FINDINGS_KIND = "mail_findings"
 
+/** @experimental */
 export interface MailFindingsBatch {
   id: string
   account: AccountKey
@@ -22,7 +24,7 @@ export interface MailFindingsBatch {
   receipt: FindingsReceipt | null
 }
 
-/** What `stage` would do with a batch, found without writing anything. */
+/** What `stage` would do with a batch, found without writing anything. @experimental */
 export interface MailFindingsCheck {
   valid: boolean
   findings: number
@@ -35,6 +37,7 @@ export interface MailFindingsCheck {
  * What an agent read in new mail — tasks, task updates, facts, memories, links, new contacts — cited and staged for
  * the owner, one batch per mailbox and run. Only the owner decides one: an agent's mail proposal never becomes the
  * owner's word without him.
+ * @experimental
  */
 export interface MailFindingsStore {
   stage(

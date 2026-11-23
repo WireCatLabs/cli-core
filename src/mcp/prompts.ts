@@ -36,6 +36,7 @@ const after = (time: string): string => {
  * Slash commands in Claude Code, copied from max-cli's. Each names tools and steps only — fetching
  * is the tools' job, so no message text is ever part of a prompt. The owner's own argument goes in
  * quoted, as data.
+ * @experimental
  */
 export const registerLinkConversationsPrompt = (
   server: McpServer,

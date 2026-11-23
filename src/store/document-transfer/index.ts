@@ -87,6 +87,7 @@ const openPreviewTarget = async (path: string) => {
   }
 }
 
+/** @experimental */
 export const previewDocumentTransfer = async (options: DocumentTransferOptions) => {
   const location = locations(options)
   return damagedFile([location.source, location.destination], () => previewWith(location, options))
@@ -111,6 +112,7 @@ const previewWith = async (location: ReturnType<typeof locations>, options: Docu
   }
 }
 
+/** @experimental */
 export const applyDocumentTransfer = async (options: DocumentTransferOptions & { expected_fingerprint: string }) => {
   if (!/^[a-f0-9]{64}$/.test(options.expected_fingerprint))
     throw new CliError("validation_error", "apply requires the fingerprint returned by a transfer preview")

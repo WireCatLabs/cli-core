@@ -532,7 +532,10 @@ export const RECORD_TYPES = {
 
 export type RecordType = keyof typeof RECORD_TYPES
 
-/** Every registered type is an envelope type: `custom:<name>` covers whatever a source has beyond them. */
+/**
+ * Every registered type is an envelope type: `custom:<name>` covers whatever a source has beyond them.
+ * @experimental
+ */
 export type RecordEntityType = RecordType
 
 export const isRecordType = (type: string): type is RecordType => Object.hasOwn(RECORD_TYPES, type)
@@ -548,6 +551,7 @@ export const isBusinessType = (type: string): type is BusinessType =>
 export const isIdentityType = (type: unknown): type is IdentityType =>
   typeof type === "string" && isRecordType(type) && RECORD_TYPES[type].review === "identity"
 
+/** @experimental */
 export const RECORD_ENTITY_TYPES = Object.keys(RECORD_TYPES) as RecordType[]
 
 type Tables<T> = { [K in keyof T]: T[K] extends { table: infer N } ? N : never }

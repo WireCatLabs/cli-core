@@ -63,6 +63,7 @@ export const typedCommand = (tool: string, words: string, profile = currentRun()
 /**
  * For a one-shot command whose action runs outside `inRun` — max's `max bot`, recorded from commander's hooks, which
  * cannot wrap the action — so its answers' `meta.run_id` names the run `runs show` finds. Never in a server.
+ * @experimental
  */
 export const useAsProcessRun = (scope: RunScope | undefined): void => {
   const own = ownProcesses.getStore()

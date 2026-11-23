@@ -83,6 +83,7 @@ const problem = v.objectWithRest(
   { code: text, message: text, retryable: v.optional(v.boolean()), retry_after_ms: v.optional(v.number()) },
   v.unknown(),
 )
+/** @experimental */
 const progress = v.strictObject({
   job: id,
   profile: text,

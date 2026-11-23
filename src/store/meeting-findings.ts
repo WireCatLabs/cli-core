@@ -2,6 +2,7 @@ import type { FindingOutcome, MeetingFindingsInput, MeetingFindingsReceipt } fro
 import type { Decider } from "./decisions.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export interface MeetingFindingsBatch {
   id: string
   account: AccountKey
@@ -18,6 +19,7 @@ export interface MeetingFindingsBatch {
   edited: string[]
   receipt: MeetingFindingsReceipt | null
 }
+/** @experimental */
 export interface MeetingFindingsStore {
   stage(
     account: AccountKey,

@@ -16,6 +16,7 @@ export interface ContractEvidenceOptions {
   errors?: AppErrors
 }
 
+/** @experimental */
 export const contractEvidence = (root: Command, { fields, errors }: ContractEvidenceOptions = {}) => {
   const schemas: Record<string, unknown> = { ...entityDefinitions() }
   const fieldOnly: string[] = []

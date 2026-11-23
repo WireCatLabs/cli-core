@@ -17,10 +17,11 @@ import {
 } from "../mcp/http/state.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 
+/** @experimental */
 export const MCP_HTTP_DEFAULT_PORT = 8765
 const LOOKS = 120
 
-/** What one CLI tells `mcp server` about the server it would run. */
+/** What one CLI tells `mcp server` about the server it would run. @experimental */
 export interface McpServerTarget {
   /** What a person types before `mcp`: `tg personal`, `memo`. */
   invocation: string
@@ -38,6 +39,7 @@ export interface McpServerTarget {
   version: string
 }
 
+/** @experimental */
 export interface McpServerOptions {
   /** How help shows the CLI before `mcp`: `tg personal`. */
   example: string
@@ -118,6 +120,7 @@ const clientLines = (clients: ReturnType<typeof signedInClients>) =>
  * keeps a lock beside its token file (`state.ts`) with its port, address and login code, so status
  * survives the shell that started it, and `stop` ends only a process that carries this CLI's marker.
  * None of it is offered over MCP: status holds a live login code.
+ * @experimental
  */
 export const mcpServerCommand = ({
   example,

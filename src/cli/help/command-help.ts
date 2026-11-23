@@ -88,6 +88,7 @@ const SAMPLES: Readonly<Record<string, string>> = {
 
 const MAX_NEXT = 3
 
+/** @experimental */
 export interface NextChoice {
   /** Command paths shown first, in this order: `messages context`. */
   pin?: readonly string[]
@@ -97,7 +98,10 @@ export interface NextChoice {
 
 const choices = new WeakMap<Command, NextChoice>()
 
-/** Overrides the "Next usually" a command's help derives from types. Kept off `annotate`, like its section. */
+/**
+ * Overrides the "Next usually" a command's help derives from types. Kept off `annotate`, like its section.
+ * @experimental
+ */
 export const nextUsually = <T extends Command>(command: T, choice: NextChoice): T => {
   choices.set(command, choice)
   return command
@@ -214,6 +218,7 @@ const withProfile = (command: Command, example: string): string => {
     : example
 }
 
+/** @experimental */
 export interface CommandHelp {
   /** Empty when the command declares no output entity: its description already says what it does. */
   returns: string
@@ -223,7 +228,7 @@ export interface CommandHelp {
   origin: "written" | "generated"
 }
 
-/** Returns, Next usually and Example for one command, from its definition alone. */
+/** Returns, Next usually and Example for one command, from its definition alone. @experimental */
 export const commandHelp = (command: Command): CommandHelp => {
   const written = metaOf(command).examples ?? []
   return {
@@ -236,7 +241,7 @@ export const commandHelp = (command: Command): CommandHelp => {
 
 const LABEL = 15
 
-/** The lines `--help` prints after a command's options. */
+/** The lines `--help` prints after a command's options. @experimental */
 export const commandHelpText = (command: Command): string => {
   const { returns, next, examples } = commandHelp(command)
   const rows = (label: string, values: readonly string[]) =>
@@ -287,7 +292,10 @@ export const installCommandHelp = (program: Command, { profile = true }: { profi
   for (const command of leaves(program)) command.addHelpText("after", () => commandHelpText(command))
 }
 
-/** Which leaf commands still show a generated example, so the important ones get a written one. Report only. */
+/**
+ * Which leaf commands still show a generated example, so the important ones get a written one. Report only.
+ * @experimental
+ */
 export const exampleReport = (program: Command): { written: string[]; generated: string[]; text: string } => {
   const written: string[] = []
   const generated: string[] = []

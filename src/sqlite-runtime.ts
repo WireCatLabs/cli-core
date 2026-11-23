@@ -61,6 +61,7 @@ const trialScript = (version: string) => `
   for (const statement of ${JSON.stringify(CAPABILITY_STATEMENTS)}) database.exec(statement)
 `
 
+/** @experimental */
 export const nodeRuntime = (): SqliteRuntime => ({
   env: process.env,
   platform: process.platform,
@@ -100,6 +101,7 @@ export const nodeRuntime = (): SqliteRuntime => ({
  * The parent stays while the command runs in the child: it passes on what stops it — an MCP client
  * or `kill <pid>` signals the process it started — and leaves with the child's code or signal. The
  * terminal sends Ctrl-C to both, so the parent ignores SIGINT and waits.
+ * @experimental
  */
 export const relay = (
   child: ChildProcess,

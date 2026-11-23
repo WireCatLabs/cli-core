@@ -1,201 +1,74 @@
-import type { ContextEvidenceReader, ContextIndex, ContextRecordReader } from "../context/evidence.js"
-import type { RefsStore } from "../domain/ref-summaries.js"
-import type { EventStore } from "../meetings/index.js"
-import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
-import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
-import {
-  type AccountAttachments,
-  type AttachmentsStore,
-  accountAttachmentsOver,
-  attachmentsStoreOver,
-} from "./attachments.js"
+import { type Area, bindAccount, type Keyed } from "./account-store.js"
+import { type AccountAccounts, accountAccountsOver, accountsStoreOver } from "./accounts.js"
+import { type AccountAttachments, accountAttachmentsOver, attachmentsStoreOver } from "./attachments.js"
 import { type ChatsStore, chatsStoreOver } from "./chats.js"
 import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
-import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
-import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "./decisions.js"
-import type { EvidenceFindingsStore } from "./evidence-findings.js"
-import type { MailFindingsStore } from "./mail-findings.js"
-import type { MeetingFindingsStore } from "./meeting-findings.js"
-import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
-import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
-import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"
-import type { ProjectAnnotationStore } from "./project-transfer/store.js"
-import { type QueriesStore, queriesStoreOver } from "./queries.js"
+import { type AccountCounters, accountCountersOver, countersStoreOver } from "./counters.js"
+import { DEFAULT_DECISION_POLICY } from "./decisions.js"
+import { type AccountMentions, accountMentionsOver, mentionsStoreOver } from "./mentions.js"
+import type { MessageStore } from "./message-store.js"
+import { type AccountMessages, accountMessagesOver, messagesStoreOver } from "./messages.js"
+import { type AccountPeople, accountPeopleOver, peopleStoreOver } from "./people.js"
+import { queriesStoreOver } from "./queries.js"
 import { type RosterStore, rosterStoreOver } from "./roster.js"
-import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
-import { type SearchesStore, searchesStoreOver } from "./searches.js"
+import { searchIndexStoreOver } from "./search-index.js"
+import { searchesStoreOver } from "./searches.js"
 import * as accounts from "./sqlite/accounts.js"
 import { addedSourcesOver } from "./sqlite/added-sources.js"
-import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
+import { agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
-import { type BaseStagesStore, baseStagesStoreOver } from "./sqlite/base-stages.js"
-import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
-import { type ContractsStore, contractsStoreOver } from "./sqlite/business-contracts.js"
-import { type BusinessSearchStore, businessSearchOver } from "./sqlite/business-search.js"
+import { baseStagesStoreOver } from "./sqlite/base-stages.js"
+import { botUpdateStoreOver } from "./sqlite/bot-updates.js"
+import { contractsStoreOver } from "./sqlite/business-contracts.js"
+import { businessSearchOver } from "./sqlite/business-search.js"
 import { eventStoreOver } from "./sqlite/calendar.js"
-import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
-import { type ContentStore, contentStoreOver } from "./sqlite/content.js"
+import { catalogStoreOver } from "./sqlite/catalog.js"
+import { contentStoreOver } from "./sqlite/content.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
-import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
-import { type CrmFileStore, crmFilesOver } from "./sqlite/crm-files.js"
-import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
-import { type DecisionRequestStore, decisionRequestStoreOver } from "./sqlite/decision-requests.js"
-import { type DocumentListing, documentListingOver } from "./sqlite/document-listing.js"
-import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
-import { type EnrichmentStore, enrichmentsOver } from "./sqlite/enrichments.js"
-import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
+import { crmCopiesOver } from "./sqlite/crm.js"
+import { crmFilesOver } from "./sqlite/crm-files.js"
+import { dealsStoreOver } from "./sqlite/deals.js"
+import { decisionRequestStoreOver } from "./sqlite/decision-requests.js"
+import { documentListingOver } from "./sqlite/document-listing.js"
+import { mailStoreOver } from "./sqlite/emails.js"
+import { enrichmentsOver } from "./sqlite/enrichments.js"
+import { eventSearchOver } from "./sqlite/event-search.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
-import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
-import { type FilesStore, filesStoreOver } from "./sqlite/files.js"
-import { type FinanceStore, financeStoreOver } from "./sqlite/finance.js"
-import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
-import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
+import { factsStoreOver } from "./sqlite/facts.js"
+import { filesStoreOver } from "./sqlite/files.js"
+import { financeStoreOver } from "./sqlite/finance.js"
+import { involvementStoreOver } from "./sqlite/involvements.js"
+import { knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
 import { mailFindingsStoreOver } from "./sqlite/mail-findings.js"
 import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
-import { type MeetingListing, meetingListingOver } from "./sqlite/meeting-listing.js"
-import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
-import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
-import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
-import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
-import { type TransactionsStore, transactionsStoreOver } from "./sqlite/money-transactions.js"
+import { meetingListingOver } from "./sqlite/meeting-listing.js"
+import { meetingVectorsOver } from "./sqlite/meeting-vectors.js"
+import { meetingStoreOver } from "./sqlite/meetings.js"
+import { memoriesStoreOver } from "./sqlite/memories.js"
+import { sourceMentionStoreOver } from "./sqlite/mention-sources.js"
+import { transactionsStoreOver } from "./sqlite/money-transactions.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
-import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
+import { notesStoreOver } from "./sqlite/notes.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
-import { type OrdersStore, ordersStoreOver } from "./sqlite/orders.js"
-import { type ProductsStore, productsStoreOver } from "./sqlite/products.js"
+import { ordersStoreOver } from "./sqlite/orders.js"
+import { productsStoreOver } from "./sqlite/products.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
-import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
-import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
+import { proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
+import { recordStoreOver } from "./sqlite/records.js"
 import { refsStoreOver } from "./sqlite/ref-summaries.js"
-import { type RelationsStore, relationsStoreOver } from "./sqlite/reported-relations.js"
+import { relationsStoreOver } from "./sqlite/reported-relations.js"
 import * as stems from "./sqlite/stems.js"
-import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
-import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
-import { type TemplateStore, templateStoreOver } from "./sqlite/templates.js"
-import { type TrackerStore, trackerStoreOver } from "./sqlite/tracker.js"
-import { type WalletsStore, walletsStoreOver } from "./sqlite/wallets.js"
+import { subscriptionsStoreOver } from "./sqlite/subscriptions.js"
+import { taskStoreOver } from "./sqlite/tasks.js"
+import { templateStoreOver } from "./sqlite/templates.js"
+import { trackerStoreOver } from "./sqlite/tracker.js"
+import { walletsStoreOver } from "./sqlite/wallets.js"
 import { storeErrors } from "./store-errors.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
 import { type TagsStore, tagsStoreOver } from "./tags.js"
-import type { AccountKey } from "./types.js"
-import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStoreOver } from "./vectors.js"
-
-export interface MessageStore {
-  readonly projectAnnotations?: ProjectAnnotationStore
-  readonly contextEvidence?: ContextEvidenceReader
-  readonly contextIndex?: ContextIndex
-  readonly contextRecords?: ContextRecordReader
-  /** Accounts, account groups and which account each app profile is. */
-  readonly accounts: AccountsStore
-  /** One account's chats: the list, what left, what is complete, their metadata. */
-  readonly chats: ChatsStore
-  /** Sync markers, catch-up deltas, stretch leases and the stretches held completely. */
-  readonly sync: SyncStore
-  /** Messages: writes, reads, tombstones, reactions, transcripts and the plain text search. */
-  readonly messages: MessagesStore
-  /** Downloaded files and the text held of them. */
-  readonly attachments: AttachmentsStore
-  /** Who is in a chat, and its member history. */
-  readonly roster: RosterStore
-  /** People and contacts, the links between their identities, and the owner's private notes on them. */
-  readonly people: PeopleStore
-  /** Reply links, conversation builds and the user's agent's batches. */
-  readonly conversations: ConversationsStore
-  /** Chunk, image and picture vectors, and the nearest conversations by meaning. */
-  readonly vectors: VectorsStore
-  /** View, forward and reaction counters as they were observed. */
-  readonly counters: CountersStore
-  /** The search history and saved searches. */
-  readonly searches: SearchesStore
-  /** A resolved Lucene query run over the store. */
-  readonly queries: QueriesStore
-  /** The word index, the stems and the stemmer choices. */
-  readonly searchIndex: SearchIndexStore
-  /** Tags on chats, people and messages. */
-  readonly tags: TagsStore
-  /** Phones, addresses, links and documents found in messages, and the owner's decisions on them. */
-  readonly mentions: MentionsStore
-  /** Open tasks waiting on the owner, for the task service in `src/tasks/`. */
-  readonly botUpdates: BotUpdateStore
-  readonly involvements: InvolvementStore
-  readonly tasks: StoreTaskStore
-  /** Mentions in documents, notes and mail: memo lists and decides them. */
-  readonly sourceMentions: SourceMentionStore
-  readonly knowledge: KnowledgeStore
-  /** Notes, the links between anything and anything, and the owner's organisations and projects. */
-  readonly notes: NotesStore
-  readonly catalog: CatalogStore
-  /** Where each document is kept: its files, their folders and paths. */
-  readonly files: FilesStore
-  /** Every document of every account, and every meeting, call and event as one row each: what a page lists. */
-  readonly listings: DocumentListing & MeetingListing
-  /** Calendars and their entries, the source records of events: the `EventStore` a calendar CLI writes through. */
-  readonly calendar: EventStore & EventSearch
-  /** Choices that hold until replaced, each with its evidence. */
-  readonly meetingFindings: MeetingFindingsStore
-  /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
-  readonly evidenceFindings: EvidenceFindingsStore
-  /** What an agent read in new mail, cited and staged per mailbox; only the owner decides it. */
-  readonly mailFindings: MailFindingsStore
-  /** What any ref names, a page of them at a time: read once per page, never once per row. */
-  readonly refs: RefsStore
-  readonly facts: FactsStore
-  /** Invoices, payments and their allocations, in exact minor units; an agent's or an import's wait for the owner. */
-  readonly finance: FinanceStore
-  /** What the owner, his business or a client ordered and how far delivery got; an agent's wait for the owner. */
-  readonly orders: OrdersStore
-  /** The owner's sales pipelines and the deals in them, written directly by the owner and his agents. */
-  readonly deals: DealsStore
-  /** The owner's base stages of deals and of leads, and every other pipeline's stages mapped onto them. */
-  readonly baseStages: BaseStagesStore
-  /** What the owner or a supplier sells, with its price; written directly. */
-  readonly products: ProductsStore
-  /** The contracts the owner works under; one with a value from an agent or an import waits for the owner. */
-  readonly contracts: ContractsStore
-  /** Subscriptions the owner bills or pays, with a price history never overwritten. */
-  readonly subscriptions: SubscriptionsStore
-  /** Bank accounts, cards and cash, with balances computed from their transactions. */
-  readonly wallets: WalletsStore
-  /** What statements say moved on the wallets, split by category; an agent's or an import's wait for the owner. */
-  readonly transactions: TransactionsStore
-  readonly business: BusinessSearchStore
-  /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
-  readonly crm: CrmCopies
-  /** The CRM files the owner downloaded, with their text; only CRM code reads them, under the copy's viewer rule. */
-  readonly crmFiles: CrmFileStore
-  /** Issue trackers' copies: teams, users, states, labels, projects, issues and comments, as last synced. */
-  readonly tracker: TrackerStore
-  /** Blogs' and social accounts' copies: channels, authors, terms, posts with their versions, and metrics. */
-  readonly content: ContentStore
-  /** Relationships a source account reports, written as a diff that never overrides the owner's. */
-  readonly relations: RelationsStore
-  /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
-  readonly decisionRequests: DecisionRequestStore
-  /** The message templates the owner saved over the shipped ones, with every body a change replaced. */
-  readonly templates: TemplateStore
-  /** What each import said, by the source's identity; `ingest` (services) is the way in. */
-  readonly records: RecordStore
-  /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
-  readonly memories: MemoriesStore
-  /** What an agent wants done outside the store, waiting for the owner's approval. */
-  readonly proposedActions: ProposedActionsStore
-  /** Who may decide proposals, fixed when the store was opened; the store's decide methods and the registry read it. */
-  readonly decisionPolicy: DecisionPolicy
-  /** One row per tool an agent called, never its arguments. */
-  readonly agentActions: AgentActionsStore
-  /** Meetings and calendar events: the port `src/meetings/` defines. */
-  readonly meetingVectors: MeetingVectors
-  readonly meetings: StoredMeetings
-  /** Email threads, emails, recipients and mailboxes. */
-  readonly mail: MailStore
-  /** What a hosted model wrote about notes, documents and mail, with the owner's consent; off by default. */
-  readonly enrichment?: EnrichmentStore
-  /** The same store with this account bound — what a service of one account reads and writes through. */
-  forAccount(key: AccountKey): AccountStore
-  close(): Promise<void>
-}
+import { type AccountVectors, accountVectorsOver, vectorsStoreOver } from "./vectors.js"
 
 export type { ChatHistoryShape, StoredHistorySkip } from "./sqlite/history-skips.js"
 export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
@@ -498,3 +371,4 @@ const storeOver = (context: StoreContext): MessageStore => {
 }
 
 export * from "./exports.js"
+export type { MessageStore } from "./message-store.js"

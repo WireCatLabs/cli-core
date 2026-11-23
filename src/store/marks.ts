@@ -7,12 +7,18 @@ import { refuseOwnerStoreInTests } from "./path.js"
 /**
  * Both marks live beside the store, not in it: the store may be the file that cannot be read. Each holds no content,
  * only times, command names and SQLite's own message.
+ * @experimental
  */
 export const damageMarkPath = (store: string): string => `${store}.damaged.json`
+/** @experimental */
 export const healthMarkPath = (store: string): string => `${store}.health.json`
+/** @experimental */
 export const journalMarkPath = (store: string): string => `${store}.journal.json`
 
-/** A run saw SQLite say the store is damaged. Every writable open refuses while it names the file in place. */
+/**
+ * A run saw SQLite say the store is damaged. Every writable open refuses while it names the file in place.
+ * @experimental
+ */
 export interface DamageMark {
   at: string
   command: string
@@ -23,7 +29,10 @@ export interface DamageMark {
   inode: number
 }
 
-/** The newest deep check of the store, and the time of the newest one that passed: the last known good. */
+/**
+ * The newest deep check of the store, and the time of the newest one that passed: the last known good.
+ * @experimental
+ */
 export interface HealthMark {
   checked_at: string
   ok: boolean
@@ -71,6 +80,7 @@ const sqliteFailure = (error: unknown): unknown =>
 /**
  * Leaves the damage mark when `error` is SQLite saying the store is damaged; the first sighting is kept. Never
  * throws: the failure being reported matters more than the mark.
+ * @experimental
  */
 export const markStoreDamaged = (
   error: unknown,
@@ -102,7 +112,10 @@ export const markStoreDamaged = (
   }
 }
 
-/** The mark, or null; a mark left by another file at this path is removed. An unreadable mark still counts. */
+/**
+ * The mark, or null; a mark left by another file at this path is removed. An unreadable mark still counts.
+ * @experimental
+ */
 export const readDamageMark = (store: string): DamageMark | null => {
   const path = damageMarkPath(store)
   let mark: DamageMark | null
@@ -119,6 +132,7 @@ export const readDamageMark = (store: string): DamageMark | null => {
   return mark
 }
 
+/** @experimental */
 export const clearDamageMark = (store: string): void => rmSync(damageMarkPath(store), { force: true })
 
 /** Thrown by a writable open of a store a run found damaged, so timers fail fast instead of writing into it. */
@@ -145,6 +159,7 @@ export const markJournalLost = (
   } catch {}
 }
 
+/** @experimental */
 export const readJournalMark = (store: string): JournalMark | null => {
   try {
     return readJson<JournalMark>(journalMarkPath(store))
@@ -153,6 +168,7 @@ export const readJournalMark = (store: string): JournalMark | null => {
   }
 }
 
+/** @experimental */
 export const readHealthMark = (store: string): HealthMark | null => {
   try {
     return readJson<HealthMark>(healthMarkPath(store))
@@ -165,6 +181,7 @@ export const readHealthMark = (store: string): HealthMark | null => {
  * Records a deep check of the store. One that passed also removes the damage mark: the file reads whole. Returns the
  * mark it replaced, whose `last_ok_at` is the last known good before this check, and the damage mark it removed. A pass
  * also removes the journal mark: whatever the lost journal held is gone or was never needed.
+ * @experimental
  */
 export const recordDeepCheck = (
   store: string,

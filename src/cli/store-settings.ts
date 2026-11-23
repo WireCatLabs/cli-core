@@ -59,7 +59,7 @@ const AGENT_CLOSE = "task_agent_close"
 const AGENT_CLOSE_MIN = "task_agent_close_min"
 const FIRST_PASS = "task_first_pass_per_chat"
 
-/** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
+/** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. @experimental */
 export const STORE_SETTINGS = [
   ...Object.keys(SCRIPTS),
   OWNER_LANGUAGES,
@@ -116,6 +116,7 @@ export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
   )
 }
 
+/** @experimental */
 export const isStoreSetting = (setting: string): boolean =>
   setting in SCRIPTS ||
   setting === OWNER_LANGUAGES ||
@@ -128,6 +129,7 @@ export const isStoreSetting = (setting: string): boolean =>
   setting.startsWith(GROUP_PREFIX) ||
   parseCrmSetting(setting) !== undefined
 
+/** @experimental */
 export const changeStoreSetting = async (
   app: AppIdentity,
   env: NodeJS.ProcessEnv,
@@ -423,7 +425,10 @@ const categoryRows = (saved: readonly TaskCategory[] | undefined, file: string) 
   }))
 }
 
-/** For `config show`: reads the file as it is — never creates, migrates or unseals it to say the defaults apply. */
+/**
+ * For `config show`: reads the file as it is — never creates, migrates or unseals it to say the defaults apply.
+ * @experimental
+ */
 export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   const path = storePath(env)
   let saved: Stemmers | null | undefined

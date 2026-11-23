@@ -1,5 +1,6 @@
-/** The days `--on` takes, Monday first. */
+/** The days `--on` takes, Monday first. @experimental */
 export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const
+/** @experimental */
 export type Weekday = (typeof WEEKDAYS)[number]
 
 /** One calendar time: `HH:MM` local, every day or on one weekday. */
@@ -19,6 +20,7 @@ export type When =
   | { calendar: Slot[] }
   | { once: string }
 
+/** @experimental */
 export type CalendarWhen = Extract<When, { daily: string } | { weekly: string } | { calendar: Slot[] }>
 
 const SYSTEMD_DAYS: Record<Weekday, string> = {
@@ -40,14 +42,18 @@ export const WINDOWS_DAYS: Record<Weekday, string> = {
   sun: "Sunday",
 }
 
+/** @experimental */
 export const isCalendar = (when: When): when is CalendarWhen =>
   "daily" in when || "weekly" in when || "calendar" in when
 
-/** A calendar schedule's times, whichever shape it was saved in. */
+/** A calendar schedule's times, whichever shape it was saved in. @experimental */
 export const slotsOf = (when: CalendarWhen): Slot[] =>
   "daily" in when ? [{ at: when.daily }] : "weekly" in when ? [{ at: when.weekly, on: when.on }] : when.calendar
 
-/** The shape a schedule is saved in: one slot as `daily` or `weekly`, so files and their wording stay as they were. */
+/**
+ * The shape a schedule is saved in: one slot as `daily` or `weekly`, so files and their wording stay as they were.
+ * @experimental
+ */
 export const calendarOf = (slots: readonly Slot[]): CalendarWhen => {
   const seen = new Map(slots.map((slot) => [`${slot.on ?? ""} ${slot.at}`, slot]))
   const unique = [...seen.values()].sort(
@@ -67,6 +73,7 @@ const describeSlots = (slots: Slot[]): string => {
   return `at ${slots.map((slot) => (slot.on ? `${SYSTEMD_DAYS[slot.on]} ${slot.at}` : `daily ${slot.at}`)).join(", ")}`
 }
 
+/** @experimental */
 export const describeWhen = (when: When): string =>
   "every" in when
     ? `every ${when.every % 1440 === 0 ? `${when.every / 1440}d` : when.every % 60 === 0 ? `${when.every / 60}h` : `${when.every}m`}`
@@ -80,7 +87,10 @@ export const onCalendar = (when: Exclude<When, { every: number }>): string[] =>
     ? [localStamp(when.once)]
     : slotsOf(when).map((slot) => (slot.on ? `${SYSTEMD_DAYS[slot.on]} *-*-* ${slot.at}:00` : `*-*-* ${slot.at}:00`))
 
-/** The local moments of a calendar schedule's runs from `from` (inclusive) to `to` (exclusive), oldest first. */
+/**
+ * The local moments of a calendar schedule's runs from `from` (inclusive) to `to` (exclusive), oldest first.
+ * @experimental
+ */
 export const runsBetween = (when: CalendarWhen, from: number, to: number): number[] => {
   const slots = slotsOf(when)
   const moments: number[] = []
@@ -105,9 +115,13 @@ const daysFrom = (at: number, days: number) => {
   return moved.getTime()
 }
 
-/** The run a calendar schedule has next after `now`, or the one before or at it; eight days hold every slot. */
+/**
+ * The run a calendar schedule has next after `now`, or the one before or at it; eight days hold every slot.
+ * @experimental
+ */
 export const nextRun = (when: CalendarWhen, now: number): number | undefined =>
   runsBetween(when, now + 1, daysFrom(now, 8))[0]
+/** @experimental */
 export const previousRun = (when: CalendarWhen, now: number): number | undefined =>
   runsBetween(when, daysFrom(now, -8), now + 1).at(-1)
 

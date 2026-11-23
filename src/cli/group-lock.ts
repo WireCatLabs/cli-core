@@ -13,12 +13,14 @@ const keepsToGroup = new WeakSet<Command>()
 /**
  * Marks a command, and every command under it, as one that keeps to the run's account group: it scopes its reads
  * and writes with `scopeToGroup`. Under `<PREFIX>_GROUP_LOCK` every other command is refused (WC-ACCT-13).
+ * @experimental
  */
 export const groupAware = <T extends Command>(command: T): T => {
   keepsToGroup.add(command)
   return command
 }
 
+/** @experimental */
 export const isGroupAware = (command: Command): boolean => {
   let top: Command | undefined
   for (let at: Command | null = command; at?.parent; at = at.parent) {
@@ -34,6 +36,7 @@ const valuesOf = (value: unknown): string[] =>
 /**
  * What a bare id names: a referenced thing's kind, a proposed action (`action`, as `actions confirm 17` takes it), or
  * a proposal id of the review registry (`proposal`: `17070`, `17080/f1`, `link:17`, `fact:512`).
+ * @experimental
  */
 export type RefKind = SimpleReference | "action" | "proposal"
 
@@ -45,6 +48,7 @@ const declared = new WeakMap<Command, Readonly<Record<string, RefKind>>>()
  * after a kind needs no entry. Under the lock a bare value there is checked as `<kind>:<value>`; a command that
  * declares nothing has any other argument value refused, since what it names is unknown (`1e0`, `+1`, `link:1`).
  * `{}` says no argument takes an id, so free text passes.
+ * @experimental
  */
 export const refKinds = <T extends Command>(command: T, kinds: Readonly<Record<string, RefKind>>): T => {
   declared.set(command, kinds)
@@ -61,6 +65,7 @@ const kindAt = (command: Command, name: string, implicit: string): RefKind | und
  * Every reference typed into the run: each word of each argument and option value that is a reference, and each bare
  * id in a position whose kind is known, as `<kind>:<id>`. `unknown` holds every other argument value of a command
  * that declares no kinds.
+ * @experimental
  */
 export const referencesIn = (command: Command): { references: string[]; unknown: string[] } => {
   const references = new Set<string>()
@@ -109,6 +114,7 @@ const pathOf = (command: Command): string => {
  * Under `<PREFIX>_GROUP_LOCK`, refuses a command that does not keep to a group, and a reference whose thing belongs
  * only to accounts outside the group. A thing no account brought is the owner's and passes in every group, a note
  * written in memo included; a person passes when one of their identities is in the group.
+ * @experimental
  */
 export const refuseOutsideGroup = async (
   command: Command,

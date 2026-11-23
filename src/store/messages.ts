@@ -24,6 +24,7 @@ import { write } from "./sqlite/transaction.js"
 import * as transcripts from "./sqlite/transcripts.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageFilter, SenderChatStats, StoredHit } from "./types.js"
 
+/** @experimental */
 export interface AccountMessages {
   /**
    * A scheduled message is not kept: it is not history yet.

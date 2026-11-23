@@ -113,6 +113,7 @@ const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLo
 /**
  * `snakeKeys` that keeps everything under the listed keys as written: a note's front matter, an email's headers — the
  * owner's or a provider's words, not field names. The key itself still goes snake_case; either spelling matches.
+ * @experimental
  */
 export const snakeKeysKeeping = (verbatim: Iterable<string>): ((value: unknown) => unknown) => {
   const kept = new Set(verbatim)
@@ -158,14 +159,20 @@ const refuse = (value: unknown): never => {
   throw new Error(`not an answer envelope (keys: ${keys}) — build it with itemOf or listOf`)
 }
 
-/** The answer with each next step judged by `targets` — for MCP, which prints no command line to check them by. */
+/**
+ * The answer with each next step judged by `targets` — for MCP, which prints no command line to check them by.
+ * @experimental
+ */
 export const judgedAnswer = <T>(value: T, targets: NonNullable<StepInput["targets"]>): T => {
   if (!isBody(value)) return refuse(value)
   if (!value.next) return value
   return { ...value, next: withSafety(value.next, targets) } as T
 }
 
-/** `meta` from the run the answer belongs to, so `runs show <run_id>` finds it. Complete unless it names an issue. */
+/**
+ * `meta` from the run the answer belongs to, so `runs show <run_id>` finds it. Complete unless it names an issue.
+ * @experimental
+ */
 export const metaNow = (extra: Partial<Meta> = {}): Meta => {
   const run = currentRun()
   return {
@@ -176,7 +183,7 @@ export const metaNow = (extra: Partial<Meta> = {}): Meta => {
   }
 }
 
-/** The one place an answer gets its `meta`, for the CLI and MCP alike. */
+/** The one place an answer gets its `meta`, for the CLI and MCP alike. @experimental */
 export const sealed = <T>(value: T): T => {
   if (!isBody(value)) return refuse(value)
   const { meta, ...rest } = withoutProviderRefs(value)
@@ -296,7 +303,10 @@ export const renderAnswer = <T>(
 export const renderDocument = ({ renderer }: Pick<AnswerOutput, "renderer">, document: object): void =>
   renderer.result(document)
 
-/** One thing as a sealed `{ item, meta }` answer, for a command that prints without `renderAnswer`'s steps. */
+/**
+ * One thing as a sealed `{ item, meta }` answer, for a command that prints without `renderAnswer`'s steps.
+ * @experimental
+ */
 export const itemAnswer = <T>(item: T) => sealed(itemOf(item))
 
 /** Prints one thing: the envelope in `--json`, one record and the end line in `--jsonl`, the thing itself to a person. */

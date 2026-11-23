@@ -11,13 +11,18 @@ import {
   type RecordsEnvelope,
 } from "./records.js"
 
-/** The types a table can carry: an SMS and a call come from a phone's own export, never from a hand-made sheet. */
+/**
+ * The types a table can carry: an SMS and a call come from a phone's own export, never from a hand-made sheet.
+ * @experimental
+ */
 export const TABLE_RECORD_TYPES = Object.keys(RECORD_TYPES).filter(
   (type) => (RECORD_TYPES[type as keyof typeof RECORD_TYPES] as RecordTypeSpec).sheet !== false,
 ) as readonly string[]
 
+/** @experimental */
 export type ColumnShape = "text" | "decimal" | "day" | "instant" | "currency" | "integer" | "boolean" | "list"
 
+/** @experimental */
 export interface TableColumn {
   /** `external_id`, a field (`total`), a role (`counterparty`) or an item of a list (`lines.amount`). */
   name: string
@@ -32,18 +37,23 @@ export interface TableColumn {
   many?: boolean
 }
 
-/** Where a pointer into the envelope came from in the sheet: its line from 1 (the header is 1), and the column. */
+/**
+ * Where a pointer into the envelope came from in the sheet: its line from 1 (the header is 1), and the column.
+ * @experimental
+ */
 export interface TablePlace {
   line: number
   column?: string
 }
 
+/** @experimental */
 export interface TableEnvelope {
   envelope: RecordsEnvelope
   /** The sheet's place of a receipt's or an error's pointer, by its longest known prefix. */
   placeOf(pointer: string): TablePlace | undefined
 }
 
+/** @experimental */
 export class TableError extends Error {
   constructor(readonly errors: (IngestError & { place?: TablePlace })[]) {
     super(errors.map((e) => e.message).join("; "))
@@ -104,7 +114,10 @@ const roleColumn = (name: string, role: RecordRoleSpec): TableColumn => ({
   ...(role.many ? { many: true } : {}),
 })
 
-/** A type's columns: the external id, its flat fields, one per role, then one per key of each list of items. */
+/**
+ * A type's columns: the external id, its flat fields, one per role, then one per key of each list of items.
+ * @experimental
+ */
 export const recordColumns = (type: string): TableColumn[] => {
   const spec = specOf(type)
   if (!spec || spec.sheet === false) return []
@@ -163,6 +176,7 @@ const exampleRef = (column: TableColumn) => ({
 /**
  * A file to fill for a type. CSV is the header row alone, with a byte-order mark so Excel reads it as UTF-8; JSON is
  * an envelope of one example record that names every field and role.
+ * @experimental
  */
 export const recordTemplate = (
   type: string,
@@ -315,6 +329,7 @@ const relationsOf = (column: TableColumn, raw: string): RecordRelation[] | Inges
 /**
  * Reads a sheet of one type as an envelope. A row whose `external_id` an earlier row had continues that record: its
  * item columns (`lines.amount`) add one item to the list, as an invoice exported a line a row does.
+ * @experimental
  */
 export const envelopeOfCsv = (
   text: string,

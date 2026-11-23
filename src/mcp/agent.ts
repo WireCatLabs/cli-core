@@ -34,6 +34,7 @@ export interface AgentProgram {
   commands: readonly CommandInfo[]
 }
 
+/** @experimental */
 export interface AgentContext {
   profile: string
   readOnly?: boolean
@@ -58,6 +59,7 @@ export interface AgentContext {
   caller?: RunCaller
 }
 
+/** @experimental */
 export type AgentAnswer = { result: unknown } | { error: ErrorObject }
 
 export interface AgentTool {
@@ -340,6 +342,7 @@ const argvOf = (
  * apply, to the check before the run and to the command's own guard. With `connection`, the command borrows the
  * server's open connection and never opens one of its own. Which commands are offered is the catalogue's
  * decision (`toolsFromCommands`); this runs what it is handed, except a command that never returns.
+ * @experimental
  */
 export const runCommandForAgent = async (
   program: AgentProgram,

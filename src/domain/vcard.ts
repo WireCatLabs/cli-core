@@ -3,6 +3,7 @@ import { e164Of, type PhoneCountry } from "./phones.js"
 import { WORD_BODY } from "./record-types.js"
 import type { EnvelopeRecord, RecordRelation, RecordsEnvelope } from "./records.js"
 
+/** @experimental */
 export interface VcardOptions {
   provider: string
   account: string
@@ -11,6 +12,7 @@ export interface VcardOptions {
   region?: PhoneCountry
 }
 
+/** @experimental */
 export interface VcardIssue {
   /** The card's place in the file, from 0. */
   card: number
@@ -26,7 +28,7 @@ interface Property {
 const MAX_ID = 512
 const AS_WORD = new RegExp(`^${WORD_BODY}$`)
 
-/** Whether a file is a vCard address book rather than a JSON or JSONL envelope. */
+/** Whether a file is a vCard address book rather than a JSON or JSONL envelope. @experimental */
 export const isVcard = (text: string): boolean => /^﻿?\s*BEGIN:VCARD\b/i.test(text)
 
 const isQuotedPrintable = (line: string) => {
@@ -195,6 +197,7 @@ const cardsOf = (text: string): { cards: Property[][]; issues: VcardIssue[] } =>
  * A vCard file (2.1, 3.0 or 4.0) as a records envelope: one person per card, matched later by its numbers and
  * addresses, and one organization per `ORG` name the person is a member of. Nothing is guessed: a national number
  * is read only in `region`, and a card says nothing about a person it does not hold.
+ * @experimental
  */
 export const envelopeOfVcard = (
   text: string,

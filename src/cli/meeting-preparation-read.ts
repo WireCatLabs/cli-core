@@ -20,6 +20,7 @@ const bound = (name: keyof typeof MEETING_PREPARATION_LIMITS) => {
   const { min, max } = MEETING_PREPARATION_LIMITS[name]
   return v.optional(v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max)))
 }
+/** @experimental */
 export const meetingPreparationInput = v.strictObject({
   series_id: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   communications: v.optional(
@@ -38,6 +39,7 @@ export const meetingPreparationInput = v.strictObject({
 // A date alone ends a window at the end of that day and starts one at its start.
 const instant = (value: string | undefined, fallback: number, field: string, now: number, end = false) =>
   value === undefined ? fallback : momentOf(value, field, now, { end })
+/** @experimental */
 export const readMeetingPreparation = async (
   read: MeetingPreparationReader,
   input: unknown,

@@ -5,6 +5,7 @@ const EXAMPLE = "--public-url https://<name>.ts.net"
 /**
  * The tunnel's address a public listener is reached at, checked one way for every command that opens
  * one. `missing` says what needs it; `reaches` who calls through it, for the https refusal.
+ * @experimental
  */
 export const publicUrlOf = (
   given: string | undefined,
@@ -44,7 +45,7 @@ export const publicUrlOf = (
   return url
 }
 
-/** A local port from `--port`, or the command's own default. */
+/** A local port from `--port`, or the command's own default. @experimental */
 export const portOf = (given: string | undefined, fallback: number): number => {
   if (given === undefined) return fallback
   const port = Number(given)
@@ -53,6 +54,9 @@ export const portOf = (given: string | undefined, fallback: number): number => {
   return port
 }
 
-/** The connector address under a public address: `https://<name>.ts.net/mcp`, or `…/tg/mcp` under a path. */
+/**
+ * The connector address under a public address: `https://<name>.ts.net/mcp`, or `…/tg/mcp` under a path.
+ * @experimental
+ */
 export const mcpUrlOf = (publicUrl: URL): URL =>
   new URL(`${publicUrl.pathname.replace(/\/+$/, "")}/mcp`, publicUrl.origin)

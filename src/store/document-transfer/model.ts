@@ -29,6 +29,7 @@ export interface TransferSnapshot {
   external: TransferExternal[]
 }
 
+/** @experimental */
 export interface DocumentTransferOptions {
   source: string
   destination: string
@@ -38,6 +39,7 @@ export interface DocumentTransferOptions {
   bindings?: Record<string, string>
 }
 
+/** @experimental */
 export interface DocumentTransferPreview {
   fingerprint: string
   source_documents: { external_id: string; content_hash: string | null }[]
@@ -59,6 +61,7 @@ export interface DocumentTransferPreview {
   ready: boolean
 }
 
+/** @experimental */
 export interface DocumentTransferReceipt extends DocumentTransferPreview {
   references: Record<string, string>
   documents: Record<string, string>

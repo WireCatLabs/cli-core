@@ -483,7 +483,7 @@ const toContact = (chat: Chat): Contact => ({
 const byRecency = (a: Contact, b: Contact) => (b.lastMessagedAt ?? "").localeCompare(a.lastMessagedAt ?? "")
 const byName = (a: Contact, b: Contact) => (a.name ?? "").localeCompare(b.name ?? "")
 
-/** `--hide-phone`: the answer without the number, for output that will be pasted somewhere. */
+/** `--hide-phone`: the answer without the number, for output that will be pasted somewhere. @experimental */
 export const withoutPhone = <T extends { phone?: string | null }>(answer: T): T => {
   const { phone: _phone, ...rest } = answer
   return rest as T

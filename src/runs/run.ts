@@ -427,6 +427,7 @@ const eventOf = (line: Record<string, unknown>): Record<string, unknown> => {
  *
  * A day at a time, by the directory name and the day's index, so no run has to be opened to decide — and a directory
  * that is not a date is left alone rather than guessed at.
+ * @experimental
  */
 export const pruneRuns = (
   runsDir: string,

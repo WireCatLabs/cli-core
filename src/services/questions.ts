@@ -8,6 +8,7 @@ const LINKS = /https?:\/\/\S+/g
  * it, or a reply to the owner or an admin. It is answered when one of them replied to it, or was the
  * next to speak after the person who asked — "the next to speak" rather than "spoke later", because
  * in a busy group an admin answering somebody else says nothing about this question.
+ * @experimental
  */
 export const unanswered = (
   messages: Message[],

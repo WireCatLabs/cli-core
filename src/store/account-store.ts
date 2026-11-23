@@ -58,7 +58,7 @@ const bindArea = <K>({ keyed, whole }: Area<K>, account: AccountKey): BoundArea<
   ) as BoundArea<K>
 }
 
-/** One account's mail: the thread and email ids of another account read as nothing. */
+/** One account's mail: the thread and email ids of another account read as nothing. @experimental */
 export interface AccountMail {
   threads(filter?: Omit<MailFilter, "accountId">): Promise<EmailThread[]>
   thread(id: number): Promise<ThreadDetails | null>
@@ -67,7 +67,7 @@ export interface AccountMail {
   mailboxes(): Promise<Mailbox[]>
 }
 
-/** One account's meetings: a meeting id of another account reads as nothing. */
+/** One account's meetings: a meeting id of another account reads as nothing. @experimental */
 export interface AccountMeetings {
   meetings(filter?: Omit<MeetingFilter, "accountId">): Promise<Meeting[]>
   meeting(id: number): Promise<MeetingDetails | null>
@@ -77,6 +77,7 @@ export interface AccountMeetings {
 /**
  * The store with one account bound: every read and write takes the account from here, and a row id
  * of another account is not found. A read across accounts goes to the whole store, by name.
+ * @experimental
  */
 export interface AccountStore {
   readonly account: AccountKey

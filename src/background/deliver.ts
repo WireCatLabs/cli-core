@@ -25,8 +25,10 @@ const CHAT = /^(-?\d+|user:\d+)$/
 const PROFILE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const ADDRESS = /^[^\s@/,<>"]+@[^\s@/,<>"]+\.[^\s@/,<>"]+$/
 
+/** @experimental */
 export const ROUTE_HELP = "telegram-bot:<profile>/<chat id or user:id>, or email:<profile>/<address>"
 
+/** @experimental */
 export const parseRoute = (text: string): Route => {
   const [, kind = "", profile = "", target = ""] = /^([a-z-]+):([^/]+)\/(.+)$/.exec(text.trim()) ?? []
   const refuse = (why: string) => new CliError("validation_error", `--deliver-to ${text}: ${why} — ${ROUTE_HELP}`)
@@ -40,6 +42,7 @@ export const parseRoute = (text: string): Route => {
   return { kind: "email", profile, address: target }
 }
 
+/** @experimental */
 export const routeText = (route: Route): string =>
   `${route.kind}:${route.profile}/${route.kind === "telegram-bot" ? route.chat : route.address}`
 

@@ -5,13 +5,14 @@ import type { IdentityRef } from "./types.js"
 /**
  * A stored kind of its own, not an `identity_link`: every reader of those takes a row for two people who may be one,
  * and would settle a split of one person away as moot.
+ * @experimental
  */
 export const IDENTITY_SPLIT_KIND = "identity_split"
 
 /** `unlink` moves the identities to one new person; `unmerge` gives a merge's identities back to their person. */
 export type IdentitySplitMove = "unlink" | "unmerge"
 
-/** An `identity_split` proposal's payload. */
+/** An `identity_split` proposal's payload. @experimental */
 export interface IdentitySplitPayload {
   split: IdentitySplitMove
   /** The person the identities would leave, as a uid when it was proposed. */

@@ -11,6 +11,7 @@ import { linkInbox } from "./sqlite/tasks.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, StoredAccount } from "./types.js"
 
+/** @experimental */
 export interface AccountAccounts {
   /**
    * Answers the store's id for the account, which `meetings` and `mail` take. `scope` is what a new account starts

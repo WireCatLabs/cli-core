@@ -2,11 +2,14 @@ import type { OrderDirection } from "./business.js"
 import type { FinanceReview } from "./finance.js"
 import { moneyLabel } from "./money.js"
 
+/** @experimental */
 export const ORDER_STATUSES = ["placed", "shipped", "delivered", "cancelled", "returned"] as const
-/** Why it was ordered: for the owner himself, for his business, for a client, or anything else. */
+/** Why it was ordered: for the owner himself, for his business, for a client, or anything else. @experimental */
 export const ORDER_PURPOSES = ["personal", "business", "client", "other"] as const
 
+/** @experimental */
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
+/** @experimental */
 export type OrderPurpose = (typeof ORDER_PURPOSES)[number]
 
 export interface OrderTitleFields {

@@ -804,15 +804,7 @@ export {
   upgradeCommand,
   watchCommand,
 } from "./shared-command-exports.js"
-export {
-  assertSharedContracts,
-  customizeSharedCommand,
-  hasSharedContract,
-  overrideSharedContract,
-  type SharedContractOverride,
-  sharedContractOverrides,
-  sharedContracts,
-} from "./shared-contracts.js"
+export { hasSharedContract, overrideSharedContract } from "./shared-contracts.js"
 export { runnable, withSafety } from "./steps.js"
 export { type StoreInfo, sharedStoreCommand, storeInfo, storeInfoCommand } from "./store-info.js"
 export {

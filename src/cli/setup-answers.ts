@@ -5,11 +5,13 @@ import { readSharedSection, sharedConfigPath, writeSharedSection } from "../stor
 
 /** One switch for every tool, the same on the command line and over MCP; "allow" leaves each profile as configured. */
 export const PERMISSION_ANSWERS = ["readonly", "allow"] as const
+/** @experimental */
 export type PermissionAnswer = (typeof PERMISSION_ANSWERS)[number]
 
 /**
  * The first-run answers every WireCat CLI shares. Languages live in the store (`search_stemmers`), so only the
  * fact that they were asked is kept here.
+ * @experimental
  */
 export interface SetupAnswers {
   languages?: true
@@ -21,6 +23,7 @@ export type Question = (typeof QUESTIONS)[number]
 
 const SECTION = "setup"
 
+/** @experimental */
 export const readSetupAnswers = (path: string): SetupAnswers => {
   const section = readSharedSection(path, SECTION)
   if (section === undefined) return {}

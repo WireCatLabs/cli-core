@@ -1,8 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { PHONE_PLANS } from "./phone-plans.generated.js"
 
+/** @experimental */
 export type PhoneCountry = (typeof PHONE_PLANS)[number]["country"]
 
+/** @experimental */
 export const PHONE_COUNTRIES = PHONE_PLANS.map((plan) => plan.country)
 
 /** Without the setting a number with no `+` is read as Russian, as before the setting existed. */

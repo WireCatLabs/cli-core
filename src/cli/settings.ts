@@ -65,9 +65,11 @@ export const plain =
   (issue: v.BaseIssue<unknown>): string =>
     `${rule}, not ${issue.received}`
 const wholeNumber = plain("has to be a whole number, 1 or more")
+/** @experimental */
 export const count = v.pipe(v.number(wholeNumber), v.integer(wholeNumber), v.minValue(1, wholeNumber))
 const zeroOrMore = plain("has to be a whole number, 0 or more")
 const countOrZero = v.pipe(v.number(zeroOrMore), v.integer(zeroOrMore), v.minValue(0, zeroOrMore))
+/** @experimental */
 export const flag = v.boolean(plain("has to be true or false"))
 const historyDaysMessage = plain(`has to be a whole number of days, 1 to ${HISTORY_MAX_DAYS}`)
 const historyDays = v.pipe(
@@ -308,6 +310,7 @@ interface KindSection {
   profiles?: Record<string, Scope>
 }
 
+/** @experimental */
 export interface Config {
   defaults?: Scope
   profiles: Record<string, Scope>
@@ -333,7 +336,7 @@ export interface GlobalFlags {
   timeout?: string
 }
 
-/** `first word`, `flag`, `TG_PROFILE`, `config file`, `config defaults`, `default`… */
+/** `first word`, `flag`, `TG_PROFILE`, `config file`, `config defaults`, `default`… @experimental */
 export type Source = string
 
 export interface Settings extends AISettings {
@@ -461,7 +464,10 @@ export const NONE_NAMED = "none named"
 /** A name for a command that speaks for no account; never chosen for one that does. */
 const NO_PROFILE = "default"
 
-/** The profile a run is for: none when nothing named one, even though `Settings.profile` holds a placeholder. */
+/**
+ * The profile a run is for: none when nothing named one, even though `Settings.profile` holds a placeholder.
+ * @experimental
+ */
 export const namedProfile = (settings: Pick<Settings, "profile"> & Partial<Pick<Settings, "sources">>) =>
   settings.sources?.profile === NONE_NAMED ? undefined : settings.profile
 
@@ -491,7 +497,7 @@ export class NoProfileHere extends CliError {
   }
 }
 
-/** The first candidate that is set, and which layer it came from. */
+/** The first candidate that is set, and which layer it came from. @experimental */
 export const first = <T>(candidates: [Source, T | undefined][], fallback: T): { value: T; from: Source } => {
   for (const [from, value] of candidates) if (value !== undefined) return { value, from }
   return { value: fallback, from: "default" }

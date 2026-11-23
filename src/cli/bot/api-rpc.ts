@@ -7,6 +7,7 @@ import { apiJson, parseApiJson } from "./api-input.js"
 type Definitions = Readonly<Record<string, SchemaNode>>
 type ObjectValue = Record<string, unknown>
 
+/** @experimental */
 export interface RpcApiBody {
   text?: string
   value: ObjectValue
@@ -107,6 +108,7 @@ const flagValue = (raw: string, original: SchemaNode, definitions: Definitions):
   throw new CliError("validation_error", "an API parameter does not match its declared type")
 }
 
+/** @experimental */
 export const prepareRpcApiBody = (
   operation: ManifestOperation,
   input: ApiCommandInput,

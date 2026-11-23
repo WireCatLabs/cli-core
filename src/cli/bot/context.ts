@@ -18,7 +18,7 @@ import type { BotAdapter, BotChatRef, BotConnectOptions, BotMessenger } from "./
 import { botFiles, ChatRegistry } from "./registry.js"
 import { BotTokenStore } from "./token.js"
 
-/** How the owner types this bot — `max sales bot` — so a refusal names the command that fixes it. */
+/** How the owner types this bot — `max sales bot` — so a refusal names the command that fixes it. @experimental */
 export const botWords = (bot: BotMessenger, profile: string): string => `${bot.app.command} ${asFirstWord(profile)}bot`
 
 /** What a messenger command refuses before it connects, for a bot: an unknown key, then a denied read. */
@@ -128,6 +128,7 @@ export const botContext = (
   }
 }
 
+/** @experimental */
 export type BotContext = ReturnType<typeof botContext>
 
 /** `--offline` reads the local copy; a command that has to ask the messenger refuses it rather than ignoring it. */

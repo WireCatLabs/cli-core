@@ -7,7 +7,7 @@ import { answerRow } from "./answer-entity.js"
 import type { Body } from "./envelope.js"
 import { STATUS_ROWS } from "./project-status-rows.js"
 
-/** How one column prints. `text` by default. */
+/** How one column prints. `text` by default. @experimental */
 export type RowValue = "text" | "time" | "day" | "count" | "files" | "reply" | "forward"
 
 export interface RowColumn {
@@ -38,6 +38,7 @@ export interface RowShape {
   oneLine?: boolean
 }
 
+/** @experimental */
 export interface CompactOptions {
   /** IANA zone for times; the answer's `meta.timezone` wins. */
   timezone: string
@@ -118,7 +119,7 @@ const EVIDENCE_ROWS: Readonly<Record<string, RowShape>> = {
   },
 }
 
-/** Rows for cli-core's shared entities. */
+/** Rows for cli-core's shared entities. @experimental */
 export const SHARED_ROWS: Readonly<Record<string, RowShape>> = {
   message: messageRow,
   "message.summary": messageRow,
@@ -145,7 +146,7 @@ export const SHARED_ROWS: Readonly<Record<string, RowShape>> = {
   ...EVIDENCE_ROWS,
 }
 
-/** Any record: what names it, what it is called, what state it is in, then what it says. */
+/** Any record: what names it, what it is called, what state it is in, then what it says. @experimental */
 export const GENERIC_ROW: RowShape = {
   columns: [
     { field: ["key", "ref", "id"] },
@@ -155,12 +156,16 @@ export const GENERIC_ROW: RowShape = {
   text: ["text", "excerpt"],
 }
 
+/** @experimental */
 export type RowsResolver = (command: Command | undefined) => RowShape | undefined
 
-/** An app's own rows by entity name (or `name.view`). */
+/** An app's own rows by entity name (or `name.view`). @experimental */
 export type RowTable = Readonly<Record<string, RowShape>>
 
-/** The row an entity named in a section is drawn with: the app's, the shared one, else the generic one. */
+/**
+ * The row an entity named in a section is drawn with: the app's, the shared one, else the generic one.
+ * @experimental
+ */
 export const rowsOfEntity =
   (table: RowTable = {}) =>
   (entity: string): RowShape =>
@@ -172,7 +177,7 @@ const declaredNames = (command: Command | undefined): string[] => {
   return output.view ? [`${output.entity}.${output.view}`, output.entity] : [output.entity]
 }
 
-/** An app's own rows by entity name, as `entityFields` takes its fields; a shared name is refused. */
+/** An app's own rows by entity name, as `entityFields` takes its fields; a shared name is refused. @experimental */
 export const entityRows = (table: RowTable): RowsResolver => {
   const shared = Object.keys(table).filter((name) => name in ENTITIES || name in SHARED_ROWS)
   if (shared.length > 0) throw new Error(`entityRows: ${shared.join(", ")} is cli-core's entity; name yours apart`)
@@ -182,7 +187,7 @@ export const entityRows = (table: RowTable): RowsResolver => {
   }
 }
 
-/** The row a command's answer is drawn with: its own, its app's, the shared one, else the generic one. */
+/** The row a command's answer is drawn with: its own, its app's, the shared one, else the generic one. @experimental */
 export const rowShapeOf = (command: Command | undefined, resolve?: RowsResolver): RowShape => {
   const own = answerRow(command) ?? resolve?.(command)
   if (own) return own
@@ -472,7 +477,7 @@ const usableZone = (zone: string | undefined): string | undefined => {
   }
 }
 
-/** The whole answer as compact text: header, rows, footer. Pure: no store, no clock. */
+/** The whole answer as compact text: header, rows, footer. Pure: no store, no clock. @experimental */
 export const compactText = <T>(
   body: Body<T>,
   shape: RowShape,

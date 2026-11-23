@@ -14,6 +14,7 @@ const inputSchema: Record<string, unknown> = { ...jsonSchemaOf(meetingSeriesInve
 const outputSchema: Record<string, unknown> = {
   ...jsonSchemaOf(v.union([itemEnvelopeSchema(meetingSeriesInventory), errorObjectSchema])),
 }
+/** @experimental */
 export const meetingSeriesInventoryTool = {
   name: "meeting_series_inventory",
   description: `Discover one bounded page of series candidates in the host's selected provider/account. after/until (an ISO date or time, local without a zone, or 7d ago) default to now and seven days ahead. Provider inventory may contain undated or past recurring start hints; these never prove the next occurrence or calendar completeness. Continue with page.next_cursor and the returned absolute after/until. No store writes or automatic selection. ${UNTRUSTED_NEUTRAL}`,
@@ -21,6 +22,7 @@ export const meetingSeriesInventoryTool = {
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },
 }
+/** @experimental */
 export const callMeetingSeriesInventoryTool = async (
   read: MeetingSeriesInventoryReader,
   input: unknown,

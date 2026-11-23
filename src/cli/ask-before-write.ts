@@ -11,6 +11,7 @@ import { commandPathKey } from "./permission-keys.js"
  * already stopped it before it ran (`refuseByCommandPermissions`), and `ask` is left to the command. At `ask` the owner
  * is asked, `--yes` answers, an agent goes ahead, and with nobody to answer it refuses. Outside the CLI's run, where
  * the profile's levels are not known, it refuses too.
+ * @experimental
  */
 export const askBeforeWrite = async (command: Command): Promise<void> => {
   const key = commandPathKey(commandPathOf(command))

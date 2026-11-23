@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import type { Chat, Message } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
+/** @experimental */
 export interface SearchRecipes {
   chats: Pick<Chat, "id" | "title" | "kind">[]
   messages: Pick<Message, "id" | "chatId" | "text" | "timestamp" | "senderId" | "senderName">[]
@@ -15,6 +16,7 @@ export interface SearchRecipes {
   recipes: { title: string; query: string; ids: string[] }[]
   negative: { query: string; code: string; reason: string }[]
 }
+/** @experimental */
 export const searchRecipes: SearchRecipes = JSON.parse(
   readFileSync(new URL("../../docs/search/recipes.json", import.meta.url), "utf8"),
 )

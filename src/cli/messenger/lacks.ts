@@ -9,6 +9,7 @@ type Need = readonly [method: keyof MessengerAdapter, what: string]
  * The commands that do one thing only an adapter method can, with the words `capability()` refuses in.
  * `Messenger.lacks` names the methods a messenger never has, so these refuse before anything connects;
  * a test holds each entry to the live refusal it stands in for.
+ * @experimental
  */
 export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "account update": ["updateProfile", "change the profile"],

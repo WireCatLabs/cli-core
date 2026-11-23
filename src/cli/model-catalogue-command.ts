@@ -23,6 +23,7 @@ import { localOnlyCommand } from "./local-only-command.js"
 import { pictureReadingCommand } from "./picture-reading-command.js"
 import { harderConsentsCommand } from "./search-harder-consents-command.js"
 
+/** @experimental */
 export const MODEL_CATALOGUE_QUERY = defineQuery({
   entity: "model",
   backend: "native",

@@ -198,7 +198,10 @@ const applies = (permission: OperationPermission, body: unknown, input: ApiComma
   )
 }
 
-/** The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body. */
+/**
+ * The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body.
+ * @experimental
+ */
 export const serviceApiKeys = (
   input: ServiceApiPermissionsInput,
   operation: ManifestOperation,

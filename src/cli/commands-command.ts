@@ -17,6 +17,7 @@ import { hasSharedContract } from "./shared-contracts.js"
 /**
  * The major version of the JSON every command prints. The output types live in this package, so the
  * contract is this package's: raise it with a major version, when a field is removed or renamed.
+ * @experimental
  */
 export const CONTRACT = 3
 

@@ -68,6 +68,7 @@ import type {
   UnlinkOptions,
 } from "./types.js"
 
+/** @experimental */
 export interface AccountPeople {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
   /**

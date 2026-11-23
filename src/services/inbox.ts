@@ -11,6 +11,7 @@ import { applyTaskRules, type RuleResult, withWatched } from "./task-rules.js"
 /**
  * **At most this many history reads per `inbox`**, as in max-cli: a person opening twenty chats in
  * one burst is already more than a person does, and the rest are named in `skipped`, not lost.
+ * @experimental
  */
 
 export const INBOX_CHATS = 20
@@ -44,7 +45,7 @@ const everyChat = (adapter: InboxReader): Promise<Page<Chat> & { left?: string[]
 
 const leftOf = (page: { left?: string[] }) => (page.left?.length ? { left: page.left } : {})
 
-/** What `inbox` and `review` read: the messenger's own answers, or the local store's in store mode. */
+/** What `inbox` and `review` read: the messenger's own answers, or the local store's in store mode. @experimental */
 export type InboxReader = Pick<ServerReads, "chats" | "history"> &
   Pick<MessengerAdapter, "resolve" | "admins" | "unreadChats">
 
@@ -105,6 +106,7 @@ export const capped = (chats: Chat[], most: number) => ({
  *
  * Muted and archived chats are left out unless `all`, or they mention the owner: on a busy account
  * they are most of what is unread, and they would take the history reads a person's chat needs.
+ * @experimental
  */
 export const unreadIn = async (
   adapter: InboxReader,
@@ -144,6 +146,7 @@ export const unreadIn = async (
  * one after another, so a chat read early can gain a message while a later one is read; anything
  * newer than the snapshot waits for the next run and shows once there. Each chat read is `checked`
  * up to that cut.
+ * @experimental
  */
 export const newIn = async (
   adapter: InboxReader,
@@ -196,7 +199,7 @@ export const newIn = async (
   }
 }
 
-/** Every page is a history request; 20 chats of 3 pages stays well inside what one account may ask. */
+/** Every page is a history request; 20 chats of 3 pages stays well inside what one account may ask. @experimental */
 export const REVIEW_CHATS = 20
 const REVIEW_PAGE = 100
 const REVIEW_PER_CHAT = 300
@@ -242,6 +245,7 @@ const window = async (adapter: InboxReader, chat: Id, since: number, cut: number
  * **Every message, both sides, in each chat that changed after `since`** — what a review of who
  * owes what reads, where `inbox` reads only other people's newest few. Cut at the chat list's newest
  * message, as `inbox --new` is, so the next review starting at `until` misses nothing.
+ * @experimental
  */
 export const reviewIn = async (
   adapter: InboxReader,
