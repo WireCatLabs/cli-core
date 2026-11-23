@@ -17,6 +17,7 @@ import {
 import type { Setup } from "../setup/define.js"
 import { type Block, SETUP_LIMITS, type SetupDocument, type Step, type Value } from "../setup/document.js"
 import { plainSetupText } from "../setup/plain.js"
+import { drawsHyperlinks, hyperlink } from "../terminal/hyperlink.js"
 import { answerStdinOption, lineReader, type SignInSteps, signInSteps } from "../terminal/sign-in-steps.js"
 import { refuseGuardedKey } from "./config-command.js"
 import { baseContext, environmentOf, secretInputOf } from "./context.js"
@@ -333,7 +334,8 @@ export const setupCommand = (setup: Setup): Command => {
             /\{([a-z][a-z0-9_]*)\}/g,
             (all: string, name: string) => params[name] ?? all,
           )
-    const say = (line: string) => renderer.note(plainSetupText(line))
+    const drawn = drawsHyperlinks(env) ? { link: hyperlink } : {}
+    const say = (line: string) => renderer.note(plainSetupText(line, drawn))
     const environment = environmentOf(command)
     const input = secretInputOf(command)
     const ask = async (prompt: string, hidden: boolean): Promise<string> => {
@@ -436,7 +438,7 @@ export const setupCommand = (setup: Setup): Command => {
             if (block.caption) say(text(block.caption))
             break
           case "link":
-            say(`${text(block.text)}: ${block.href}`)
+            say(`[${text(block.text)}](${block.href})`)
             break
           case "requirement":
             say(`${text(block.text)}${block.fix ? ` — ${text(block.fix)}` : ""}`)
