@@ -144,7 +144,7 @@ describe("tracker chunks", () => {
   })
 
   it("finds the nearest live items of the accounts asked only, archived ones too, never deleted ones", async () => {
-    const { store } = await fixture()
+    const { store, database } = await fixture()
     await store.tracker.save(
       A,
       "issue",
@@ -160,6 +160,8 @@ describe("tracker chunks", () => {
     const found = await store.tracker.nearest(MODEL, all, { limit: 10, accounts: [A] })
     expect(found.map(({ item }) => item.record.externalId).sort()).toEqual(["i1", "i2"])
     expect(found.every(({ account }) => account.account === "a")).toBe(true)
+    database.exec("UPDATE vector_indexes SET ready = 0")
+    expect(await store.tracker.nearest(MODEL, all, { limit: 10, accounts: [A] })).toEqual(found)
     expect(await store.tracker.embedded(MODEL, [A])).toBe(true)
     expect(await store.tracker.embedded(MODEL, [{ provider: "fake-tracker", account: "none" }])).toBe(false)
   })
