@@ -304,15 +304,19 @@ for (const { name, run } of crmManifestContract(SOURCE, { api, definitions, hook
 The store keeps one copy per CRM account, whichever profile synced it. `addCrmCommands({ account })` mounts
 `account remove` (cli-core's `accountRemoveCommand`), which refuses `--delete-data` while another profile here holds the
 same account, even one whose session ended (`conflict`, `account-remove.account-shared`); under `--dry-run` it warns
-instead. `refuseTakenCrmAccount` refuses a sign-in to an account and user another profile is signed in to
-(`conflict`, `session.duplicate`); `crmAccountClaim` is that refusal as `tokenSessionCommand`'s `claim`.
+instead. When the CLI's `held` cannot tell another profile's account, `--delete-data` is refused too
+(`account-remove.account-unknown`). `refuseTakenCrmAccount` refuses a sign-in to an account and user another profile is
+signed in to (`conflict`, `session.duplicate`), and a profile named after a folder every account shares
+(`profile.reserved`); `crmAccountClaim` is that refusal as `tokenSessionCommand`'s `claim`, given `resolveSettings` so
+it sees the profiles the configuration names.
 
 - `held(profile, { env, keyring })` says which account a profile holds: `account` as the store names it, `user` where
   one account has several users, `signedIn` while a sign-in is saved here. Unset, it is the account `session start`
   remembered (`recalledAccount`), signed in while the profile's entry keeps a token; `<PREFIX>_TOKEN` is no profile's.
-- `removal` replaces parts of the removal: the sign-out's words, an OAuth entry among `secrets`. By default the
-  sign-out only forgets `token:<profile>`, and `<state>/crm/<profile>` is removed, never one of the folders every
-  account shares there (`CRM_SHARED_FOLDERS`: `files`, `foreign-contacts`).
+  bitrix24-cli and amo-cli pass their own: they remember `<host>:<userId>`, and the store names the account `<host>`.
+- `signedOut(profile)` is what the sign-out removed, in the owner's words. The removal forgets `token:<profile>` and
+  `oauth:<provider>:<profile>`, and removes `<state>/crm/<profile>`, never one of the folders every account shares there
+  (`CRM_SHARED_FOLDERS`: `files`, `foreign-contacts`, in any case).
 
 ## Adapter helpers
 

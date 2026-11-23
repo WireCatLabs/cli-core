@@ -9,6 +9,7 @@ import { profilesHere, recalledAccount, rememberAccount } from "../../cli/messen
 import { ProfileTokenStore } from "../../cli/profile-token.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../../cli/settings.js"
 import type { TokenSessionOptions } from "../../cli/token-session.js"
+import { oauthAccount } from "../../oauth/storage.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { CRM_SHARED_FOLDERS } from "../state-folders.js"
 
@@ -34,35 +35,43 @@ export interface CrmAccountOptions {
   service: string
   /**
    * What a profile holds, from its saved sign-in or else from what `session start` remembered. Unset: the account
-   * `rememberAccount` recorded, signed in while a token is saved in the profile's entry.
+   * `rememberAccount` recorded, signed in while a token is saved in the profile's entry. A CLI whose remembered
+   * account is not the store's name for it (bitrix24's and amo's `<host>:<userId>`) passes its own.
    */
   held?: (profile: string, context: CrmAccountContext) => CrmHeld | undefined
-  /** Parts of `account remove`'s own: the sign-out's words, an OAuth entry among `secrets`. */
-  removal?: Partial<AccountRemoval>
-  /** Unset: the one `run()` set. */
+  /** What `account remove` says the sign-out removed, when the CRM keeps more than a token valid. */
+  signedOut?: (profile: string) => string
+  /** Unset: the one `run()` set. `crmAccountClaim` needs it to see the profiles the configuration names. */
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
 }
 
 const SHARED: ReadonlySet<string> = new Set(Object.values(CRM_SHARED_FOLDERS))
+// A folder named Files is the folder files on macOS and Windows.
+const isShared = (profile: string) => SHARED.has(profile.toLowerCase())
 
-const savedToken = (tokens: ProfileTokenStore, profile: string) => {
-  const saved = tokens.read(profile)
-  // `<PREFIX>_TOKEN` is every profile's at once, so it is no profile's own sign-in.
-  return saved !== undefined && saved.source !== "environment"
-}
+/** The account alone, which the delete guard needs: the default reads no keyring, so it cannot fail. */
+const accountBy = (app: AppIdentity, options: CrmAccountOptions) => (profile: string, context: CrmAccountContext) =>
+  options.held
+    ? options.held(profile, context)?.account
+    : recalledAccount(app, options.provider, profile, context.env)?.account
 
-const heldBy = (app: AppIdentity, options: CrmAccountOptions) => (profile: string, context: CrmAccountContext) => {
-  try {
-    if (options.held) return options.held(profile, context)
-    const account = recalledAccount(app, options.provider, profile, context.env)?.account
-    if (account === undefined) return undefined
-    const tokens = new ProfileTokenStore({ app, ...context })
-    return { account, signedIn: savedToken(tokens, profile) }
-  } catch {
-    // A keyring that does not answer for one profile must not stop the check of the others.
-    return undefined
+type Tokens = Pick<ProfileTokenStore, "read">
+
+const signedInBy =
+  (app: AppIdentity, options: CrmAccountOptions, tokens: Tokens | undefined) =>
+  (profile: string, context: CrmAccountContext): CrmHeld | undefined => {
+    try {
+      if (options.held) return options.held(profile, context)
+      const account = recalledAccount(app, options.provider, profile, context.env)?.account
+      if (account === undefined) return undefined
+      const saved = (tokens ?? new ProfileTokenStore({ app, ...context, warn: () => {} })).read(profile)
+      // `<PREFIX>_TOKEN` is every profile's at once, so it is no profile's own sign-in.
+      return { account, signedIn: saved !== undefined && saved.source !== "environment" }
+    } catch {
+      // A keyring that does not answer for one profile must not stop another profile's sign-in.
+      return undefined
+    }
   }
-}
 
 const also = (names: readonly string[]) => `${names.join(", ")} also read${names.length === 1 ? "s" : ""}`
 
@@ -71,6 +80,8 @@ export interface CrmSignIn extends CrmAccountContext {
   profile: string
   /** The profiles the configuration names; those `session start` remembered are added. */
   profiles?: readonly string[]
+  /** The run's token store, whose warnings go where the run's do. Unset: one that keeps them quiet. */
+  tokens?: Tokens
 }
 
 /**
@@ -80,10 +91,17 @@ export interface CrmSignIn extends CrmAccountContext {
 export const refuseTakenCrmAccount = (
   app: AppIdentity,
   options: CrmAccountOptions,
-  { profile, profiles = [], ...context }: CrmSignIn,
+  { profile, profiles = [], tokens, ...context }: CrmSignIn,
   at: { account: string; user?: string },
 ): void => {
-  const held = heldBy(app, options)
+  if (isShared(profile))
+    throw new CliError(
+      "validation_error",
+      `"${profile}" names a folder every account shares, where this profile's own files would land. Pick another ` +
+        `name than ${Object.values(CRM_SHARED_FOLDERS).join(" or ")}`,
+      { reason: "profile.reserved", profile },
+    )
+  const held = signedInBy(app, options, tokens)
   const other = profilesHere(app, profiles, context.env).find((one) => {
     if (one === profile) return false
     const found = held(one, context)
@@ -94,8 +112,10 @@ export const refuseTakenCrmAccount = (
   throw new CliError(
     "conflict",
     `profile ${other} already signs in to ${options.service} account ${at.account}` +
-      `${at.user === undefined ? "" : ` as user ${at.user}`}. Use \`${command} ${other}\`, sign it in again with ` +
-      `\`${command} ${other} session start\`, or end it with \`${command} ${other} session end\` first`,
+      `${at.user === undefined ? "" : ` as user ${at.user}`}. Use \`${command} ${other}\`, ` +
+      // Another user's token on the account is a second sign-in only where the account has users.
+      (at.user === undefined ? "" : `sign it in again with \`${command} ${other} session start\`, `) +
+      `or end it with \`${command} ${other} session end\` first`,
     { reason: "session.duplicate", profile: other, account: at.account },
   )
 }
@@ -103,8 +123,14 @@ export const refuseTakenCrmAccount = (
 /** `claim` for `tokenSessionCommand`: refuses an account another profile is signed in to, then remembers it. */
 export const crmAccountClaim =
   (app: AppIdentity, options: CrmAccountOptions): NonNullable<TokenSessionOptions["claim"]> =>
-  (env, profile, id, _tokens, keyring) => {
-    refuseTakenCrmAccount(app, options, { env, profile, ...(keyring ? { keyring } : {}) }, { account: id })
+  (env, profile, id, tokens, keyring) => {
+    const profiles = options.resolveSettings?.({}, { env, needsProfile: false }).configuredProfiles ?? []
+    refuseTakenCrmAccount(
+      app,
+      options,
+      { env, profile, profiles, tokens, ...(keyring ? { keyring } : {}) },
+      { account: id },
+    )
     rememberAccount(app, profile, id, env)
   }
 
@@ -116,10 +142,22 @@ const refuseSharedDelete = (app: AppIdentity, options: CrmAccountOptions, comman
   if (!resolveSettings) return
   const { env, keyring, settings, renderer } = baseContext(command, resolveSettings)
   const context = { env, ...(keyring ? { keyring } : {}) }
-  const held = heldBy(app, options)
-  const own = held(settings.profile, context)?.account
+  const accountOf = accountBy(app, options)
+  const read = (profile: string) => {
+    try {
+      return accountOf(profile, context)
+    } catch {
+      throw new CliError(
+        "conflict",
+        `${app.command} could not tell which ${options.service} account ${profile} holds, so --delete-data could ` +
+          `delete a copy ${profile} still reads. Fix ${profile}'s sign-in, or use --keep-data`,
+        { reason: "account-remove.account-unknown", profile },
+      )
+    }
+  }
+  const own = read(settings.profile)
   if (own === undefined) return
-  const sharing = settings.profilesHere.filter((one) => one !== settings.profile && held(one, context)?.account === own)
+  const sharing = settings.profilesHere.filter((one) => one !== settings.profile && read(one) === own)
   if (sharing.length === 0) return
   if (given.dryRun === true) {
     renderer.warn(`without --dry-run this refuses: ${also(sharing)} ${options.service} account ${own}`)
@@ -135,17 +173,25 @@ const refuseSharedDelete = (app: AppIdentity, options: CrmAccountOptions, comman
 }
 
 const removalOf = (app: AppIdentity, options: CrmAccountOptions): AccountRemoval => {
-  const held = heldBy(app, options)
+  const accountOf = accountBy(app, options)
   const folders = (env: NodeJS.ProcessEnv) => resolvePaths({ appName: app.appName, prefix: app.envPrefix, env })
   return {
     // A CRM's API token has no call that revokes it; the CRM's own settings do.
     signOut: async (profile) => ({
       revoked: null,
-      removed: [`the sign-in of ${profile} (the token stays valid in ${options.service} until you delete it there)`],
+      removed: [
+        options.signedOut?.(profile) ??
+          `the sign-in of ${profile} (the token stays valid in ${options.service} until you delete it there)`,
+      ],
     }),
     account: (profile, context) => {
-      const found = held(profile, context)
-      return found ? { provider: options.provider, account: found.account } : undefined
+      try {
+        const account = accountOf(profile, context)
+        return account === undefined ? undefined : { provider: options.provider, account }
+      } catch {
+        // --delete-data was refused before this; --keep-data only names the account it keeps.
+        return undefined
+      }
     },
     secrets: (profile, { env, keyring }) => [
       {
@@ -156,12 +202,12 @@ const removalOf = (app: AppIdentity, options: CrmAccountOptions): AccountRemoval
           env,
           ...(keyring ? { keyring } : {}),
         },
-        accounts: [`token:${profile}`],
+        // An OAuth sign-in's entry; removing a missing one is fine.
+        accounts: [`token:${profile}`, oauthAccount(options.provider, profile)],
       },
     ],
     // A profile named after a folder every account shares has no folder of its own there.
-    stateFiles: (profile, { env }) => (SHARED.has(profile) ? [] : [join(folders(env).state, "crm", profile)]),
-    ...options.removal,
+    stateFiles: (profile, { env }) => (isShared(profile) ? [] : [join(folders(env).state, "crm", profile)]),
   }
 }
 

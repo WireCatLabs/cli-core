@@ -175,16 +175,51 @@ describe("account remove of a CRM", () => {
     expect(await accountsInStore(given.env)).toEqual(["portal-2"])
   })
 
-  it("asks the CLI's own hook which account a profile holds, and takes its own sign-out", async () => {
-    const given = await setup({ personal: "remembered-1", work: "remembered-2" })
-    const held = (): CrmHeld => ({ account: "portal-9", signedIn: true })
+  it("still refuses when the other profile's saved sign-in cannot be read, and keeps the copy", async () => {
+    const given = await setup({ personal: "portal-1", work: "portal-1" })
+    for (const key of given.keyring.entries.keys())
+      if (key.includes("token:work")) given.keyring.entries.set(key, "wirecat-secrets:v1:{damaged")
+    expect(() => given.tokens.read("work")).toThrow("cannot be read")
+    const result = await call(["personal", "--json", "account", "remove", "--delete-data", "--yes"], given)
+
+    expect(result.error).toMatchObject({ reason: "account-remove.account-shared", details: { profiles: ["work"] } })
+    expect(await accountsInStore(given.env)).toEqual(["portal-1"])
+  })
+
+  it("refuses --delete-data when the CLI's own hook cannot tell another profile's account", async () => {
+    const given = await setup({ personal: "portal-1", work: "portal-1" })
+    const held = (profile: string): CrmHeld => {
+      if (profile === "work") throw new Error("keyring.unreachable")
+      return { account: "portal-1", signedIn: true }
+    }
     const result = await call(["personal", "--json", "account", "remove", "--delete-data", "--yes"], given, {
       ...ACCOUNT,
       held,
-      removal: { signOut: async () => ({ revoked: null, removed: ["the webhook of personal"] }) },
     })
 
-    expect(result.error).toMatchObject({ reason: "account-remove.account-shared", details: { account: "portal-9" } })
+    expect(result.error).toMatchObject({
+      code: "conflict",
+      reason: "account-remove.account-unknown",
+      details: { profile: "work" },
+    })
+    expect(await accountsInStore(given.env)).toEqual(["portal-1"])
+  })
+
+  it("asks the CLI's own hook which account a profile holds, and says what its sign-out removed", async () => {
+    const given = await setup({ personal: "remembered-1", work: "remembered-2" })
+    const held = (profile: string): CrmHeld => ({ account: `portal-${profile}`, signedIn: true })
+    const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, {
+      ...ACCOUNT,
+      held,
+      signedOut: (profile) => `the webhook address of ${profile} (the webhook itself stays in Example CRM)`,
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.item.account).toEqual({ provider: PROVIDER, account: "portal-personal" })
+    expect(result.item.removed).toContainEqual({
+      kind: "sign_in",
+      target: "the webhook address of personal (the webhook itself stays in Example CRM)",
+    })
   })
 })
 
@@ -200,7 +235,7 @@ describe("a second sign-in to a CRM account", () => {
             app: APP,
             service: "Example CRM",
             resolveSettings: settingsFor(APP).resolveSettings,
-            claim: crmAccountClaim(APP, ACCOUNT),
+            claim: crmAccountClaim(APP, { ...ACCOUNT, resolveSettings: settingsFor(APP).resolveSettings }),
             verify: async () => ({ id, account: { id } }),
           }),
         ],
@@ -221,6 +256,7 @@ describe("a second sign-in to a CRM account", () => {
       details: { profile: "work", account: "portal-1" },
     })
     expect(refused.error.message).toContain("profile work already signs in to Example CRM account portal-1")
+    expect(refused.error.message).not.toContain("session start")
     expect(given.tokens.read("personal")).toBeUndefined()
 
     given.tokens.remove("work")
@@ -251,6 +287,14 @@ describe("a second sign-in to a CRM account", () => {
     given.tokens.remove("sales")
     const fromVariable = { ...where, env: { ...given.env, CRM_TOKEN: "synthetic" } }
     expect(() => refuseTakenCrmAccount(APP, ACCOUNT, fromVariable, { account: "portal-1" })).not.toThrow()
+  })
+
+  it("refuses a profile named after a folder every account shares, in any case", async () => {
+    const given = await setup({})
+    const refused = await signIn(given, "Files", "portal-1")
+
+    expect(refused.error).toMatchObject({ code: "validation_error", reason: "profile.reserved" })
+    expect(recalledAccount(APP, PROVIDER, "Files", given.env)).toBeUndefined()
   })
 
   it("passes over a profile whose sign-in cannot be read", () => {
