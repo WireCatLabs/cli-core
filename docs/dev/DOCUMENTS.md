@@ -391,8 +391,9 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 
 1. Each path is compared three ways: the local file now, the remote file now and the last sync (`FileEntry` in the
    state). A change on one side is copied to the other. The same content on both sides is adopted without a
-   transfer, so a first sync of two identical trees moves nothing. Different content on both sides, or a deletion
-   on one side against a change on the other, is a conflict: never overwritten, reported with each side's time and
+   transfer, so a first sync of two identical trees moves nothing. A small text file both sides changed is merged
+   (point 13). Other different content on both sides, a merge that conflicts, or a deletion on one side against a
+   change on the other, is a conflict: never overwritten, reported with each side's time and
    size, and the run ends with a `mirror.partial` issue. `keep` settles conflicts on a later run: `local` and
    `remote` pick a side; `both` downloads the remote version beside the local one as
    `name (conflict YYYY-MM-DD <remote>).ext`, then sends both. The copy enters the state only once its upload
@@ -400,7 +401,7 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 2. A deletion crosses sides into a trash: the remote's (`trash`, with the expected hashes) or
    `<root>/.wirecat-trash/YYYY-MM-DD/`, which is hidden and so never synced. A run that would delete more than 10
    files (`MAX_DELETIONS`), or replace more than 50 existing files on either side (`MAX_REPLACEMENTS`: an upload over
-   a remote file, a download over a local one, `keep: "both"`), stops before any write unless `allowDeletions` and
+   a remote file, a download over a local one, `keep: "both"`, a merge), stops before any write unless `allowDeletions` and
    `allowReplacements` cover the counts, however large the mirror. The stop is not thrown: the mirror's result has
    one error at path `.` with `code: "confirmation_required"` and `reason` `mirror.too-many-deletions` or
    `mirror.too-many-replacements`, plus `tooManyDeletions` and `tooManyReplacements`, so `syncFileMirrors` goes on

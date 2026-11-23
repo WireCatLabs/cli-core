@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs"
-import { stat } from "node:fs/promises"
-import { join, posix } from "node:path"
+import { mkdir, stat } from "node:fs/promises"
+import { dirname, join, posix } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import type { Expect, FileConflict, FileMirrorStatePort, RemoteFile } from "../../documents/file-mirror-model.js"
 import type { Keep } from "../../documents/push-model.js"
@@ -146,6 +146,7 @@ export const resolveFileConflict = async (options: FileConflictResolveOptions): 
     const found = recorded(options.state, path)
     await assertNoLink(root, path)
     const absolute = join(root, path)
+    await mkdir(dirname(absolute), { recursive: true })
     const remotePath = (at: string) => posix.join(folder, at)
     const localNow = existsSync(absolute) ? await versions.keep(absolute) : undefined
     if (localNow !== found.local) throw changed("the local file", "mirror.local-changed")

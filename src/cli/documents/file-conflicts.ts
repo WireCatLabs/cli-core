@@ -12,13 +12,16 @@ import {
   resolveFileConflict,
   showFileConflict,
 } from "../../documents.js"
+import type { AppIdentity } from "../../ports/app.js"
+import { refusedPlace } from "../../sends/upload.js"
+import { environmentOf } from "../context.js"
 import { LOCAL_READ, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf, snakeKeys } from "../envelope.js"
 
 /** What a file-mirror CLI gives `fileConflictsCommand`: its mirrors, their state and stores, and its remote. */
 export interface FileConflictCommands {
-  /** The app's command, as examples name it: `ydisk`. */
-  app: string
+  /** Who the app is: its command names the examples, its folders are never read by `--file`. */
+  identity: AppIdentity
   /** How the app names the remote side, `disk` for Yandex Disk: `--keep`'s other choice and a kept copy's name. */
   remote: string
   output(command: Command, body: Body): void
@@ -43,7 +46,8 @@ const PATH = "the file's path inside the mirror, like notes/plan.md"
  * versions and the line merge that failed, and a resolution that writes one final content to both sides.
  */
 export const fileConflictsCommand = (helpers: FileConflictCommands): Command => {
-  const { app, remote } = helpers
+  const { remote, identity } = helpers
+  const app = identity.command
   const one = (command: Command, id: string) => helpers.mirrors(command, id)[0] as Mirror
   return annotate(new Command("conflicts"), { effects: LOCAL_READ })
     .summary("files changed on both sides that a sync could not merge")
@@ -123,6 +127,11 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
         .action(async function (this: Command, id: string, input: string, args: { keep?: string; file?: string }) {
           if ((args.keep === undefined) === (args.file === undefined))
             throw new CliError("validation_error", "give either --keep or --file", { param: "--keep" })
+          const file = args.file === undefined ? undefined : resolve(args.file)
+          if (file && refusedPlace(file, identity, environmentOf(this).env ?? process.env))
+            throw new CliError("validation_error", `--file may not read ${file}: it holds sign-ins or state`, {
+              param: "--file",
+            })
           const mirror = one(this, id)
           const keep = (args.keep === remote ? "remote" : args.keep) as Keep | undefined
           const resolved = await resolveFileConflict({
@@ -133,7 +142,7 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
             state: helpers.stateOf(this, mirror),
             versions: helpers.versionsOf(this, mirror),
             remote,
-            choice: keep ? { keep } : { file: resolve(args.file as string) },
+            choice: keep ? { keep } : { file: file as string },
           })
           const resolution = resolved.resolution === "remote" ? remote : resolved.resolution
           helpers.output(this, itemOf(snakeKeys({ id, ...resolved, resolution })))

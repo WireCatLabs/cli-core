@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
@@ -46,7 +46,13 @@ const setup = async () => {
   program.addCommand(
     new Command("mirrors").addCommand(
       fileConflictsCommand({
-        app: "ydisk",
+        identity: {
+          command: "ydisk",
+          appName: "ydisk-cli",
+          envPrefix: "YDISK",
+          description: "ydisk",
+          version: "1.0.0",
+        },
         remote: "disk",
         output: (_command, body) => bodies.push(body),
         mirrors: () => [mirror],
@@ -80,6 +86,13 @@ describe("mirrors conflicts", () => {
     expect((await run("resolve", "m1", "plan.md", "--keep", "disk")).item).toMatchObject({ resolution: "disk" })
     expect(readFileSync(join(root, "plan.md"), "utf8")).toBe("a\ntheirs\n")
     expect(port.read().conflicts).toBeUndefined()
+  })
+
+  it("refuses a final file from the app's own folders, which hold sign-ins and state", async () => {
+    const { run } = await setup()
+    await expect(
+      run("resolve", "m1", "plan.md", "--file", join(homedir(), ".config", "ydisk-cli", "credentials.json")),
+    ).rejects.toMatchObject({ code: "validation_error", details: { param: "--file" } })
   })
 
   it("asks for exactly one of --keep and --file", async () => {

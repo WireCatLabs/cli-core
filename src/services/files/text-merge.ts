@@ -99,6 +99,8 @@ const plain = (text: string) => (text.startsWith(BOM) ? text.slice(1) : text).re
 const mergeMarkdown = async (base: Buffer, local: Buffer, remote: Buffer): Promise<Buffer | undefined> => {
   const [baseText, localText, remoteText] = [utf8(base), utf8(local), utf8(remote)]
   if (baseText === undefined || localText === undefined || remoteText === undefined) return undefined
+  // The splice writes every line ending as CRLF once the file has one, which would change lines nobody edited.
+  if (/\r\n/.test(localText) && /(^|[^\r])\n/.test(localText)) return undefined
   const [baseBlocks, localBlocks, remoteBlocks] = await Promise.all(
     [baseText, localText, remoteText].map((text) => markdownBlocks(plain(text))),
   )

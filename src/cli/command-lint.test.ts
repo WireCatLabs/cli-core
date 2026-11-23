@@ -110,7 +110,7 @@ it("a file mirror's conflict commands pass the command lint with only the mirror
           .description("keep local folders and Disk folders the same")
           .addCommand(
             fileConflictsCommand({
-              app: "ydisk",
+              identity: app,
               remote: "disk",
               output: refuse,
               mirrors: refuse,

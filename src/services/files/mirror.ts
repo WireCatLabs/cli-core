@@ -416,10 +416,13 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       continue
     }
     // A re-pinned run settles nothing: whatever `keep` says, different content is a conflict.
+    // Asked only of a file both sides changed: the store is not read for every unchanged one.
     const merges =
       here !== undefined &&
       file !== undefined &&
       entry !== undefined &&
+      here.hash !== entry.sha256 &&
+      file.sha256 !== entry.sha256 &&
       mergeable(path, here.size, file.size, entry.size) &&
       versions.has(entry.sha256)
     const step = decide(path, sure, here, file, entry, repin ? undefined : keep, merges)

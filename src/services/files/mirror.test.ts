@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -2048,6 +2049,32 @@ describe("syncFileMirror, text merges and conflicts", () => {
     expect(await context.local()).toMatchObject({ "plan.md": PLAN.replace("gym", "gym at 7") })
     expect(await context.disk.files()).toMatchObject({ "plan.md": "someone else" })
     expect(context.port.read().conflicts?.["plan.md"]).toBeDefined()
+  })
+
+  it("resolves a deletion against a change: the kept deletion goes to the other side's trash", async () => {
+    const context = await synced({ "a.txt": LIST, "b.txt": LIST, "sub/c.txt": LIST })
+    put(context.root, "a.txt", "changed here")
+    context.disk.remove("a.txt")
+    rmSync(join(context.root, "b.txt"))
+    context.disk.write("b.txt", "changed there")
+    rmSync(join(context.root, "sub"), { recursive: true })
+    put(context.root, "keep.txt", "so the folder is not empty")
+    context.disk.write("sub/c.txt", "changed there too")
+    expect((await context.sync()).conflicts.map((one) => one.path)).toEqual(["a.txt", "b.txt", "sub/c.txt"])
+    expect(await resolveWith(context, "a.txt", { keep: "remote" })).toMatchObject({ sha256: null })
+    expect(await resolveWith(context, "b.txt", { keep: "local" })).toMatchObject({ sha256: null })
+    expect(await resolveWith(context, "sub/c.txt", { keep: "remote" })).toMatchObject({
+      sha256: hashes("changed there too").sha256,
+    })
+    expect(readdirSync(join(context.root, ".wirecat-trash", "2026-11-18"))).toEqual(["a.txt"])
+    expect(context.disk.trash).toEqual([{ path: "b.txt", content: "changed there" }])
+    expect(context.disk.calls.find((call) => call.op === "trash")?.expect).toEqual(hashes("changed there"))
+    expect(await context.local()).toEqual({
+      "keep.txt": "so the folder is not empty",
+      "sub/c.txt": "changed there too",
+    })
+    expect(Object.keys(context.port.read().entries).sort()).toEqual(["keep.txt", "sub/c.txt"])
+    expect(await context.sync()).toMatchObject({ conflicts: [], errors: [], unchanged: 2 })
   })
 
   it("refuses a resolution when the local file changed since the conflict", async () => {

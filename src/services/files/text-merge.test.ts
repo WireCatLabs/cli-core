@@ -65,6 +65,12 @@ describe("mergeText", () => {
     expect(result).toHaveProperty("conflicts")
   })
 
+  it("leaves Markdown with mixed line endings to the line merge, which never rewrites a line nobody edited", async () => {
+    const base = "# Plan\r\n\n- [ ] buy milk\n- [ ] call Anna\n"
+    const result = await merge("p.md", base, base.replace("[ ] buy", "[x] buy"), base.replace("milk", "oat milk"))
+    expect(result).toHaveProperty("conflicts")
+  })
+
   it("takes only small files of text kinds", () => {
     expect(mergeable("notes/A.MD", 10, 10)).toBe(true)
     expect(mergeable("data.tsv", 1024 * 1024)).toBe(true)

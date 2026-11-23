@@ -9,3 +9,12 @@
   or a final file, refused with nothing written when either side changed since), mounted by `fileConflictsCommand`
   as `mirrors conflicts list|show|resolve`. The contents of every merge, conflict and resolution are kept for good,
   and `versions list` names each one's role ([DOCUMENTS.md](../docs/dev/DOCUMENTS.md#plain-files-both-ways)).
+
+### Changed — may break callers
+
+- **A file mirror writes a merged text file to both sides where it used to report a conflict.** A caller that counted
+  on every both-sides change waiting for `keep` now finds the file in the new `FileMirrorResult.merged`, and a plan
+  step of the new kind `merge`; `VersionDirection` gains `both` and `VersionEvent.event` gains `merged`, `conflict`
+  and `resolved`, so a switch over them needs the new cases. `FileVersions` gains `read(sha256)`, and `prune` takes
+  the contents to keep (`pinned`): an implementation of its own adds both. `versions.has` is false for anything but a
+  sha256.
