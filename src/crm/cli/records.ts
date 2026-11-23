@@ -360,7 +360,10 @@ export const addCrmRecordCommands = (program: Command, options: CrmRecordCommand
           `one of the CRM's ${noun.what}, read live, with its phones and e-mails; one that is not your client ` +
             "counts toward the day's limit when the CRM sets one",
         )
-        .argument(`<${noun.kind}>`, `the CRM's id of the ${noun.kind}, as list prints it, or its exact name`),
+        .argument(
+          `<${noun.kind}>`,
+          `the CRM's id of the ${noun.kind}, as list prints it, the ${noun.kind}:<id> a deal gives, or its exact name`,
+        ),
       `${noun.noun} show 42`,
       `${noun.noun} show "Anna Example" --json`,
     ).action(async (given: string, _opts: unknown, command: Command) => {
@@ -388,8 +391,23 @@ const byIdOrNone = async (run: CrmRun, noun: Noun, id: string) => {
   }
 }
 
+/** The copy's `person:<id>` or `organization:<id>`, which a deal gives, is the CRM record it was stored from. */
+const storedRecord = async (run: CrmRun, noun: Noun, ref: string): Promise<CrmPerson | CrmOrganization> => {
+  const ids = await run.store.crm.externalIdsOf(run.account, ref)
+  if (ids.length > 1)
+    throw new CliError("validation_error", `${ref} is ${ids.length} records of the CRM; name one by its id`, {
+      reason: "crm.record-ambiguous",
+      candidates: ids.map((id) => ({ id })),
+    })
+  const found = ids[0] ? await sourceWith(run, "get", noun.what).get(noun.kind, ids[0]) : null
+  if (!found)
+    throw new CliError("not_found", `the copy holds no CRM ${noun.kind} as ${ref}, or this sign-in cannot see it`)
+  return found as CrmPerson | CrmOrganization
+}
+
 const recordNamed = async (run: CrmRun, noun: Noun, given: string): Promise<CrmPerson | CrmOrganization> => {
   const id = given.trim()
+  if (id.startsWith(`${noun.kind}:`) && /^\w+:\d+$/.test(id)) return storedRecord(run, noun, id)
   const byId = RECORD_ID.test(id) ? await byIdOrNone(run, noun, id) : null
   if (byId) return byId as CrmPerson | CrmOrganization
   const want = foldName(id)

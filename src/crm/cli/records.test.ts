@@ -16,7 +16,13 @@ import type { Level } from "../../sends/permissions.js"
 import { crmIdentityId } from "../../store/sqlite/crm-rows.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { DAILY_FOREIGN_CONTACTS, foreignContactsPathFor } from "../foreign-contacts.js"
-import { exampleOrganization, examplePerson, type FakeCrmSourceOptions, fakeCrmSource } from "../testing/index.js"
+import {
+  exampleDeal,
+  exampleOrganization,
+  examplePerson,
+  type FakeCrmSourceOptions,
+  fakeCrmSource,
+} from "../testing/index.js"
 import { crmAlsoChecks } from "../writer.js"
 import { addCrmCommands, type CrmCommandOptions, type CrmRun } from "./index.js"
 
@@ -219,6 +225,23 @@ describe("people, organizations and users, read live", () => {
     expect((await cli("people", "show", "p2")).item).toMatchObject({ id: "p2", name: "Anna Example" })
     expect((await cli("organizations", "show", "c1")).item).toMatchObject({ id: "c1", own: true })
     await expect(cli("people", "show", "p404")).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("show takes the person and company refs a stored deal gives", async () => {
+    const { cli, source } = await setup()
+    source.put(
+      "deal",
+      exampleDeal("d1", { organization: "c1", people: [{ externalId: "p2", role: "contact" }], assignee: "7" }),
+    )
+    await cli("sync")
+    const [listed] = (await cli("deals", "list")).items as { ref: string }[]
+    const deal = (await cli("deals", "show", listed?.ref as string)).item as {
+      organization: { ref: string }
+      people: { ref: string }[]
+    }
+    expect((await cli("organizations", "show", deal.organization.ref)).item).toMatchObject({ id: "c1" })
+    expect((await cli("people", "show", deal.people[0]?.ref as string)).item).toMatchObject({ id: "p2" })
+    await expect(cli("people", "show", "person:999")).rejects.toMatchObject({ code: "not_found" })
   })
 
   it("a non-admin sees foreign contacts without phones and e-mails, and show spends the day's slots", async () => {
