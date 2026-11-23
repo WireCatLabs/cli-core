@@ -229,6 +229,17 @@ describe("one sync for a tracker that holds documents too", () => {
     })
   })
 
+  it("fails as the tracker does when it cannot run and no folder is chosen", async () => {
+    const { cli } = setup({ signedIn: false })
+    const done = await cli(["sync"])
+    expect(done.exit).not.toBe(0)
+    expect(done.stdout).toBe("")
+    expect(JSON.parse(done.stderr).error).toMatchObject({
+      code: "authentication_error",
+      message: "personal is not signed in",
+    })
+  })
+
   it("skips the documents, asking nothing, while no folder is chosen and nothing is kept", async () => {
     const documents = fakeDocumentSource("alpha")
     let asked = 0
