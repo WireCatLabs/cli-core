@@ -38,7 +38,8 @@ const organizationOf = (database: CacheDatabase, ref: string) => {
 
 /**
  * Deletes an organization and what memo knows of it alone: the tags, links, aliases and mentions that name it, and
- * which identities it held. A deal, lead, project, account, fact or note that names it stays and loses the name.
+ * which identities it held, and the owner's notes about it. A deal, lead, project, account or fact that names it stays
+ * and loses the name.
  * Refused for one of the owner's own companies, and while an invoice, order, subscription or a row it wrote cannot
  * be without it. `apply: false` answers the same without changing anything.
  */
