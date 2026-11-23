@@ -15,7 +15,6 @@ import { refreshMeetingIndex } from "./meeting-hit-search.js"
 import { readMeetingPassage } from "./meeting-passage-format.js"
 import type { SearchFound } from "./messages.js"
 import { type SearchAllItem, type SearchAllRequest, searchAll } from "./search-all.js"
-import { searchAllIncludingMeetings } from "./search-all-deprecated.js"
 import type { MeetingSearchItem } from "./search-all-meetings.js"
 
 const alice = { provider: "zoom", account: "zm-profile:alice" }
@@ -517,21 +516,6 @@ describe("meetings in search all", () => {
       { source: `zoom:${alice.account}`, code: "validation_error", reason: READ_BUDGET_EXCEEDED },
     ])
   })
-
-  it("keeps the deprecated searchAllIncludingMeetings to the meeting account it names", async () => {
-    const { store, save } = await fixture()
-    await save(alice, "a", ["needle from alice"])
-    await save(bob, "b", ["needle from bob"])
-    const found = await searchAllIncludingMeetings(store, caller, {
-      text: "needle",
-      limit: 20,
-      only: ["meetings"],
-      meetingAccount: alice,
-      maxMeetings: 1,
-    })
-    expect(texts(found.items)).toEqual(["needle from alice"])
-    expect(found.meetings).toBeUndefined()
-  })
 })
 
 describe("a Meet transcript that Drive also imported", () => {
@@ -591,6 +575,10 @@ describe("a Meet transcript that Drive also imported", () => {
     return saved
   }
   const asked = meetingsOnly({ only: ["notes", "meetings"] })
+  const transcriptOf = async (store: MessageStore, id: number) => {
+    const found = (await store.meetings.documentMeetings([id])).get(id)
+    return found?.role === "transcript" ? found.meetingId : undefined
+  }
 
   it("shows the meeting once, whichever of the two the store holds first", async () => {
     for (const driveFirst of [true, false]) {
@@ -598,7 +586,7 @@ describe("a Meet transcript that Drive also imported", () => {
       const document = driveFirst ? await transcriptDoc(store, "needle in the transcript") : undefined
       const saved = await withDocument(save, store)
       const id = document ?? (await transcriptDoc(store, "needle in the transcript"))
-      expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+      expect(await transcriptOf(store, id)).toBe(saved.meeting.id)
       const found = await searchAll(store, caller, asked)
       expect(found.items.filter((item) => item.ref === `document:${id}`)).toEqual([])
       expect(meetingHits(found.items).length).toBeGreaterThan(0)
@@ -609,9 +597,9 @@ describe("a Meet transcript that Drive also imported", () => {
     const { store, save } = await fixture()
     const saved = await withDocument(save, store)
     const id = await transcriptDoc(store, "needle in the transcript")
-    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    expect(await transcriptOf(store, id)).toBe(saved.meeting.id)
     await withDocument(save, store)
-    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    expect(await transcriptOf(store, id)).toBe(saved.meeting.id)
     const sample = sampleMeeting()
     await store.meetings.saveMeeting({
       meeting: { ...sample.meeting, accountId: saved.accountId, externalId: "meet-1", title: "Invented call" },
@@ -626,7 +614,7 @@ describe("a Meet transcript that Drive also imported", () => {
       ],
       now: 5000,
     })
-    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map())
+    expect(await transcriptOf(store, id)).toBeUndefined()
   })
 
   it("keeps the document's hit when the meeting is not among the hits", async () => {

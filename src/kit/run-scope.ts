@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import { hasOwnAction } from "../cli/commander-internals.js"
 import { createProgram, type ProgramDefinition, type RunOptions, run } from "../cli/program.js"
 import { findRun, runsDirFor } from "../runs/run.js"
 
@@ -45,7 +46,7 @@ interface Remote {
 }
 
 /** Commander keeps it private; a group with an action of its own, as `doctor` beside `doctor reports`, runs too. */
-const acts = (command: Command): boolean => (command as unknown as { _actionHandler?: unknown })._actionHandler != null
+const acts = (command: Command): boolean => hasOwnAction(command)
 
 const remoteCommands = (program: Command, path: string[] = []): Remote[] =>
   program.commands.flatMap((command) => {

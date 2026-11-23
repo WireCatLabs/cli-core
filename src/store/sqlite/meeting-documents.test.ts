@@ -97,7 +97,6 @@ describe("a meeting's Drive documents", () => {
         [late, { meetingId, accountId, role: "notes" }],
       ]),
     )
-    expect(await store.meetings.transcriptMeetings([early, late])).toEqual(new Map([[early, meetingId]]))
   })
 
   it("a replay adds no second link and retitles; a list without a file, empty or failed keeps its link", async () => {

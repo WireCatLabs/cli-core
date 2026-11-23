@@ -4,6 +4,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, type Option } from "commander"
 import type { AppIdentity } from "../ports/app.js"
+import { hasOwnAction, helpOptionOf } from "./commander-internals.js"
 import { environmentOf, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
@@ -319,11 +320,11 @@ export const checkStep = (program: Command, run: string): string[] => {
   }
   // A mistyped command reads like a profile word; when nothing follows that is a command, name the first word.
   if (at === program) return [`no command "${rest[0] ?? ""}"`]
-  const help = (at as unknown as { _getHelpOption: () => Option | null })._getHelpOption()
+  const help = helpOptionOf(at)
   const beforeDashes = rest.slice(index, rest.includes("--") ? rest.indexOf("--") : undefined)
   if (help && beforeDashes.some((word) => word === help.long || word === help.short)) return []
   // A group with an action of its own runs as typed rather than asking for one of its children.
-  const runsItself = (at as unknown as { _actionHandler: unknown })._actionHandler != null
+  const runsItself = hasOwnAction(at)
   if (at.commands.length > 0 && !runsItself) return [`needs one of: ${at.commands.map((one) => one.name()).join(", ")}`]
   for (const command of chain) silent(command)
   const problems: string[] = []
