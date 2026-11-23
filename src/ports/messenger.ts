@@ -341,7 +341,10 @@ export interface ThreadReplies {
    * history and saves them without marking a stretch held. A chat with many threads answers in batches: each is saved
    * as it comes, so a stopped or killed sync keeps what it read; the next one reads from the same point again.
    */
-  threadReplies(chatId: Id, window: { since?: number }): Promise<Message[]> | AsyncIterable<Message[]>
+  threadReplies(
+    chatId: Id,
+    window: { since?: number },
+  ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
 }
 
 export interface MessageButtons {
