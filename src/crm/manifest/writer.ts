@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import { serviceApiOwnKeys } from "../../cli/service-api.js"
+import { type ServiceApiPermissionsInput, serviceApiOwnKeys } from "../../cli/service-api.js"
 import { type ServiceApiCall, type ServiceApiCallOptions, serviceApiSend } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmKind, CrmRecords } from "../../domain/crm.js"
@@ -60,7 +60,8 @@ const capabilitiesOf = (manifest: CrmManifest): CrmWriteCapabilities | undefined
   return {
     kinds: written.map(({ kind }) => kind),
     verbs: CRM_VERBS.filter((verb) => written.some(({ kind, one }) => takes(kind, one, verb))),
-    idempotent: written.every(({ one }) => one.idempotent === true),
+    // No slot sends the operation id, so a repeated write would be made again.
+    idempotent: false,
   }
 }
 
@@ -75,13 +76,14 @@ export const crmManifestWriteCapabilities = (input: unknown, api: ServiceApiMani
 export const crmManifestWriteKeys = (
   input: unknown,
   api: ServiceApiManifest,
+  bodyPermissions?: ServiceApiPermissionsInput["bodyPermissions"],
 ): ((kind: CrmKind, verb: CrmVerb) => PermissionKey[]) => {
   const manifest = parseCrmManifest(input, api)
   const operations = new Map(api.operations.map((one) => [one.id, one]))
   return (kind, verb) => {
     const call = (manifest.writes?.[kind] as CrmManifestWrite | undefined)?.[CALL_OF[verb]]
     const operation = call && operations.get(call.operation)
-    return operation ? serviceApiOwnKeys(operation) : []
+    return operation ? serviceApiOwnKeys(operation, bodyPermissions) : []
   }
 }
 
@@ -89,6 +91,14 @@ const refused = (message: string, param?: string) =>
   new CliError("validation_error", message, { reason: "crm.record-field", sent: false, ...(param ? { param } : {}) })
 
 /** A merge of the entries rules that share a key give: each object's keys beside the others'. */
+/** Our fields that write one key of the service together, by that key: Attio's name and its parts. */
+const sharedOf = (one: CrmManifestWrite): string[][] => {
+  const by = new Map<string, string[]>()
+  for (const [field, rule] of Object.entries(one.fields as Readonly<Record<string, Rule>>))
+    if (typeof rule === "object" && "to" in rule) by.set(rule.to, [...(by.get(rule.to) ?? []), field])
+  return [...by.values()].filter((fields) => fields.length > 1)
+}
+
 const merged = (entries: readonly unknown[], list: boolean): unknown => {
   const given = entries.filter((one) => one !== CLEAR)
   if (given.length === 0) return CLEAR
@@ -144,6 +154,9 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
       return one.externalId
     })
     const entries = items.map((one) => {
+      const decimals = /\.(\d+)$/.exec(String(one))?.[1]?.length ?? 0
+      if (rule.decimals !== undefined && decimals > rule.decimals)
+        throw refused(`${service} keeps a ${kind}'s ${field} to ${rule.decimals} decimal places`, field)
       const given = rule.number ? Number(one) : one
       return rule.each === undefined ? given : fill(rule.each, { value: given })
     })
@@ -160,10 +173,48 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
       return ruleOf(one, "name") && whole ? { ...given, name: whole } : given
     }
     if (typeof name !== "string" || firstName !== undefined || lastName !== undefined) return given
-    if (ruleOf(one, "name") || !ruleOf(one, "firstName")) return given
+    if (!ruleOf(one, "firstName")) return given
     const [first, ...rest] = name.trim().split(/\s+/)
     const { name: _, ...parts } = given
-    return { ...parts, firstName: first ?? "", lastName: rest.join(" ") || null }
+    return {
+      ...parts,
+      ...(ruleOf(one, "name") ? { name } : {}),
+      firstName: first ?? "",
+      lastName: rest.join(" ") || null,
+    }
+  }
+
+  /**
+   * The fields an update leaves out of a key it writes with others, from the record as the service holds it: an update
+   * replaces the whole value (Attio's name), so a part not sent would be lost. A contact's whole name is not read back
+   * when a part is given, nor its parts when the name is: `namesOf` makes them from what was given.
+   */
+  const completed = async (
+    kind: CrmKind,
+    one: CrmManifestWrite,
+    externalId: string,
+    given: Readonly<Record<string, unknown>>,
+  ) => {
+    const person = kind === "person"
+    const parts = person && (given.firstName !== undefined || given.lastName !== undefined)
+    const whole = person && given.name !== undefined && !parts
+    const missing = sharedOf(one).flatMap((fields) =>
+      fields.some((field) => given[field] !== undefined)
+        ? fields.filter(
+            (field) =>
+              given[field] === undefined &&
+              !(parts && field === "name") &&
+              !(whole && (field === "firstName" || field === "lastName")),
+          )
+        : [],
+    )
+    if (missing.length === 0) return given
+    const record = (await options.source().record(kind, externalId)) as Readonly<Record<string, unknown>> | null
+    if (!record) throw new CliError("not_found", `${service} has no ${kind} ${externalId}`, { sent: false })
+    return {
+      ...given,
+      ...Object.fromEntries(missing.map((field) => [field, record[field === "owner" ? "assignee" : field] ?? null])),
+    }
   }
 
   /** The object `"{values}"` stands for; a field the manifest has no rule for is refused, with nothing sent. */
@@ -195,9 +246,17 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
         typeof rule === "object" && "to" in rule ? [foldFieldName(rule.to)] : [],
       ),
     )
+    // Only a code the service defines as the account's own: Attio also takes an attribute's id, which could be a stage.
+    const source = options.source()
+    const defined =
+      custom.length && manifest.fields?.[kind] && source.fields
+        ? (await source.fields(kind)).map(({ code }) => code)
+        : []
     for (const [code, value] of custom) {
       if (own.has(foldFieldName(code)))
         throw refused(`${code} is one of ${service}'s own fields; set it with its own option, not --field`, "--field")
+      if (!defined.includes(code))
+        throw refused(`${service} defines no field ${code} of a ${kind}; fields list names them`, "--field")
       const rule = one.custom as Omit<CrmWriteRule, "to">
       add(code, rule.list === true, encode(kind, code, rule, value))
     }
@@ -234,7 +293,11 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
     verb: CrmVerb = "update",
   ): Promise<CrmRecords[K]> => {
     const one = specOf(kind, verb)
-    const values = await valuesOf(kind, one, given)
+    const values = await valuesOf(
+      kind,
+      one,
+      await completed(kind, one, externalId, given as Readonly<Record<string, unknown>>),
+    )
     if (Object.keys(values).length === 0) throw refused("nothing to change: name a field")
     await sent(one.update as CrmOperationCall, { id: externalId, values })
     return readBack(kind, externalId, written)
@@ -280,7 +343,10 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
   }
 }
 
-export interface CrmManifestWritesOptions extends ServiceApiCallOptions, Omit<CrmWrites, "writer" | "alsoChecks"> {
+export interface CrmManifestWritesOptions
+  extends ServiceApiCallOptions,
+    Pick<ServiceApiPermissionsInput, "bodyPermissions">,
+    Omit<CrmWrites, "writer" | "alsoChecks"> {
   /** The CLI's source over the same manifest (`crmSourceFromManifest`). */
   source: () => CrmManifestSource
 }
@@ -293,7 +359,7 @@ export const crmManifestWrites = (input: unknown, options: CrmManifestWritesOpti
   const { manifest: api, service, source, app, settings, self, env, warn } = options
   return {
     writer: crmWriterFromManifest(input, { api, service, send: serviceApiSend(options), source }),
-    alsoChecks: crmManifestWriteKeys(input, api),
+    alsoChecks: crmManifestWriteKeys(input, api, options.bodyPermissions),
     app,
     settings,
     ...(self === undefined ? {} : { self }),

@@ -5,7 +5,7 @@ import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { provide } from "../../cli/context.js"
-import { serviceApiCall, serviceApiSend } from "../../cli/service-api-call.js"
+import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
@@ -20,8 +20,13 @@ import {
   FAKE_MANIFEST_TOKEN,
 } from "../testing/manifest-fake.js"
 import { type CrmManifest, type CrmManifestHooks, parseCrmManifest } from "./manifest.js"
-import { crmSourceFromManifest } from "./source.js"
-import { crmManifestWriteCapabilities, crmManifestWriteKeys, crmManifestWrites } from "./writer.js"
+import { type CrmManifestSource, crmSourceFromManifest } from "./source.js"
+import {
+  crmManifestWriteCapabilities,
+  crmManifestWriteKeys,
+  crmManifestWrites,
+  crmWriterFromManifest,
+} from "./writer.js"
 
 // A trimmed copy of Attio's API with its record writes: a create and a replace whose values sit under
 // `data.values`, each attribute a list of entries, and a delete. The currency is the attribute's, read from it.
@@ -70,6 +75,7 @@ const definitions: Record<string, SchemaNode> = {
   Empty: obj({}),
   Statuses: obj({ data: list(obj({ id: obj({ status_id: str }), title: str, celebration_enabled: bool })) }, ["data"]),
   Attribute: obj({ data: obj({ config: obj({ currency: obj({ default_currency_code: str }) }) }) }, ["data"]),
+  Attributes: obj({ data: list(obj({ api_slug: str, title: str, type: str, is_system_attribute: bool })) }, ["data"]),
 }
 
 const path = (name: string) => ({ name, in: "path", required: true, schema: str }) as const
@@ -119,6 +125,10 @@ const api: ServiceApiManifest = {
     op("statuses", "GET", "/v2/objects/{object}/attributes/{attribute}/statuses", {
       parameters: [path("object"), path("attribute")],
       ...answered("Statuses"),
+    }),
+    op("attributes", "GET", "/v2/objects/{object}/attributes", {
+      parameters: [path("object")],
+      ...answered("Attributes"),
     }),
     op("attribute", "GET", "/v2/objects/{object}/attributes/{attribute}", {
       parameters: [path("object"), path("attribute")],
@@ -193,6 +203,13 @@ const ATTIO: CrmManifest = {
       },
     },
   },
+  fields: {
+    deal: {
+      call: { operation: "attributes", path: { object: "deals" }, items: "data" },
+      map: { code: "api_slug", label: "title", type: "type" },
+      keep: { path: "is_system_attribute", is: false },
+    },
+  },
   writes: {
     deal: {
       ...writesOf("deals"),
@@ -206,7 +223,7 @@ const ATTIO: CrmManifest = {
           list: true,
           each: { referenced_actor_type: "workspace-member", referenced_actor_id: "{value}" },
         },
-        amount: { to: "value", list: true, number: true, each: { currency_value: "{value}" } },
+        amount: { to: "value", list: true, number: true, decimals: 4, each: { currency_value: "{value}" } },
         currency: {
           fixed: { operation: "attribute", path: { object: "deals", attribute: "value" } },
           at: "data.config.currency.default_currency_code",
@@ -449,6 +466,85 @@ describe("crmWriterFromManifest", () => {
     })
   })
 
+  it("refuses a --field code the service does not define, such as an attribute's id, with nothing sent", async () => {
+    const fixture = await attio()
+    const [open, won] = [fixture.pipeline.stages[0], fixture.pipeline.stages.find((one) => one.outcome === "won")]
+    const made = await fixture.writer.create("deal", { title: "Example", stage: open?.externalId as string }, OPERATION)
+    const before = fixture.requests()
+    const attributeId = "e3b0c442-98fc-1c14-9afb-4c8996fb9242"
+    for (const code of [attributeId, "Stage"])
+      await expect(
+        fixture.writer.update("deal", made.externalId, { custom: { [code]: won?.externalId as string } }, OPERATION),
+      ).rejects.toMatchObject({ code: "validation_error", details: { param: "--field", sent: false } })
+    expect(fixture.requests()).toBe(before)
+    await fixture.writer.update("deal", made.externalId, { custom: { deal_field_1: "Example" } }, OPERATION)
+    expect(bodyOf(fixture, "replace")).toEqual({ data: { values: { deal_field_1: ["Example"] } } })
+    expect(fixture.fake.refusals).toEqual([])
+  })
+
+  it("an update of one part of a value written whole sends the other parts as the service holds them", async () => {
+    const fixture = await attio()
+    const made = await fixture.writer.create("person", { firstName: "Anna", lastName: "Example" }, OPERATION)
+    const changed = await fixture.writer.update("person", made.externalId, { firstName: "Ann" }, OPERATION)
+    expect(bodyOf(fixture, "replace")).toEqual({
+      data: { values: { name: [{ first_name: "Ann", last_name: "Example", full_name: "Ann Example" }] } },
+    })
+    expect(changed).toMatchObject({ firstName: "Ann", lastName: "Example", name: "Ann Example" })
+    await fixture.writer.update("person", made.externalId, { name: "Ann Lee" }, OPERATION)
+    expect(bodyOf(fixture, "replace")).toEqual({
+      data: { values: { name: [{ full_name: "Ann Lee", first_name: "Ann", last_name: "Lee" }] } },
+    })
+  })
+
+  it("refuses an amount with more decimal places than the service keeps", async () => {
+    const fixture = await attio()
+    const stage = fixture.pipeline.stages[0]?.externalId as string
+    await expect(
+      fixture.writer.create("deal", { title: "Example", stage, amount: "1.12345", currency: "EUR" }, OPERATION),
+    ).rejects.toMatchObject({ code: "validation_error", details: { param: "amount", sent: false } })
+    expect(fixture.requests()).toBe(0)
+  })
+
+  it("closes as lost to the lost stage of the item's own pipeline", async () => {
+    const lostHooks: CrmManifestHooks = {
+      pipelines: { deal: { outcome: (stage, _, found) => (stage.title === "name 3" ? "lost" : found) } },
+    }
+    const fixture = await crmManifestWriteFixture(ATTIO, { api, definitions, hooks: lostHooks })
+    const stage = fixture.pipeline.stages[0]?.externalId as string
+    const made = await fixture.writer.create("deal", { title: "Example", stage }, OPERATION)
+    const closed = await fixture.writer.close("deal", made.externalId, "lost", OPERATION)
+    expect(closed.stage).toBe(fixture.pipeline.stages.find((one) => one.outcome === "lost")?.externalId)
+    // Two pipelines: the item stands in the second, whose won stage is not the first one's.
+    const sent: unknown[] = []
+    const source = {
+      record: async () => ({ externalId: "d1", pipeline: "p2", stage: "a" }),
+      pipelines: async () => [
+        { externalId: "p1", name: "One", stages: [{ externalId: "w1", name: "Won", position: 0, outcome: "won" }] },
+        { externalId: "p2", name: "Two", stages: [{ externalId: "w2", name: "Won", position: 0, outcome: "won" }] },
+      ],
+    } as unknown as CrmManifestSource
+    const writer = crmWriterFromManifest(ATTIO, {
+      api,
+      service: "attio",
+      send: async (_operation, input) => sent.push(JSON.parse(input.body ?? "null")),
+      source: () => source,
+    })
+    await writer.close("deal", "d1", "won", OPERATION)
+    expect(sent).toEqual([{ data: { values: { stage: ["w2"] } } }])
+  })
+
+  it("a flat shape clears a field with an empty string", async () => {
+    const fixture = await crmManifestWriteFixture(FLAT, { api: flatApi, definitions: flatDefinitions })
+    const stage = fixture.pipeline.stages[0]?.externalId as string
+    const made = await fixture.writer.create("deal", { title: "Example", stage, closeDate: "2026-12-01" }, OPERATION)
+    expect(made.closeDate).toBe("2026-12-01")
+    const cleared = await fixture.writer.update("deal", made.externalId, { closeDate: null }, OPERATION)
+    expect(fixture.fake.calls.filter((call) => call.operation === "patch").at(-1)?.body).toEqual({
+      properties: { closedate: "" },
+    })
+    expect(cleared.closeDate ?? null).toBeNull()
+  })
+
   it("takes what the manifest describes, and checks each operation's api keys", () => {
     expect(crmManifestWriteCapabilities(ATTIO, api)).toEqual({
       kinds: ["person", "deal"],
@@ -595,7 +691,6 @@ describe("serviceApiCall", () => {
     const sending = { manifest: api, service: "Attio", fetch: fake.fetch, token: () => FAKE_MANIFEST_TOKEN }
     const input = { path: { object: "deals" }, query: {}, headers: {}, fields: {}, body: "{}" }
     await expect(serviceApiCall(sending)("create", input)).rejects.toMatchObject({ code: "configuration_error" })
-    expect(serviceApiSend(sending)).toBeTypeOf("function")
     expect(fake.requests()).toBe(0)
   })
 })

@@ -137,15 +137,17 @@ const formerKeyOf = (operation: ManifestOperation): PermissionKey | undefined =>
 const permissionsOf = (operation: ManifestOperation): readonly OperationPermission[] => operation.permissions ?? []
 
 /**
- * The keys every call of the operation checks, whatever it sends: `api.<operation>` and the manifest's unconditional
- * ones. For a writer that sends the operation outside the `api` group, so its door is no wider.
+ * Every key a call of the operation may check: `api.<operation>`, the manifest's and the CLI's body keys, each whatever
+ * the body holds. For a writer that sends the operation outside the `api` group, so its door is never wider.
  */
-export const serviceApiOwnKeys = (operation: ManifestOperation): PermissionKey[] => [
+export const serviceApiOwnKeys = (
+  operation: ManifestOperation,
+  bodyPermissions?: ServiceApiPermissionsInput["bodyPermissions"],
+): PermissionKey[] => [
   ...new Set([
     keyOf(operation),
-    ...permissionsOf(operation)
-      .filter((permission) => whenOf(permission) === undefined)
-      .map(({ key }) => key),
+    ...permissionsOf(operation).map(({ key }) => key),
+    ...(bodyPermissions?.[operation.command] ?? []).map(({ key }) => key),
   ]),
 ]
 

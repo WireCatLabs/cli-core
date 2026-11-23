@@ -150,6 +150,8 @@ export interface CrmWriteRule {
   list?: true
   /** A decimal string goes as a number: an amount. */
   number?: true
+  /** The most decimal places the service keeps; more is refused (Attio's currency takes 4). */
+  decimals?: number
 }
 
 /** A value the service keeps elsewhere (Attio's currency is the attribute's): read once, and another one is refused. */
@@ -194,8 +196,6 @@ export interface CrmManifestWrite<K extends CrmKind = CrmKind> {
   custom?: Omit<CrmWriteRule, "to">
   /** What clears a field: Attio `[]`, HubSpot `""`. Default `null`. */
   clear?: unknown
-  /** The service answers a repeat of one operation id from its record (`CrmWriteCapabilities.idempotent`). */
-  idempotent?: boolean
 }
 
 /** A CRM account described as data: what to call for each kind and where each of our fields is in the answer. */
@@ -342,6 +342,7 @@ const writeShape = {
   each: v.optional(v.unknown()),
   list: v.optional(v.literal(true)),
   number: v.optional(v.literal(true)),
+  decimals: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 }
 const writeRule = v.strictObject({ to: v.pipe(v.string(), v.minLength(1)), ...writeShape })
 
@@ -353,7 +354,6 @@ const write = v.strictObject({
   fields: v.record(v.string(), v.union([writeRule, v.literal("implied"), v.strictObject({ fixed: call, at: path })])),
   custom: v.optional(v.strictObject(writeShape)),
   clear: v.optional(v.unknown()),
-  idempotent: v.optional(v.boolean()),
 })
 
 const schema = v.strictObject({

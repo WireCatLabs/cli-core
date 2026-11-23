@@ -276,18 +276,24 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
 names its `create`, `update` (`"{id}"` in the path) and, for a deal or lead, `remove`; a body holds `"{values}"`
 where the values go, and `id` says where a create's answer keeps the new id. `fields` maps each of our fields
 (`CrmWriteFields`, and `reason` for a close) to the service's key, `to`, in the shape `each` gives one value
-(`"{value}"` is ours), as a list with `list`, a number with `number`. Rules that share a `to` merge into one entry
-(Attio's name takes `first_name`, `last_name` and `full_name` together). `implied` sends nothing (Attio's one
-pipeline), and `currency: { fixed, at }` reads the service's own currency once and refuses another. `custom` writes
-`--field` codes, `clear` is what clears a field (Attio `[]`, HubSpot `""`).
+(`"{value}"` is ours), as a list with `list`, a number with `number`, at most `decimals` places. Rules that share a
+`to` merge into one entry (Attio's name takes `first_name`, `last_name` and `full_name` together); an update that
+gives only some of them sends the rest as the service holds them, since the value is replaced whole. `implied` sends
+nothing (Attio's one pipeline), and `currency: { fixed, at }` reads the service's own currency once and refuses
+another. `custom` writes `--field` codes, `clear` is what clears a field (Attio `[]`, HubSpot `""`). No slot sends
+the operation id, so a manifest's writes are never idempotent.
 
 - **A field with no rule is refused before anything is sent**: `validation_error` with `sent: false`, naming the
-  field and the service. So is a `--field` code that is one of the rules' keys, and `--reason` with no rule.
+  field and the service. So is `--reason` with no rule, and a `--field` code that is one of the rules' keys or not
+  one the service defines (`fields.<kind>`; none defined, no `--field`): Attio also takes an attribute's id, which
+  could be the stage's.
 - Each write is sent once and read back by the entity's `get`, mapped as a sync maps it; a read-back that fails is
   `invalid_response` with `sent: true`. A close moves the item to its pipeline's first stage with that outcome.
 - The guard stays `crm/writes.ts`: `crmManifestWrites(manifest, { manifest: api, service, fetch, token, source, app,
-  settings })` is the CLI's `CrmRun.writes`, and its `alsoChecks` adds each operation's `api` keys, so a `deny` on
-  `api.<operation>` stops the write too. The send it uses (`serviceApiSend`) is not exported from the package.
+  settings })` is the CLI's `CrmRun.writes`, and its `alsoChecks` adds every key the operation may check in the `api`
+  group (`api.<operation>`, the manifest's and the CLI's `bodyPermissions`, whatever the body), so a `deny` there
+  stops the write too. The send it uses (`serviceApiSend`) is not exported from the package. Its `writer` alone is
+  unguarded, as a hand-written writer is: a CLI calls it only through `crm/writes.ts`, by `CrmRun.writes`.
   `crmManifestWriteCapabilities` gives `addCrmCommands` its `writes`, `crmManifestWriteKeys` gives `crmAlsoChecks`
   the same keys for `--dry-run`.
 - `crmManifestWriteContract(manifest, { api, definitions, hooks })` (`@wirecat/cli-core/crm/testing`) runs

@@ -118,7 +118,8 @@ const givenOf = (spec: CrmManifestWrite, values: unknown): Record<string, unknow
       .filter((one) => one !== undefined && one !== null)
       .map(String)
     if (list) given[name] = field === "people" ? found.map((one) => ({ externalId: one, role: "contact" })) : found
-    else if (found.length) given[name] = found[0]
+    // A key several rules write together is replaced whole: a part it leaves out is gone.
+    else given[name] = found[0] ?? null
   }
   return given
 }
@@ -554,7 +555,16 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     }
     const entity = manifest.entities[kind] as NonNullable<CrmManifest["entities"][CrmKind]>
     const before = place < 0 ? {} : (mapRecord(kind, entity, list[place] as CrmRaw) ?? {})
-    const given = givenOf(write.spec, write.values ? readPlace(call, write.values) : undefined)
+    const values = write.values ? readPlace(call, write.values) : undefined
+    const known = [
+      ...Object.values(write.spec.fields).flatMap((rule) =>
+        typeof rule === "object" && "to" in rule ? [rule.to] : [],
+      ),
+      ...(manifest.fields?.[kind] ? Array.from({ length: PAGE }, (_, n) => `${kind}_field_${n + 1}`) : []),
+    ]
+    const unknown = Object.keys(isRaw(values) ? values : {}).filter((key) => !known.includes(key))
+    if (unknown.length) return refuse(`${call.operation}: ${kind} has no field ${unknown.join(", ")} in the fake`)
+    const given = givenOf(write.spec, values)
     const pipeline = pipelines.get(kind as DealKind)
     const fields: Record<string, unknown> = {
       ...(pipeline ? { pipeline: pipeline.id } : {}),
