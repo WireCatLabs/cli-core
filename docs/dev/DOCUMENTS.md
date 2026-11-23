@@ -588,3 +588,11 @@ per record and a 16 MiB snapshot. Larger graphs refuse without truncation. Origi
 place. Structured references are remapped; literal references inside free text stay as written.
 Embeddings and cached pictures are derived and must be indexed again explicitly. The host retains
 its original refusal guard for store changes that have not completed this operation.
+
+## Edit an Office file in place
+
+A provider with no document API, such as Yandex Disk, changes a workbook or a Word document by downloading the
+file, editing it and uploading it whole. `@wirecat/cli-core/office` does the edit: `editXlsxCells` by cell address,
+`editDocxParagraphs` by paragraph, each spliced into the original XML with every other zip entry copied byte for
+byte, so fonts, styles, images, comments and tracked changes survive. It never rebuilds the file from text. What
+it refuses and what collapses is in [Editing Office files](../office.md).

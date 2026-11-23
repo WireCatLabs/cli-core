@@ -89,7 +89,7 @@ const target = (owner: string, reference: string) => {
   if (path.startsWith("../") || !path || path === ".") throw new Error("external_part")
   return path
 }
-const relationships = (archive: Map<string, Uint8Array>, owner: string) => {
+export const relationships = (archive: Map<string, Uint8Array>, owner: string) => {
   const path = owner ? posix.join(posix.dirname(owner), "_rels", `${posix.basename(owner)}.rels`) : "_rels/.rels"
   const document = xmlPart(archive, path)
   rootIs(document, "Relationships", [PACKAGE_REL])
@@ -106,7 +106,7 @@ const relationships = (archive: Map<string, Uint8Array>, owner: string) => {
   return result
 }
 const relationId = (element: Element) => required(attribute(element, "id", REL) || attribute(element, "id", STRICT_REL))
-const mainPart = (archive: Map<string, Uint8Array>, contentType: string) => {
+export const mainPart = (archive: Map<string, Uint8Array>, contentType: string) => {
   const types = xmlPart(archive, "[Content_Types].xml")
   const namespace = "http://schemas.openxmlformats.org/package/2006/content-types"
   rootIs(types, "Types", [namespace])

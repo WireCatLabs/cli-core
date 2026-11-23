@@ -61,6 +61,19 @@ A 9.5 KB Word 97–2003 document with invented text (English and Russian), for t
 - **Made with:** `soffice --headless --convert-to doc legacy.txt` (LibreOffice), from a text file holding
   "Synthetic legacy memo", a blank line and "The heron count rose to 42 in October. Цапли вернулись."
 
+## `letter.docx`
+
+A 5.6 KB Word document with invented text, for the paragraph editor tests in `src/office/docx.test.ts`: a heading, a
+paragraph with one bold word, a plain paragraph, a two-cell table and a closing paragraph. LibreOffice writes its zip
+entries with data descriptors, so the tests cover copying those byte for byte.
+
+- **Made with** LibreOffice 26.2 headless from this HTML, once:
+
+  ```sh
+  echo '<html><body><h1>Synthetic letter</h1><p>Dear <b>heron</b>, the pond is ready.</p><p>Plain second paragraph.</p><table border="1"><tr><td>Cell one</td><td>Cell two</td></tr></table><p>Closing words.</p></body></html>' > letter.html
+  soffice --headless --convert-to docx:"MS Word 2007 XML" letter.html
+  ```
+
 ## `budget.xlsx`
 
 A 6.5 KB workbook with invented numbers, for the spreadsheet reader test in `src/attachments/extract.test.ts`:
