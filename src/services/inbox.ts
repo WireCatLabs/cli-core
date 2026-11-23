@@ -39,10 +39,11 @@ export const heard = (chats: Chat[], all: boolean) =>
  * typed title; MAX answers from the chats its login sent. `hasMore` is the messenger saying it could
  * not list them all.
  */
-const everyChat = (adapter: InboxReader) => adapter.chats({ offset: 0 })
+const everyChat = (adapter: InboxReader) => (adapter.unreadChats ? adapter.unreadChats() : adapter.chats({ offset: 0 }))
 
 /** What `inbox` and `review` read: the messenger's own answers, or the local store's in store mode. */
-export type InboxReader = Pick<ServerReads, "chats" | "history"> & Pick<MessengerAdapter, "resolve" | "admins">
+export type InboxReader = Pick<ServerReads, "chats" | "history"> &
+  Pick<MessengerAdapter, "resolve" | "admins" | "unreadChats">
 
 /**
  * The stored chats and messages, read as the messenger would answer. Saving a message does not move
@@ -335,6 +336,7 @@ export const inboxService = (deps: ServiceDeps): InboxService => {
       history: capability(connection, "history", "read a chat's history"),
       resolve: (reference) => connection.resolve(reference),
       ...(connection.admins ? { admins: capability(connection, "admins", "list a chat's admins") } : {}),
+      ...(connection.unreadChats ? { unreadChats: capability(connection, "unreadChats", "count unread chats") } : {}),
     }
   }
 
