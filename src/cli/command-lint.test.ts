@@ -12,7 +12,7 @@ import { addCallStatsCommand } from "./call-stats-command.js"
 import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
 import { fileConflictsCommand } from "./documents/file-conflicts.js"
-import { addFileUpdateCommand } from "./documents/file-update.js"
+import { addFileEditCommands } from "./documents/file-edit.js"
 import { LOCAL_READ } from "./effects.js"
 import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
@@ -136,8 +136,8 @@ it("a file mirror's conflict commands pass the command lint with only the mirror
   expect(lint.status).toBe(0)
 })
 
-// ydisk and the other file CLIs mount it under their own files group; a messenger never does.
-it("a files host's shared update passes the command lint with no overrides", async () => {
+// ydisk and the other file CLIs mount them under their own files group; a messenger never does.
+it("a files host's shared update, Office edits, history and restore pass the command lint with no overrides", async () => {
   const refuse = async (): Promise<never> => {
     throw new Error("not read in a lint")
   }
@@ -148,13 +148,15 @@ it("a files host's shared update passes the command lint with no overrides", asy
       commands: () => {
         const holder = new Command("disk").addCommand(commandsCommand(app))
         const files = holder.command("files").description("the files on the disk, live")
-        addFileUpdateCommand(files, {
+        addFileEditCommands(files, {
           words: { app: "disk", remote: "disk", provider: "Disk", source: "disk" },
           output: () => undefined,
           path: (input) => input,
           reread: (input) => `disk personal files show ${input}`,
           stdin: () => undefined,
+          read: refuse,
           write: refuse,
+          restoreFromTrash: refuse,
         })
         return [...holder.commands, runsCommand(app)]
       },

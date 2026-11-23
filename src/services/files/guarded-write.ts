@@ -1,6 +1,6 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { FileTarget, RemoteFile } from "../../documents/file-mirror-model.js"
-import type { FileVersions } from "./versions.js"
+import type { FileVersions, VersionDirection } from "./versions.js"
 
 export interface GuardedFileWrite {
   target: FileTarget
@@ -14,6 +14,8 @@ export interface GuardedFileWrite {
   expected?: string
   /** How the caller reads the file and its sha256 again, for the conflict's message. */
   reread: string
+  /** How the replaced content is logged; `restored` when the new content is a kept version. */
+  direction?: Extract<VersionDirection, "local-to-remote" | "restored">
   signal?: AbortSignal
 }
 
@@ -23,7 +25,7 @@ export interface GuardedFileWriteResult {
   replaced?: { sha256: string }
 }
 
-const remoteChanged = (path: string, why: string, reread: string) =>
+export const remoteChanged = (path: string, why: string, reread: string) =>
   new CliError("conflict", `${path} ${why}; nothing was written. Read it again: ${reread}`, {
     reason: "mirror.remote-changed",
   })
@@ -35,7 +37,7 @@ const remoteChanged = (path: string, why: string, reread: string) =>
  * content is kept, which is what makes the write safe to undo.
  */
 export const guardedFileWrite = async (write: GuardedFileWrite): Promise<GuardedFileWriteResult> => {
-  const { target, versions, path, from, expected, reread, signal } = write
+  const { target, versions, path, from, expected, reread, direction = "local-to-remote", signal } = write
   const there = await target.exists(path, signal)
   if (there && expected === undefined)
     throw new CliError(
@@ -58,7 +60,7 @@ export const guardedFileWrite = async (write: GuardedFileWrite): Promise<Guarded
   versions.log({
     path,
     event: "changed",
-    direction: "local-to-remote",
+    direction,
     old: kept,
     from: "remote",
     ...(file.sha256 ? { new: file.sha256 } : {}),
