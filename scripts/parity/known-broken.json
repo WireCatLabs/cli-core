@@ -1,11 +1,5 @@
 [
   {
-    "repo": "cli-memo",
-    "pr": 3258,
-    "until": "2026-11-30",
-    "reason": "#3258 no longer offers schedule exec over MCP; src/mcp/server.test.ts still expects it available to an agent"
-  },
-  {
     "repo": "mail-cli",
     "pr": 3258,
     "until": "2026-11-30",
