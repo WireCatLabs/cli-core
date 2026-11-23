@@ -15,3 +15,5 @@
   for longer: yandex-disk-cli users keep a year of replaced files unless they set a shorter period.
 - **`FileTarget.exists` answers false only for a real deletion.** A provider that cannot tell a deletion from lost
   access throws instead, and the file is left alone as unknown. yandex-disk-cli's target already answers that way.
+  It also gets the file's id from the last sync, so a provider that keeps ids across a move can tell a file moved out
+  of the folder from a deleted one.

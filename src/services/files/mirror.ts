@@ -455,7 +455,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   for (let at = 0; at < absent.length; at += CHECKS)
     await Promise.all(
       absent.slice(at, at + CHECKS).map(async (step) => {
-        const why = await target.exists(remotePath(step.path), signal).then(
+        const why = await target.exists(remotePath(step.path), signal, step.base?.id).then(
           (there) => (there ? `missing from the ${options.remote} listing, but still there` : undefined),
           (error: unknown) => {
             if (signal?.aborted) throw error

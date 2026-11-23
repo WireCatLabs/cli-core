@@ -405,7 +405,7 @@ interface FileTarget {
     signal?: AbortSignal,
     options?: { excluded?(path: string): boolean; from?: string },
   ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean; next?: string } | undefined>
-  exists(path: string, signal?: AbortSignal): Promise<boolean>
+  exists(path: string, signal?: AbortSignal, id?: string): Promise<boolean>
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
   trash(path: string, expect: { sha256: string; md5?: string }, signal?: AbortSignal): Promise<void>
@@ -422,7 +422,9 @@ type Expect = { absent: true } | { sha256: string; md5?: string }
 listing that can go on later (a run's deadline stopped it, a page failed) returns `next`, its position, such as an
 offset; given back as `from`, the listing returns only the files from there on. `exists` reads one
 path directly, false only when the provider says the file was deleted. An answer that cannot tell a deletion from lost
-access (Notion's 404, which may mean "no longer shared") throws, and the file is `unknown`, never trashed. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
+access (Notion's 404, which may mean "no longer shared") throws, and the file is `unknown`, never trashed. It gets the
+file's `id` from the last sync too, so a provider that keeps ids across a move asks by it: a file moved out of the
+folder is still there, not deleted. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
 size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
 `conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
 just before the write ("checked just before the write": an edit landing after that read is not caught). An editing

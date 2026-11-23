@@ -38,9 +38,11 @@ export interface FileTarget {
   /**
    * Whether anything is at `path` now, read directly rather than from a listing; false only when the provider says the
    * file was deleted. A file missing from a listing is deleted only once this says so. An answer that cannot tell a
-   * deletion from lost access (a 404 that may mean "no longer shared") throws, and the file is left alone.
+   * deletion from lost access (a 404 that may mean "no longer shared") throws, and the file is left alone. `id` is
+   * the file's id at the last sync: a provider that keeps a file's id across a move asks by it, so a file moved out of
+   * the folder is still there, not deleted.
    */
-  exists(path: string, signal?: AbortSignal): Promise<boolean>
+  exists(path: string, signal?: AbortSignal, id?: string): Promise<boolean>
   /** Streams the file into `into`, a new local file. */
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   /**

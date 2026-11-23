@@ -2259,3 +2259,17 @@ describe("syncFileMirror, a remote that rewrites the text it is sent", () => {
     expect(await context.sync()).toMatchObject({ unchanged: 1, conflicts: [] })
   })
 })
+
+describe("syncFileMirror, a file missing from the listing", () => {
+  it("is asked about by its id at the last sync, and left alone while the remote says it is there", async () => {
+    const context = setup({ "a.md": "one" }, { "a.md": "one" })
+    await context.sync()
+    const id = context.disk.idOf("a.md")
+    context.disk.unlist("a.md")
+    const exists = vi.spyOn(context.disk.target, "exists")
+    const result = await context.sync()
+    expect(exists).toHaveBeenCalledWith(`${FOLDER}/a.md`, undefined, id)
+    expect(result.unknown).toEqual([expect.objectContaining({ path: "a.md", side: "remote" })])
+    expect(await context.local()).toEqual({ "a.md": "one" })
+  })
+})
