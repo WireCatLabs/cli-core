@@ -5,6 +5,27 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.735.0 — 23.11.2026
+
+### Added
+
+- **`unreadChats`, an optional messenger port for `inbox` and `review`.** A messenger whose chat list carries no
+  unread counts or last message times, because each costs a request (Slack), answers them here; `inbox`, `inbox --new`
+  and `review` use it when present, and every other command keeps the cheap `chats`. `hasMore` marks the answer
+  partial.
+
+### Fixed
+
+- **`search conversations --like` shows the part of a huge conversation that answers the question.** A conversation of
+  more than 50 chunks holds text near any question, so its nearest chunk was often about something else. With a
+  made-up reply, such a hit now shows the chunk that ranks best by meaning (to the question and the reply together)
+  and by the words of both that are rare inside that conversation. Without `--like` nothing changes.
+- **A usage error says how to fix the call.** An unknown flag that a sibling command takes names it
+  (`unknown option '--like' — --like is an option of search conversations`). `--filter` on `search messages` and
+  `search all` says the filter goes in the query. A query that fails after `--` quotes the words read as the query and
+  says to put options before `--`: an unknown option there (`messages list -- -100… --around 5419`) used to fail as
+  bare `query.invalid-syntax at position 2`.
+
 ## 0.734.0 — 23.11.2026
 
 ### Added
