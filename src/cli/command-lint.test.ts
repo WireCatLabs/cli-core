@@ -95,8 +95,8 @@ it("a calls host's shared commands pass the command lint with no overrides", asy
   expect(lint.status).toBe(0)
 })
 
-// ydisk mounts these under its own file-mirror commands, whose words it overrides until cli-base's vocabulary has them.
-it("a file mirror's conflict commands pass the command lint with only the mirror words' overrides", async () => {
+// ydisk mounts these under its own file-mirror commands.
+it("a file mirror's conflict commands pass the command lint with only the conflict list's override", async () => {
   const refuse = (): never => {
     throw new Error("not read in a lint")
   }
@@ -125,11 +125,14 @@ it("a file mirror's conflict commands pass the command lint with only the mirror
     },
     ["--allow-stale"],
     [
-      ["unknown-resource", "mirrors", "a saved pairing of a local and a remote folder; ydisk overrides it too"],
-      ["unknown-resource", "mirrors conflicts", "the files a mirror's sync could not merge; no shared noun names them"],
-      ["option-role", "mirrors conflicts resolve --keep", "the conflict side, as ydisk's mirrors sync --keep"],
-      ["list-without-query", "mirrors conflicts list", "a mirror's few recorded conflicts, from its state file"],
-    ].map(([rule, target, reason]) => ({ rule, target, reason, owner: "@WireCatLabs", review_after: "2026-12-22" })),
+      {
+        rule: "list-without-query",
+        target: "mirrors conflicts list",
+        reason: "a mirror's few recorded conflicts, from its state file",
+        owner: "@WireCatLabs",
+        review_after: "2026-12-22",
+      },
+    ],
   )
 
   expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
