@@ -5,6 +5,18 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.732.0 — 23.11.2026
+
+### Fixed
+
+- **A sync keeps the thread replies it read when it is stopped.** A messenger's `threadReplies` may answer in
+  batches (an async iterable); `messages sync` saves each one as it comes and moves the thread point only after the
+  last, so a stopped or killed sync keeps what it read and the next one reads from the same point. A plain array still
+  works.
+- **A failed server search says what the messenger refused, by its keys.** Each `failed` entry carries
+  `error: {code, reason?}`, and the note reads `server search incomplete: search_failed (permission_error:
+  oauth.scope-missing)`. The provider's own words still stay out.
+
 ## 0.731.0 — 23.11.2026
 
 ### Added
