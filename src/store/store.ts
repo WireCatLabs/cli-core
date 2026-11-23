@@ -371,4 +371,4 @@ const storeOver = (context: StoreContext): MessageStore => {
 }
 
 export * from "./exports.js"
-export type { MessageStore } from "./message-store.js"
+export type { MessageStore, MessageStoreAreas, MessageStoreCore } from "./message-store.js"

@@ -61,7 +61,23 @@ import type { TagsStore } from "./tags.js"
 import type { AccountKey } from "./types.js"
 import type { VectorsStore } from "./vectors.js"
 
-export interface MessageStore {
+/** The part of `MessageStore` that semver covers: accounts, chats, messages, people, tags and `close`. */
+export interface MessageStoreCore {
+  /** Accounts, account groups and which account each app profile is. */
+  readonly accounts: AccountsStore
+  /** One account's chats: the list, what left, what is complete, their metadata. */
+  readonly chats: ChatsStore
+  /** Messages: writes, reads, tombstones, reactions, transcripts and the plain text search. */
+  readonly messages: MessagesStore
+  /** People and contacts, the links between their identities, and the owner's private notes on them. */
+  readonly people: PeopleStore
+  /** Tags on chats, people and messages. */
+  readonly tags: TagsStore
+  close(): Promise<void>
+}
+
+/** Every other area of `MessageStore`: experimental, so a minor release may change any of them. @experimental */
+export interface MessageStoreAreas {
   /** @experimental */
   readonly projectAnnotations?: ProjectAnnotationStore
   /** @experimental */
@@ -70,20 +86,12 @@ export interface MessageStore {
   readonly contextIndex?: ContextIndex
   /** @experimental */
   readonly contextRecords?: ContextRecordReader
-  /** Accounts, account groups and which account each app profile is. */
-  readonly accounts: AccountsStore
-  /** One account's chats: the list, what left, what is complete, their metadata. */
-  readonly chats: ChatsStore
   /** Sync markers, catch-up deltas, stretch leases and the stretches held completely. @experimental */
   readonly sync: SyncStore
-  /** Messages: writes, reads, tombstones, reactions, transcripts and the plain text search. */
-  readonly messages: MessagesStore
   /** Downloaded files and the text held of them. @experimental */
   readonly attachments: AttachmentsStore
   /** Who is in a chat, and its member history. @experimental */
   readonly roster: RosterStore
-  /** People and contacts, the links between their identities, and the owner's private notes on them. */
-  readonly people: PeopleStore
   /** Reply links, conversation builds and the user's agent's batches. @experimental */
   readonly conversations: ConversationsStore
   /** Chunk, image and picture vectors, and the nearest conversations by meaning. @experimental */
@@ -96,8 +104,6 @@ export interface MessageStore {
   readonly queries: QueriesStore
   /** The word index, the stems and the stemmer choices. @experimental */
   readonly searchIndex: SearchIndexStore
-  /** Tags on chats, people and messages. */
-  readonly tags: TagsStore
   /** Phones, addresses, links and documents found in messages, and the owner's decisions on them. @experimental */
   readonly mentions: MentionsStore
   /** Open tasks waiting on the owner, for the task service in `src/tasks/`. @experimental */
@@ -210,5 +216,6 @@ export interface MessageStore {
   readonly enrichment?: EnrichmentStore
   /** The same store with this account bound — what a service of one account reads and writes through. @experimental */
   forAccount(key: AccountKey): AccountStore
-  close(): Promise<void>
 }
+
+export interface MessageStore extends MessageStoreCore, MessageStoreAreas {}

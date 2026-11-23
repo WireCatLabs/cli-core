@@ -598,6 +598,8 @@ export {
   type MentionsStore,
   type MessageFilter,
   type MessageStore,
+  type MessageStoreAreas,
+  type MessageStoreCore,
   type MessagesStore,
   OTHER_SOURCES,
   openStore,

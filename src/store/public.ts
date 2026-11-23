@@ -241,6 +241,8 @@ export {
   type MentionsStore,
   type MessageFilter,
   type MessageStore,
+  type MessageStoreAreas,
+  type MessageStoreCore,
   type MessagesStore,
   openStore,
   type PeopleStore,

@@ -812,8 +812,9 @@ every entry point not on the list is experimental as a whole (`./meetings`, `./m
 - A break of a stable name raises the major, and comes first as a deprecation in a minor. It is listed under
   "Changed — may break callers" or "Removed".
 - A change to an experimental name raises the minor. Pin an exact version if you use one.
-- `MessageStore` is stable in `accounts`, `chats`, `messages`, `people`, `tags` and `close`. Its other areas are
-  experimental, as are the family entry points they serve.
+- `MessageStore` is `MessageStoreCore & MessageStoreAreas`. `MessageStoreCore` is stable: `accounts`, `chats`,
+  `messages`, `people`, `tags` and `close`. `MessageStoreAreas`, every other area, is experimental, as are the family
+  entry points it serves.
 - The store file format is stable too: `minCompatible` rises only in a major.
 
 The stable names are the ones that two or more WireCat CLIs import, or the CLI template, plus every type those
