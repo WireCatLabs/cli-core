@@ -207,12 +207,12 @@ export const withLocal = async <T>(
  * an error naming the download command; nothing is downloaded.
  */
 /** When a run with this deadline stops: its margin before the end, as the word index after a sync does. */
-const stopsAt = (deadline: Deadline | undefined) =>
+export const stopsAt = (deadline: Deadline | undefined) =>
   deadline ? deadline.endsAt - deadlineMargin(deadline) : Number.POSITIVE_INFINITY
 
-const embedChunks = async (
+export const embedChunks = async (
   store: MessageStore,
-  source: Pick<MessageStore["notes"] | MessageStore["calendar"], "chunksToEmbed"> & {
+  source: Pick<MessageStore["notes"] | MessageStore["calendar"] | MessageStore["tracker"], "chunksToEmbed"> & {
     chunksLeft?(model: string): Promise<number>
   },
   {
@@ -342,7 +342,7 @@ export const nearestNotes = async (
   return nearest.filter(({ score }) => score > floor)
 }
 
-type NearestOptions = Omit<NotesEmbedOptions, "maxChunks"> & {
+export type NearestOptions = Omit<NotesEmbedOptions, "maxChunks"> & {
   limit: number
   folderIds?: string[]
   withInternal?: boolean

@@ -78,7 +78,7 @@ it("skips the tracker with the reason when the query names a field an issue does
     expect.objectContaining({
       resource: "tracker",
       code: "validation_error",
-      reason: "issues, projects and comments are found by the words of their title and text only",
+      reason: "issues, projects and comments are found by the words and meaning of their title and text only",
     }),
   ])
 })

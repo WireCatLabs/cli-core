@@ -169,6 +169,7 @@ export {
   type TrackerFilter,
   type TrackerHit,
   type TrackerItem,
+  type TrackerNearest,
   type TrackerPerson,
   type TrackerSearch,
   type TrackerStore,

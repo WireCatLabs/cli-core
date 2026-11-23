@@ -76,6 +76,18 @@ assignee or none, state, state types through the state rows, label, archived), `
 `tracker_item_words` (titles, descriptions, comment bodies), `count`, and `people`: the tracker users whose e-mail an
 identity linked to a person has, joined when read. Nothing is written to the people graph.
 
+Issues, projects and comments are searched by meaning too. Their chunks (`chunks.chunkable_type = 'tracker_item'`,
+`chunkable_id` = `tracker_items.id`, `src/store/sqlite/tracker-chunks.ts`) are cut as a note's are: title and
+description, or a comment's body, in pieces of `CHUNK_CHARS`, under the account's scope and id, dated by the tracker's
+`updatedAt`. Teams, users, states and labels have none. `save` rewrites an item's chunks only when its title or text
+changed or it comes back, in the same write, and drops the vectors no other chunk holds after the new chunks are in, so
+a text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
+run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone
+and cuts those of items saved before this existed, in short batches that stop at the deadline (`left`). `chunksToEmbed`,
+`chunksLeft`, `embedded` and `nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
+one at a time through the model's vector index (scan while it has none), keeps archived items and never deleted ones,
+one hit per item by its best chunk.
+
 ## An issue as the owner's task
 
 A task from an issue has `source` `tracker:issue/<externalId>`, `sourceKind` `tracker_issue`, kind `request`, and the
@@ -111,9 +123,13 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
 `addTrackerCommands(program, { app, open, writes?, documents? })` mounts `sync`, `issues list|show|search|assign`, and
 `list` for `projects`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
 `TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)); with `documents`, a `sync`
-that brings the documents too ([One sync with documents](#one-sync-with-documents)). Every text field from the
-tracker is named in the row's `untrusted`. Each list narrows by its query, as `deals list` does:
-`issues list team:<id> assignee:none type:started`, and `archived:include` for archived rows too.
+that brings the documents too ([One sync with documents](#one-sync-with-documents)). `sync --embed` then embeds new
+issues, projects and comments (`embedTracker` in `src/services/tracker-meaning.ts`, at most 600 chunks, within the
+deadline) with a model already downloaded, answered under `embeddings`. A run its budget stopped embeds nothing, and the
+step that goes on keeps `embed`. A missing model keeps the sync's report and its step, and is named in `meta.issues`
+with `source` `tracker:embeddings`. Every text field from the tracker is named in the row's `untrusted`. Each list
+narrows by its query, as `deals list` does: `issues list team:<id> assignee:none type:started`, and `archived:include`
+for archived rows too.
 
 ## One sync with documents
 
@@ -144,8 +160,9 @@ return [...library.commands, ...holder.commands]
   folders were all removed still syncs once more, so their documents leave the copy.
 - **Flags.** `--rescan` lists both again; the documents' walk starts over at each one, so run it once and continue with
   a plain `sync`. `--max-pages` bounds each part's requests. `--embed` indexes the documents' pending text for meaning
-  search (issues are found by words). `--limit`, the shared documents `sync`'s count of documents, is refused: it would
-  bound one part only.
+  search, then, after both parts, the new issues, projects and comments, each within the run's deadline; a missing model
+  leaves the tracker's report in place and is named in `meta.issues` with `source` `tracker:embeddings`. `--limit`, the
+  shared documents `sync`'s count of documents, is refused: it would bound one part only.
 - **Going on.** One `tracker.sync` step, with `max_pages`, `timeout` and `embed` as given, when either part stopped
   before its end; the documents' `sync.longer` step as they give it.
 - **Runs.** The tracker's part is the run the answer's `meta.run_id` names (`sync`); the documents' part is a run of
@@ -193,15 +210,19 @@ return [...library.commands, ...holder.commands]
 
 The `tracker` lane of `search all` (`RESOURCES_SEARCHED`) reads the copies of every account of a provider the registry
 marks `tracker`, or those `--source` names, through `store.tracker.find`: issues, projects and comments by the words of
-their title and text, as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 Fix login`), a
-`project` or an `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue
-under the same id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane
-with the reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is read by
-this lane under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. A group naming
-`linear:<account>` holds its issues and its documents; one naming only `notes:<id>` holds the documents alone. With no
-tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a tracker, since
-linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by `issues.list` and
-projects by `projects.list`.
+their title and text, as `issues search` finds them, and by meaning through `nearestTracker` when the query is words or
+phrases (`OR` too, as notes take it) with no `title:`, not `exact`, and the model and some vectors are there. The two
+lists are fused by reciprocal rank as notes' and messages' are, a question's hit voting once; a hit found both ways has
+`foundBy` `["words", "meaning"]`, and its cosine places it among the other lanes'. `tracker: { by, meaningSkipped? }`
+says how the lane was searched and, when by words only, why. A hit is an `issue` titled with its key (`ENG-12 Fix
+login`), a `project` or an `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the
+same issue under the same id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips
+the lane with the reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is
+read by this lane under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. A
+group naming `linear:<account>` holds its issues and its documents; one naming only `notes:<id>` holds the documents
+alone. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
+tracker, since linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by
+`issues.list` and projects by `projects.list`.
 
 ## A tracker described as data
 

@@ -6,17 +6,18 @@ import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
-import { type TrackerIssue, trackerTitleOf } from "../domain/tracker.js"
+import { type TrackerIssue, trackerBodyOf, trackerTitleOf } from "../domain/tracker.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import { formatMeetingReference } from "../meetings/index.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting, type ListedAccount, listedHolds } from "../search/account-list.js"
 import { RRF_K } from "../search/fusion.js"
+import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { type Period, questionPeriod } from "../search/question-period.js"
-import { planQuestion, questionLookup } from "../search/question-plan.js"
+import { planQuestion, questionLookup, questionText } from "../search/question-plan.js"
 import type {
   AccountKey,
   BusinessKind,
@@ -25,6 +26,7 @@ import type {
   MessageStore,
   StoredAccount,
   TrackerItem,
+  TrackerNearest,
 } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
@@ -38,6 +40,7 @@ import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
+import { nearestTracker } from "./tracker-meaning.js"
 
 export const RESOURCES_SEARCHED = [
   "messages",
@@ -134,6 +137,8 @@ export interface SearchAllFound {
   notes?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** How calendar events were searched, when they were. */
   events?: { by: "words" | "words and meaning"; meaningSkipped?: string }
+  /** How issues, projects and comments were searched, when they were; never by meaning with `exact`. */
+  tracker?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** How the messages were searched, when they were; never by meaning with `exact` or the server alone. */
   messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** How the mail was searched, when it was; never by meaning with `exact`. */
@@ -346,6 +351,24 @@ const trackerTitle = ({ kind, record }: TrackerItem): string => {
   return key ? `${key} ${title}` : title
 }
 
+/**
+ * What the meaning half embeds: the words and phrases asked for, OR included, as notes take them. `title:` narrows to
+ * the title, which a hit by meaning cannot be held to, so such a query is searched by words only.
+ */
+const trackerMeaningWords = (text: string): string | undefined => {
+  try {
+    const { root } = parseLucene(text, SEARCH_QUERY)
+    const nodes = root.kind === "boolean" ? root.clauses.map(({ node }) => node) : [root]
+    if (!nodes.every((node) => node.kind === "predicate" && node.field === "text")) return undefined
+    return meaningWords(root) || undefined
+  } catch {
+    return undefined
+  }
+}
+
+const trackerExcerpt = ({ kind, record }: TrackerItem, query: string): string =>
+  excerpt([trackerTitleOf(kind, record), trackerBodyOf(kind, record)].filter(Boolean).join("\n"), query)
+
 /** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
@@ -388,6 +411,7 @@ export const searchAll = async (
   let hasMore = false
   let notes: SearchAllFound["notes"]
   let events: SearchAllFound["events"]
+  let tracker: SearchAllFound["tracker"]
   const by: { messages?: SearchAllFound["messages"]; mail?: SearchAllFound["mail"] } = {}
   let server: ServerSearched | undefined
   // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
@@ -630,7 +654,7 @@ export const searchAll = async (
           if (!read.length) continue
           const { words, anyWord } = titleWords(
             request.text,
-            "issues, projects and comments are found by the words of their title and text only",
+            "issues, projects and comments are found by the words and meaning of their title and text only",
           )
           const found = await store.tracker.find({
             words,
@@ -641,20 +665,64 @@ export const searchAll = async (
             accounts: read,
           })
           hasMore ||= found.hasMore
-          lists.push(
-            found.items.map(({ account: at, item, excerpt: text }) => ({
-              kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
-              // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
-              ref: `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`,
-              provider: at.provider,
-              account: at.account,
-              ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
-              title: trackerTitle(item),
-              timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
-              text,
-              foundBy: ["words"],
-            })),
-          )
+          const hitOf = (
+            at: AccountKey,
+            item: TrackerItem,
+            text: string,
+            foundBy: SearchAllRecordItem["foundBy"],
+          ): SearchAllRecordItem => ({
+            kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
+            // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
+            ref: `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`,
+            provider: at.provider,
+            account: at.account,
+            ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
+            title: trackerTitle(item),
+            timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
+            text,
+            foundBy,
+          })
+          const byWords = found.items.map(({ account: at, item, excerpt: text }) => hitOf(at, item, text, ["words"]))
+          const plain = trackerMeaningWords(discover ? questionText(request.text) : request.text)
+          let near: TrackerNearest[] | undefined
+          let meaningSkipped: string | undefined
+          if (request.exact) meaningSkipped = "--exact searches words as written"
+          else if (plain === undefined) meaningSkipped = "the query names a title, which meaning cannot follow"
+          else
+            try {
+              near = await nearestTracker(store, plain, {
+                limit: Math.min(depth, 500),
+                accounts: read,
+                embedders,
+                ...(command === undefined ? {} : { command }),
+                ...(request.env === undefined ? {} : { env: request.env }),
+              })
+            } catch (error) {
+              if (!(error instanceof CliError && error.code === "not_found")) throw error
+              meaningSkipped = error.message
+            }
+          tracker = {
+            by: near === undefined ? "words" : "words and meaning",
+            ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
+          }
+          if (near === undefined) lists.push(byWords)
+          else {
+            // As notes and messages fuse theirs: one list for the lane, a question's hit voting once.
+            const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
+            byWords.forEach((item, rank) => {
+              fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
+            })
+            near.forEach(({ account: at, item, score }, rank) => {
+              const hit = hitOf(at, item, trackerExcerpt(item, request.text), ["meaning"])
+              cosines.set(hit.ref, score)
+              const held = fused.get(hit.ref)
+              if (held) held.item.foundBy = ["words", "meaning"]
+              const vote = 1 / (RRF_K + rank + 1)
+              if (held && discover) held.score = Math.max(held.score, vote)
+              else fused.set(hit.ref, { item: held?.item ?? hit, score: (held?.score ?? 0) + vote })
+            })
+            lists.push([...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item))
+          }
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {
           const { words, anyWord } = titleWords(request.text, BUSINESS_WORDS_ONLY)
@@ -733,6 +801,7 @@ export const searchAll = async (
     skipped,
     ...(notes === undefined ? {} : { notes }),
     ...(events === undefined ? {} : { events }),
+    ...(tracker === undefined ? {} : { tracker }),
     ...(by.messages === undefined ? {} : { messages: by.messages }),
     ...(by.mail === undefined ? {} : { mail: by.mail }),
     ...(server === undefined ? {} : { server }),

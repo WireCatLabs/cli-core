@@ -974,12 +974,12 @@ const NEW = {
     },
     {
       name: "chunks",
-      doc: "Pieces of a longer text, the unit that gets an embedding: ranges of a document, an email thread, an attachment's text, a note, a meeting transcript or summary; a short task or event is one chunk. A conversation of messages is cut into pieces here too, one `conversation` row per piece, and `chunk_messages` says which messages each piece spans; so one search can read every kind of text, filtered by scope, account, project and time.",
+      doc: "Pieces of a longer text, the unit that gets an embedding: ranges of a document, an email thread, an attachment's text, a note, a meeting transcript or summary, a tracker's issue, project or comment; a short event is one chunk. A conversation of messages is cut into pieces here too, one `conversation` row per piece, and `chunk_messages` says which messages each piece spans; so one search can read every kind of text, filtered by scope, account, project and time.",
       cols: [
         id(),
         ...poly(
           "chunkable",
-          "`document`, `email_thread`, `attachment`, `note`, `memory`, `conversation`, `meeting_transcript`, `meeting_summary`, `event`, `task`",
+          "`document`, `email_thread`, `attachment`, `note`, `memory`, `conversation`, `meeting_transcript`, `meeting_summary`, `event`, `tracker_item` (`tracker_items.id`: an issue, a project or a comment)",
         ),
         c("position", "integer", { notnull: true }),
         c("start_offset", "integer", {

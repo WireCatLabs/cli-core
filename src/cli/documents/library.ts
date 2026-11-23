@@ -549,7 +549,12 @@ const libraryOf = <M extends SourceFile>(
               const { embedNotes } = await import("../../services/notes-search.js")
               return {
                 ...result,
-                embeddings: await embedNotes(store, { maxChunks: 600, env: env(), command: app.command }),
+                embeddings: await embedNotes(store, {
+                  maxChunks: 600,
+                  env: env(),
+                  command: app.command,
+                  ...(deadline ? { deadline } : {}),
+                }),
               }
             }),
           )

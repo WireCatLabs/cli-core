@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { CliError, captureStreams, memoryKeyring } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { documentLibrary } from "../../cli/documents/library.js"
 import { documentCommandsContract, FAKE_FOLDER, fakeDocumentSource } from "../../cli/documents/testing/index.js"
 import type { DocumentWords } from "../../cli/documents/words.js"
@@ -18,6 +18,29 @@ import { type MessageStore, openStore } from "../../store/store.js"
 import type { TrackerSource } from "../source.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../testing/index.js"
 import { addTrackerCommands } from "./index.js"
+
+const embedNotesWith = vi.hoisted(() => [] as object[])
+const embedTrackerWith = vi.hoisted(() => [] as object[])
+vi.mock("../../services/notes-search.js", async (original) => {
+  const real = await original<typeof import("../../services/notes-search.js")>()
+  return {
+    ...real,
+    embedNotes: async (_store: unknown, options: Record<string, unknown>) => {
+      embedNotesWith.push(options)
+      return { model: "example-model", embedded: 0, left: false }
+    },
+  }
+})
+vi.mock("../../services/tracker-meaning.js", async (original) => {
+  const real = await original<typeof import("../../services/tracker-meaning.js")>()
+  return {
+    ...real,
+    embedTracker: (store: MessageStore, options: Parameters<typeof real.embedTracker>[1] = {}) => {
+      embedTrackerWith.push(options)
+      return real.embedTracker(store, options)
+    },
+  }
+})
 
 const app = {
   command: "lin",
@@ -317,6 +340,33 @@ describe("one sync for a tracker that holds documents too", () => {
     const done = await cli(["sync", "--limit", "5"])
     expect(done.exit).not.toBe(0)
     expect(done.stderr).toContain("--max-pages bounds both parts")
+  })
+
+  it("keeps the tracker's report when --embed finds no model, naming the embedding as its own issue", async () => {
+    const { answer, env } = setup()
+    env.WIRECAT_STATE_DIR = join(String(env.LIN_STATE_DIR), "wirecat")
+    const synced = await answer(["sync", "--embed"])
+    expect(synced.exit).toBe(0)
+    expect(synced.item).toMatchObject({ state: "complete", complete: false, tasks: { opened: 1 } })
+    expect(synced.item.embeddings).toBeUndefined()
+    expect(synced.meta.issues).toContainEqual({
+      code: "not_found",
+      reason: "model.not-downloaded",
+      source: "tracker:embeddings",
+    })
+  })
+
+  it("embeds the documents and then the tracker's items within the run's deadline", async () => {
+    const { cli, answer, env } = setup()
+    env.WIRECAT_STATE_DIR = join(String(env.LIN_STATE_DIR), "wirecat")
+    await cli(["folders", "add", "root"])
+    embedNotesWith.length = 0
+    embedTrackerWith.length = 0
+    const synced = await answer(["sync", "--embed", "--timeout", "5m"])
+    expect(synced.item.documents.embeddings).toMatchObject({ model: "example-model" })
+    const within = expect.objectContaining({ deadline: expect.objectContaining({ ms: 300_000 }) })
+    expect(embedNotesWith).toEqual([within])
+    expect(embedTrackerWith).toEqual([within])
   })
 
   it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {
