@@ -27,6 +27,7 @@ import {
   skippedName,
 } from "../documents/push.js"
 import { excludedBy } from "./exclusions.js"
+import { listingSchema, listRemote } from "./listing.js"
 import type { FileVersions } from "./versions.js"
 
 type Local = LocalDocument & { size: number; mtimeMs: number }
@@ -75,7 +76,7 @@ export interface FileMirrorOptions {
   /** Throws once the sync lock is lost; checked before every write. */
   assertHeld(): void | Promise<void>
   signal?: AbortSignal
-  /** Local files the mirror takes at most; more fail the run. */
+  /** Files the mirror takes at most: more local ones fail the run, more remote ones leave the listing incomplete. */
   maxFiles?: number
   /** Bytes free for this process on the file system holding `path`, and its device. */
   space?(path: string): Promise<{ free: number; dev: number }>
@@ -343,7 +344,22 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const state = options.state.read()
   if (state.principal !== principal || state.root !== root || state.target !== folder)
     throw new CliError("configuration_error", "mirror state belongs to another account or mirror")
-  const listed = await target.list(folder, signal, { excluded })
+  const { listed, progress } = await listRemote(
+    target,
+    folder,
+    signal,
+    excluded,
+    state.listing,
+    now(),
+    options.maxFiles ?? MAX_FILES,
+  )
+  // Kept before any refusal below, so a stopped run's pages are not listed again. A completed listing's progress is
+  // cleared only once the run gets past its refusals: a run stopped by the guard goes on from there.
+  if (!options.dryRun && listed?.complete !== true && (progress || state.listing)) {
+    if (progress) state.listing = progress
+    else delete state.listing
+    options.state.save(state)
+  }
   const localRoot = await stat(root).catch(() => undefined)
   const remoteReplaced = listed !== undefined && state.rootId !== undefined && listed.rootId !== state.rootId
   const localReplaced =
@@ -599,9 +615,11 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       await rm(localTemp(join(root, path), tagOf(pending.operationId)), { force: true })
     if (!cutOff.has(path)) delete state.pending[path]
   }
+  if (listed?.complete) delete state.listing
   let savedAt = now()
   // A big mirror's state is megabytes of JSON: saved less often, it costs no more than a small one's.
-  const saveEvery = SAVE_EVERY_MS * Math.max(1, Object.keys(state.entries).length / 10_000)
+  const saved = Object.keys(state.entries).length + (state.listing?.files.length ?? 0)
+  const saveEvery = SAVE_EVERY_MS * Math.max(1, saved / 10_000)
   const save = (force = false) => {
     if (!force && now() - savedAt < saveEvery) return
     options.state.save(state)
@@ -915,6 +933,7 @@ const stateSchema = v.object({
     v.string(),
     v.object({ op: v.string(), operationId: v.string(), created: v.optional(v.boolean()) }),
   ),
+  listing: v.optional(listingSchema),
 })
 
 /** A file mirror's state in `<dir>/<id>.json`, refused rather than reset when invalid. */

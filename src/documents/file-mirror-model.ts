@@ -27,12 +27,14 @@ export interface FileTarget {
    * Every file under `root`, with the root folder's own id; undefined when the folder does not exist. `complete` is
    * false when any page was skipped or a cap was hit: a file missing from such a listing is not taken as deleted.
    * Files at paths `excluded` names are listed too, so a file moved there is found by its id, but count toward no cap.
+   * An incomplete listing that can go on later returns `next`, its position; given back as `from` in a later run, the
+   * listing returns only the files from there on.
    */
   list(
     root: string,
     signal?: AbortSignal,
-    options?: { excluded?(path: string): boolean },
-  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
+    options?: { excluded?(path: string): boolean; from?: string },
+  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean; next?: string } | undefined>
   /**
    * Whether anything is at `path` now, read directly rather than from a listing; false only when the provider says
    * nothing is there. A file missing from a listing is deleted only once this says so.
@@ -78,6 +80,11 @@ export interface FileMirrorState {
    * download that replaces a file, which is renamed into place whole and so never left partial.
    */
   pending: Record<string, { op: FileStepKind; operationId: string; created?: boolean }>
+  /**
+   * A remote listing that stopped before its end: the files listed so far and where the next run goes on. Cleared once
+   * a run completes it, or when it is too old, of another root, or cannot go on.
+   */
+  listing?: { rootId: string; startedAt: string; next: string; files: RemoteFile[] }
 }
 
 export interface FileMirrorStatePort {

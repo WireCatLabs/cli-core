@@ -92,6 +92,8 @@ const fakeDisk = () => {
   let gone = false
   let complete = true
   let rootId = "root-1"
+  let perRun: number | undefined
+  const froms: (string | undefined)[] = []
   const unlisted = new Set<string>()
   const relative = (path: string) => posix.relative(FOLDER, path)
   const touch = (path: string) => {
@@ -116,11 +118,17 @@ const fakeDisk = () => {
   }
   const target: FileTarget = {
     identity: async () => "alpha",
-    list: async (root) => {
+    list: async (root, _signal, options) => {
       if (gone || root !== FOLDER) return undefined
       const files: RemoteFile[] = []
       for (const path of [...ids.keys()].sort()) if (!unlisted.has(path)) files.push(await describe(path))
-      return { rootId, files, complete }
+      if (perRun === undefined) return { rootId, files, complete }
+      froms.push(options?.from)
+      const at = Number(options?.from ?? 0)
+      const end = at + perRun
+      return end < files.length
+        ? { rootId, files: files.slice(at, end), complete: false, next: String(end) }
+        : { rootId, files: files.slice(at), complete: true }
     },
     exists: async (path) => ids.has(relative(path)),
     download: async (path, into) => {
@@ -189,6 +197,12 @@ const fakeDisk = () => {
     replaceRoot: () => {
       rootId = "root-2"
     },
+    /** Each listing stops after this many files, as a run's deadline would, and goes on by offset from `from`. */
+    listPerRun: (count: number) => {
+      perRun = count
+    },
+    /** The `from` each paged listing was given. */
+    froms,
     /** The listing leaves the file out while it is still there, as a page that shifted or a lagging index would. */
     unlist: (path: string) => {
       unlisted.add(path)
@@ -1166,6 +1180,135 @@ describe("syncFileMirror, a deletion is proven or nothing is deleted", () => {
       lock: async () => ({ assertHeld: () => {}, release: () => {} }),
     })
     expect(result.issues).toEqual([expect.objectContaining({ reason: "mirror.partial" })])
+  })
+})
+
+describe("syncFileMirror, a listing that spans runs", () => {
+  const DAY = 24 * 3_600_000
+  const letters = (names: string) => Object.fromEntries([...names].map((name, n) => [`${name}.md`, `${n}`]))
+  const synced = async (files: Record<string, string>, perRun: number) => {
+    const context = setup(files, files)
+    await context.sync()
+    context.disk.calls.length = 0
+    context.disk.listPerRun(perRun)
+    return context
+  }
+
+  it("goes on where the last run stopped, and proves a deletion only once the listing is complete", async () => {
+    const context = await synced(letters("abcdef"), 2)
+    context.disk.write("a.md", "0, edited")
+    context.disk.remove("b.md")
+    context.disk.write("f.md", "5, edited")
+    const first = await context.sync()
+    expect(first.downloaded).toEqual(["a.md"])
+    expect(first.trashed).toEqual([])
+    expect(first.unknown.map((item) => item.path)).toEqual(["b.md", "d.md", "e.md", "f.md"])
+    expect(context.port.read().listing).toMatchObject({ rootId: "root-1", next: "2" })
+    expect(await context.sync()).toMatchObject({ downloaded: [], trashed: [] })
+    const last = await context.sync()
+    expect(last).toMatchObject({ downloaded: ["f.md"], trashed: [{ path: "b.md", side: "local" }], unknown: [] })
+    expect(context.disk.froms).toEqual([undefined, "2", "4"])
+    expect(context.port.read().listing).toBeUndefined()
+    await context.sync()
+    expect(context.disk.froms.at(-1)).toBeUndefined()
+  })
+
+  it("keeps a file met twice once, a file moved between runs at its new path, and never deletes one skipped", async () => {
+    const context = await synced(letters("abcd"), 2)
+    await context.sync()
+    context.disk.move("a.md", "z.md")
+    const result = await context.sync()
+    expect(result).toMatchObject({ renamed: [{ from: "a.md", to: "z.md" }], trashed: [], downloaded: [] })
+    expect(result.unknown).toEqual([
+      { path: "c.md", side: "remote", reason: "missing from the disk listing, but still there" },
+    ])
+    expect(await context.local()).toEqual({ "b.md": "1", "c.md": "2", "d.md": "3", "z.md": "0" })
+
+    const shifted = await synced(letters("abcd"), 2)
+    await shifted.sync()
+    shifted.disk.write("0.md", "new")
+    await shifted.sync()
+    expect(await shifted.sync()).toMatchObject({ unchanged: 4, unknown: [], errors: [], trashed: [] })
+  })
+
+  it("trashes a file the pages skipped only once it has left its path, kept, and downloads it at the new one", async () => {
+    const context = await synced(letters("abcd"), 2)
+    await context.sync()
+    context.disk.move("c.md", "0.md")
+    const result = await context.sync()
+    expect(result).toMatchObject({ trashed: [{ path: "c.md", side: "local" }], unknown: [] })
+    expect(context.versions.has(hashes("2").sha256)).toBe(true)
+    expect(await context.sync()).toMatchObject({ downloaded: ["0.md"] })
+    expect(await context.local()).toEqual({ "0.md": "2", "a.md": "0", "b.md": "1", "d.md": "3" })
+  })
+
+  it("still reads a skipped file directly when --keep remote would take a deletion against a local change", async () => {
+    const context = await synced(letters("abcd"), 2)
+    put(context.root, "c.md", "2, edited")
+    await context.sync()
+    context.disk.move("a.md", "z.md")
+    const result = await context.sync("remote")
+    expect(result.trashed).toEqual([])
+    expect(result.unknown).toEqual([
+      { path: "c.md", side: "remote", reason: "missing from the disk listing, but still there" },
+    ])
+    expect(await context.local()).toMatchObject({ "c.md": "2, edited" })
+  })
+
+  it("only fails a write for a saved file the remote deleted since its page was listed", async () => {
+    const context = await synced(letters("abcd"), 2)
+    await context.sync()
+    context.disk.remove("a.md")
+    rmSync(join(context.root, "a.md"))
+    const result = await context.sync()
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({ path: "a.md", reason: "the disk file changed during the sync" }),
+    ])
+    expect(context.disk.trash).toEqual([])
+    expect(await context.disk.files()).toEqual({ "b.md": "1", "c.md": "2", "d.md": "3" })
+  })
+
+  it("starts over when the saved listing is more than a week old or of another root folder", async () => {
+    const context = await synced(letters("abcde"), 2)
+    await context.sync()
+    await context.sync(undefined, { now: () => TODAY + 8 * DAY })
+    expect(context.disk.froms).toEqual([undefined, undefined])
+    await context.sync(undefined, { now: () => TODAY + 8 * DAY })
+    expect(context.disk.froms.at(-1)).toBe("2")
+
+    const moved = await synced(letters("abcde"), 2)
+    await moved.sync()
+    moved.disk.replaceRoot()
+    const repinned = await moved.sync(undefined, { repin: true })
+    expect(repinned.trashed).toEqual([])
+    expect(moved.port.read().listing).toBeUndefined()
+    await moved.sync()
+    expect(moved.disk.froms).toEqual([undefined, "2", undefined])
+  })
+
+  it("keeps its progress through a guard stop, and a dry run saves none", async () => {
+    const files = Object.fromEntries(
+      Array.from({ length: 14 }, (_, n) => [`f${String(n).padStart(2, "0")}.md`, `${n}`]),
+    )
+    const context = await synced(files, 12)
+    await context.sync(undefined, { dryRun: true })
+    expect(context.port.read().listing).toBeUndefined()
+    await context.sync()
+    for (let n = 0; n < 11; n++) rmSync(join(context.root, `f${String(n).padStart(2, "0")}.md`))
+    expect(await context.sync()).toMatchObject({ tooManyDeletions: 11, trashed: [] })
+    expect(context.port.read().listing).toMatchObject({ next: "12" })
+    expect((await context.sync(undefined, { allowDeletions: 11 })).trashed).toHaveLength(11)
+    expect(context.disk.froms).toEqual([undefined, undefined, "12", "12"])
+  })
+
+  it("is incomplete once the files of all its runs pass the cap, and starts over", async () => {
+    const context = await synced(letters("abc"), 2)
+    for (const name of ["d.md", "e.md", "f.md"]) context.disk.write(name, name)
+    await context.sync(undefined, { maxFiles: 4 })
+    await context.sync(undefined, { maxFiles: 4 })
+    expect(context.port.read().listing).toMatchObject({ next: "4" })
+    await context.sync(undefined, { maxFiles: 4 })
+    expect(context.port.read().listing).toBeUndefined()
   })
 })
 
