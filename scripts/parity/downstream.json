@@ -1,11 +1,21 @@
 [
-  { "cli": "mail", "repo": "mail-cli" },
-  { "cli": "memo", "repo": "cli-memo" },
-  { "cli": "tg", "repo": "tg-cli" },
-  { "cli": "max", "repo": "max-cli" },
-  { "cli": "wa", "repo": "whatsapp-cli" },
-  { "cli": "drive", "repo": "drive-cli" },
+  { "cli": "mail", "repo": "mail-cli", "pr": true },
+  { "cli": "memo", "repo": "cli-memo", "pr": true },
+  { "cli": "tg", "repo": "tg-cli", "pr": true },
+  { "cli": "max", "repo": "max-cli", "pr": true },
+  { "cli": "wa", "repo": "whatsapp-cli", "pr": true },
+  { "cli": "drive", "repo": "drive-cli", "pr": true },
+  { "cli": "attio", "repo": "attio-cli", "pr": true },
   { "cli": "gcal", "repo": "gcal-cli" },
   { "cli": "zm", "repo": "zoom-cli" },
-  { "cli": "b24", "repo": "bitrix24-cli" }
+  { "cli": "b24", "repo": "bitrix24-cli" },
+  { "cli": "amo", "repo": "amo-cli" },
+  { "cli": "pbx", "repo": "asterisk-cli" },
+  { "cli": "beeline", "repo": "beeline-cli" },
+  { "cli": "hubspot", "repo": "hubspot-cli" },
+  { "cli": "linear", "repo": "linear-cli" },
+  { "cli": "notion", "repo": "notion-cli" },
+  { "cli": "slack", "repo": "slack-cli" },
+  { "cli": "wordpress", "repo": "wordpress-cli" },
+  { "cli": "ydisk", "repo": "ydisk-cli" }
 ]

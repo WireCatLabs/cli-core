@@ -138,6 +138,9 @@ jobs:
         run: pnpm ci:quick && pnpm test
         working-directory: cli
 
+  # Every CLI on a release (`tests`), the monthly run and a run by hand; a pull request and a push to main build the
+  # ones marked `pr`: the messengers the manifest and wording jobs read, the store's heaviest user, mail, a Google
+  # client and a CRM built from a config. Actions minutes are shared by every WireCat repository.
   downstream-list:
     runs-on: ubuntu-latest
     outputs:
@@ -149,7 +152,11 @@ jobs:
           sparse-checkout: scripts/parity/downstream.json
           sparse-checkout-cone-mode: false
       - id: read
-        run: echo "clis=$(jq -c . scripts/parity/downstream.json)" >> "$GITHUB_OUTPUT"
+        env:
+          ALL: ${{ inputs.tests || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "clis=$(jq -c 'if env.ALL == "true" then . else map(select(.pr)) end' scripts/parity/downstream.json)" \
+            >> "$GITHUB_OUTPUT"
 
   # Each CLI that depends on cli-core, built against this checkout: what its own pull request would run first. A build,
   # typecheck or start that fails is a break and fails `downstream`; command lint and docs only warn: they flag cleanup
@@ -292,7 +299,7 @@ jobs:
   # labelled `breaks-downstream` passes it with the broken CLIs named: a break made on purpose, said so in its body.
   # The label is read when the job runs, not from the event, so adding it and re-running this job is enough.
   downstream-result:
-    needs: downstream
+    needs: [downstream-list, downstream]
     if: always()
     runs-on: ubuntu-latest
     name: downstream
@@ -308,6 +315,7 @@ jobs:
           merge-multiple: true
       - env:
           RESULT: ${{ needs.downstream.result }}
+          CLIS: ${{ needs.downstream-list.outputs.clis }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           LABEL: breaks-downstream

@@ -8,6 +8,7 @@
 #
 #   outcomes dir   one <repo>.json per matrix leg, written by its "Record the outcome" step
 #   RESULT         needs.downstream.result
+#   CLIS           the matrix's list as JSON (downstream-list), when it is not all of downstream.json
 #   PR LABEL GH_TOKEN GITHUB_REPOSITORY   PR is empty outside a pull request: no label can apply
 set -uo pipefail
 
@@ -26,7 +27,7 @@ known_until() { jq -r --arg r "$1" --arg t "$today" '.[] | select(.repo == $r an
   echo "| CLI | ref | build | typecheck | start | tests | command lint | docs |"
   echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
 } >>"$summary"
-for repo in $(jq -r '.[].repo' "$here/downstream.json"); do
+for repo in $(jq -r '.[].repo' <<<"${CLIS:-$(cat "$here/downstream.json")}"); do
   file="$dir/$repo.json"
   if [ ! -f "$file" ]; then
     echo "| $repo | | no result | | | | | |" >>"$summary"

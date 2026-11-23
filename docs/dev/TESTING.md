@@ -24,11 +24,15 @@ that CLI has an open pull request (a draft counts) from that branch, and at its 
 with adoption pull requests in the CLIs can pass before they merge. A branch with no pull request is not built
 ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)). A release takes the adoption branches with
 `bin/release --app-ref <branch>`.
-Parity's `downstream` job builds every CLI listed in
-[`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel. One required
+Parity's `downstream` job builds the CLIs listed in
+[`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel: all of them
+on a release (which also runs their tests), the monthly run and a run by hand, and only those marked `"pr": true` on a
+pull request and a push to `main`, to spare the Actions minutes every WireCat repository shares. The marked ones are
+tg, max and wa (the manifest and wording jobs read their builds), memo, mail, drive and attio. One required
 check, `validation / parity / downstream`, sums the matrix
 ([`scripts/parity/downstream-result.sh`](../../scripts/parity/downstream-result.sh)); its summary has a row per CLI.
-A new CLI on cli-core is one line in that file; a private repository cannot be listed (the job checks out without a
+A new CLI on cli-core is one line in that file, `cli` being the file name in its `dist/bin/` (`slack` for `slk`);
+a private repository cannot be listed (the job checks out without a
 token).
 
 The same blocking steps run locally before a push: [`bin/downstream-check`](../../bin/downstream-check) packs the

@@ -69,9 +69,10 @@ Every pull request runs three checks. The fast standards job (`standards.yml`) c
 `CHANGELOG.md`, config integrity, lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
 on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
-dist checks, Bun, old Node, the SQLite restart and parity, which builds cli-template and every CLI in
-`scripts/parity/downstream.json` against the branch, checking the manifests and wording of tg, max and wa on the
-same builds. The security checks (`security.yml`) run zizmor, gitleaks and CodeQL of the workflows; CodeQL of the
+dist checks, Bun, old Node, the SQLite restart and parity, which builds cli-template and the CLIs marked `pr` in
+`scripts/parity/downstream.json` against the branch (a release builds and tests all of them), checking the
+manifests and wording of tg, max and wa on the same builds. The security checks (`security.yml`) run zizmor,
+gitleaks and CodeQL of the workflows; CodeQL of the
 code (javascript-typescript, python, c-cpp, java-kotlin) runs only in the release's `checks` and the monthly run, and
 the pull request reports those checks as passed.
 A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and the version against a `main` already
