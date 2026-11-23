@@ -539,6 +539,36 @@ same; the tests run on real WordPress and Ghost posts in `test/fixtures/posts/`.
 embeds, frames, classes and block comments are lost, so a CLI that reads a post, edits it and writes it back
 flattens it. Such a CLI warns or refuses to write back a body that had them.
 
+<a id="write-one-file-at-the-hash-read"></a>
+
+### One file written at the hash it was read at
+
+An agent that edits a file reads it, then writes the whole file back. `guardedFileWrite` (`@wirecat/cli-core/documents`)
+writes over the content the caller read and nothing else, through the same `FileTarget` and `fileVersions`:
+
+1. A file at the path needs `expected`, the sha256 the caller read; none is a `validation_error` that says how to read
+   it. No file at the path needs no hash, and the upload goes with `{ absent: true }`.
+2. The current content is downloaded into the profile's version store, under its state folder and never in a mirrored
+   folder. Its hash is the proof: another one is `conflict`, reason `mirror.remote-changed`, with the command that
+   reads the file again, and nothing is uploaded.
+3. The target's `upload` checks `{ sha256: expected }` again just before it sends. Few providers have a conditional
+   upload, so a change landing between that check and the upload is not caught. What the write replaced is kept and
+   logged (`changed`, `from: "remote"`), so the write can be undone.
+
+The answer is the file as the remote now has it and the replaced sha256. The store's retention is not run here: it
+runs under a mirror sync's lock.
+
+`addFileUpdateCommand(files, helpers)` (`@wirecat/cli-core/documents/cli`) adds
+`<files> update <path> (--text <text> | stdin) [--expected-fingerprint <sha256>]` to the CLI's own files group. It is
+a remote write, so the MCP catalogue lists it as one and a global `--dry-run` previews it. The CLI passes `words`,
+`output`, `path` (what the user typed as the target's path), `reread` (the command that shows the file's sha256),
+`stdin`, and `write(extra, act)`: its own write path, with its permission key for the command and `extra`, which is
+`files.delete` (or `deleteKey`) when a file is replaced, as an upload with `--replace` asks. `act` takes the signed-in
+target and the profile's version store. The answer has `path`, the new `sha256`, and `replaced` with the old sha256 and
+`kept_at`, the kept copy, or `null` for a new file. An empty stdin, which is what an agent over MCP has, is a missing
+`--text`. The help says to write back only a whole plain-text file: a text cut with `truncated: true`, or one read out
+of a PDF or docx, replaces the whole file.
+
 ## Copy a document collection to another database
 
 Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core/store` to retain
