@@ -2116,14 +2116,14 @@ describe("syncFileMirror, text merges and conflicts", () => {
     it(`settles a crash ${when} the upload of a merge with no second merge`, async () => {
       const context = await synced()
       put(context.root, "list.txt", LIST.replace("one", "ONE"))
-      context.disk.write("list.txt", LIST.replace("two", "TWO"))
+      context.disk.write("list.txt", LIST.replace("three", "THREE"))
       context.crashOn("update", "remote", when)
       await expect(context.sync()).rejects.toBeInstanceOf(Crash)
       context.recover()
       const resumed = await context.sync()
       expect(resumed).toMatchObject({ conflicts: [], errors: [], merged: [] })
       expect(resumed[when === "before" ? "uploaded" : "adopted"]).toEqual(["list.txt"])
-      const merged = "ONE\nTWO\nthree\nfour\nfive\n"
+      const merged = "ONE\ntwo\nTHREE\nfour\nfive\n"
       expect(await context.local()).toMatchObject({ "list.txt": merged })
       expect(await context.disk.files()).toMatchObject({ "list.txt": merged })
     })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { markdownBlocks } from "../../documents/markdown-blocks.js"
-import { diffBlocks, mergeBlocks } from "./block-diff.js"
+import { adjoins, diffBlocks, mergeBlocks } from "./block-diff.js"
 
 const md = (text: string) => markdownBlocks(text)
 
@@ -39,6 +39,14 @@ describe("mergeBlocks", () => {
       blocks: await md("# Plan v2\n\n- [ ] call\n- [ ] write\n\nnotes\n\nadded in Google\n"),
       conflicts: [],
     })
+  })
+
+  it("merges edits to neighbouring blocks for a document push, and conflicts on them with adjoins", async () => {
+    const from = await md(base)
+    const local = await md(base.replace("call", "call Ana"))
+    const remote = await md(base.replace("write", "write it"))
+    expect(mergeBlocks(from, from, local, remote)).toMatchObject({ status: "clean", conflicts: [] })
+    expect(mergeBlocks(from, from, local, remote, undefined, adjoins)).toMatchObject({ status: "conflict" })
   })
 
   it("merges the same change made on both sides once", async () => {

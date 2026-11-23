@@ -31,6 +31,20 @@ describe("mergeText", () => {
     )
   })
 
+  it("reports edits on neighbouring lines as a conflict, as Git does", async () => {
+    const result = await merge("a.txt", "a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nC\nd\n")
+    expect(result).toMatchObject({ conflicts: [{ line: 2, base: "b\nc\n", local: "B\nc\n", remote: "b\nC\n" }] })
+  })
+
+  it("merges edits with one unchanged line between them", async () => {
+    expect(await merge("a.txt", "a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nb\nc\nD\n")).toBe("a\nB\nc\nD\n")
+  })
+
+  it("reports an insertion right after the other side's edit, or at the same point, as a conflict", async () => {
+    expect(await merge("a.txt", "a\nb\nc\n", "a\nB\nc\n", "a\nb\nnew\nc\n")).toHaveProperty("conflicts")
+    expect(await merge("a.txt", "a\nb\n", "a\nmine\nb\n", "a\ntheirs\nb\n")).toHaveProperty("conflicts")
+  })
+
   it("keeps CRLF line endings, a byte-order mark and a missing last newline byte for byte", async () => {
     const base = "﻿one\r\ntwo\r\nthree\r\nfour"
     const merged = await merge("a.txt", base, "﻿ONE\r\ntwo\r\nthree\r\nfour", "﻿one\r\ntwo\r\nthree\r\nFOUR")
@@ -57,6 +71,12 @@ describe("mergeText", () => {
         "# Plan\n\n- [ ] buy oat milk\n- [ ] call Anna\n",
       ),
     ).toBe("# Plan\n\n- [x] buy oat milk\n- [ ] call Anna\n")
+  })
+
+  it("keeps edits to neighbouring Markdown list items a conflict when merging by blocks", async () => {
+    const base = "# Plan\n\n- buy milk\n- call Anna\n"
+    const result = await merge("p.md", base, base.replace("milk", "oat milk"), base.replace("Anna", "Ben"))
+    expect(result).toHaveProperty("conflicts")
   })
 
   it("never drops a remote change that Markdown blocks cannot see: front matter stays a conflict", async () => {
