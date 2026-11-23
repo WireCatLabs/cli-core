@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { TrackerKind, TrackerRecords } from "../../domain/tracker.js"
 import type { TrackerCallContext, TrackerChanges, TrackerIdPage, TrackerSource } from "../source.js"
+import { TRACKER_WRITES, type TrackerIssueFields, type TrackerWrite, type TrackerWriter } from "../writer.js"
 
 const OVERLAP_MS = 10 * 60_000
 
@@ -18,7 +19,11 @@ export interface FakeTrackerSourceOptions {
   self?: string
 }
 
-export interface FakeTrackerSource extends TrackerSource {
+export interface FakeTrackerSource extends TrackerSource, TrackerWriter {
+  /** Each write that reached the tracker, in order. */
+  sent: { write: TrackerWrite; id: string }[]
+  /** The next write is made, and its answer lost, as a dropped connection does. */
+  loseNextAnswer(): void
   /** Changes one row on the tracker's side: it gets a new `updatedAt`. */
   touch(kind: TrackerKind, externalId: string): void
   archive(kind: TrackerKind, externalId: string): void
@@ -45,6 +50,20 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
     return found
   }
   const self = options.self
+  const sent: FakeTrackerSource["sent"] = []
+  let lose = false
+  const made = (write: TrackerWrite, id: string) => {
+    sent.push({ write, id })
+    if (!lose) return
+    lose = false
+    throw new CliError("outcome_unknown", "the connection dropped after the tracker got the write")
+  }
+  const apply = (issue: TrackerRecords["issue"], fields: TrackerIssueFields) => {
+    for (const [field, value] of Object.entries(fields))
+      if (value !== undefined) Object.assign(issue, { [field]: value })
+    issue.updatedAt = clock()
+    return { ...issue }
+  }
   const make = (skew: number): FakeTrackerSource => ({
     provider: options.provider ?? "fake-tracker",
     traits: { kinds: (Object.keys(rows) as TrackerKind[]).filter((kind) => listOf(kind).length > 0) },
@@ -94,6 +113,51 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
       list?.splice(at, 1)
     },
     skewed: (ms) => make(ms),
+    sent,
+    loseNextAnswer() {
+      lose = true
+    },
+    writes: TRACKER_WRITES,
+    async createIssue(draft) {
+      rows.issue ??= []
+      const issues = rows.issue
+      const team = (rows.team ?? []).find((one) => one.externalId === draft.team)
+      const number = issues.length + 1
+      const issue: TrackerRecords["issue"] = {
+        externalId: `issue-${number}`,
+        key: `${team?.key ?? "ISS"}-${number}`,
+        labels: [],
+        creator: self ?? null,
+        createdAt: clock(),
+        title: draft.title,
+      }
+      issues.push(issue)
+      const answer = apply(issue, draft)
+      made("create", issue.externalId)
+      return answer
+    },
+    async updateIssue(externalId, patch) {
+      const found = (rows.issue ?? []).find((one) => one.externalId === externalId)
+      if (!found) throw new CliError("not_found", `the fake tracker has no issue ${externalId}`)
+      const answer = apply(found, patch)
+      made("update", externalId)
+      return answer
+    },
+    async comment(issue, body) {
+      rows.comment ??= []
+      const comments = rows.comment
+      const comment = {
+        externalId: `comment-${comments.length + 1}`,
+        issue,
+        body,
+        author: self ?? null,
+        createdAt: clock(),
+        updatedAt: clock(),
+      }
+      comments.push(comment)
+      made("comment", comment.externalId)
+      return { ...comment }
+    },
   })
   return make(options.skew ?? 0)
 }

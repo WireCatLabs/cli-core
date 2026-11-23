@@ -3,13 +3,11 @@ import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson } from "../
 import type { DealKind } from "../domain/deals.js"
 import { currencyOf, minorUnits } from "../domain/money.js"
 import { e164Of } from "../domain/phones.js"
-import type { AppIdentity } from "../ports/app.js"
 import { foldName } from "../resolve.js"
-import type { Warn } from "../runs/events.js"
-import { type Asker, type GuardSettings, guardFor, type SendGuard } from "../sends/guard.js"
+import type { Asker, SendGuard } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
-import { keyedGuard } from "../sends/keyed-guard.js"
-import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
+import type { PermissionKey } from "../sends/permissions.js"
+import { type ProfileWrites, profileWriteGuard } from "../sends/profile-writes.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { Deal, Pipeline, PipelineOptions, PipelineReport } from "../store/sqlite/deals.js"
 import type { MessageStore } from "../store/store.js"
@@ -29,18 +27,10 @@ import {
 } from "./writer.js"
 
 /** What a CLI hands the CRM writes for one profile. */
-export interface CrmWrites {
+export interface CrmWrites extends ProfileWrites {
   writer: CrmWriter
-  app: AppIdentity
-  /**
-   * The profile's levels, read on every write so a config change applies at once. A CRM limits its own rate, so
-   * `sendsPerHour` is not read: the guard is there for the levels and the journal.
-   */
-  settings: () => Omit<GuardSettings, "sendsPerHour"> & Partial<Pick<GuardSettings, "sendsPerHour">>
   /** The CRM user the sign-in acts as. An owner other than it checks `crm.assign-others`; left out, every owner does. */
   self?: string
-  env?: NodeJS.ProcessEnv
-  warn?: Warn
   /**
    * The CLI's own keys a write also checks, such as Bitrix24's `api.crm.deal.update`; pass the same function to
    * `crmAlsoChecks` so `--dry-run` names them.
@@ -366,24 +356,8 @@ const keysOf = (
   return { key: keyOf(kind, verb), extra: [...extra, ...(context.writes.alsoChecks?.(kind, verb) ?? [])] }
 }
 
-/** The profile's guard over the write's own key and the keys its fields imply (`keyedGuard`). */
-const guardOf = (context: CrmWriteContext, extra: readonly PermissionKey[]): SendGuard => {
-  const settings = context.writes.settings()
-  const defaults = { ...DEFAULT_PERMISSIONS, ...CRM_WRITE_DEFAULTS, ...settings.permissionDefaults }
-  return keyedGuard(
-    (ask) =>
-      guardFor(
-        context.writes.app,
-        { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: defaults },
-        context.writes.warn ?? (() => {}),
-        context.writes.env,
-        ask,
-      ),
-    context.ask,
-    (key) => levelFor(settings.permissions, key, defaults).level,
-    extra,
-  )
-}
+const guardOf = (context: CrmWriteContext, extra: readonly PermissionKey[]): SendGuard =>
+  profileWriteGuard(context.writes, context.ask, CRM_WRITE_DEFAULTS, extra)
 
 /** Sends the write once, never again: a lost answer is `outcome_unknown`, with what the owner may do about it. */
 const written = async <T>(

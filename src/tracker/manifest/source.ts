@@ -30,13 +30,24 @@ const OVERLAP_MS = 10 * 60_000
 
 const DROP = Symbol("drop")
 
-const fill = (value: unknown, since: string | undefined): unknown => {
-  if (value === "{since}") return since ?? DROP
-  if (Array.isArray(value)) return value.map((one) => fill(one, since)).filter((one) => one !== DROP)
+/** What the engine puts in a call's variables: `"{since}"`, and a write's `"{id}"` and `"{values}"`. */
+export interface TrackerSlots {
+  since?: string
+  id?: string
+  values?: Readonly<Record<string, unknown>>
+}
+
+const SLOT = /^\{(since|id|values)\}$/
+
+// A slot's value goes in as it is, never filled again: an owner's title may say "{since}".
+const fill = (value: unknown, slots: TrackerSlots): unknown => {
+  const slot = typeof value === "string" ? SLOT.exec(value)?.[1] : undefined
+  if (slot !== undefined) return slots[slot as keyof TrackerSlots] ?? DROP
+  if (Array.isArray(value)) return value.map((one) => fill(one, slots)).filter((one) => one !== DROP)
   if (crmValues.isRaw(value))
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, one]) => {
-        const filled = fill(one, since)
+        const filled = fill(one, slots)
         return filled === DROP ? [] : [[key, filled]]
       }),
     )
@@ -44,12 +55,12 @@ const fill = (value: unknown, since: string | undefined): unknown => {
 }
 
 /** The variables travel as the body: each GraphQL argument is a body parameter of the operation. */
-const inputOf = (call: TrackerOperationCall, since?: string): ApiCommandInput => ({
+export const trackerInputOf = (call: TrackerOperationCall, slots: TrackerSlots = {}): ApiCommandInput => ({
   path: {},
   query: {},
   headers: {},
   fields: {},
-  ...(call.variables ? { body: JSON.stringify(fill(call.variables, since)) } : {}),
+  ...(call.variables ? { body: JSON.stringify(fill(call.variables, slots)) } : {}),
   ...(call.selection ? { selection: call.selection } : {}),
 })
 
@@ -106,7 +117,7 @@ export const trackerSourceFromManifest = (input: unknown, options: TrackerManife
   ) => {
     const pagination = operations.get(call.operation)?.pagination
     const parameter = pagination && cursorParameter(pagination)
-    let request: ApiCommandInput = inputOf(call, since)
+    let request: ApiCommandInput = trackerInputOf(call, since === undefined ? {} : { since })
     if (token !== undefined && parameter)
       request = { ...withValue(request, parameter, pagination.style === "cursor" ? token : Number(token)) }
     const answer = await send(call.operation, request)
@@ -205,7 +216,9 @@ export const trackerSourceFromManifest = (input: unknown, options: TrackerManife
       ? {
           async self(context?: TrackerCallContext) {
             const self = manifest.self as NonNullable<TrackerManifest["self"]>
-            const found = crmValues.id(at(await metered(context)(self.call.operation, inputOf(self.call)), self.path))
+            const found = crmValues.id(
+              at(await metered(context)(self.call.operation, trackerInputOf(self.call)), self.path),
+            )
             if (found === null) throw new CliError("invalid_response", `${manifest.provider} named no signed-in user`)
             return found
           },

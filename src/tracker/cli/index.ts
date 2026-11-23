@@ -25,6 +25,9 @@ import type { AccountKey } from "../../store/types.js"
 import type { TrackerSource } from "../source.js"
 import { syncTracker } from "../sync.js"
 import { trackerIssueTask } from "../tasks.js"
+import type { TrackerWrite } from "../writer.js"
+import type { TrackerWrites } from "../writes.js"
+import { addTrackerWriteCommands } from "./writes.js"
 
 /** The selected profile's tracker account, opened for one command and closed before its answer is printed. */
 export interface TrackerRun {
@@ -32,6 +35,8 @@ export interface TrackerRun {
   store: MessageStore
   /** The tracker, built on first use: a command that only reads the store never reads the sign-in. */
   source: () => TrackerSource
+  /** The tracker's writer and the profile's levels, built for the command run; needed by every write command. */
+  writes?: (command: Command) => TrackerWrites
   close?: () => Promise<void>
 }
 
@@ -40,6 +45,8 @@ export interface TrackerCommandOptions {
   app: AppIdentity
   /** Opens the selected profile for one command; `readOnly` when the command only reads the store. */
   open: (command: Command, access: { readOnly: boolean }) => Promise<TrackerRun>
+  /** What the tracker's writer takes (`TrackerWriter.writes`): mounts `issues create`, `update` and `comment`. */
+  writes?: readonly TrackerWrite[]
   now?: () => number
 }
 
@@ -135,6 +142,13 @@ const trackerSync = v.strictObject({
       v.strictObject({ skipped: text }),
     ]),
   ),
+})
+
+const trackerWrite = v.strictObject({
+  operation_id: text,
+  issue: v.optional(trackerView),
+  comment: v.optional(trackerView),
+  untrusted: v.array(text),
 })
 
 const trackerTask = v.strictObject({ task_id: text, key: v.optional(text), issue: text, created: v.boolean() })
@@ -368,6 +382,17 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     })
   })
 
+  if (options.writes?.length)
+    addTrackerWriteCommands(issues, {
+      writes: options.writes,
+      within,
+      example,
+      view: async (run, item) =>
+        item.kind === "issue" ? ((await withNames(run, [item as TrackerItem<"issue">]))[0] as never) : viewOf(item),
+      answer: trackerWrite,
+      now,
+    })
+
   for (const [kind, plural, what] of [
     ["project", "projects", "the tracker's projects: status, lead, teams and target date"],
     ["team", "teams", "the tracker's teams"],
@@ -419,5 +444,8 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
   }
 }
 
-/** The tracker's commands: `sync`, `issues list|show|search|assign`, and a `list` of each other kind. */
+/**
+ * The tracker's commands: `sync`, `issues list|show|search|assign`, `issues create|update|comment` for the writes in
+ * `writes`, and a `list` of each other kind.
+ */
 export const addTrackerCommands = honoursDryRun(sharedCommand(addTrackerCommandsDefinition))

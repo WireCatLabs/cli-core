@@ -15,18 +15,23 @@ export {
 export { addTrackerCommands, type TrackerCommandOptions, type TrackerRun } from "./cli/index.js"
 export {
   parseTrackerManifest,
+  TRACKER_WRITE_FIELDS,
   type TrackerAfterHook,
   type TrackerChangesCall,
   type TrackerManifest,
   type TrackerManifestEntity,
   type TrackerManifestHooks,
+  type TrackerManifestWrite,
   type TrackerOperationCall,
+  type TrackerWriteKind,
+  type TrackerWriteRule,
 } from "./manifest/manifest.js"
 export { TRACKER_FIELDS } from "./manifest/map.js"
 export {
   type TrackerManifestSourceOptions,
   trackerSourceFromManifest,
 } from "./manifest/source.js"
+export { type TrackerManifestWriterOptions, trackerWriterFromManifest } from "./manifest/writer.js"
 export type {
   TrackerCallContext,
   TrackerChanges,
@@ -43,6 +48,7 @@ export {
   type TrackerSyncResult,
   trackerCursorName,
   trackerGapsOf,
+  trackerSelfOf,
 } from "./sync.js"
 export {
   syncTrackerTasks,
@@ -52,3 +58,27 @@ export {
   trackerIssueTask,
   trackerIssueTitle,
 } from "./tasks.js"
+export {
+  TRACKER_ASSIGN_OTHERS_KEY,
+  TRACKER_WRITE_DEFAULTS,
+  TRACKER_WRITE_EXTRA_KEYS,
+  TRACKER_WRITE_KEYS,
+  TRACKER_WRITES,
+  type TrackerIssueDraft,
+  type TrackerIssueFields,
+  type TrackerWrite,
+  type TrackerWriteOptions,
+  type TrackerWriter,
+  trackerAlsoChecks,
+} from "./writer.js"
+export {
+  commentTrackerIssue,
+  createTrackerIssue,
+  type TrackerCommentWritten,
+  type TrackerIssueInput,
+  type TrackerIssueWritten,
+  type TrackerWriteContext,
+  type TrackerWrites,
+  trackerIssueOf,
+  updateTrackerIssue,
+} from "./writes.js"

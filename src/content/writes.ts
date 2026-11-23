@@ -1,11 +1,9 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { ContentPost } from "../domain/content.js"
-import type { AppIdentity } from "../ports/app.js"
-import type { Warn } from "../runs/events.js"
-import { type Asker, type GuardSettings, guardFor, type SendGuard } from "../sends/guard.js"
+import type { Asker, SendGuard } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
-import { keyedGuard } from "../sends/keyed-guard.js"
-import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
+import type { PermissionKey } from "../sends/permissions.js"
+import { askedKeys, type ProfileWrites, profileWriteGuard } from "../sends/profile-writes.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { ContentItem } from "../store/sqlite/content.js"
 import type { MessageStore } from "../store/store.js"
@@ -22,13 +20,8 @@ import {
 } from "./writer.js"
 
 /** What a CLI hands the content writes for one profile. */
-export interface ContentWrites {
+export interface ContentWrites extends ProfileWrites {
   writer: ContentWriter
-  app: AppIdentity
-  /** The profile's levels, read on every write so a config change applies at once. */
-  settings: () => Omit<GuardSettings, "sendsPerHour"> & Partial<Pick<GuardSettings, "sendsPerHour">>
-  env?: NodeJS.ProcessEnv
-  warn?: Warn
 }
 
 export interface ContentWriteContext {
@@ -54,23 +47,8 @@ export interface ContentWritten {
 
 const PUBLIC = new Set(["published", "scheduled"])
 
-const guardOf = (context: ContentWriteContext, extra: readonly PermissionKey[]): SendGuard => {
-  const settings = context.writes.settings()
-  const defaults = { ...DEFAULT_PERMISSIONS, ...CONTENT_WRITE_DEFAULTS, ...settings.permissionDefaults }
-  return keyedGuard(
-    (ask) =>
-      guardFor(
-        context.writes.app,
-        { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: defaults },
-        context.writes.warn ?? (() => {}),
-        context.writes.env,
-        ask,
-      ),
-    context.ask,
-    (key) => levelFor(settings.permissions, key, defaults).level,
-    extra,
-  )
-}
+const guardOf = (context: ContentWriteContext, extra: readonly PermissionKey[]): SendGuard =>
+  profileWriteGuard(context.writes, context.ask, CONTENT_WRITE_DEFAULTS, extra)
 
 /** Checked and journaled once; a lost answer is `outcome_unknown`, and the owner syncs before writing again. */
 const written = async <T>(
@@ -81,11 +59,7 @@ const written = async <T>(
   act: (confirmed: readonly PermissionKey[]) => Promise<T>,
 ): Promise<T> => {
   try {
-    // The keys the owner was asked about here (an `ask` level) need not be asked again by a writer's own call; a key
-    // allowed here was asked about by nobody, so it confirms nothing.
-    const settings = context.writes.settings()
-    const defaults = { ...DEFAULT_PERMISSIONS, ...CONTENT_WRITE_DEFAULTS, ...settings.permissionDefaults }
-    const asked = [key, ...extra].filter((one) => levelFor(settings.permissions, one, defaults).level === "ask")
+    const asked = askedKeys(context.writes, CONTENT_WRITE_DEFAULTS, [key, ...extra])
     return await guardedWrite(guardOf(context, extra), { chatId: null, kind: "edit", key, operationId }, () =>
       act(asked),
     )

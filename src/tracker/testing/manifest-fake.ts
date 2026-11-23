@@ -20,10 +20,12 @@ import {
   parseTrackerManifest,
   rowSelection,
   selectionOf,
+  TRACKER_WRITE_FIELDS,
   type TrackerChangesCall,
   type TrackerManifest,
   type TrackerManifestHooks,
   type TrackerOperationCall,
+  type TrackerWriteKind,
 } from "../manifest/manifest.js"
 import { TRACKER_FIELDS } from "../manifest/map.js"
 import { trackerSourceFromManifest } from "../manifest/source.js"
@@ -232,34 +234,44 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     return typeof rule === "string" ? rule : typeof rule === "object" && "path" in rule ? rule.path : undefined
   }
 
+  const writeCalls = (kind: TrackerKind) => {
+    const one = manifest.writes?.[kind as TrackerWriteKind]
+    return [one?.create, one?.update].filter((call) => call !== undefined)
+  }
   const items = new Map<TrackerKind, SchemaNode | undefined>()
+  const selections = new Map<TrackerKind, Selection>()
   const rows: Partial<Record<TrackerKind, crmValues.CrmRaw[]>> = {}
+  const seed = (kind: TrackerKind, n: number) => {
+    const entity = manifest.entities[kind] as NonNullable<TrackerManifest["entities"][TrackerKind]>
+    const item = items.get(kind)
+    const made = item ? sampled(item, selections.get(kind) ?? {}) : {}
+    const row = crmValues.isRaw(made) ? made : {}
+    for (const [field, rule] of Object.entries(entity.map as Record<string, CrmRule | undefined>)) {
+      if (typeof rule === "function" || (typeof rule === "object" && "value" in rule && !("each" in rule))) continue
+      const [first, inside] = rulePaths(rule)
+      if (!first) continue
+      if (inside?.inside !== undefined) {
+        const one: crmValues.CrmRaw = {}
+        put(one, inside.path, pointed(field))
+        put(row, first.path, [one])
+      } else if (typeof rule === "object" && "map" in rule) put(row, first.path, Object.keys(rule.map)[0] ?? null)
+      else write(row, item, first.path, sampleValue(kind, field, n))
+    }
+    return row
+  }
   for (const kind of manifest.kinds) {
     const entity = manifest.entities[kind] as NonNullable<TrackerManifest["entities"][TrackerKind]>
     const calls = [entity.list, entity.changes, entity.ids].filter((one) => one !== undefined)
-    const selection = calls
-      .map((call) => rowSelection(selectionOf(call, api) ?? {}, itemsOf(call)) ?? {})
-      .reduce((all, one) => merge(all, one), {})
-    const item = nodeAt(responseOf(entity.list), itemsOf(entity.list))
-    items.set(kind, item)
+    // A written row is answered within the write's selection too, so the rows hold what it reads.
+    const selection = [
+      ...calls.map((call) => rowSelection(selectionOf(call, api) ?? {}, itemsOf(call)) ?? {}),
+      ...writeCalls(kind).map((call) => rowSelection(selectionOf(call, api) ?? {}, call.items) ?? {}),
+    ].reduce((all, one) => merge(all, one), {})
+    selections.set(kind, selection)
+    items.set(kind, nodeAt(responseOf(entity.list), itemsOf(entity.list)))
     if (entity.changes && timePath(kind, "updatedAt") === undefined)
       throw new Error(`${kind}: map updatedAt to a path, so the fake can read a change time`)
-    rows[kind] = Array.from({ length: ROWS }, (_, n) => {
-      const made = item ? sampled(item, selection) : {}
-      const row = crmValues.isRaw(made) ? made : {}
-      for (const [field, rule] of Object.entries(entity.map as Record<string, CrmRule | undefined>)) {
-        if (typeof rule === "function" || (typeof rule === "object" && "value" in rule && !("each" in rule))) continue
-        const [first, inside] = rulePaths(rule)
-        if (!first) continue
-        if (inside?.inside !== undefined) {
-          const one: crmValues.CrmRaw = {}
-          put(one, inside.path, pointed(field))
-          put(row, first.path, [one])
-        } else if (typeof rule === "object" && "map" in rule) put(row, first.path, Object.keys(rule.map)[0] ?? null)
-        else write(row, item, first.path, sampleValue(kind, field, n))
-      }
-      return row
-    })
+    rows[kind] = Array.from({ length: ROWS }, (_, n) => seed(kind, n))
   }
 
   const filterProblem = (kind: TrackerKind, call: TrackerOperationCall, place?: string) => {
@@ -405,6 +417,74 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     return { data: project(body, selection) }
   }
 
+  /** One of our fields onto a row where the map reads it: a list of ids under its `each`, a cleared link as null. */
+  const assign = (kind: TrackerKind, row: crmValues.CrmRaw, field: string, value: unknown) => {
+    const rule: CrmRule | undefined = manifest.entities[kind]?.map[field as never]
+    const [first, inside] = rulePaths(rule)
+    if (!first) return
+    if (inside?.inside !== undefined && Array.isArray(value))
+      put(
+        row,
+        first.path,
+        value.map((id) => {
+          const one: crmValues.CrmRaw = {}
+          put(one, inside.path, id)
+          return one
+        }),
+      )
+    else if (value === null && TRACKER_FIELDS[kind][field] === "id" && first.path.includes("."))
+      put(row, first.path.slice(0, first.path.lastIndexOf(".")), null)
+    else write(row, items.get(kind), first.path, value as Value)
+  }
+
+  const writeRoutes = (Object.keys(manifest.writes ?? {}) as TrackerWriteKind[]).flatMap((kind) => {
+    const one = manifest.writes?.[kind]
+    return (["create", "update"] as const).flatMap((verb) => {
+      const call = one?.[verb]
+      return call ? [{ kind, verb, call, fields: one.fields }] : []
+    })
+  })
+
+  /**
+   * A create adds a row, an update changes the row its `"{id}"` names; each answers the row within the call's
+   * selection. The variables were checked against the schema first, as the tracker checks them.
+   */
+  const answerWrite = (call: GraphqlFakeCall): GraphqlFakeAnswer => {
+    const route = writeRoutes.find((one) => one.call.operation === call.operation)
+    if (!route) return refuse(`${call.operation}: no write of the source manifest sends it`)
+    const { kind } = route
+    const values = at(call.variables, placeOf(route.call.variables, "{values}") as string)
+    if (!crmValues.isRaw(values)) return refuse(`${call.operation}: no "{values}" object in its variables`)
+    const named = new Set(Object.values(route.fields).map(({ to }) => to.split(".")[0]))
+    const stray = Object.keys(values).find((key) => !named.has(key))
+    if (stray) return refuse(`${call.operation}: ${stray} is not a field the manifest writes`)
+    let row: crmValues.CrmRaw | undefined
+    if (route.verb === "create") {
+      row = seed(kind, rows[kind]?.length ?? 0)
+      // What the tracker sets itself (the key, the creator, the times) keeps its sample; the rest is what was sent.
+      for (const field of TRACKER_WRITE_FIELDS[kind]) assign(kind, row, field, field === "labels" ? [] : null)
+      rows[kind] ??= []
+      rows[kind].push(row)
+    } else {
+      const id = at(call.variables, placeOf(route.call.variables, "{id}") as string)
+      row = rows[kind]?.find((one) => externalIdOf(manifest, kind, one) === id)
+      // The tracker's own refusal, not the fake's: an issue deleted since the last sync.
+      if (!row)
+        return { errors: [{ message: `Entity not found: ${String(id)}`, extensions: { code: "INVALID_INPUT" } }] }
+    }
+    for (const [field, rule] of Object.entries(route.fields)) {
+      const value = at(values, rule.to)
+      if (value !== undefined) assign(kind, row, field, value)
+    }
+    stamp(kind, row, "updatedAt")
+    const selection = call.selection ?? {}
+    const made = sampled(responseOf(route.call), selection)
+    const body = crmValues.isRaw(made) ? made : {}
+    if (route.call.items === undefined) return { data: project(row, selection) }
+    put(body, route.call.items, project(row, rowSelection(selection, route.call.items) ?? true))
+    return { data: project(body, selection) }
+  }
+
   const scheme = Object.values(api.securitySchemes ?? {})[0] as
     | { type?: string; in?: string; name?: string }
     | undefined
@@ -423,6 +503,7 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     answers: {
       ...Object.fromEntries(routes.map((route) => [route.call.operation, answer])),
       ...(manifest.self ? { [manifest.self.call.operation]: answerSelf } : {}),
+      ...Object.fromEntries(writeRoutes.map((route) => [route.call.operation, answerWrite])),
     },
   })
 
@@ -536,11 +617,19 @@ export const trackerManifestFixture = (
  */
 export const trackerManifestContract = (manifest: unknown, options: TrackerManifestFixtureOptions): ContractCase[] => {
   const fakes: TrackerManifestFake[] = []
-  return trackerSourceContract(() => {
-    const fixture = trackerManifestFixture(manifest, options)
-    fakes.push(fixture.fake)
-    return fixture
-  }).map(({ name, run }) => ({
+  return failingOnRefusals(
+    trackerSourceContract(() => {
+      const fixture = trackerManifestFixture(manifest, options)
+      fakes.push(fixture.fake)
+      return fixture
+    }),
+    fakes,
+  )
+}
+
+/** Each case failing too when a fake it built refused a call: the refusal says why, the error only that it was refused. */
+export const failingOnRefusals = (cases: readonly ContractCase[], fakes: TrackerManifestFake[]): ContractCase[] =>
+  cases.map(({ name, run }) => ({
     name,
     async run() {
       fakes.length = 0
@@ -548,11 +637,9 @@ export const trackerManifestContract = (manifest: unknown, options: TrackerManif
         () => undefined,
         (error: unknown) => error,
       )
-      // A refused call fails the source too; the refusal says why, its error only that the tracker said no.
       const refused = fakes.flatMap((fake) => fake.refusals)
       if (refused.length)
         throw new Error(`the fake refused calls the source made:\n${refused.join("\n")}`, { cause: failed })
       if (failed) throw failed
     },
   }))
-}

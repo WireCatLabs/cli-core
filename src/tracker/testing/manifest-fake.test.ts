@@ -117,8 +117,9 @@ describe("trackerManifestFake", () => {
   it("writes a text field the schema keeps as an enum as one of its values", async () => {
     const project = MANIFEST.entities.project as NonNullable<TrackerManifest["entities"]["project"]>
     const selection = project.list.selection?.replace(" state ", " status { type } ")
+    const { writes: _, ...reads } = MANIFEST
     const manifest = {
-      ...MANIFEST,
+      ...reads,
       kinds: ["project"],
       entities: {
         project: {
