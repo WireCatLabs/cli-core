@@ -30,7 +30,7 @@ A tracker that takes writes has a `TrackerWriter` beside its source (`src/tracke
 | `writes` | which of `create`, `update` and `comment` it takes (`TRACKER_WRITES`) |
 | `createIssue(draft, options)` | a new issue from `TrackerIssueFields` with its `title`; answers the whole issue |
 | `updateIssue(id, patch, options)` | changes the fields given, `null` clearing one, `labels` replacing the list; answers the whole issue |
-| `comment(issue, body, options)` | a comment on the issue by its tracker id; answers the comment |
+| `comment(issue, body, options)` | a comment on the issue, by its tracker id; answers the comment |
 
 Every field is the tracker's own id. `options` carries the write's `operationId` and the keys the owner was already
 asked about (`confirmed`). None of them retries: a lost answer throws `outcome_unknown`, and an answer with no record
@@ -131,7 +131,8 @@ tracker is named in the row's `untrusted`. Each list narrows by its query, as `d
   (`TRACKER_WRITE_KEYS`), through the profile's guard (`profileWriteGuard`, shared with the CRM and content writes): a
   `deny` or `readonly` refuses, `ask` asks once at a terminal and needs `--yes` otherwise, and the setup ceiling caps
   every level. No built-in level tightens them: as `deals.create`, they go ahead unless the profile says otherwise.
-  The write is journaled once with its `operation_id`; a lost answer is `outcome_unknown` with that id, and the owner
+  The write's journal line carries the answer's `operation_id` (a manifest writer's `serviceApiWriter` adds its own
+  line under `api.*`, as content's does); a lost answer is `outcome_unknown` with that id, and the owner
   syncs and looks before writing again, since a tracker does not recognise a repeat. `--dry-run` previews and sends
   nothing.
 - **The answer is stored.** The tracker's answer is saved with `store.tracker.save`, as a sync saves a page, so

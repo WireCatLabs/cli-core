@@ -11,6 +11,7 @@ import { serviceApiCommand, serviceApiPermissions, serviceApiWriter } from "../.
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import { settingsFor } from "../../cli/settings.js"
 import { FAKE_MANIFEST_TOKEN } from "../../crm/testing/index.js"
+import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { api, definitions, MANIFEST } from "../../testing/tracker-graphql.js"
 import { addTrackerCommands } from "../cli/index.js"
@@ -172,12 +173,13 @@ const cliOver = async (permissions: Record<string, string>) => {
   }
   const mutations = () =>
     fake.calls.filter((one) => ["issueCreate", "issueUpdate", "commentCreate"].includes(one.operation ?? ""))
-  return { cli, fake, mutations }
+  const journal = () => new SendJournal(sendsPathFor(APP, "work", env)).entries()
+  return { cli, fake, mutations, journal }
 }
 
 describe("a CLI made from the manifest writes through the api group's path", () => {
   it("asks once for the tracker's key, sends the mutation within its selection, and stores the answer", async () => {
-    const { cli, fake, mutations } = await cliOver({ "issues.create": "ask" })
+    const { cli, fake, mutations, journal } = await cliOver({ "issues.create": "ask" })
     expect((await cli("sync")).code).toBe(0)
     const unasked = await cli(
       "issues",
@@ -205,6 +207,10 @@ describe("a CLI made from the manifest writes through the api group's path", () 
     expect(made.code, JSON.stringify(made.error)).toBe(0)
     expect(made.json?.item.issue).toMatchObject({ title: "Example: refunds", team: "team-1", labels: ["label-1"] })
     expect(mutations()).toHaveLength(1)
+    // The tracker's line carries the answer's operation_id; the api group's write path journals its own call too.
+    const sent = journal().filter(({ outcome }) => outcome === "sent")
+    expect(sent.map(({ key }) => key).sort()).toEqual(["api.issue-create", "issues.create"])
+    expect(sent.find(({ key }) => key === "issues.create")?.operationId).toBe(made.json?.item.operation_id)
     const id = (made.json?.item.issue as Row | undefined)?.external_id as string
     const shown = await cli("issues", "show", id)
     expect(shown.json?.item).toMatchObject({ title: "Example: refunds" })
