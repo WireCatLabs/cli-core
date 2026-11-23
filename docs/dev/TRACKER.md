@@ -72,19 +72,41 @@ A save merges: a field the read left out keeps its stored value, so a partial se
 ## `store.tracker`
 
 `save`, `removeUnlisted`, `get`, `issueByKey` (`ENG-12`, any case), `list` with issue filters (team, project,
-assignee or none, state, state types through the state rows, label, archived), `find` over the word index
-`tracker_item_words` (titles, descriptions, comment bodies), `count`, and `people`: the tracker users whose e-mail an
-identity linked to a person has, joined when read. Nothing is written to the people graph.
+assignee or none, state, state types through the state rows, label, archived), `find` over titles, descriptions and
+comment bodies, `count`, and `people`: the tracker users whose e-mail an identity linked to a person has, joined when
+read. Nothing is written to the people graph.
+
+`find` matches words as a CRM's deals are matched (`src/search/word-match.ts`): a query word finds the same word, a
+word it begins when it has four letters or more, or a word of the same stem by the default Snowball stemmers (Russian,
+English, Spanish); a word of several parts (`ENG-12`) finds its parts in a row. `exact` keeps the words as written. The
+word index `tracker_item_words` gives the candidates in one ranked read: rows holding the word, a word it begins, or a
+word that begins with its stem (an English stem's final `i` left off, since Snowball turns `company` into `compani`;
+the few English words Snowball stems irregularly, such as `skies` to `sky`, are not found by another form). The words
+of each candidate decide. At most 2,000 candidates are read: rows holding all the words keep the index's order and the
+reading stops once the page is full; with `anyWord` all of them are read and ranked by how many words they hold
+first. When the index offered more, the answer has `capped: true`, and `hasMore` is set while the page found any.
+Spelling is not corrected.
 
 Issues, projects and comments are searched by meaning too. Their chunks (`chunks.chunkable_type = 'tracker_item'`,
 `chunkable_id` = `tracker_items.id`, `src/store/sqlite/tracker-chunks.ts`) are cut as a note's are: title and
-description, or a comment's body, in pieces of `CHUNK_CHARS`, under the account's scope and id, dated by the tracker's
-`updatedAt`. Teams, users, states and labels have none. `save` rewrites an item's chunks only when its title or text
-changed or it comes back, in the same write, and drops the vectors no other chunk holds after the new chunks are in, so
-a text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
-run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone
-and cuts those of items saved before this existed, in short batches that stop at the deadline (`left`). `chunksToEmbed`,
-`chunksLeft`, `embedded` and `nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
+description, or a comment's body after its issue's key and title (`ENG-12 Fix login`, a blank line, the body: a
+comment's meaning is often only beside its issue), in pieces of `CHUNK_CHARS`, under the account's scope and id, dated
+by the tracker's `updatedAt`. Only the embedded text has the issue; the word index and the hit keep the comment's own.
+A comment of fewer than `SHORTEST_EMBEDDED_COMMENT` (16) characters, spaces and line breaks around it aside (`LGTM`,
+`+1`, «Спасибо»), has no chunk: with its issue in front it was a near copy of the issue that filled the first results
+in the [tracker-meaning study](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/tracker-meaning),
+and its words still find it. Teams, users, states and labels have none. `save` rewrites an item's chunks only when its
+title or text changed or it comes back, and an issue that is new, comes back, or changes its title or key cuts its
+live comments again, in the same write; it drops the vectors no other chunk holds after the new chunks are in, so a
+text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
+run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone,
+cuts every comment again once in a store whose `store_settings` key `tracker_chunks_cut` is not the current cut (a
+store cut by 0.730–0.732, from the body alone; a store with no tracker chunks is marked cut at once), and cuts the
+chunks of items saved before this existed, in short batches that stop at the deadline (`left`) and go on from there
+the next time; `added` counts the items it wrote chunks for. `chunksToEmbed` cuts each chunk's text again and gives it
+only when it hashes to the chunk's hash: a chunk an older build sharing the store cut another way is left out and its
+item cut again, so no vector is made of other text than its hash names. `chunksToEmbed`, `chunksLeft`, `embedded` and
+`nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
 one at a time through the model's vector index (scan while it has none), keeps archived items and never deleted ones,
 one hit per item by its best chunk.
 
@@ -218,7 +240,13 @@ lists are fused by reciprocal rank as notes' and messages' are, a question's hit
 `foundBy` `["words", "meaning"]`, and its cosine places it among the other lanes'. `tracker: { by, meaningSkipped? }`
 says how the lane was searched and, when by words only, why. A hit is an `issue` titled with its key (`ENG-12 Fix
 login`), a `project` or an `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the
-same issue under the same id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips
+same issue under the same id. For a provider whose entry says `globalItemIds: true` (seeded for `linear`, whose ids
+name one item in every workspace), copies of one item (same provider, kind and id) that several accounts hold fold
+into one hit, the best placed: its `account` and `ref` are that copy's, `accounts` names every account that holds it (that one
+first), and it keeps the best cosine and every way any copy was found. The lane reads each list deep enough for the
+folded page (the page times the accounts read, at most 500), and `accounts` in the answer still lists each account
+read. A tracker whose ids are only unique within one site, as a CLI built from a config may be, keeps each account's
+copy apart unless its entry says otherwise. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips
 the lane with the reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is
 read by this lane under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. A
 group naming `linear:<account>` holds its issues and its documents; one naming only `notes:<id>` holds the documents

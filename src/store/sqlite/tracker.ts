@@ -6,11 +6,21 @@ import {
   trackerParentOf,
   trackerTitleOf,
 } from "../../domain/tracker.js"
+import { START_LETTERS } from "../../search/stem.js"
+import {
+  clauseIn,
+  type Probe,
+  probeOf,
+  type QueryWord,
+  type StoredWord,
+  tokensOf,
+  wordMatches,
+} from "../../search/word-match.js"
 import type { CacheDatabase } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { excerptOf, matchOf } from "./crm-files.js"
+import { excerptOf } from "./crm-files.js"
 import type { StoreContext } from "./open.js"
 import {
   dropTrackerChunks,
@@ -114,7 +124,11 @@ export interface TrackerStore {
     kind: K,
     filter?: TrackerFilter,
   ): Promise<{ items: TrackerItem<K>[]; hasMore: boolean }>
-  find(search: TrackerSearch): Promise<{ items: TrackerHit[]; hasMore: boolean }>
+  /**
+   * Issues, projects and comments by their words. `capped`: the index offered more rows than are read for one search,
+   * so a later row holding the words may be left out; `hasMore` is set while the page found any.
+   */
+  find(search: TrackerSearch): Promise<{ items: TrackerHit[]; hasMore: boolean; capped?: true }>
   /** Live rows of the kind, archived ones included. */
   count(key: AccountKey, kind: TrackerKind): Promise<number>
   /** The tracker users among `users` whose e-mail, in any letter case, an identity linked to one person has. */
@@ -142,6 +156,9 @@ export interface TrackerStore {
 }
 
 const MOST = 500
+/** How many rows the index may offer one search; each is read and its words checked. */
+const CANDIDATES = 2_000
+const PAGE = 200
 
 type Row = Record<string, unknown>
 
@@ -177,7 +194,40 @@ export const resetTrackerItemWords = (database: CacheDatabase): number => {
   })
 }
 
+const keyOf = (data: unknown): string | undefined =>
+  data == null ? undefined : (JSON.parse(String(data)) as { key?: string }).key
+
 const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state" } as const
+
+/**
+ * The words as clauses for `clauseIn`, and the index expression that finds the rows they could match: a word, a word
+ * it begins, or a word that begins with its stem. A Snowball stem begins its word, but for the English `y` it turns to
+ * `i` (`compani`), so a stem ending in `i` is looked up without it.
+ */
+const queryOf = (words: readonly string[], exact: boolean) => {
+  const seen = new Set<string>()
+  const clauses: QueryWord[][] = words
+    .map((word) => tokensOf(word).filter((token) => fold(token)))
+    .filter((tokens) => {
+      const key = tokens.map(fold).join(" ")
+      if (!tokens.length || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((tokens) => tokens.map((token) => [probeOf(token)]))
+  if (!clauses.length) return undefined
+  const termOf = ({ literal, stems }: Probe) => {
+    const terms = new Set([exact || literal.length < START_LETTERS ? `"${literal}"` : `"${literal}"*`])
+    if (!exact)
+      for (const stem of stems) {
+        const start = stem.endsWith("i") ? stem.slice(0, -1) : stem
+        if (start.length >= 3) terms.add(`"${start}"*`)
+      }
+    return terms.size > 1 ? `(${[...terms].join(" OR ")})` : [...terms].join("")
+  }
+  const expressions = clauses.map((clause) => `(${clause.flatMap((word) => word.map(termOf)).join(" AND ")})`)
+  return { clauses, match: (anyWord: boolean) => expressions.join(anyWord ? " OR " : " AND ") }
+}
 
 export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   const { database } = context
@@ -192,6 +242,10 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const chunked = isChunkedTrackerKind(kind)
       const chunk = trackerChunkWriter(database)
       const released: string[] = []
+      const comments = database.prepare(
+        "SELECT id, title, body, coalesce(source_updated_at, synced_at) AS at FROM tracker_items " +
+          "WHERE account_id = ? AND kind = 'comment' AND parent_id = ? AND deleted_at IS NULL",
+      )
       const upsert = database.prepare(
         "INSERT INTO tracker_items (account_id, kind, external_id, parent_id, title, title_folded, body, " +
           "normalized_text, data, source_created_at, source_updated_at, archived_at, deleted_at, synced_at) " +
@@ -228,6 +282,30 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         )
         // Most rows of a sync come back with the text they had; their chunks stay, and only a revived row needs new.
         const same = before?.deleted_at == null && before?.title === title && (before?.body ?? null) === body
+        // A comment is embedded after its issue's key and title, so a new, revived, renamed or moved issue cuts its
+        // comments again.
+        if (
+          kind === "issue" &&
+          (before?.deleted_at !== null ||
+            before.title !== title ||
+            keyOf(before.data) !== (merged as TrackerRecords["issue"]).key)
+        )
+          for (const row of comments.all(accountId, merged.externalId)) {
+            const freed = chunk(
+              {
+                id: Number(row.id),
+                accountId,
+                kind: "comment",
+                title: String(row.title),
+                body: row.body == null ? null : String(row.body),
+                parent: merged.externalId,
+                occurredAt: Number(row.at),
+                scope: scope == null ? null : String(scope),
+              },
+              now,
+            )
+            for (const hash of freed?.released ?? []) released.push(hash)
+          }
         if (!chunked || same) continue
         const freed = chunk(
           {
@@ -236,12 +314,13 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
             kind,
             title,
             body,
+            parent: trackerParentOf(kind, merged) ?? null,
             occurredAt: merged.updatedAt ?? now,
             scope: scope == null ? null : String(scope),
           },
           now,
         )
-        for (const hash of freed ?? []) released.push(hash)
+        for (const hash of freed?.released ?? []) released.push(hash)
       }
       dropUnusedVectors(database, released)
       return records.length
@@ -319,15 +398,14 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   }
 
   const find = ({ words, anyWord = false, exact = false, accounts, kinds, limit, offset = 0 }: TrackerSearch) => {
-    const match = matchOf(words, anyWord, exact)
-    if (!match) return { items: [], hasMore: false }
+    const query = queryOf(words, exact)
+    if (!query) return { items: [], hasMore: false }
     const most = Math.min(Math.max(limit ?? 100, 1), MOST)
     const scoped = accounts?.map((one) => findAccountPk(context, one)).filter((one) => one !== undefined) ?? []
     if (accounts !== undefined && !scoped.length) return { items: [], hasMore: false }
-    const params: (string | number)[] = [match]
+    const params: (string | number)[] = [query.match(anyWord)]
     let sql =
-      `SELECT ${COLUMNS}, t.title, t.body, a.provider, a.external_id AS account FROM tracker_items t ` +
-      "JOIN accounts a ON a.id = t.account_id " +
+      "SELECT t.id FROM tracker_items t " +
       "JOIN (SELECT rowid, rank FROM tracker_item_words WHERE tracker_item_words MATCH ?) w ON w.rowid = t.id " +
       "WHERE t.deleted_at IS NULL"
     if (accounts !== undefined) {
@@ -338,18 +416,58 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       sql += ` AND t.kind IN (${kinds.map(() => "?").join(", ")})`
       for (const kind of kinds) params.push(kind)
     }
-    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ? OFFSET ?"
-    params.push(most + 1, offset)
-    const rows = database.prepare(sql).all(...params)
+    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ?"
+    // One read of the index for the ids, then the rows in pages: paging the ranked query by OFFSET ranks it again for
+    // every page.
+    const ids = database
+      .prepare(sql)
+      .all(...params, CANDIDATES + 1)
+      .map(({ id }) => Number(id))
+    const capped = ids.length > CANDIDATES
+    const rowsOf = database.prepare(
+      `SELECT ${COLUMNS}, t.id, t.title, t.body, a.provider, a.external_id AS account FROM tracker_items t ` +
+        "JOIN accounts a ON a.id = t.account_id WHERE t.id IN (SELECT value FROM json_each(?))",
+    )
+    const wanted = offset + most + 1
+    const found: { row: Row; held: StoredWord[]; hit: QueryWord[][]; score: number; at: number }[] = []
+    let read = 0
+    // Each candidate's own words decide. All words matched rank by the index alone, so the reading stops once the page
+    // is full; some of them rank by how many matched first, over every candidate.
+    for (let at = 0; at < Math.min(ids.length, CANDIDATES); at += PAGE) {
+      if (!anyWord && found.length >= wanted) break
+      const batch = ids.slice(at, Math.min(at + PAGE, CANDIDATES))
+      const byId = new Map(rowsOf.all(JSON.stringify(batch)).map((row) => [Number(row.id), row]))
+      for (const id of batch) {
+        const row = byId.get(id)
+        if (!row) continue
+        read += 1
+        const held = tokensOf([row.title, row.body].filter(Boolean).join("\n")).map((token) => ({
+          token,
+          literal: fold(token),
+        }))
+        const hit = query.clauses.filter((clause) => clauseIn(clause, held, exact))
+        if (anyWord ? hit.length > 0 : hit.length === query.clauses.length)
+          found.push({ row, held, hit, score: hit.length, at: read })
+        if (!anyWord && found.length >= wanted) break
+      }
+    }
+    const rows = found.sort((a, b) => b.score - a.score || a.at - b.at).slice(offset, wanted)
     return {
-      items: rows.slice(0, most).map(
-        (row): TrackerHit => ({
+      items: rows.slice(0, most).map(({ row, held, hit }): TrackerHit => {
+        const matched = held
+          .filter((word) =>
+            hit.some((clause) => clause.some((one) => one.some((probe) => wordMatches(probe, word, exact)))),
+          )
+          .map(({ token }) => token)
+        return {
           account: { provider: String(row.provider), account: String(row.account) },
           item: itemOf(row),
-          excerpt: excerptOf([row.title, row.body].filter(Boolean).join("\n"), words),
-        }),
-      ),
-      hasMore: rows.length > most,
+          excerpt: excerptOf([row.title, row.body].filter(Boolean).join("\n"), [...words, ...matched]),
+        }
+      }),
+      // A capped search may hold more past what was read; an empty page ends the paging.
+      hasMore: rows.length > most || (capped && rows.length > 0),
+      ...(capped ? { capped: true as const } : {}),
     }
   }
 
@@ -426,7 +544,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         }))
     },
     refreshChunks: async ({ until } = {}) => refreshTrackerChunks(database, context.now(), until),
-    chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options),
+    chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options, context.now()),
     chunksLeft: async (model) => trackerChunksLeft(database, model),
     embedded: async (model, accounts) =>
       trackerEmbedded(

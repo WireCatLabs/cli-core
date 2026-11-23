@@ -2,13 +2,13 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { holdsKind, isDocumentAccountProvider } from "../domain/providers.js"
+import { addProvider, holdsKind, isDocumentAccountProvider, useProviders } from "../domain/providers.js"
 import { accountsOfList, sourceOf } from "../search/account-list.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
 import { groupGuardOf } from "./group-guard.js"
-import { searchAll } from "./search-all.js"
+import { type SearchAllItem, searchAll } from "./search-all.js"
 import { listContextOf } from "./search-kind.js"
 
 const stores: MessageStore[] = []
@@ -19,6 +19,8 @@ afterEach(async () => {
 const ME = { provider: "telegram", account: "100" }
 const LINEAR = { provider: "linear", account: "user-1" }
 const OTHER = { provider: "linear", account: "user-2" }
+
+const accountsOf = (item: SearchAllItem) => ("accounts" in item ? item.accounts : undefined)
 
 const withIssues = async (...accounts: { provider: string; account: string }[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-search-")), "store.db") })
@@ -56,11 +58,62 @@ it("finds issues, projects and comments by their words, titled as people say an 
 it("reads every tracker account, and only the ones --source names", async () => {
   const store = await withIssues(LINEAR, OTHER)
   const all = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"] })
-  expect(new Set(all.items.map(({ account }) => account))).toEqual(new Set(["user-1", "user-2"]))
+  expect(all.items.map((item) => accountsOf(item)?.slice().sort())).toEqual([
+    ["user-1", "user-2"],
+    ["user-1", "user-2"],
+  ])
   expect(all.accounts.map(({ account }) => account).sort()).toEqual(["user-1", "user-2"])
 
   const one = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"], scope: { tracker: [OTHER] } })
   expect(new Set(one.items.map(({ account }) => account))).toEqual(new Set(["user-2"]))
+})
+
+it("shows an item two sign-ins hold once, naming both accounts, and fills the page with other items", async () => {
+  const store = await withIssues(LINEAR, OTHER)
+  await store.tracker.save(
+    LINEAR,
+    "issue",
+    [{ externalId: "issue-9", key: "ENG-9", title: "Invoices of the old provider", team: "team-1", updatedAt: 1 }],
+    Date.UTC(2026, 10, 17),
+  )
+  const found = await searchAll(store, ME, { text: "invoices", limit: 2, only: ["tracker"] })
+  const ids = found.items.map(({ ref }) => ref.split("/").slice(2).join("/"))
+  expect(new Set(ids).size).toBe(2)
+  const all = await searchAll(store, ME, { text: "invoices", limit: 10, only: ["tracker"] })
+  expect(all.items).toHaveLength(3)
+  const shared = all.items.find(({ ref }) => ref.endsWith("/issue/issue-1"))
+  expect(shared && accountsOf(shared)).toEqual([shared?.account, shared?.account === "user-1" ? "user-2" : "user-1"])
+  const alone = await searchAll(store, ME, { text: "old provider", limit: 10, only: ["tracker"] })
+  expect(alone.items.map((item) => [item.ref, accountsOf(item)])).toEqual([
+    ["tracker:linear/user-1/issue/issue-9", undefined],
+  ])
+  expect(found.accounts.map(({ account }) => account).sort()).toEqual(["user-1", "user-2"])
+})
+
+it("keeps the copies apart for a tracker that does not say its ids name one item across accounts", async () => {
+  const store = await withIssues()
+  addProvider({ name: "site-tracker", kind: "tracker", aliases: [] })
+  try {
+    for (const account of ["site-a", "site-b"])
+      await syncTracker(
+        fakeTrackerSource({ rows: exampleTrackerRows() }),
+        store,
+        { provider: "site-tracker", account },
+        {
+          now: Date.UTC(2026, 10, 17),
+        },
+      )
+    const found = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"] })
+    expect(
+      found.items
+        .filter(({ ref }) => ref.endsWith("/issue/issue-1"))
+        .map(({ account }) => account)
+        .sort(),
+    ).toEqual(["site-a", "site-b"])
+    expect(found.items.every((item) => accountsOf(item) === undefined)).toBe(true)
+  } finally {
+    useProviders([])
+  }
 })
 
 it("is one of the lanes a plain search all reads, beside the others", async () => {
@@ -177,5 +230,51 @@ describe("a Linear account with issues and documents", () => {
     expect(found.searched).not.toContain("tracker")
     expect(found.items.map(({ kind }) => kind)).toContain("document")
     expect(await (await groupGuardOf(store, app, LOCKED))?.visible(document)).toBe(true)
+  })
+})
+
+describe("words in another form", () => {
+  const withWords = async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-forms-")), "store.db") })
+    stores.push(store)
+    const rows = exampleTrackerRows()
+    rows.issue.push(
+      { externalId: "issue-ru", key: "ENG-7", title: "Поставка цемента задерживается", team: "team-1", updatedAt: 1 },
+      { externalId: "issue-kot", key: "ENG-8", title: "Котельная не греет", team: "team-1", updatedAt: 2 },
+      { externalId: "issue-replace", key: "ENG-9", title: "Replacement parts are late", team: "team-1", updatedAt: 3 },
+    )
+    rows.comment.push({ externalId: "comment-ru", issue: "issue-ru", body: "Поставщики обещали к пятнице" })
+    await syncTracker(fakeTrackerSource({ rows }), store, LINEAR, { now: Date.UTC(2026, 10, 17) })
+    return store
+  }
+  const refs = async (store: MessageStore, text: string, exact = false) =>
+    (await searchAll(store, ME, { text, limit: 10, only: ["tracker"], ...(exact ? { exact } : {}) })).items
+      .map(({ ref }) => ref.split("/").at(-1))
+      .sort()
+
+  it("finds an issue by another form of its words, in Russian and English", async () => {
+    const store = await withWords()
+    expect(await refs(store, "поставки цемента")).toEqual(["issue-ru"])
+    expect(await refs(store, "invoice failing")).toEqual(["issue-1"])
+    expect(await refs(store, "migrations guides")).toEqual(["issue-2"])
+  })
+
+  it("finds the words a query word of four letters or more begins, never one inside a word", async () => {
+    const store = await withWords()
+    expect(await refs(store, "пост")).toEqual(["comment-ru", "issue-ru"])
+    expect(await refs(store, "кот")).toEqual([])
+    expect(await refs(store, "cement")).toEqual([])
+  })
+
+  it("keeps --exact to the words as written", async () => {
+    const store = await withWords()
+    expect(await refs(store, "поставки", true)).toEqual([])
+    expect(await refs(store, "поставка", true)).toEqual(["issue-ru"])
+  })
+
+  it("shows the matched form in the excerpt", async () => {
+    const store = await withWords()
+    const [hit] = (await searchAll(store, ME, { text: "поставщика", limit: 10, only: ["tracker"] })).items
+    expect(hit?.text).toContain("Поставщики")
   })
 })

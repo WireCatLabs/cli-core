@@ -25,6 +25,11 @@ export interface ProviderEntry {
   command?: string
   /** The read command, after `<command> <profile>`, that opens a ref of each kind: `{ chat: "messages list" }`. */
   opens?: Partial<Record<RefKindName, string>>
+  /**
+   * A tracker whose item ids name one item across every account of the provider, as Linear's do: two sign-ins'
+   * copies of an id are one item, and `search all` shows it once.
+   */
+  globalItemIds?: boolean
 }
 
 const MESSENGER_OPENS = { chat: "messages list", message: "messages show", contact: "contacts show" } as const
@@ -50,7 +55,14 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "google-drive", kind: "documents", aliases: [] },
   // Seeded: linear-cli registers no entry, and without one its accounts would count as a messenger's. One sign-in holds
   // the issues and the documents, so the account is a tracker's and a documents account at once.
-  { name: "linear", kind: "tracker", kinds: ["tracker", "documents"], aliases: [], command: "linear" },
+  {
+    name: "linear",
+    kind: "tracker",
+    kinds: ["tracker", "documents"],
+    aliases: [],
+    command: "linear",
+    globalItemIds: true,
+  },
   // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
   { name: "telemost", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
@@ -153,7 +165,7 @@ const opensOf = (value: unknown, named: string): Partial<Record<RefKindName, str
 export const providerEntryOf = (value: unknown): ProviderEntry => {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return invalid("a provider entry is an object")
-  const { name, kind, kinds, aliases = [], command, opens, imported } = value as Record<string, unknown>
+  const { name, kind, kinds, aliases = [], command, opens, imported, globalItemIds } = value as Record<string, unknown>
   const named = wordOf(name, "a provider's name")
   const isKindWord = (one: unknown): one is Kind =>
     typeof one === "string" && (KINDS as readonly string[]).includes(one)
@@ -164,6 +176,8 @@ export const providerEntryOf = (value: unknown): ProviderEntry => {
   if (kind !== undefined && kind !== list[0]) invalid(`provider ${named}'s kind is the first of its kinds`)
   if (!Array.isArray(aliases)) invalid(`provider ${named}'s aliases are a list`)
   if (imported !== undefined && typeof imported !== "boolean") invalid(`provider ${named}'s imported is true or false`)
+  if (globalItemIds !== undefined && typeof globalItemIds !== "boolean")
+    invalid(`provider ${named}'s globalItemIds is true or false`)
   return {
     name: named,
     kind: list[0] as Kind,
@@ -172,6 +186,7 @@ export const providerEntryOf = (value: unknown): ProviderEntry => {
     aliases: [...new Set((aliases as unknown[]).map((alias) => wordOf(alias, `an alias of ${named}`)))],
     ...(command === undefined ? {} : { command: wordOf(command, `the command of ${named}`) }),
     ...(opens === undefined ? {} : { opens: opensOf(opens, named) }),
+    ...(globalItemIds === true ? { globalItemIds: true } : {}),
   }
 }
 
@@ -204,6 +219,7 @@ const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): Provider
         aliases: [...new Set([...same.aliases, ...entry.aliases])],
         ...(entry.command ? { command: entry.command } : {}),
         ...(entry.opens ? { opens: { ...same.opens, ...entry.opens } } : {}),
+        ...(entry.globalItemIds ? { globalItemIds: true } : {}),
       }
     : entry
   const others = known.filter((one) => one !== same)
@@ -289,6 +305,10 @@ export const importedOf = (entry: ProviderEntry, held: ProviderEntry | undefined
     invalid(`provider ${entry.name} was registered without imported: an entry cannot make it import-only later`)
   return held.imported === true
 }
+
+/** Whether a tracker's item ids name one item across all its accounts, so their copies are one item. */
+export const hasGlobalItemIds = (provider: Provider): boolean =>
+  registry.find(({ name }) => name === provider)?.globalItemIds === true
 
 /** Whether a provider's accounts hold only what imports wrote: the one place a records import writes messages and events. */
 export const isImportedProvider = (provider: Provider): boolean =>

@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { chunkHash } from "../conversations/chunks.js"
 import type { TrackerRecords } from "../domain/tracker.js"
 import { syncTracker } from "../tracker/sync.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
@@ -187,5 +188,125 @@ describe("tracker chunks", () => {
     expect(new Set(indexed.map(({ score }) => score.toFixed(6))).size).toBe(30)
     database.exec("UPDATE vector_indexes SET ready = 0")
     expect(await store.tracker.nearest(MODEL, query, { limit: 30, accounts: [A] })).toEqual(indexed)
+  })
+
+  const comment = (externalId: string, body: string, on = "i1"): TrackerRecords["comment"] => ({
+    externalId,
+    issue: on,
+    body,
+    updatedAt: NOW,
+  })
+  const textsOf = async (store: MessageStore) =>
+    (await store.tracker.chunksToEmbed(MODEL, { limit: 100 })).map(({ text }) => text).sort()
+
+  it("embeds a comment after its issue's key and title, and no comment too short to say anything", async () => {
+    const { store, database } = await fixture()
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops on Android")], NOW)
+    await store.tracker.save(
+      A,
+      "comment",
+      [
+        comment("c1", "Fixed by clearing the token cache"),
+        comment("c2", "LGTM"),
+        comment("c3", "+1, тоже вижу"),
+        comment("c4", "  fifteen chars \n"),
+        comment("c5", "sixteen chars ok"),
+        comment("c6", "👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍"),
+      ],
+      NOW,
+    )
+    expect(await textsOf(store)).toEqual([
+      "I1 Login loops on Android\n\nFixed by clearing the token cache",
+      "I1 Login loops on Android\n\nsixteen chars ok",
+      "Login loops on Android\n\n",
+    ])
+    expect(chunksOf(database).map(({ id }) => id)).toEqual(["c1", "c5", "i1"])
+    const found = await store.tracker.find({ words: ["LGTM"], accounts: [A] })
+    expect(found.items.map(({ item }) => item.record.externalId)).toEqual(["c2"])
+    const byTitle = await store.tracker.find({ words: ["Android"], accounts: [A] })
+    expect(byTitle.items.map(({ item }) => item.record.externalId)).toEqual(["i1"])
+
+    database.exec("DELETE FROM chunks WHERE chunkable_type = 'tracker_item'")
+    database.exec("DELETE FROM store_settings WHERE key = 'tracker_chunks_cut'")
+    expect(await store.tracker.refreshChunks({ until: () => true })).toMatchObject({ added: 0, left: true })
+    expect(database.prepare("SELECT value FROM store_settings WHERE key = 'tracker_chunks_cut'").get()).toBeDefined()
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 3, left: false })
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 0, left: false })
+  })
+
+  it("cuts a comment again when its issue arrives, is renamed or moves, never when it keeps its name", async () => {
+    const { store, database } = await fixture()
+    await store.tracker.save(A, "comment", [comment("c1", "Fixed by clearing the token cache")], NOW)
+    expect(await textsOf(store)).toEqual(["Fixed by clearing the token cache"])
+
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops")], NOW)
+    await embedAll(store)
+    const first = chunksOf(database).find(({ id }) => id === "c1")?.hash
+    expect(await store.tracker.chunksToEmbed(MODEL, { limit: 100 })).toEqual([])
+
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops", "Now with a description")], NOW + 1)
+    expect(chunksOf(database).find(({ id }) => id === "c1")?.hash).toBe(first)
+
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops on Android")], NOW + 2)
+    expect(vectors(database)).not.toContain(first)
+    await store.tracker.save(A, "issue", [{ ...issue("i1", "Login loops on Android"), key: "MOB-4" }], NOW + 3)
+    expect((await textsOf(store)).filter((text) => text.endsWith("cache"))).toEqual([
+      "MOB-4 Login loops on Android\n\nFixed by clearing the token cache",
+    ])
+  })
+
+  it("cuts the comments of a store cut before once, releasing the old vectors", async () => {
+    const { store, database } = await fixture()
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops")], NOW)
+    await store.tracker.save(
+      A,
+      "comment",
+      [comment("c1", "Fixed by clearing the token cache"), comment("c2", "ok")],
+      NOW,
+    )
+    await store.tracker.refreshChunks()
+    await embedAll(store)
+    const kept = new Set(vectors(database))
+    // As 0.730 left it: the comments cut from their body alone, the short one too, each with a vector.
+    database.exec("DELETE FROM store_settings WHERE key = 'tracker_chunks_cut'")
+    database
+      .prepare(
+        "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, " +
+          "created_at, updated_at) SELECT 'tracker_item', id, 0, 0, 2, 'old-short', 1, 1 FROM tracker_items " +
+          "WHERE external_id = 'c2'",
+      )
+      .run()
+    database.exec(
+      "UPDATE chunks SET content_hash = 'old-long' WHERE content_hash NOT IN ('old-short') AND " +
+        "chunkable_id = (SELECT id FROM tracker_items WHERE external_id = 'c1')",
+    )
+    await store.vectors.saveVectors(MODEL, 4, [
+      { hash: "old-long", vector: unit(0) },
+      { hash: "old-short", vector: unit(1) },
+    ])
+
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 1, left: false })
+    expect(chunksOf(database).map(({ id }) => id)).toEqual(["c1", "i1"])
+    expect(new Set(vectors(database))).toEqual(kept)
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 0, left: false })
+  })
+
+  it("never gives text to embed that its chunk's hash does not name, and cuts that item again", async () => {
+    const { store, database } = await fixture()
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops")], NOW)
+    await store.tracker.save(A, "comment", [comment("c1", "Fixed by clearing the token cache")], NOW)
+    // As an older build cuts a comment: its body alone, at the body's offsets, under that text's hash.
+    const body = "Fixed by clearing the token cache"
+    database
+      .prepare(
+        "UPDATE chunks SET start_offset = 0, end_offset = ?, content_hash = ? WHERE chunkable_id = " +
+          "(SELECT id FROM tracker_items WHERE external_id = 'c1')",
+      )
+      .run(body.length, chunkHash(body))
+
+    expect((await textsOf(store)).filter((text) => text.includes("cache"))).toEqual([])
+    expect((await textsOf(store)).filter((text) => text.includes("cache"))).toEqual([
+      "I1 Login loops\n\nFixed by clearing the token cache",
+    ])
   })
 })

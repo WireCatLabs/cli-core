@@ -603,7 +603,10 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     paging(
       answerEntity(annotate(issues.command("search"), { effects: LOCAL_READ }), "tracker_hit", trackerView)
         .description("find issues, projects and comments in the copy by their words")
-        .argument("<words...>", "every word must match; prefixes of three letters or more match too"),
+        .argument(
+          "<words...>",
+          "every word must match, in any form; a word of four letters or more finds the words it begins",
+        ),
     ),
     'issues search "invoice currency"',
   ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {

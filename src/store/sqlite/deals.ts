@@ -17,7 +17,7 @@ import { dayIn } from "../../domain/moment.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { notOverriddenSql } from "../../domain/relations.js"
 import { correctWords, type Vocabulary } from "../../search/correct.js"
-import { createStemmer, DEFAULT_STEMMERS } from "../../search/stem.js"
+import { clauseIn, probeOf, type QueryWord, type StoredWord, tokensOf, wordMatches } from "../../search/word-match.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
@@ -336,40 +336,6 @@ const accountOf = (provider: unknown, external: unknown) =>
   provider == null ? null : { provider: String(provider), account: String(external) }
 
 const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact", "activity"]
-const TOKEN = /[\p{L}\p{N}\p{M}]+/gu
-/** A query word shorter than this matches only a whole word: «с» or "a" begins half the words of any title. */
-const SHORTEST_BEGINNING = 4
-const stemmer = createStemmer(DEFAULT_STEMMERS, { cacheLimit: 20_000 })
-const stemsOf = (token: string) => stemmer.stemSequences(token).flat()
-
-type StoredWord = { token: string; literal: string }
-type Probe = { literal: string; stems: string[] }
-/** One word of a query clause, with the corrections that may stand for it. */
-type QueryWord = Probe[]
-
-const probeOf = (token: string): Probe => ({ literal: fold(token), stems: stemsOf(token) })
-const tokensOf = (text: string) => text.normalize("NFC").toLowerCase().match(TOKEN) ?? []
-
-const wordMatches = (probe: Probe, word: StoredWord, exact: boolean): boolean => {
-  if (word.literal === probe.literal) return true
-  if (exact) return false
-  if (probe.literal.length >= SHORTEST_BEGINNING && word.literal.startsWith(probe.literal)) return true
-  // A stem begins its word, so a word that does not start like the stem needs no stemming.
-  return (
-    probe.stems.some((stem) => word.literal.startsWith(stem.slice(0, 3))) &&
-    stemsOf(word.token).some((stem) => probe.stems.includes(stem))
-  )
-}
-
-/** A clause of several words, `КТП-630` or an e-mail, matches only where they follow each other. */
-const clauseIn = (clause: QueryWord[], words: StoredWord[], exact: boolean): boolean =>
-  words.some((_, at) =>
-    clause.every((alternatives, offset) => {
-      const word = words[at + offset]
-      return word !== undefined && alternatives.some((probe) => wordMatches(probe, word, exact))
-    }),
-  )
-
 const listOf = (json: unknown): string[] => {
   if (typeof json !== "string") return []
   try {

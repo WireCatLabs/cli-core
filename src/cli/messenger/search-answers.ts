@@ -392,6 +392,7 @@ export const allHitItem = (item: SearchAllItem): HitItem =>
         ref: item.ref,
         provider: item.provider,
         account: item.account,
+        accounts: item.accounts,
         title: item.title,
         timestamp: item.timestamp,
         url: item.url,
