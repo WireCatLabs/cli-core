@@ -5,6 +5,42 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.721.0 — 23.11.2026
+
+### Added
+
+- **A file written only at the hash it was read at.** `guardedFileWrite` writes over a provider's file through its
+  `FileTarget` only while the file still has the sha256 the caller read: the current content is downloaded into the
+  profile's version store and hashed, another hash is `conflict` (`mirror.remote-changed`) with nothing uploaded, and
+  the target checks it again just before the upload. What it replaced stays in the version store. The shared builder
+  `addFileUpdateCommand` adds `files update <path> (--text | stdin) [--expected-fingerprint <sha256>]` to a CLI's files
+  group, a remote write that asks the delete key when it replaces a file
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#write-one-file-at-the-hash-read)).
+- **A file mirror merges text files both sides changed, and its conflicts can be resolved.** A `.md`, `.markdown`,
+  `.txt`, `.csv` or `.tsv` file up to 1 MB that changed on both sides since the last sync is merged line by line
+  (Markdown also by blocks, so a checklist tick and an edit of the same item merge) and written to both sides, in
+  every mirror; CRLF, a byte-order mark and other encodings pass through byte for byte. Lines both sides changed
+  differently stay a conflict, now recorded in the mirror's state: `listFileConflicts`, `showFileConflict` (the three
+  versions, the conflicting lines and the file with conflict markers) and `resolveFileConflict` (keep a side, both,
+  or a final file, refused with nothing written when either side changed since), mounted by `fileConflictsCommand`
+  as `mirrors conflicts list|show|resolve`. The contents of every merge, conflict and resolution are kept for good,
+  and `versions list` names each one's role ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#plain-files-both-ways)).
+
+### Changed — may break callers
+
+- **A file mirror writes a merged text file to both sides where it used to report a conflict.** A caller that counted
+  on every both-sides change waiting for `keep` now finds the file in the new `FileMirrorResult.merged`, and a plan
+  step of the new kind `merge`; `VersionDirection` gains `both` and `VersionEvent.event` gains `merged`, `conflict`
+  and `resolved`, so a switch over them needs the new cases. `FileVersions` gains `read(sha256)`, and `prune` takes
+  the contents to keep (`pinned`): an implementation of its own adds both. `versions.has` is false for anything but a
+  sha256.
+- **An old flat `api` key is refused, not honoured: rename it to the key the refusal names.** A config that still names
+  `api.contacts-list` after the generated `api` group put that command under `api contacts list` no longer has the key
+  checked beside the new one. Every command refuses to run, `mcp serve` refuses to start, and `config set` refuses the
+  key, each with `configuration_error` or `validation_error` saying "its command moved, so rename it to
+  permissions.api.contacts.list". A moved path keeps no alias, its key included (WC-CMD-8). Until a CLI regenerates
+  with groups, no key moved and nothing changes.
+
 ## 0.720.0 — 23.11.2026
 
 ### Added
