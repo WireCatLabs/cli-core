@@ -337,7 +337,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `mirrors` | collection | saved pairings of a local folder and a folder in the source, which sync keeps the same both ways |  |
 | `conflicts` | collection | files a mirror's sync found changed on both sides and could not merge, each waiting for a side or a final file |  |
 | `versions` | collection | earlier contents of a file that a write replaced or deleted, kept on this computer to be put back |  |
-| `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
+| `comments` | collection | comments people left on a thing in the source: a channel post, a file or an issue |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
 | `calls` | collection | phone calls a phone system recorded, stored as meetings with their transcripts |  |
 | `calendars` | collection | calendars of an account, each synced or not |  |
@@ -683,7 +683,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--old-parent` | `<id>` | id | the folder to take it out of, by id |  |
 | `--only-missing` |  | switch | only what has none yet |  |
 | `--organization` | `<organization>` | string | an organization: its id or organization:<id> |  |
-| `--parent` | `<id>` | id | the folder or task it sits under, by id |  |
+| `--parent` | `<id>` | id | the folder, task or issue it sits under |  |
 | `--participant-id` | `<id>` | id | a participant of the meeting, by id |  |
 | `--person` | `<uid>` | id | a person, by their stored UID |  |
 | `--personal` |  | switch | the personal-account section of the configuration |  |
@@ -742,7 +742,6 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--allow-chats` | `<ids>` | list | the chats allowed, by comma-separated ids; empty clears |  |
 | `--allow-people` | `<ids>` | list | the senders allowed, by comma-separated ids; empty clears |  |
 | `--as` | `<state>` | choice | how it is closed: done, or dismissed when it needs no answer |  |
-| `--assignee` | `<person...>` | list | who does it, by UID |  |
 | `--at` | `<hh:mm>` | string | every day at this local time |  |
 | `--body` | `<json>` | string | the request body, as JSON |  |
 | `--caption-above` |  | switch | show the text above the photo or file, not below it |  |
@@ -773,7 +772,6 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--params` | `<json>` | string | the request's query and path parameters, as JSON |  |
 | `--payload` | `<json>` | string | the data of what to do, as JSON |  |
 | `--pin` | `<chat>` | id | pin this chat at the top of it; repeat it for more |  |
-| `--priority` | `<n>` | count | 0 urgent … 4 low |  |
 | `--quiz` |  | switch | a quiz: one answer is right, and a vote is final |  |
 | `--reason` | `<text>` | string | why, in a few words; kept with it |  |
 | `--remind-time` | `<time>` | time | when to look at it again |  |
@@ -888,6 +886,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--allow-deletions` | `<count>` | count | let this run delete up to this many files when the mirror's guard stops it; owner only |  |
 | `--allow-replacements` | `<count>` | count | let this run overwrite up to this many existing files when the mirror's guard stops it; owner only |  |
 | `--repin` |  | switch | accept that a replaced local or remote folder is the mirror's folder now, and sync it; owner only |  |
+| `--assignee` | `<person...>` | list | who does it: people by UID (<person...>), or one tracker user by id, name or e-mail (<user>) |  |
+| `--priority` | `<n>` | string | how urgent: low, medium, high, critical or none, a score from 0.0 to 1.0, or the old 0 urgent … 4 low |  |
+| `--team` | `<team>` | string | the tracker team that owns an issue, by id, key or name |  |
 
 <!-- flags: end -->
 
