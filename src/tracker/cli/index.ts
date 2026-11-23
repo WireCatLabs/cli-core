@@ -21,7 +21,7 @@ import {
 } from "../../domain/tracker.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
-import { embedTracker } from "../../services/notes-search.js"
+import { embedTracker } from "../../services/tracker-meaning.js"
 import type { TrackerFilter, TrackerItem } from "../../store/sqlite/tracker.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -229,8 +229,14 @@ const trackerNext = (report: TrackerReport, opts: SyncOptions): NextStep[] =>
       ]
     : []
 
-const trackerAnswer = (report: TrackerReport, opts: SyncOptions): Body => {
-  const issues = trackerIssues(report)
+/** Why `--embed` failed after the sync saved its report: a model not downloaded. */
+const embeddingIssue = (error: unknown) => {
+  const { code, reason } = errorOf(error)
+  return { code, reason: reason ?? "sync.failed", source: "tracker:embeddings" }
+}
+
+const trackerAnswer = (report: TrackerReport, opts: SyncOptions, embedError?: unknown): Body => {
+  const issues = [...trackerIssues(report), ...(embedError === undefined ? [] : [embeddingIssue(embedError)])]
   const next = trackerNext(report, opts)
   return itemOf(report, {
     ...(report.state === "partial" || issues.length
@@ -259,7 +265,6 @@ const combinedAnswer = (
   tracker: Settled<TrackerReport>,
   documents: Settled<DocumentsOutcome>,
   opts: SyncOptions & { timeout?: string },
-  /** Why `--embed` failed after the tracker's part saved its report: a model not downloaded. */
   embedError?: unknown,
 ): Body => {
   const failed = (part: string, error: { code: ErrorCode; reason?: string }) => ({
@@ -274,7 +279,7 @@ const combinedAnswer = (
   const issues = [
     ...(report ? trackerIssues(report) : []),
     ...(trackerError ? [failed("tracker", trackerError)] : []),
-    ...(embedError === undefined ? [] : [failed("tracker:embeddings", errorOf(embedError))]),
+    ...(embedError === undefined ? [] : [embeddingIssue(embedError)]),
     ...(outcome?.meta.issues ?? []),
     ...(documentsError ? [failed("documents", documentsError)] : []),
   ]
@@ -441,7 +446,14 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       .action(async (opts: SyncOptions, command: Command) => {
         await within(command, false, async (run) => {
           const report = await syncOf(command, opts)(run)
-          return trackerAnswer(opts.embed ? await embedOf(command, run, report) : report, opts)
+          if (!opts.embed) return trackerAnswer(report, opts)
+          try {
+            return trackerAnswer(await embedOf(command, run, report), opts)
+          } catch (error) {
+            // What the sync saved is answered; a cancel still ends the command.
+            if (environmentOf(command).signal?.aborted) throw error
+            return trackerAnswer(report, opts, error)
+          }
         })
       })
   else

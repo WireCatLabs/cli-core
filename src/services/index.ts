@@ -574,7 +574,6 @@ export {
   embedEvents,
   embedMail,
   embedNotes,
-  embedTracker,
   type FoundNote,
   type LinkedRecord,
   type NotesEmbedded,
@@ -685,3 +684,4 @@ export { createStoredMeetingProjectCandidateReader } from "./stored-meeting-proj
 export { applyTaskRulesSinceLastPass, applyTaskRulesToStored, type RuleResult } from "./task-rules.js"
 export type { ThreadContext, ThreadOptions } from "./thread-context.js"
 export { readThreadContext, THREAD_BOUNDS } from "./thread-context.js"
+export { embedTracker, nearestTracker } from "./tracker-meaning.js"

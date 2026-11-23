@@ -19,7 +19,8 @@ import type { TrackerSource } from "../source.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../testing/index.js"
 import { addTrackerCommands } from "./index.js"
 
-const embedNotesWith = vi.hoisted(() => [] as Record<string, unknown>[])
+const embedNotesWith = vi.hoisted(() => [] as object[])
+const embedTrackerWith = vi.hoisted(() => [] as object[])
 vi.mock("../../services/notes-search.js", async (original) => {
   const real = await original<typeof import("../../services/notes-search.js")>()
   return {
@@ -27,6 +28,16 @@ vi.mock("../../services/notes-search.js", async (original) => {
     embedNotes: async (_store: unknown, options: Record<string, unknown>) => {
       embedNotesWith.push(options)
       return { model: "example-model", embedded: 0, left: false }
+    },
+  }
+})
+vi.mock("../../services/tracker-meaning.js", async (original) => {
+  const real = await original<typeof import("../../services/tracker-meaning.js")>()
+  return {
+    ...real,
+    embedTracker: (store: MessageStore, options: Parameters<typeof real.embedTracker>[1] = {}) => {
+      embedTrackerWith.push(options)
+      return real.embedTracker(store, options)
     },
   }
 })
@@ -345,13 +356,17 @@ describe("one sync for a tracker that holds documents too", () => {
     })
   })
 
-  it("embeds the documents within the run's deadline", async () => {
-    const { cli, answer } = setup()
+  it("embeds the documents and then the tracker's items within the run's deadline", async () => {
+    const { cli, answer, env } = setup()
+    env.WIRECAT_STATE_DIR = join(String(env.LIN_STATE_DIR), "wirecat")
     await cli(["folders", "add", "root"])
     embedNotesWith.length = 0
+    embedTrackerWith.length = 0
     const synced = await answer(["sync", "--embed", "--timeout", "5m"])
     expect(synced.item.documents.embeddings).toMatchObject({ model: "example-model" })
-    expect(embedNotesWith).toEqual([expect.objectContaining({ deadline: expect.objectContaining({ ms: 300_000 }) })])
+    const within = expect.objectContaining({ deadline: expect.objectContaining({ ms: 300_000 }) })
+    expect(embedNotesWith).toEqual([within])
+    expect(embedTrackerWith).toEqual([within])
   })
 
   it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {
