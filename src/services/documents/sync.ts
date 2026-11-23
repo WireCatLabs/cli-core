@@ -11,6 +11,8 @@ const MAX_PICTURE_BYTES = 25 * 1024 * 1024
 const SAVE_EVERY_MS = 2000
 const SAVE_EVERY_ITEMS = 25
 const SETTLE_MS = 10_000
+const DAY_MS = 24 * 60 * 60 * 1000
+export const KEEP_VERSIONS_FOR_DAYS = 365
 const isPicture = (file: SourceFile) => file.mime.startsWith("image/") && file.canDownload
 const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
 export interface SyncResult {
@@ -92,7 +94,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       // Work the new plan cannot see: a file saved to the index before its state was.
       for (const job of state.pending.jobs)
         if (!state.documents[job.id]) {
-          await index.remove(profile.principal, job.id)
+          await index.remove(profile.principal, job.id, "unsynced")
           statePort.removeSnapshot(job.id)
         }
       delete state.pending
@@ -192,7 +194,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       lock.assertHeld()
       try {
         if (job.kind === "remove") {
-          await index.remove(profile.principal, job.id)
+          await index.remove(profile.principal, job.id, job.reason ?? "unavailable")
           statePort.removeSnapshot(job.id)
           delete state.documents[job.id]
           result.removed++
@@ -214,7 +216,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           const listed =
             query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))
           if (!listed && !inScope(content.metadata, profile.roots, pending.folders, new Set(), query)) {
-            await index.remove(profile.principal, job.id)
+            await index.remove(profile.principal, job.id, "unsynced")
             statePort.removeSnapshot(job.id)
             delete state.documents[job.id]
             result.removed++
@@ -254,7 +256,8 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           }
           if (job.file && safe.code === "validation_error") await saveNamesOnly(job.file, skipped.reason)
           else {
-            await index.remove(profile.principal, job.id)
+            // A 404 or a refusal says the sign-in cannot read it now, not that it is gone: its text stays.
+            await index.remove(profile.principal, job.id, "unavailable")
             statePort.removeSnapshot(job.id)
             delete state.documents[job.id]
           }
@@ -280,6 +283,8 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       delete state.pending
       state.lastSync = new Date(now()).toISOString()
       statePort.save(state)
+      const days = options.keepVersionsForDays ?? KEEP_VERSIONS_FOR_DAYS
+      await index.prune?.(profile.principal, new Date(now() - days * DAY_MS).toISOString())
     }
     // A reader that cannot write finds the text by its words only once it is indexed; a search that can write does it
     // itself, so what this bound leaves, or a failure here, is indexed by the next one. Skipped after a stop, and kept

@@ -286,6 +286,18 @@ export type {
   TakeResult,
 } from "./sqlite/decision-requests.js"
 export {
+  DOCUMENT_EVENTS,
+  DOCUMENT_REMOVALS,
+  type DocumentChange,
+  type DocumentEvent,
+  type DocumentHistoryAnswer,
+  type DocumentHistoryStore,
+  type DocumentRemoval,
+  type DocumentVersion,
+  type DocumentVersionText,
+  type VersionReason,
+} from "./sqlite/document-history.js"
+export {
   DOCUMENT_KINDS,
   type DocumentDetail,
   type DocumentFolderNode,

@@ -186,10 +186,12 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   `changes`. Every sync
   is then a full walk of the selected folders: no folder is skipped as already walked, the cursor is `walked`, and a
   file is saved only when `changedSince` its last pass (version, time, name, parents). What the finished pass did not
-  find is removed; a pass cut short removes nothing and goes on from its saved walk. A chosen folder that answers
-  `not_found` is skipped as unavailable and its documents go; with a feed, the same root fails the rescan instead.
-  On a path-addressed source a root moved on the provider answers `not_found` too, so its documents go until the
-  folder is chosen again under its new path. A file kept by name only is read again only once it changes. The cost is one listing of every
+  find leaves the copy as no longer visible, with its text kept ([history](#history-and-the-change-log)). A pass cut
+  short removes nothing and goes on from its saved walk. A chosen folder that answers
+  `not_found` is skipped as unavailable, and its documents leave the copy as no longer visible with their text kept.
+  With a feed, the same root fails the rescan instead. On a path-addressed source a root moved on the provider
+  answers `not_found` too, so its documents are no longer visible until the folder is chosen again under its new
+  path. A file kept by name only is read again only once it changes. The cost is one listing of every
   folder per sync, so such a CLI keeps its folders selected rather than the whole account.
 - **A source that addresses files by path** reads the path from the file the sync passes: `metadata(id, known)` (the
   folder as the last pass held it, for a root or a folder that answered 404), `children(id, folder)`,
@@ -199,6 +201,40 @@ A sync stops before its end and saves where it is; the next sync goes on from th
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one
   `changes()`. A folder listed with `children()` is listed whole, so a source caps its own listing (drive at 10 000
   entries in one folder or one change feed).
+
+## History and the change log
+
+The store keeps the earlier versions of every synced document, and a log of what each sync changed. The owner
+asked for it (IDEA-2862 in cli-private's Notion roadmap): "what did this page say before, and what changed since
+yesterday, even after a page is deleted".
+
+- **A version is kept before every overwrite and every removal.** `saveFileNote` keeps the old text, title and front
+  matter in `document_revisions` when any of the three changes, and the revision goes up by one. A removal keeps the
+  last text the same way before the body is blanked. The first read of a catalog entry, which had no text, is not a
+  version.
+- **A removal has a reason**, `SourceRemoval`: `deleted`, `unavailable` or `unsynced`. Only `deleted` is a deletion,
+  and only a source's own signal gives it: the file in the trash (`trashed: true`) or a change with
+  `gone: "deleted"`. A bare `removed: true` in the feed, a 404 or a refusal when the content is read, a folder that
+  vanished with what was below it, and a file a finished walk did not find are `unavailable`: the document leaves the live copy (lists and
+  search) but keeps its text on its row, marked in `documents.removal`, and comes back as it was when the source
+  shows it again. A file that left the scope because the owner changed the chosen folders is `unsynced`. So a source that can tell a deletion from a lost
+  share (Notion's `in_trash` against a 404) sets `gone: "deleted"` on the first only.
+- **The change log**, `document_changes`, has one row per document added, changed, deleted, unavailable, unsynced or
+  restored, with its title and path at that moment. It outlives the document row. A trigger drops an account's rows
+  with the account.
+- **Retention** is the profile's `keep_versions_for_days`, 365 by default. A sync that completes its pass calls
+  `index.prune` (`documentIngestion` gives it) with that age, under its lock. It drops older versions and change log
+  rows of that account only, and blanks the text of a document unavailable for longer. The last version of a deleted
+  document follows the same period. A CLI passes the setting as `keepVersionsForDays` to `syncDocuments`, and adds
+  `DOCUMENT_HISTORY_SETTINGS` to `settingsFor` so its config file takes the key. `keepVersionsForDays(settings)`
+  reads it.
+- **The commands.** `documents history <document>` lists the versions, newest first, the current one marked, and
+  `--revision <n>` shows one version's text and front matter. A removed document is found too. `changes` lists the
+  changes since `--since` (default `1d`), up to `--until`, of the `--event` kinds asked for. Both are local reads, so
+  an agent gets them as MCP tools like the other reads. `addDocumentCommands` mounts them when `history` is given:
+  `run(fn)` opens the store read-only and hands `documentIngestion(...).history` and the profile's account, and
+  `id(input)` reads an id or a link. `documentLibraryCommands` mounts them always. A CLI with its own `documents`
+  group calls `addDocumentHistoryCommands(program, …)`, which adds `history` to that group.
 
 ## Verification
 
@@ -265,8 +301,8 @@ reference is `undefined`, so a caller tells an added source from a folder docume
 
 `@wirecat/cli-core/documents/cli` (in `src/cli/documents/`: the domain layer `src/documents/` may not import
 commands, the store or services) holds the commands every documents CLI shares, built over these services the way
-`addCalendarCommands` and `addCrmCommands` are. `addDocumentCommands(program, options)` mounts them all;
-one builder per group lets a CLI place its own groups between them (drive puts `transcripts` and `store` after
+`addCalendarCommands` and `addCrmCommands` are. `addDocumentCommands(program, options)` mounts them all, and
+`documents history` and `changes` when `history` is given. One builder per group lets a CLI place its own groups between them (drive puts `transcripts` and `store` after
 `status`). The CLI passes:
 
 - **`words`**: its command, the provider in sentences, the store provider name and the word for the

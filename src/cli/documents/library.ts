@@ -37,6 +37,7 @@ import { ProfileTokenStore } from "../profile-token.js"
 import { addDocumentCatalogCommands, type DocumentCatalogCommands } from "./catalog.js"
 import { addLocalDocumentCommands, type LocalDocumentCommands } from "./documents.js"
 import { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
+import { addDocumentHistoryCommands, type DocumentHistoryCommands, keepVersionsForDays } from "./history.js"
 import type { DocumentKnowledgePort } from "./knowledge.js"
 import { addDocumentKnowledgeCommands, type DocumentKnowledgeCommands } from "./knowledge.js"
 import { factItem, memoryItem } from "./queries.js"
@@ -53,6 +54,7 @@ interface DocumentGroups {
   search: Group<DocumentSearchCommands>
   catalog: Group<DocumentCatalogCommands>
   knowledge: Group<DocumentKnowledgeCommands>
+  history: Group<DocumentHistoryCommands>
 }
 type Ingestion<M extends SourceFile> = ReturnType<typeof documentIngestion<M>>
 
@@ -486,6 +488,7 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
                 errorOf,
                 assertHeld,
                 storeVersion: app.version,
+                keepVersionsForDays: keepVersionsForDays(context().settings),
                 ...(environmentOf(command()).signal ? { signal: environmentOf(command()).signal as AbortSignal } : {}),
                 ...(rescan ? { rescan } : {}),
                 ...(budget ? { budget } : {}),
@@ -556,6 +559,13 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
         return { id, metadata, snapshot }
       },
       lastSync: () => files().state("").read().lastSync,
+    },
+    history: {
+      run: (fn) => {
+        const account = principal()
+        return withStore(false, (store) => fn(options.ingestion(store).history, account))
+      },
+      id: (input) => options.idOf(input),
     },
     search: {
       search: (query, searchOptions) => {
@@ -652,6 +662,7 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
   addDocumentFolderCommands(holder, { ...shared, ...groups.folders })
   addDocumentSyncCommands(holder, { ...shared, ...groups.sync })
   addLocalDocumentCommands(holder, { ...shared, ...groups.documents })
+  addDocumentHistoryCommands(holder, { ...shared, ...groups.history })
   addDocumentSearchCommand(holder, { ...shared, ...groups.search })
   addDocumentCatalogCommands(holder, { ...shared, ...groups.catalog })
   addDocumentKnowledgeCommands(holder, { ...shared, ...groups.knowledge })

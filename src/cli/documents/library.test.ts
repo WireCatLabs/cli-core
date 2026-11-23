@@ -1,12 +1,15 @@
-import { mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import { documentIngestion, type FeedlessDocumentSource, type SourceFile } from "../../documents.js"
+import { toolsFromCommands } from "../../mcp/agent.js"
 import { commandPermissions } from "../permission-keys.js"
 import { createProgram, type ProgramDefinition, run } from "../program.js"
 import { settingsFor } from "../settings.js"
+import { DOCUMENT_HISTORY_SETTINGS, keepVersionsForDays } from "./history.js"
 import { documentLibraryCommands } from "./library.js"
 import { documentCommandsContract, FAKE_FOLDER, type FakeDocumentSource, fakeDocumentSource } from "./testing/index.js"
 import type { DocumentWords } from "./words.js"
@@ -24,7 +27,7 @@ const WORDS: DocumentWords = { app: "box", remote: "box", provider: "Box", sourc
 const isFolder = (file: SourceFile) => file.mime === FAKE_FOLDER
 
 const definition = (source: FeedlessDocumentSource, words: DocumentWords = WORDS): ProgramDefinition => {
-  const configuration = settingsFor(app, { permissions: commandPermissions() })
+  const configuration = settingsFor(app, { permissions: commandPermissions(), ...DOCUMENT_HISTORY_SETTINGS })
   return {
     app,
     configuration,
@@ -89,10 +92,67 @@ const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
     })
     return { exit, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
   }
-  return { source, program, cli }
+  return { source, program, cli, env }
 }
 
 describe("documentLibraryCommands over a source without a change feed", () => {
+  it("shows a document's earlier versions and what changed, a page the source no longer lists kept", async () => {
+    const { source, cli } = setup(fakeDocumentSource("alpha", { feed: false }), memoryKeyring())
+    await cli(["folders", "add", "root"])
+    await cli(["sync"])
+    source.put({ ...source.files.get("a"), version: "2" } as SourceFile, "a new budget line")
+    source.remove("b")
+    await cli(["sync"])
+    const shown = await cli(["documents", "history", "a"])
+    if (!shown.stdout) throw new Error(shown.stderr)
+    const history = JSON.parse(shown.stdout).item
+    expect(history.versions.map((one: { current: boolean; reason: string }) => [one.current, one.reason])).toEqual([
+      [true, "edited"],
+      [false, "edited"],
+    ])
+    const read = await cli(["documents", "history", "a", "--revision", "1"])
+    if (!read.stdout) throw new Error(read.stderr)
+    const old = JSON.parse(read.stdout).item
+    expect(old.text).not.toContain("a new budget line")
+    expect(JSON.parse((await cli(["documents", "history", "b"])).stdout).item).toMatchObject({ removal: "unavailable" })
+    const changes = JSON.parse((await cli(["changes", "--since", "2020-01-01T00:00:00Z"])).stdout).items
+    expect(changes.map((one: { path: string; event: string }) => [one.path, one.event])).toEqual(
+      expect.arrayContaining([
+        ["a.md", "changed"],
+        ["b.md", "unavailable"],
+      ]),
+    )
+    const only = JSON.parse((await cli(["changes", "--since", "1d", "--event", "unavailable"])).stdout).items
+    expect(only.map((one: { path: string }) => one.path)).toEqual(["b.md"])
+    expect((await cli(["documents", "history", "missing"])).exit).not.toBe(0)
+  })
+
+  it("gives an agent the history and the change log as read tools", () => {
+    const tools = toolsFromCommands(describeProgram(setup().program)).map((tool) => tool.path.join(" "))
+    expect(tools).toEqual(expect.arrayContaining(["documents history", "changes"]))
+  })
+
+  it("takes keep_versions_for_days from the config file", async () => {
+    const { cli, env } = setup(fakeDocumentSource("alpha", { feed: false }), memoryKeyring())
+    mkdirSync(String(env.BOX_CONFIG_DIR), { recursive: true })
+    writeFileSync(
+      join(String(env.BOX_CONFIG_DIR), "config.json"),
+      JSON.stringify({ defaults: { keep_versions_for_days: 30 }, profiles: {} }),
+    )
+    expect((await cli(["folders", "add", "root"])).exit).toBe(0)
+    expect((await cli(["sync"])).exit).toBe(0)
+    const configuration = settingsFor(app, { permissions: commandPermissions(), ...DOCUMENT_HISTORY_SETTINGS })
+    const read = (profiles: object) => {
+      writeFileSync(join(String(env.BOX_CONFIG_DIR), "config.json"), JSON.stringify(profiles))
+      return keepVersionsForDays(
+        configuration.resolveSettings({ profile: "personal" }, { env, configDir: String(env.BOX_CONFIG_DIR) }),
+      )
+    }
+    expect(read({ defaults: { keep_versions_for_days: 30 }, profiles: {} })).toBe(30)
+    expect(read({ defaults: {}, profiles: { personal: { keep_versions_for_days: 7 } } })).toBe(7)
+    expect(read({ profiles: {} })).toBe(365)
+  })
+
   for (const c of documentCommandsContract(async () => {
     const { program, cli } = setup()
     expect((await cli(["folders", "add", "root"])).exit).toBe(0)

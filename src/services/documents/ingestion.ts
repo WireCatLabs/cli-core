@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { walkQuery } from "@wirecat/cli-base/query"
-import type { SourceContent, SourceFile } from "../../documents/model.js"
+import type { SourceContent, SourceFile, SourceRemoval } from "../../documents/model.js"
 import type { CatalogInput, CatalogQuery, MessageStore } from "../../store/index.js"
 export interface IngestionOptions<M extends SourceFile> {
   /**
@@ -114,7 +114,7 @@ export const documentIngestion = <M extends SourceFile>(
       await options.observed?.(principal, content.metadata, note.id)
       return note.ref
     },
-    remove: async (principal: string, id: string) => {
+    remove: async (principal: string, id: string, reason?: SourceRemoval) => {
       const selected = await folder(principal, false)
       if (selected) {
         const path = options.externalId(id)
@@ -122,8 +122,32 @@ export const documentIngestion = <M extends SourceFile>(
         const retired = note ? undefined : await store.catalog.get(selected.id, path, true)
         const ref = note?.ref ?? retired?.ref
         if (ref) await stale(ref)
-        await store.notes.deleteFileNotes(selected.id, [path])
+        await store.notes.deleteFileNotes(selected.id, [path], reason)
       }
+    },
+    prune: async (principal: string, before: string) => {
+      const selected = await folder(principal, false)
+      return selected ? store.notes.pruneDocumentHistory?.(selected.id, before) : undefined
+    },
+    /** The profile's local history: earlier versions of a document and what changed when. */
+    history: {
+      /** `id` is the source's id, or a `document:<n>` ref; a removed document is found too. */
+      reference: async (principal: string, id: string) => {
+        if (/^document:\d+$/.test(id)) return id
+        const selected = await folder(principal, false)
+        if (!selected) return undefined
+        for (const path of both(id)) {
+          const found = await store.notes.documentAt(selected.id, path)
+          if (found) return found
+        }
+        return undefined
+      },
+      versions: (reference: string) => store.notes.documentHistory(reference),
+      version: (reference: string, revision: number) => store.notes.documentVersion(reference, revision),
+      changes: async (principal: string, query: Parameters<MessageStore["notes"]["documentChanges"]>[1]) => {
+        const selected = await folder(principal, false)
+        return selected ? store.notes.documentChanges(selected.id, query) : { items: [], hasMore: false }
+      },
     },
   }
 }

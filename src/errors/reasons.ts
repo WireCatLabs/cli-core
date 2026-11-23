@@ -224,6 +224,7 @@ const OTHERS: Entry[] = [
   validation("agent.cost-unknown", "the agent reports no cost, so a cost cap cannot stop it"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
+  ["document.version-missing", "not_found", "the local copy holds no such version of the document"],
   ["document.not-found", "not_found", "no listed document has that reference"],
   ["state.unreadable", "configuration_error", "a sync state file cannot be read; move it away and sync again"],
   ["profile.busy", "provider_unavailable", "another sync or write holds this profile's local copy"],

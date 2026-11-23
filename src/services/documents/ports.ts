@@ -49,5 +49,7 @@ export interface SyncOptions<M extends SourceFile> {
   signal?: AbortSignal
   rescan?: boolean
   pictures?: boolean
+  /** How long earlier versions and the change log are kept, in days (`keep_versions_for_days`); 365 unless given. */
+  keepVersionsForDays?: number
   now?(): number
 }

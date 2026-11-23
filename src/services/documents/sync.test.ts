@@ -538,3 +538,71 @@ describe("provider-neutral document sync", () => {
     })
   })
 })
+
+describe("why a document left the copy", () => {
+  const historyOf = async (f: Awaited<ReturnType<typeof setup>>, id: string) => {
+    const ref = must(await f.ingest.history.reference("alpha", id))
+    return f.ingest.history.versions(ref)
+  }
+  it("deletes only on the source's own signal; a bare removal and a 404 keep the text as no longer visible", async () => {
+    const f = await setup()
+    f.files.set("c", file("c"))
+    await syncDocuments(f.options)
+    await syncDocuments(f.options)
+    f.changes([
+      { id: "a", removed: true, gone: "deleted" },
+      { id: "b", removed: true },
+      { id: "c", removed: false, file: { ...file("c"), version: "2" } },
+    ])
+    vi.mocked(f.source.content).mockImplementation(async () => {
+      throw new CliError("not_found", "could not find page")
+    })
+    expect(await syncDocuments(f.options)).toMatchObject({ removed: 2, pending: 0 })
+    expect(await historyOf(f, "a")).toMatchObject({ removal: "deleted", versions: [{ reason: "deleted" }] })
+    for (const id of ["b", "c"]) {
+      const history = await historyOf(f, id)
+      expect(history).toMatchObject({ removal: "unavailable", versions: [{ current: true }] })
+      expect((await f.ingest.history.version(history.ref, history.revision)).text).toBe(`budget ${id} 1`)
+    }
+    const changes = await f.ingest.history.changes("alpha", { since: "2026-01-01T00:00:00Z", limit: 20, offset: 0 })
+    expect(changes.items.filter((one) => one.event !== "added").map((one) => [one.path, one.event])).toEqual(
+      expect.arrayContaining([
+        ["a", "deleted"],
+        ["b", "unavailable"],
+        ["c", "unavailable"],
+      ]),
+    )
+  })
+  it("calls a document that left the chosen folders unsynced, not deleted", async () => {
+    const f = await setup()
+    await syncDocuments(f.options)
+    await syncDocuments({ ...f.options, roots: ["nested"] })
+    expect(await historyOf(f, "b")).toMatchObject({ removal: "unsynced", versions: [{ reason: "unsynced" }] })
+  })
+  it("keeps the text of the pages below a parent the source stopped showing", async () => {
+    const f = await setup()
+    await syncDocuments(f.options)
+    await syncDocuments(f.options)
+    f.changes([{ id: "nested", removed: true }])
+    expect(await syncDocuments(f.options)).toMatchObject({ removed: 1 })
+    expect(await historyOf(f, "a")).toMatchObject({ removal: "unavailable", versions: [{ current: true }] })
+  })
+  it("keeps the text of the files below a chosen folder that answers 404 on a walk without a feed", async () => {
+    const f = await setup()
+    const { startToken: _start, changes: _changes, ...rest } = f.source
+    const options = { ...f.options, source: rest as FeedlessDocumentSource }
+    await syncDocuments(options)
+    f.files.delete("root")
+    expect(await syncDocuments(options)).toMatchObject({ removed: 2 })
+    for (const id of ["a", "b"]) expect(await historyOf(f, id)).toMatchObject({ removal: "unavailable" })
+  })
+  it("prunes the history older than keepVersionsForDays when a pass completes", async () => {
+    const f = await setup()
+    let at = Date.UTC(2025, 0, 1)
+    await syncDocuments({ ...f.options, now: () => at })
+    const prune = vi.spyOn(f.ingest, "prune")
+    at = Date.UTC(2026, 0, 1)
+    await syncDocuments({ ...f.options, index: { ...f.options.index, prune }, now: () => at, keepVersionsForDays: 30 })
+    expect(prune).toHaveBeenCalledWith("alpha", "2025-12-02T00:00:00.000Z")
+  })
+})

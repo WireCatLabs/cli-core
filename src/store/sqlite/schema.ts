@@ -1031,6 +1031,7 @@ export const documents = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
     pinnedFileId: integer("pinned_file_id"),
+    removal: text("removal"),
   },
   (table) => [unique().on(table.accountId, table.externalId)],
 )
@@ -1080,10 +1081,14 @@ export const documentRevisions = sqliteTable(
     body: text("body").notNull(),
     revision: integer("revision").notNull(),
     createdAt: integer("created_at").notNull(),
+    title: text("title"),
+    frontMatter: text("front_matter"),
+    reason: text("reason"),
   },
   (table) => [index("document_revisions_by_document_id").on(table.documentId)],
 )
 
+export { documentChanges } from "./schema/document-changes.js"
 export { documentIndexPending } from "./schema/document-index-pending.js"
 
 export const notes = sqliteTable(

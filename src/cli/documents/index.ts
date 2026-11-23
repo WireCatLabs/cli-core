@@ -2,6 +2,7 @@ import type { Command } from "commander"
 import { addDocumentCatalogCommands, type DocumentCatalogCommands } from "./catalog.js"
 import { addLocalDocumentCommands, type LocalDocumentCommands } from "./documents.js"
 import { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
+import { addDocumentHistoryCommands, type DocumentHistoryCommands } from "./history.js"
 import { addDocumentKnowledgeCommands, type DocumentKnowledgeCommands } from "./knowledge.js"
 import { addDocumentMirrorCommands, type DocumentMirrorCommands } from "./mirrors.js"
 import { addDocumentSearchCommand, type DocumentSearchCommands } from "./search.js"
@@ -25,6 +26,13 @@ export { addLocalDocumentCommands, type ImportedDocument, type LocalDocumentComm
 export { type FileConflictCommands, fileConflictsCommand } from "./file-conflicts.js"
 export { addFileUpdateCommand, type FileUpdateCommands, type FileUpdatePort } from "./file-update.js"
 export { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
+export {
+  addDocumentHistoryCommands,
+  DOCUMENT_HISTORY_SETTINGS,
+  type DocumentHistoryCommands,
+  type DocumentHistoryPort,
+  keepVersionsForDays,
+} from "./history.js"
 export {
   addDocumentKnowledgeCommands,
   type DocumentKnowledgeCommands,
@@ -63,17 +71,20 @@ export interface DocumentCommands<S> {
   catalog: Group<DocumentCatalogCommands>
   knowledge: Group<DocumentKnowledgeCommands>
   mirrors?: Group<DocumentMirrorCommands<S>>
+  /** `documents history` and `changes`, over the local history; left out, a CLI has neither. */
+  history?: Group<DocumentHistoryCommands>
 }
 
 /**
- * `folders`, `sync`, `status`, `documents list|show|export|context`, `search`, `catalog`, the knowledge groups and,
- * when given, `mirrors`, in that order. Answers the `documents` group, for the CLI's live subcommands.
+ * `folders`, `sync`, `status`, `documents list|show|export|context`, when given `documents history` and `changes`,
+ * `search`, `catalog`, the knowledge groups and, when given, `mirrors`, in that order. Answers the `documents` group, for the CLI's live subcommands.
  */
 export const addDocumentCommands = <S>(program: Command, options: DocumentCommands<S>): Command => {
   const shared = { words: options.words, output: options.output }
   addDocumentFolderCommands(program, { ...shared, ...options.folders })
   addDocumentSyncCommands(program, { ...shared, ...options.sync })
   const documents = addLocalDocumentCommands(program, { ...shared, ...options.documents })
+  if (options.history) addDocumentHistoryCommands(program, { ...shared, ...options.history })
   addDocumentSearchCommand(program, { ...shared, ...options.search })
   addDocumentCatalogCommands(program, { ...shared, ...options.catalog })
   addDocumentKnowledgeCommands(program, { ...shared, ...options.knowledge })
