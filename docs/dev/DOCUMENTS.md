@@ -605,8 +605,60 @@ a remote write, so the MCP catalogue lists it as one and a global `--dry-run` pr
 `files.delete` (or `deleteKey`) when a file is replaced, as an upload with `--replace` asks. `act` takes the signed-in
 target and the profile's version store. The answer has `path`, the new `sha256`, and `replaced` with the old sha256 and
 `kept_at`, the kept copy, or `null` for a new file. An empty stdin, which is what an agent over MCP has, is a missing
-`--text`. The help says to write back only a whole plain-text file: a text cut with `truncated: true`, or one read out
-of a PDF or docx, replaces the whole file.
+`--text`. A `.pdf`, `.docx` or `.xlsx` path is refused (`file.not-plain-text`): a read gives the text extracted from
+it, and writing that back would replace the document with plain text.
+
+**A truncated or extracted read carries no fingerprint.** The sha256 that `--expected-fingerprint` takes is a promise
+that the caller holds the whole file. A CLI's own text read (`files show`) gives it only beside the file's complete
+text. When it cuts the text (`truncated: true`) or answers text extracted from a PDF, docx or xlsx, it leaves the
+sha256 out, so an agent has nothing to pass to `update`; an Office file is edited with the commands below, whose
+`show` gives the sha256 of the file itself.
+
+<a id="edit-office-files-in-place"></a>
+
+### Office files edited in place, and earlier versions put back
+
+`addFileEditCommands(files, helpers)` (`@wirecat/cli-core/documents/cli`) mounts, under the CLI's own files group, the
+`update` above and:
+
+| Command | Effects | What it does |
+| --- | --- | --- |
+| `sheets show <path> [range]` | remote read | the stored cells of an .xlsx (value, type, formula, format), with the file's `sha256` |
+| `sheets update <path> <range> --values <json> --expected-fingerprint <sha256> [--replace]` | remote write | writes JSON rows of values from the range's first cell |
+| `documents show <path>` | remote read | a .docx's paragraphs by index, with style, `editable` and `reason`, and the `sha256` |
+| `documents update <path> --payload <json> --expected-fingerprint <sha256>` | remote write | replaces, inserts or deletes paragraphs |
+| `history <path>` | remote read | what this profile's writes and syncs replaced in the file, from the version store |
+| `restore <path> [version] [--expected-fingerprint <sha256>]` | remote write | puts a kept version back; with no version, the CLI's trash restore |
+
+The names are the ones cli-base's vocabulary has: `sheets` and `documents` are resources, `history` is a view, a range
+and a version are arguments, and `--values`, `--payload` and `--replace` are its flags. A range is `Sheet1!A1:C10`,
+`'My sheet'!B2`, a sheet's name, or `A1:C10` on every sheet; an update may leave the sheet out when the workbook has
+one. `--values` is rows (`[["Total", 42], [null, true]]`, null empties a cell); a range of more than one cell must
+have their shape. A text is written as text, even one that starts with `=`, and a formula cell is refused
+(`office.formula_cell`) unless `--replace`. `--payload` is a list of `{index, text}`, `{insert_after, text,
+style_from?}` and `{delete}`, by the indexes `documents show` gave (`insert_after: -1` puts it first).
+
+An edit downloads the file, refuses another sha256 than `--expected-fingerprint` (`conflict`,
+`mirror.remote-changed`, naming the `show` that reads it again), runs the Office editor from
+[`@wirecat/cli-core/office`](../../src/office/index.ts), and writes the result with `guardedFileWrite`: the file is
+checked again, the replaced content is kept, and the write asks `files.delete` (or `deleteKey`). The editor's refusal
+(a tracked change, an image, a formula, a table header, …) passes through with its `office.*` reason, and nothing is
+uploaded. The answer is the update's (`path`, `sha256`, `replaced`) plus `changed` and `calc_chain_dropped` for cells,
+or `paragraphs` (`replaced`, `inserted`, `deleted`) for a document, and `warnings`: a replaced paragraph whose mixed
+formatting became its first run's, or a replaced formula after which Excel rebuilds its calculation order. A file over
+64 MiB is refused (`file.too-large`): the editors hold it in memory.
+
+`history` lists `versions.list(path)`: each entry's `version` is the sha256 of what it replaced, and `available` says
+whether the store still holds it. `restore <path> <version>` copies that version from the store and writes it with
+`guardedFileWrite` (logged `direction: "restored"`), so a file there needs `--expected-fingerprint` and is kept first;
+a version the store no longer has is `not_found`. The store is the one `write` and `read` hand over, so the edits, the
+update and the restore keep into it and `history` reads it.
+
+Besides the update's helpers, the CLI passes `read(act)`, its signed-in read path with the same target and version
+store, and, when it has a trash, `restoreFromTrash(input)`: `restore` with no version calls it and answers what it
+returns, so the CLI drops its own `restore` command. Without it the version is required. Every helper that acts
+(`write`, `read`, `output`, `restoreFromTrash`) gets the running command as its last argument, so one set of helpers
+asks each command's own permission key and records it in the send journal under its own name.
 
 ## Copy a document collection to another database
 

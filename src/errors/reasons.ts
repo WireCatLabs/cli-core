@@ -98,6 +98,7 @@ const PROVIDER_API: Entry[] = [
   validation("file.not-a-file", "the path names a folder or another thing that is not a file"),
   ["file.denied", "permission_error", "the file cannot be opened: permission denied"],
   validation("file.too-large", "the file is larger than the limit set for this read"),
+  validation("file.not-plain-text", "the file's text is extracted on a read; writing it back would replace the file"),
 ]
 
 /** The read-only SFTP client (`./sftp`). */
