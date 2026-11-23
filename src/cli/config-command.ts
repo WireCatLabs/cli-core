@@ -15,6 +15,7 @@ import {
   knownBeside,
   knownPermissionKeys,
   type PermissionKeySource,
+  renamedPermissionKeys,
   unknownPermissionIssues,
 } from "./permission-keys.js"
 import { profileFree } from "./profile.js"
@@ -352,13 +353,19 @@ export const refuseUnknownKey = (
       : []
   if (keys.length === 0) return
   const known = knownPermissionKeys(command, permissionKey)
+  const renamed = renamedPermissionKeys(command)
   for (const key of keys) {
     if (known.has(key)) continue
     const beside = knownBeside(key, known)
+    const now = renamed.get(key)
     throw new CliError(
       "validation_error",
       `permissions.${key} names no command` +
-        (beside.length > 0 ? ` — the known ones there are ${beside.join(", ")}` : ""),
+        (now !== undefined
+          ? `: its command moved, so use permissions.${now}`
+          : beside.length > 0
+            ? ` — the known ones there are ${beside.join(", ")}`
+            : ""),
     )
   }
 }
