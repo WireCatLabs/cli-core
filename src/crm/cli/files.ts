@@ -23,6 +23,7 @@ import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { FETCH, REMOTE_READ } from "../../cli/effects.js"
 import { itemOf, listOf } from "../../cli/envelope.js"
+import { notLocalPaths } from "../../cli/path-options.js"
 import { commandLevel } from "../../cli/search-left-out.js"
 import { lineOf } from "../../cli/steps.js"
 import { normalCrmUserId } from "../../domain/crm.js"
@@ -461,7 +462,7 @@ export const addCrmFileCommands = (program: Command, options: CrmFileCommandOpti
     const { signal } = environmentOf(command)
     return { app, run, now, ...(signal ? { signal } : {}) }
   }
-  const group = annotate(program.command("files"), { effects: REMOTE_READ }).description(
+  const group = notLocalPaths(annotate(program.command("files"), { effects: REMOTE_READ }), "file").description(
     "the files of the CRM's deals, leads, contacts and companies: listed live, downloaded on demand, their text " +
       "found by search all",
   )

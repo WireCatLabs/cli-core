@@ -7,6 +7,7 @@ import type { FolderRulesEdit } from "../../services/folders.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
+import { notLocalPaths } from "../path-options.js"
 import { folderAnswer, lines, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -64,7 +65,9 @@ const FOLDERS_QUERY = unfilteredQuery("folder", folderEntity)
 
 /** `chats folders …`, in max-cli's words. */
 export const foldersCommand = (messenger: Messenger): Command => {
-  const folders = annotate(new Command("folders"), { offline: false }).description("your chat folders")
+  const folders = notLocalPaths(annotate(new Command("folders"), { offline: false }), "folder", "folders").description(
+    "your chat folders",
+  )
   folders.addCommand(
     withQuery(
       annotate(new Command("list"), { effects: REMOTE_READ }).description(

@@ -832,7 +832,11 @@ The MCP server (`src/mcp/server.ts`) holds one connection for minutes and runs o
 the CLI's commands (`toolsFromCommands`, `src/mcp/agent.ts`), each run in-process through the CLI's own `run`
 (`runCommandForAgent`) on that connection, so a tool answers and refuses exactly as the command does. What only an
 agent needs comes from the command's metadata: `mcp: false` and `ownerOnlyOption` keep a command or an option off
-MCP, `grantsAuthority` offers a command only where the profile allows `mcp.authority`, `bot api` only where it allows `bot.api`, `readsStdin` turns what a command reads on stdin into an input field. The tools that answer with an image
+MCP, `grantsAuthority` offers a command only where the profile allows `mcp.authority`, `bot api` only where it allows `bot.api`, `readsStdin` turns what a command reads on stdin into an input field. Before any call runs, `refuseAgentPaths`
+(`src/cli/path-options.ts`, from `run()`'s `preAction`) checks every local path it names by its real path: no credential
+folder, no WireCat tool's folder, not the store. An option whose placeholder names a file or folder, and an argument so
+named, is a local path unless `notLocalPaths` says it names a remote file, a title or a command path; a test fails on
+an input named like a path that is neither. The tools that answer with an image
 (`messages photo`, `attachments show`, `stats charts`) stay definitions of their own (`src/mcp/tools.ts`).
 
 `mcp --http` (`src/mcp/http/`, CLI-58) serves the same factory over Streamable HTTP on 127.0.0.1 behind the

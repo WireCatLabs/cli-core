@@ -11,6 +11,7 @@ import { honoursDryRun } from "../dry-run-guard.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
 import { bufferedInput, MAX_BUFFERED_INPUT } from "../input-policy.js"
+import { notLocalPaths } from "../path-options.js"
 import { type DocumentWords, examples, wordsOf } from "./words.js"
 
 /** What `files update` writes through, signed in for one run. */
@@ -85,7 +86,7 @@ const addFileUpdateCommandDefinition = (files: Command, helpers: FileUpdateComma
   const group = files.name()
   const deleteKey = helpers.deleteKey ?? "files.delete"
   return examples(
-    annotate(files.command("update"), { effects: REMOTE_WRITE, offline: false })
+    notLocalPaths(annotate(files.command("update"), { effects: REMOTE_WRITE, offline: false }), "path")
       .summary(`replace a ${place} file's text, or create a text file`)
       .description(
         `replace a ${place} file's text, or create a text file. A file already there is replaced only with ` +

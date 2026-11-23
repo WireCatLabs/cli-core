@@ -22,6 +22,7 @@ import { guardedFileWrite, remoteChanged } from "../../services/files/guarded-wr
 import { honoursDryRun } from "../dry-run-guard.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf } from "../envelope.js"
+import { notLocalPaths } from "../path-options.js"
 import { marksUntrusted } from "../untrusted-marks.js"
 import {
   addFileUpdateCommand,
@@ -320,7 +321,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     helpers.output(itemOf(item), command)
   }
 
-  const sheets = annotate(files.command("sheets"), { effects: REMOTE_READ }).description(
+  const sheets = notLocalPaths(annotate(files.command("sheets"), { effects: REMOTE_READ }), "path").description(
     `the cells of an Excel workbook (.xlsx) on ${place}, read and changed in place`,
   )
   examples(
@@ -471,7 +472,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
       })
     })
 
-  const documents = annotate(files.command("documents"), { effects: REMOTE_READ }).description(
+  const documents = notLocalPaths(annotate(files.command("documents"), { effects: REMOTE_READ }), "path").description(
     `the paragraphs of a Word document (.docx) on ${place}, read and changed in place`,
   )
   examples(
@@ -565,7 +566,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     })
 
   examples(
-    annotate(files.command("history"), { effects: REMOTE_READ, offline: false })
+    notLocalPaths(annotate(files.command("history"), { effects: REMOTE_READ, offline: false }), "path")
       .summary("list the earlier versions of a file kept on this computer")
       .description(
         "list what the writes and syncs of this profile replaced in a file, newest last. Each entry's version is the " +
@@ -597,7 +598,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
 
   const trash = helpers.restoreFromTrash
   examples(
-    annotate(files.command("restore"), { effects: REMOTE_WRITE, offline: false })
+    notLocalPaths(annotate(files.command("restore"), { effects: REMOTE_WRITE, offline: false }), "path")
       .summary(
         trash
           ? "bring a file back from the trash, or put back a version kept here"

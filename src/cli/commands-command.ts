@@ -11,6 +11,7 @@ import { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
 import { NO_EFFECTS } from "./effects.js"
 import { renderDocument } from "./envelope.js"
 import { commandsText } from "./help/commands-text.js"
+import { notLocalPaths } from "./path-options.js"
 import { rootOf } from "./profile.js"
 import { hasSharedContract } from "./shared-contracts.js"
 
@@ -26,7 +27,7 @@ export const CONTRACT = 3
  * settings file without a named profile. A named profile adds availability without hiding commands.
  */
 export const commandsCommand = (app: AppIdentity): Command => {
-  const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
+  const command = notLocalPaths(annotate(new Command("commands"), { effects: NO_EFFECTS }), "path")
     .description(DISCOVERY_DESCRIPTIONS.commands)
     .hook("preAction", (_command, action) => {
       if (action.optsWithGlobals<{ jsonl?: boolean }>().jsonl)

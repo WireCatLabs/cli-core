@@ -58,6 +58,7 @@ import {
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { inStoreBackups } from "../path-options.js"
 import { commandAt, lineOf, nextStep } from "../steps.js"
 import { storeInfoCommand } from "../store-info.js"
 import { storeRecoverCommand } from "../store-recover.js"
@@ -669,7 +670,10 @@ const vacuumInto = async (path: string, target: string) => {
 const stampNow = () => new Date().toISOString().replace(/[:.]/g, "-")
 
 const backupCommand = (): Command =>
-  destroysNothing(annotate(new Command("backup"), { output: { entity: "store_backup" }, effects: LOCAL_WRITE }))
+  inStoreBackups(
+    destroysNothing(annotate(new Command("backup"), { output: { entity: "store_backup" }, effects: LOCAL_WRITE })),
+    "file",
+  )
     .description("copy the store into a new file, while it is in use; never overwrites a file")
     .argument("<file>", "the new file")
     .option(...ENCRYPT_OPTION)
@@ -732,7 +736,10 @@ const decryptCommand = (): Command =>
  * `serve` runs: that opens the store on its first write, so until then it holds nothing to see.
  */
 const restoreCommand = (owner: StoreOwner): Command =>
-  grantsAuthority(annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE }))
+  inStoreBackups(
+    grantsAuthority(annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })),
+    "file",
+  )
     .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
     .description(
       "put a backup in place of the store; the store it replaces is kept beside it, never deleted. Given a rollback " +

@@ -36,6 +36,7 @@ import { FETCH, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_READ, REMOTE_WR
 import { type Body, itemOf, jsonlRecords, listOf, snakeKeys } from "../envelope.js"
 import { commandPath } from "../list-query.js"
 import { terminalAsker } from "../messenger/ask.js"
+import { notLocalPaths } from "../path-options.js"
 import { marksUntrusted } from "../untrusted-marks.js"
 import { fileConflictsCommand } from "./file-conflicts.js"
 
@@ -470,12 +471,15 @@ export const fileMirrorsCommand = (helpers: FileMirrorCommands): Command => {
   const keepOf = (side?: string): Keep | undefined => (side === REMOTE ? "remote" : (side as Keep | undefined))
 
   const addCommand = () =>
-    annotate(new Command("add"), {
-      effects: FETCH,
-      offline: false,
-      mcp: false,
-      examples: helpers.root.examples.map((example) => `${CLI} personal mirrors add ${example}`),
-    })
+    notLocalPaths(
+      annotate(new Command("add"), {
+        effects: FETCH,
+        offline: false,
+        mcp: false,
+        examples: helpers.root.examples.map((example) => `${CLI} personal mirrors add ${example}`),
+      }),
+      "folder",
+    )
       .summary(`mirror a local folder and a ${helpers.root.place} both ways`)
       .description(
         `mirror a local folder and a ${helpers.root.place} both ways: checks the ${helpers.root.place} and saves the ` +
@@ -917,7 +921,7 @@ export const fileMirrorsCommand = (helpers: FileMirrorCommands): Command => {
       })
 
   const versionsCommand = () =>
-    annotate(new Command("versions"), { effects: LOCAL_READ, mcp: false })
+    notLocalPaths(annotate(new Command("versions"), { effects: LOCAL_READ, mcp: false }), "path")
       .summary("versions of mirrored files that syncs replaced or deleted")
       .description("the versions of a mirrored file that syncs replaced or deleted, kept on this computer")
       .addCommand(

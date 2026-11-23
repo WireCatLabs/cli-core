@@ -6,6 +6,7 @@ import { CATALOG_QUERY, type CatalogEntry, type CatalogQuery } from "../../store
 import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
+import { notLocalPaths } from "../path-options.js"
 import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import type { DocumentKnowledgePort } from "./knowledge.js"
 import { bindQuery, documentQueries, tagRow, termsOf } from "./queries.js"
@@ -211,7 +212,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
   const { prefix, text } = wording
   const queries = documentQueries()
   const view = "catalog"
-  const catalog = local(program.command("catalog")).description(text.catalog)
+  const catalog = notLocalPaths(local(program.command("catalog")), "file").description(text.catalog)
   const run = <T>(
     fn: (index: DocumentCatalogStores & { catalog: DocumentCatalog }, principal: string) => Promise<T>,
     write = false,
