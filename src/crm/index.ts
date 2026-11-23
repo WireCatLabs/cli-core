@@ -77,10 +77,13 @@ export * as crmValues from "./values.js"
 export { type CrmViewing, crmViewerOf, withReadableDeal } from "./viewer.js"
 export { type CrmRows, type CrmWindow, crmWindowOf, walk } from "./walk.js"
 export {
+  CRM_ACTIVITY_WRITES,
   CRM_ASSIGN_OTHERS_KEY,
   CRM_VERBS,
   CRM_WRITE_DEFAULTS,
   CRM_WRITE_KEYS,
+  type CrmActivityDraft,
+  type CrmActivityWrite,
   type CrmDraft,
   type CrmDrafts,
   type CrmFields,
@@ -94,6 +97,9 @@ export {
   crmAlsoChecks,
 } from "./writer.js"
 export {
+  type CrmActivityInput,
+  type CrmActivityTarget,
+  type CrmActivityWritten,
   type CrmFieldsInput,
   type CrmRecordInput,
   type CrmRecordKind,
@@ -102,6 +108,8 @@ export {
   type CrmWrites,
   type CrmWritten,
   closeCrmItem,
+  completeCrmActivity,
+  createCrmActivity,
   createCrmItem,
   createCrmRecord,
   crmCustomValues,

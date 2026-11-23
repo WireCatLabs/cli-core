@@ -26,6 +26,7 @@ import { CRM_CHANGES, type CrmChange, type CrmChangeKind } from "../../store/sql
 import { crmDigest } from "../digest.js"
 import { SYNCED_FROM } from "../sync.js"
 import { shortened, viewerOf } from "../viewer.js"
+import type { CrmWriteCapabilities } from "../writer.js"
 import { addCrmActivityCommands } from "./activities.js"
 import { csvColumnPaths, printCsv, refuseCsvConflict } from "./csv.js"
 import type { CrmRun, CrmWithin } from "./index.js"
@@ -160,13 +161,25 @@ export interface CrmChangeCommandOptions {
   activities?: boolean
   /** The CRM has leads; true when absent. */
   leads?: boolean
+  /** The writer's capabilities: `activities create` and `close` when they name activities. */
+  writes?: CrmWriteCapabilities
 }
 
 /** `changes list`: what happened in the copy in a window, newest first; `--format report` is the morning digest. */
 export const addCrmChangeCommands = (program: Command, options: CrmChangeCommandOptions): void => {
   const { within, example, now, ownerOf, pathOf } = options
   const deals = options.leads === false ? "deals" : "deals and leads"
-  if (options.activities) addCrmActivityCommands(program, { within, example, now, ownerOf, pathOf })
+  if (options.activities || options.writes?.activities?.length)
+    addCrmActivityCommands(program, {
+      within,
+      example,
+      now,
+      ownerOf,
+      pathOf,
+      list: options.activities === true,
+      ...(options.writes ? { writes: options.writes } : {}),
+      ...(options.leads === undefined ? {} : { leads: options.leads }),
+    })
   const group = annotate(program.command("changes"), { effects: NO_EFFECTS }).description(
     `what changed in the CRM's ${options.leads === false ? "deals" : "deals, leads"}, activities and contacts, ` +
       "as the syncs copied it",

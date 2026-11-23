@@ -1,5 +1,13 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson } from "../domain/crm.js"
+import {
+  type CrmActivity,
+  type CrmField,
+  type CrmItem,
+  type CrmKind,
+  type CrmOrganization,
+  type CrmPerson,
+  isItemKind,
+} from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 import { currencyOf, minorUnits } from "../domain/money.js"
 import { e164Of } from "../domain/phones.js"
@@ -17,6 +25,8 @@ import type { CrmSource } from "./source.js"
 import {
   CRM_ASSIGN_OTHERS_KEY,
   CRM_WRITE_DEFAULTS,
+  type CrmActivityDraft,
+  type CrmActivityWrite,
   type CrmDraft,
   type CrmDrafts,
   type CrmFields,
@@ -739,4 +749,166 @@ export const updateCrmRecord = async <K extends CrmRecordKind>(
   return writeRecord(context, kind, "update", fields, operationId, () =>
     writer.update(kind, externalId, fields as CrmWriteFields[K], { operationId }),
   )
+}
+
+/** A comment or task as typed: `on`, the records it is on, as `deal:12`, `lead:4` (the copy's), or `person:<id>`, `organization:<id>` (the CRM's). */
+export interface CrmActivityInput {
+  title?: string
+  body?: string
+  /** A task's deadline, epoch ms. */
+  dueAt?: number
+  owner?: string
+  on: readonly string[]
+}
+
+/** A record an activity is on: the copy's reference and title when the copy holds it. */
+export interface CrmActivityTarget {
+  kind: CrmKind
+  externalId: string
+  ref: string | null
+  title: string | null
+}
+
+export interface CrmActivityWritten {
+  operationId: string
+  /** The CRM's answer. */
+  activity: CrmActivity
+  /** Whether the copy keeps it: only with the activities setting on, and on a record the copy keeps, as a sync does. */
+  stored: boolean
+  on: CrmActivityTarget[]
+}
+
+const MOST_SUBJECT = 500
+const MOST_BODY = 20_000
+
+const activityInvalid = (message: string, param?: string) =>
+  new CliError("validation_error", message, { reason: "crm.activity-field", ...(param ? { param } : {}) })
+
+const activityUnsupported = (what: string) =>
+  new CliError("validation_error", `this CRM does not take ${what}`, { reason: "crm.write-unsupported", sent: false })
+
+/** `deal:12` and `lead:4` by the copy, as `deals list` shows them; a contact or company by the CRM's id. */
+const activityTargetOf = async (context: CrmWriteContext, given: string): Promise<CrmActivityTarget> => {
+  const at = given.indexOf(":")
+  const kind = given.slice(0, at)
+  const id = given.slice(at + 1)
+  if (kind === "deal" || kind === "lead") {
+    const copy = await copyOf(context, kind, given.trim())
+    return { kind, externalId: copy.externalId as string, ref: copy.ref, title: copy.title }
+  }
+  if ((kind === "person" || kind === "organization") && RECORD_ID.test(id))
+    return { kind, externalId: id, ref: null, title: null }
+  throw new CliError(
+    "validation_error",
+    `--subject takes deal:<id> or lead:<id> as a list shows it, or person:<id> or organization:<id> by the CRM's id; got ${given}`,
+    { reason: "ref.malformed", param: "--subject" },
+  )
+}
+
+const activityKeys = async (
+  context: CrmWriteContext,
+  key: PermissionKey,
+  owner: string | undefined,
+): Promise<{ key: PermissionKey; extra: PermissionKey[] }> => ({
+  key,
+  extra: owner !== undefined && owner !== (await selfOf(context)) ? [CRM_ASSIGN_OTHERS_KEY] : [],
+})
+
+/** The CRM's answer into the store, as a sync saves it; a failure names the activity, which the CRM has written. */
+const keptActivity = async (context: CrmWriteContext, activity: CrmActivity, operationId: string) => {
+  try {
+    if (!(await context.store.crm.activitiesOn(context.account))) return false
+    return (await context.store.crm.saveActivities(context.account, [activity])).saved === 1
+  } catch (error) {
+    throw new CliError(
+      "invalid_response",
+      `the CRM wrote activity ${activity.externalId}, but the local store did not keep it ` +
+        `(${error instanceof Error ? error.message : String(error)}); sync to store it — do not write it again`,
+      { external_id: activity.externalId, operation_id: operationId, sent: true },
+    )
+  }
+}
+
+/** The records the CRM answered it is on; a deal or lead the copy holds by its reference too. */
+const answeredTargets = async (
+  context: CrmWriteContext,
+  activity: CrmActivity,
+  known: readonly CrmActivityTarget[],
+): Promise<CrmActivityTarget[]> =>
+  Promise.all(
+    activity.on.map(
+      async ({ kind, externalId }) =>
+        known.find((one) => one.kind === kind && one.externalId === externalId) ?? {
+          kind,
+          externalId,
+          ref: isItemKind(kind) ? await context.store.crm.refOf(context.account, kind, externalId) : null,
+          title: null,
+        },
+    ),
+  )
+
+/** A new comment or task on records of the CRM, through the guarded path; the CRM's answer is stored as a sync would. */
+export const createCrmActivity = async (
+  context: CrmWriteContext,
+  kind: CrmActivityWrite,
+  input: CrmActivityInput,
+  options: { operationId?: string } = {},
+): Promise<CrmActivityWritten> => {
+  const { writer } = context.writes
+  const create = writer.createActivity?.bind(writer)
+  if (!create || !writer.capabilities.activities?.includes(kind)) throw activityUnsupported(`a new ${kind}`)
+  const subject = input.title?.trim()
+  const body = input.body?.trim()
+  if (subject !== undefined && (subject === "" || subject.length > MOST_SUBJECT))
+    throw activityInvalid(`--title is 1 to ${MOST_SUBJECT} characters`, "--title")
+  if (body !== undefined && (body === "" || body.length > MOST_BODY))
+    throw activityInvalid(`--text is 1 to ${MOST_BODY} characters`, "--text")
+  if (kind === "task" && subject === undefined) throw activityInvalid("a new task needs --title", "--title")
+  if (kind === "comment" && body === undefined) throw activityInvalid("a new comment needs --text", "--text")
+  if (kind === "comment" && input.dueAt !== undefined) throw activityInvalid("a comment has no --due", "--due")
+  if (kind === "comment" && input.owner !== undefined) throw activityInvalid("a comment has no --owner", "--owner")
+  const owner = input.owner?.trim()
+  if (owner !== undefined && !owner) throw activityInvalid("--owner is the CRM user's id", "--owner")
+  if (input.on.length === 0)
+    throw activityInvalid("name the record it is on with --subject, such as deal:12", "--subject")
+  const targets: CrmActivityTarget[] = []
+  for (const given of input.on) {
+    const target = await activityTargetOf(context, given)
+    if (!targets.some((one) => one.kind === target.kind && one.externalId === target.externalId)) targets.push(target)
+  }
+  const draft: CrmActivityDraft = {
+    kind,
+    ...(subject === undefined ? {} : { subject }),
+    ...(body === undefined ? {} : { body }),
+    ...(input.dueAt === undefined ? {} : { dueAt: input.dueAt }),
+    ...(owner === undefined ? {} : { assignee: owner }),
+    on: targets.map(({ kind, externalId }) => ({ kind, externalId })),
+  }
+  const operationId = operationOf(context, options.operationId)
+  const activity = await written(context, await activityKeys(context, "activities.create", owner), operationId, () =>
+    create(draft, { operationId }),
+  )
+  const stored = await keptActivity(context, activity, operationId)
+  return { operationId, activity, stored, on: await answeredTargets(context, activity, targets) }
+}
+
+/** A task marked done in the CRM by its id, as `activities list` prints it; the copy is stored again. */
+export const completeCrmActivity = async (
+  context: CrmWriteContext,
+  externalId: string,
+  options: { operationId?: string } = {},
+): Promise<CrmActivityWritten> => {
+  const { writer } = context.writes
+  const complete = writer.completeActivity?.bind(writer)
+  if (!complete || !writer.capabilities.activities?.includes("task")) throw activityUnsupported("a task marked done")
+  if (!RECORD_ID.test(externalId))
+    throw new CliError("validation_error", "name the task by the CRM's id, as activities list prints it", {
+      reason: "ref.malformed",
+    })
+  const operationId = operationOf(context, options.operationId)
+  const activity = await written(context, await activityKeys(context, "activities.close", undefined), operationId, () =>
+    complete(externalId, { operationId }),
+  )
+  const stored = await keptActivity(context, activity, operationId)
+  return { operationId, activity, stored, on: await answeredTargets(context, activity, []) }
 }
