@@ -82,8 +82,8 @@ const addDocumentHistoryCommandsDefinition = (program: Command, helpers: Documen
     ),
     [`${prefix} changes`, `${prefix} changes --since 7d --event deleted,unavailable`],
   )
-    .option("--since <when>", "from this time: an ISO 8601 time, today, yesterday, or 30m, 2h, 1d ago", "1d")
-    .option("--until <when>", "up to this time, in the same forms")
+    .option("--since <time>", "from this time: an ISO 8601 time, today, yesterday, or 30m, 2h, 1d ago", "1d")
+    .option("--until <time>", "up to this time, in the same forms")
     .option(`--event <events>`, `only these, comma separated: ${DOCUMENT_EVENTS.join(", ")}`, eventList)
     .option("--limit <n>", "how many changes to return", positive, 50)
     .option("--page <n>", "which page to return", positive, 1)
