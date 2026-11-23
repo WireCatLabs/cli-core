@@ -5,6 +5,39 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.720.0 — 23.11.2026
+
+### Added
+
+- **A file mirror's remote listing goes on across runs**, so a cloud disk too big to list in one run (100,000 files
+  at about 30 s a page) syncs fully over several. `FileTarget.list` takes an optional `from` and may return `next`
+  for an incomplete listing; the engine keeps the files so far and `next` in the mirror's state (`listing`), merges
+  the next run's files by path and by id, and proves deletions only once the listing completes, each still by a
+  direct `exists` read. A saved listing over 7 days old, of another root folder, or past 100,000 files starts over;
+  a dry run saves none. A target without `next` lists from the start each run, as before
+  ([DOCUMENTS.md, point 12](docs/dev/DOCUMENTS.md#sync-plain-files-with-a-provider)).
+- **Edit `.xlsx` cells and `.docx` paragraphs in place** (`@wirecat/cli-core/office`), for a service with no
+  document API that downloads and uploads whole files, such as Yandex Disk. `readXlsxCells` and `editXlsxCells` work
+  by sheet and A1 address: shared or inline strings, numbers, booleans and empty cells, the cell's format kept, new
+  cells and rows in order, formula cells refused unless `overwriteFormulas`, and the workbook marked to calculate
+  again on open. `readDocxParagraphs` and `editDocxParagraphs` replace, insert or delete body and table-cell
+  paragraphs, keeping each paragraph's properties and its first run's formatting (mixed inline formatting
+  collapses, and the result lists where); a paragraph with tracked changes, a field, an image, a comment, a link or
+  a footnote is refused with the reason. Only the changed XML is spliced in; every other zip entry is copied byte for
+  byte ([Editing Office files](docs/office.md)).
+- **`people.erase` deletes a person and what memo knows of them alone.** Their identities go, with the tags, links,
+  aliases, mentions and involvements that name them. A fact, note, task or import record that names them stays and
+  loses the name. A message, mail or meeting belongs to its source: the sender stays as an identity with no person,
+  and the next sync or people scan gives it one again. `apply: false` answers what would go and changes nothing.
+  Owner only; refused for the owner's own person (`person.owner`), and while an invoice, order, subscription or a row
+  the person wrote still names them (`person.erase-blocked`).
+
+### Fixed
+
+- **Removing an import's account now takes the people only its records made.** Its e-mail and phone identities were
+  never referenced by anything, so the purge kept them and the person stayed. A person the owner tagged, linked or
+  gave a task to, or one another source or a message also names, still stays.
+
 ## 0.719.0 — 22.11.2026
 
 ### Added
