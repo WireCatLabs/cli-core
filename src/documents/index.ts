@@ -40,6 +40,15 @@ export {
   skippedName,
 } from "../services/documents/push.js"
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
+export {
+  type FileConflictResolution,
+  type FileConflictResolveOptions,
+  type FileConflictVersion,
+  type FileConflictView,
+  listFileConflicts,
+  resolveFileConflict,
+  showFileConflict,
+} from "../services/files/conflicts.js"
 export { excludedBy, exclusionPattern } from "../services/files/exclusions.js"
 export {
   type GuardedFileWrite,
@@ -61,17 +70,27 @@ export {
   syncFileMirrors,
 } from "../services/files/mirror.js"
 export {
+  MAX_MERGE_BYTES,
+  mergeable,
+  mergeText,
+  type TextMerge,
+  type TextSegment,
+} from "../services/files/text-merge.js"
+export {
   type FileVersion,
   type FileVersions,
   fileVersions,
   restoreFileVersion,
   type VersionDirection,
   type VersionEvent,
+  type VersionParts,
+  type VersionRole,
 } from "../services/files/versions.js"
 export { type Block, blockKey, blockShape, type Inline, type ListKind, normalizeInlines } from "./blocks.js"
 export { catalogFiles } from "./catalog.js"
 export type {
   Expect,
+  FileConflict,
   FileEntry,
   FileMirrorState,
   FileMirrorStatePort,

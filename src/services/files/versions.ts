@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { appendFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs"
-import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises"
+import { mkdir, readdir, readFile, rename, rm, stat, utimes } from "node:fs/promises"
 import { join } from "node:path"
 import { Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -8,14 +8,25 @@ import { CliError } from "@wirecat/cli-base"
 import { type HeldLock, heldCheck } from "../documents/mirrors.js"
 import { assertNoLink, hashFile, replaceLocal, safePath } from "../documents/push.js"
 
-/** Which way a sync moved a change. */
-export type VersionDirection = "local-to-remote" | "remote-to-local" | "restored"
+/** Which way a sync moved a change; `both` is a merge or a conflict's resolution, written to both sides. */
+export type VersionDirection = "local-to-remote" | "remote-to-local" | "restored" | "both"
+
+/** The contents a merge, a conflict or its resolution worked from: the last sync's, and each side's. */
+export interface VersionParts {
+  base?: string
+  local?: string
+  remote?: string
+}
 
 /** One line of a mirror's version log: what a sync did to a path, with the content's hash before and after. */
 export interface VersionEvent {
   at: string
   path: string
-  event: "created" | "changed" | "deleted" | "renamed"
+  /**
+   * `merged`: both sides' changes merged into `new`. `conflict`: they could not be, and `parts` were kept. `resolved`:
+   * the owner settled the conflict with `new`, as `resolution` says.
+   */
+  event: "created" | "changed" | "deleted" | "renamed" | "merged" | "conflict" | "resolved"
   direction: VersionDirection
   /** The content the change replaced: the local file kept before a pull or deletion, the remote version an upload replaced. */
   old?: string
@@ -27,11 +38,20 @@ export interface VersionEvent {
   size?: number
   /** A rename's new path. */
   to?: string
+  /** A merge's, a conflict's or a resolution's contents; with `new`, kept for good. */
+  parts?: VersionParts
+  /** How the owner resolved a conflict: kept one side, both, or gave the final file. */
+  resolution?: "local" | "remote" | "both" | "file"
 }
+
+/** Which content of a merge or a conflict a kept version is; `result` is the merge's or the resolution's. */
+export type VersionRole = "base" | "local" | "remote" | "result"
 
 /** A version of a path, and whether its bytes are still in the store. */
 export interface FileVersion extends VersionEvent {
   available: boolean
+  /** Each content of a merge, a conflict or a resolution, and whether the store still has it. */
+  versions?: { role: VersionRole; sha256: string; available: boolean }[]
 }
 
 export interface FileVersions {
@@ -46,6 +66,8 @@ export interface FileVersions {
   keep(source: string | ((temp: string) => Promise<void>)): Promise<string>
   /** Whether the store holds this content. */
   has(sha256: string): boolean
+  /** A kept content's bytes, or undefined when the store does not hold it. Meant for text a merge reads whole. */
+  read(sha256: string): Promise<Buffer | undefined>
   log(event: Omit<VersionEvent, "at">): void
   /** Every event of `path`, oldest first, including renames to or from it. */
   list(path: string): FileVersion[]
@@ -54,8 +76,11 @@ export interface FileVersions {
    * undefined. False when the store no longer has the version or the file was not as `over` said.
    */
   write(sha256: string, into: string, over?: string): Promise<boolean>
-  /** Applies the retention rule; see `fileVersions`. A sync runs it under its lock; call it only under that lock. */
-  prune(): Promise<void>
+  /**
+   * Applies the retention rule; see `fileVersions`. `pinned` stay too: a mirror's last synced contents, the base of
+   * its next merge. A sync runs it under its lock; call it only under that lock.
+   */
+  prune(pinned?: Iterable<string>): Promise<void>
 }
 
 const RETAIN_MS = 30 * 24 * 60 * 60 * 1000
@@ -95,12 +120,23 @@ const copyHashed = async (from: string, into: string) => {
   return hash.digest("hex")
 }
 
+const rolesOf = (event: VersionEvent): { role: VersionRole; sha256: string }[] => {
+  if (!event.parts) return []
+  const { base, local, remote } = event.parts
+  return [
+    ...(base ? [{ role: "base" as const, sha256: base }] : []),
+    ...(local ? [{ role: "local" as const, sha256: local }] : []),
+    ...(remote ? [{ role: "remote" as const, sha256: remote }] : []),
+    ...(event.new ? [{ role: "result" as const, sha256: event.new }] : []),
+  ]
+}
+
 /**
  * A mirror's local version store: `<dir>/objects/<sha256>` holds each kept content once, `<dir>/log.jsonl` is
- * append-only. The store lives under the profile's state folder, never inside the mirrored folder. Retention, one
- * rule: a content stays while an event newer than 30 days names it, and the last content of a path whose newest
- * event is a deletion stays for good. A content no event names stays 30 days after it was last kept, so a crash
- * between keeping a file and logging the change loses nothing.
+ * append-only. The store lives under the profile's state folder, never inside the mirrored folder. Retention: a
+ * content stays while an event newer than 30 days names it; the last content of a path whose newest event is a
+ * deletion, and every content a merge, a conflict or a resolution names, stay for good. A content no event names stays
+ * 30 days after it was last kept, so a crash between keeping a file and logging the change loses nothing.
  */
 export const fileVersions = (dir: string, now: () => number = Date.now): FileVersions => {
   const objects = join(dir, "objects")
@@ -116,7 +152,7 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
       throw error
     }
   }
-  const has = (sha256: string) => existsSync(join(objects, sha256))
+  const has = (sha256: string) => /^[0-9a-f]{64}$/.test(sha256) && existsSync(join(objects, sha256))
   return {
     dir,
     keep: async (source) => {
@@ -143,16 +179,29 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
       }
     },
     has,
+    read: async (sha256) => {
+      if (!has(sha256)) return undefined
+      return readFile(join(objects, sha256)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      })
+    },
     log: (event) => {
       mkdirSync(dir, { recursive: true, mode: 0o700 })
       appendFileSync(logPath, `${JSON.stringify({ at: new Date(now()).toISOString(), ...event })}\n`, { mode: 0o600 })
     },
     list: (path) => {
       const found = events().filter((event) => event.path === path || event.to === path)
-      return found.map((event) => ({
-        ...event,
-        available: event.old !== undefined && existsSync(join(objects, event.old)),
-      }))
+      return found.map((event) => {
+        const roles = rolesOf(event)
+        return {
+          ...event,
+          available: roles.length
+            ? roles.every(({ sha256 }) => has(sha256))
+            : event.old !== undefined && has(event.old),
+          ...(roles.length ? { versions: roles.map((role) => ({ ...role, available: has(role.sha256) })) } : {}),
+        }
+      })
     },
     write: async (sha256, into, over) => {
       if (!has(sha256)) return false
@@ -160,14 +209,15 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
         pipeline(createReadStream(join(objects, sha256)), createWriteStream(temp, { flags: "wx" }))
       return (await replaceLocal(into, over, copy, { sha256 })) !== undefined
     },
-    prune: async () => {
+    prune: async (pinned = []) => {
       const all = events()
-      const keep = new Set<string>()
+      const keep = new Set<string>(pinned)
       const last = new Map<string, VersionEvent>()
       for (const event of all) {
         last.set(event.path, event)
         if (Date.parse(event.at) > now() - RETAIN_MS)
           for (const hash of [event.old, event.new]) if (hash) keep.add(hash)
+        for (const { sha256 } of rolesOf(event)) keep.add(sha256)
       }
       for (const event of last.values()) if (event.event === "deleted" && event.old) keep.add(event.old)
       let names: string[]

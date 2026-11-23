@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { metaOf } from "@wirecat/cli-base/commands"
+import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
@@ -11,24 +11,32 @@ import { sharedProgram } from "../testing/shared-program.js"
 import { addCallStatsCommand } from "./call-stats-command.js"
 import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
+import { fileConflictsCommand } from "./documents/file-conflicts.js"
 import { addFileUpdateCommand } from "./documents/file-update.js"
+import { LOCAL_READ } from "./effects.js"
 import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { runsCommand } from "./runs/command.js"
 
-/** `cli-dev lint` over a program's `commands --json`, with no overrides. */
-const lintOf = async (definition: ProgramDefinition, ...more: string[]) => {
+/** `cli-dev lint` over a program's `commands --json`, with no overrides unless given. */
+const lintOf = async (definition: ProgramDefinition, more: string[] = [], overrides: object[] = []) => {
   const streams = captureStreams()
   expect(await run(["commands", "--json"], definition, { streams, tty: false, env: {} })).toBe(0)
   const folder = mkdtempSync(join(tmpdir(), "command-lint-"))
   const document = join(folder, "commands.json")
   writeFileSync(document, streams.stdout.join(""))
   const noOverrides = join(folder, "overrides.json")
-  writeFileSync(noOverrides, "[]")
-  return spawnSync("node_modules/.bin/cli-dev", ["lint", "--commands", document, "--overrides", noOverrides, ...more], {
-    encoding: "utf8",
-  })
+  writeFileSync(noOverrides, JSON.stringify(overrides))
+  // cli-dev reads --overrides relative to its working folder, even an absolute path.
+  const overridesPath = relative(process.cwd(), noOverrides)
+  return spawnSync(
+    "node_modules/.bin/cli-dev",
+    ["lint", "--commands", document, "--overrides", overridesPath, ...more],
+    {
+      encoding: "utf8",
+    },
+  )
 }
 
 // Every CLI runs `cli-dev lint` on its tree, and a shared command's violation lands in all of them at once. An override
@@ -80,7 +88,48 @@ it("a calls host's shared commands pass the command lint with no overrides", asy
       },
     },
     // The baseline is the messenger program's: here its entries are stale, and only a new violation fails.
-    "--allow-stale",
+    ["--allow-stale"],
+  )
+
+  expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
+  expect(lint.status).toBe(0)
+})
+
+// ydisk mounts these under its own file-mirror commands, whose words it overrides until cli-base's vocabulary has them.
+it("a file mirror's conflict commands pass the command lint with only the mirror words' overrides", async () => {
+  const refuse = (): never => {
+    throw new Error("not read in a lint")
+  }
+  const app = { command: "ydisk", appName: "ydisk-cli", envPrefix: "YDISK", description: "synthetic", version: "1.0.0" }
+  const lint = await lintOf(
+    {
+      app,
+      commands: () => [
+        commandsCommand(app),
+        annotate(new Command("mirrors"), { effects: LOCAL_READ })
+          .description("keep local folders and Disk folders the same")
+          .addCommand(
+            fileConflictsCommand({
+              identity: app,
+              remote: "disk",
+              output: refuse,
+              mirrors: refuse,
+              pathOf: refuse,
+              stateOf: refuse,
+              versionsOf: refuse,
+              connect: refuse,
+            }),
+          ),
+        runsCommand(app),
+      ],
+    },
+    ["--allow-stale"],
+    [
+      ["unknown-resource", "mirrors", "a saved pairing of a local and a remote folder; ydisk overrides it too"],
+      ["unknown-resource", "mirrors conflicts", "the files a mirror's sync could not merge; no shared noun names them"],
+      ["option-role", "mirrors conflicts resolve --keep", "the conflict side, as ydisk's mirrors sync --keep"],
+      ["list-without-query", "mirrors conflicts list", "a mirror's few recorded conflicts, from its state file"],
+    ].map(([rule, target, reason]) => ({ rule, target, reason, owner: "@WireCatLabs", review_after: "2026-12-22" })),
   )
 
   expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
@@ -110,7 +159,7 @@ it("a files host's shared update passes the command lint with no overrides", asy
         return [...holder.commands, runsCommand(app)]
       },
     },
-    "--allow-stale",
+    ["--allow-stale"],
   )
 
   expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)

@@ -64,6 +64,22 @@ export interface FileEntry {
   syncedAt: string
 }
 
+/**
+ * A conflict the last sync left: why, when, and the contents it found. A side that deleted the file has no hash. The
+ * store keeps all three (`kept`) for a text file the merge could not settle; for other files only the hashes are
+ * known, and a resolution reads the sides again.
+ */
+export interface FileConflict {
+  reason: string
+  at: string
+  base?: string
+  local?: string
+  remote?: string
+  /** The remote file as the listing saw it. */
+  remoteFile?: RemoteFile
+  kept?: boolean
+}
+
 export interface FileMirrorState {
   version: 1
   principal: string
@@ -85,6 +101,8 @@ export interface FileMirrorState {
    * a run completes it, or when it is too old, of another root, or cannot go on.
    */
   listing?: { rootId: string; startedAt: string; next: string; files: RemoteFile[] }
+  /** The conflicts the last sync left, by path; each sync replaces them, and a resolution removes its own. */
+  conflicts?: Record<string, FileConflict>
 }
 
 export interface FileMirrorStatePort {
@@ -100,6 +118,7 @@ export type FileStepKind =
   | "trash-local"
   | "rename-local"
   | "keep-both"
+  | "merge"
   | "forget"
   | "conflict"
   | "unknown"

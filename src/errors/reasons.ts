@@ -277,6 +277,8 @@ const OTHERS: Entry[] = [
     "the earlier content could not be kept in the version store, so the sync did not replace it",
   ],
   ["mirror.remote-changed", "conflict", "the remote file changed since the listing; the next sync settles it"],
+  ["mirror.local-changed", "conflict", "the local file changed since the conflict was found; nothing was written"],
+  ["mirror.no-conflict", "not_found", "the path has no recorded conflict; the last sync settled it or never saw one"],
   ["upload.mismatch", "conflict", "the uploaded file reads back with other content; the local file changed meanwhile"],
   ["download.mismatch", "invalid_response", "the downloaded file has other content than the listing said"],
   ["catalog.unavailable", "configuration_error", "the store has no shared catalog for this account"],

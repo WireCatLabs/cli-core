@@ -2,16 +2,17 @@ import { type Block, blockKey, blockShape } from "../../documents/blocks.js"
 import type { Keep } from "../../documents/push-model.js"
 
 /** `base[from, to)` is replaced by `blocks`; an empty range is an insert, an empty `blocks` a delete. */
-export interface BlockHunk {
+export interface Hunk<T> {
   from: number
   to: number
-  blocks: Block[]
+  blocks: T[]
 }
+export type BlockHunk = Hunk<Block>
 
 const MAX_CELLS = 4_000_000
 
-/** Longest common subsequence: index pairs [inA, inB] of blocks with equal keys, in order. */
-const matches = (a: Block[], b: Block[], keyOf: (block: Block) => string): [number, number][] => {
+/** Longest common subsequence: index pairs [inA, inB] of items with equal keys, in order. */
+const matches = <T>(a: T[], b: T[], keyOf: (item: T) => string): [number, number][] => {
   const ka = a.map(keyOf)
   const kb = b.map(keyOf)
   let start = 0
@@ -51,9 +52,9 @@ const matches = (a: Block[], b: Block[], keyOf: (block: Block) => string): [numb
   return pairs
 }
 
-/** The edits that turn `base` into `next`, leaving every unchanged block in place. */
-export const diffBlocks = (base: Block[], next: Block[], keyOf: (block: Block) => string = blockKey): BlockHunk[] => {
-  const hunks: BlockHunk[] = []
+/** The edits that turn `base` into `next`, leaving every unchanged item in place: blocks, or a text's lines. */
+export const diffSequence = <T>(base: T[], next: T[], keyOf: (item: T) => string): Hunk<T>[] => {
+  const hunks: Hunk<T>[] = []
   let a = 0
   let b = 0
   for (const [i, j] of [...matches(base, next, keyOf), [base.length, next.length] as [number, number]]) {
@@ -63,6 +64,10 @@ export const diffBlocks = (base: Block[], next: Block[], keyOf: (block: Block) =
   }
   return hunks
 }
+
+/** The edits that turn `base` into `next`, leaving every unchanged block in place. */
+export const diffBlocks = (base: Block[], next: Block[], keyOf: (block: Block) => string = blockKey): BlockHunk[] =>
+  diffSequence(base, next, keyOf)
 
 /** A stretch both sides changed differently: the blocks it held at the last sync and on each side now. */
 export interface BlockConflict {
@@ -80,13 +85,14 @@ const isCheck = (block: Block | undefined): block is Extract<Block, { kind: "ite
 const sameKeys = (a: Block[], b: Block[]) =>
   a.length === b.length && a.every((block, index) => blockKey(block) === blockKey(b[index] as Block))
 /** Two hunks touch the same stretch: their ranges overlap, both insert at one point, or one inserts inside the other. */
-const touches = (a: BlockHunk, b: BlockHunk) =>
+export const touches = (a: Hunk<unknown>, b: Hunk<unknown>) =>
   Math.max(a.from, b.from) < Math.min(a.to, b.to) ||
   a.from === b.from ||
   (a.from === a.to && b.from < a.from && a.from < b.to) ||
   (b.from === b.to && a.from < b.from && b.from < a.to)
-const applied = (base: Block[], from: number, to: number, hunks: BlockHunk[]) => {
-  let out: Block[] = []
+/** `base[from, to)` with `hunks`, which lie inside it in order, applied. */
+export const applied = <T>(base: T[], from: number, to: number, hunks: Hunk<T>[]) => {
+  let out: T[] = []
   let at = from
   for (const hunk of hunks) {
     out = out.concat(base.slice(at, hunk.from), hunk.blocks)
