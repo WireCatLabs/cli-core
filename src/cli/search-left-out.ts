@@ -16,6 +16,7 @@ const LIST_KEYS = {
   events: "events.list",
   meetings: "meetings.list",
   crm_file: "files.list",
+  tracker: "issues.list",
 } as const satisfies Record<string, PermissionKey>
 
 export type SearchedKind = keyof typeof LIST_KEYS

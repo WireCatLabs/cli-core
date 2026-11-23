@@ -3,7 +3,7 @@ import type { Provider } from "./models.js"
 import { REF_KINDS, type RefKindName } from "./references.js"
 
 /** What a search reads; the same names `--only`, `searched` and `skipped` use. */
-export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events", "crm"] as const
+export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events", "crm", "tracker"] as const
 export type Kind = (typeof KINDS)[number]
 
 export interface ProviderEntry {
@@ -48,6 +48,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   // Google Meet has no tool of its own: its meetings are gcal's, since every meeting is on the calendar.
   { name: "google-meet", kind: "meetings", aliases: [], command: "gcal" },
   { name: "google-drive", kind: "documents", aliases: [] },
+  // Seeded: linear-cli registers no entry, and without one its accounts would count as a messenger's.
+  { name: "linear", kind: "tracker", aliases: [], command: "linear" },
   // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
   { name: "telemost", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
@@ -68,6 +70,7 @@ const LABELS: Readonly<Record<string, string>> = {
   added: "added by hand",
   email: "mail",
   telemost: "Telemost",
+  linear: "Linear",
 }
 
 /** How a text names a provider to a person: `MAX`, not `max`. */

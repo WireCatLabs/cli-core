@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "repo": "cli-memo",
+    "pr": 3220,
+    "until": "2026-11-27",
+    "reason": "#3220 adds the tracker lane to search all; memo's search declares its overrides of the shared search contract with the old values, and adopts with the release that carries #3220, together with a LANE_GATES entry for the lane"
+  }
+]

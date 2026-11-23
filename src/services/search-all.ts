@@ -6,6 +6,7 @@ import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
+import { type TrackerIssue, trackerTitleOf } from "../domain/tracker.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import { formatMeetingReference } from "../meetings/index.js"
@@ -23,6 +24,7 @@ import type {
   CopyViewer,
   MessageStore,
   StoredAccount,
+  TrackerItem,
 } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
@@ -37,17 +39,36 @@ import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
-export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm", "business", "meetings"] as const
+export const RESOURCES_SEARCHED = [
+  "messages",
+  "mail",
+  "notes",
+  "events",
+  "crm",
+  "business",
+  "meetings",
+  "tracker",
+] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
 /** One hit of `search all`: a stored record, or a passage of a meeting. */
 export type SearchAllItem = SearchAllRecordItem | MeetingSearchItem
 
 export interface SearchAllRecordItem {
-  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead" | "crm_file" | BusinessKind
+  kind:
+    | "message"
+    | "mail"
+    | "note"
+    | "document"
+    | "event"
+    | "deal"
+    | "lead"
+    | "crm_file"
+    | TrackerHitKind
+    | BusinessKind
   /**
    * `msg:…` for a message or a mail, `note:…`, `event:…`, `deal:…`, `lead:…`, `crmfile:<file id>` for a downloaded CRM
-   * file, or a business ref: `invoice:…`.
+   * file, `tracker:<provider>/<account>/<kind>/<id>` for an issue, a project or a comment, or a business ref: `invoice:…`.
    */
   ref: string
   provider: string
@@ -298,6 +319,22 @@ const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
     if (viewer) viewers.push(viewer)
   }
   return viewers
+}
+
+/** A tracker hit's kind: a comment is named for the issue it is on, beside a CRM's and a message's kinds. */
+export type TrackerHitKind = "issue" | "project" | "issue_comment"
+
+const TRACKER_HIT_KINDS = { issue: "issue", project: "project", comment: "issue_comment" } as const
+
+/** The accounts of every tracker the store holds copies of. */
+export const trackerAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
+  (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "tracker"))
+
+/** An issue is titled as people say it, `ENG-12 Fix login`; anything else by its name or its first line. */
+const trackerTitle = ({ kind, record }: TrackerItem): string => {
+  const title = trackerTitleOf(kind, record)
+  const key = kind === "issue" ? (record as TrackerIssue).key : undefined
+  return key ? `${key} ${title}` : title
 }
 
 /** The accounts of every CRM the store holds copies of. */
@@ -576,6 +613,39 @@ export const searchAll = async (
             )
           }
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
+          for (const { provider, account } of read) accounts.push({ resource, provider, account })
+        } else if (resource === "tracker") {
+          // The registry says which providers are trackers; reading every account's rows would show hits the listed
+          // accounts do not account for.
+          const read = scope?.tracker ?? (await trackerAccounts(store))
+          if (!read.length) continue
+          const { words, anyWord } = titleWords(
+            request.text,
+            "issues, projects and comments are found by the words of their title and text only",
+          )
+          const found = await store.tracker.find({
+            words,
+            anyWord: anyWord || discover,
+            ...(request.exact ? { exact: true } : {}),
+            kinds: ["issue", "project", "comment"],
+            limit: Math.min(depth, 500),
+            accounts: read,
+          })
+          hasMore ||= found.hasMore
+          lists.push(
+            found.items.map(({ account: at, item, excerpt: text }) => ({
+              kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
+              // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
+              ref: `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`,
+              provider: at.provider,
+              account: at.account,
+              ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
+              title: trackerTitle(item),
+              timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
+              text,
+              foundBy: ["words"],
+            })),
+          )
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {
           const { words, anyWord } = titleWords(request.text, BUSINESS_WORDS_ONLY)

@@ -355,6 +355,10 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   lead: ["title", "excerpt"],
   // A client's file: its name and every word of it are someone else's.
   crm_file: ["title", "excerpt"],
+  // Written by the tracker's users, the owner's colleagues or anyone a public issue lets in.
+  issue: ["title", "excerpt"],
+  project: ["title", "excerpt"],
+  issue_comment: ["title", "excerpt"],
   ...BUSINESS_UNTRUSTED,
 }
 

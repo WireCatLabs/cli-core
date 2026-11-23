@@ -390,6 +390,9 @@ once, and the hits say `match: corrected`. The `crm` lane also reads the text of
 (`store.crmFiles.find` over `crm_file_words`, hits `crm_file` with ref `crmfile:<file id>`) under the same viewers as the
 deals, so a limited profile finds only its own records' files; a caller that passes no viewers, as memo and tg do,
 gets each copy's own rule for deals, leads and files ([CRM.md § Client files](CRM.md#client-files)).
+The `tracker` lane reads every tracker account's issues, projects and comments through `store.tracker.find` over
+`tracker_item_words` ([TRACKER.md](TRACKER.md#search-all)), hits `issue`, `project` and `issue_comment` with ref
+`tracker:<provider>/<account>/<kind>/<id>`.
 `store.business.find` (`src/store/sqlite/business-search.ts`) reads the numbers and names of invoices, payments,
 orders, contracts, subscriptions, products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)), each word at a
 word start. A business hit's

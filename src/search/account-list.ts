@@ -338,6 +338,7 @@ const READS: Record<Kind, string> = {
   meetings: "meetings — search all reads them",
   events: "calendar events — no search reads them yet",
   crm: "CRM deals and leads — search all reads them",
+  tracker: "a tracker's issues, projects and comments — search all reads them",
 }
 
 /**
