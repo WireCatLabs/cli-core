@@ -551,7 +551,8 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     content, the entry is recorded, the conflict removed, and a `resolved` event logs it. `fileConflictsCommand`
     (`@wirecat/cli-core/cli/documents`) mounts them as `mirrors conflicts list [id]`, `show <id> <path>` and
     `resolve <id> <path> (--keep local|<remote>|both | --file <file>)`, `--file` owner-only, with the app's mirrors,
-    state, stores and a connected target as its helpers.
+    state and stores as its helpers. Its `connect(command, mirror, body)` runs `body` inside the app's run (its
+    `--timeout`, run record and request log) with the connected target, so `resolve` writes only inside it.
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
@@ -672,7 +673,7 @@ and a version are arguments, and `--values`, `--payload` and `--replace` are its
 `'My sheet'!B2`, a sheet's name, or `A1:C10` on every sheet; an update may leave the sheet out when the workbook has
 one. `--values` is rows (`[["Total", 42], [null, true]]`, null empties a cell); a range of more than one cell must
 have their shape. A text is written as text, even one that starts with `=`, and a formula cell is refused
-(`office.formula_cell`) unless `--replace`. `--payload` is a list of `{index, text}`, `{insert_after, text,
+(`office.formula-cell`) unless `--replace`. `--payload` is a list of `{index, text}`, `{insert_after, text,
 style_from?}` and `{delete}`, by the indexes `documents show` gave (`insert_after: -1` puts it first).
 
 An edit downloads the file, refuses another sha256 than `--expected-fingerprint` (`conflict`,

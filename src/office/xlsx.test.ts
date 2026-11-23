@@ -122,7 +122,7 @@ describe("editXlsxCells", () => {
     const edit = [{ sheet: "Synthetic Budget", cell: "B4", value: 5 }]
     await expect(editXlsxCells(budget, edit)).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "office.formula_cell" },
+      details: { reason: "office.formula-cell" },
       message: expect.stringContaining("=B2+B3"),
     })
     const chained = withParts(budget, {
@@ -188,7 +188,7 @@ describe("editXlsxCells", () => {
     await expect(
       editXlsxCells(tabled, [{ sheet: "Synthetic Budget", cell: "B1", value: "Sum" }]),
     ).rejects.toMatchObject({
-      details: { reason: "office.table_header" },
+      details: { reason: "office.table-header" },
       message: expect.stringContaining('header cell of the table "Budget"'),
     })
     const result = await editXlsxCells(tabled, [{ sheet: "Synthetic Budget", cell: "B2", value: 1 }])
@@ -216,13 +216,13 @@ describe("editXlsxCells", () => {
   it("**refuses a formula other cells share**, a cell edited twice and a character XML cannot hold", async () => {
     await expect(
       editXlsxCells(prefixed(), [{ sheet: "Data", cell: "C1", value: 1 }], { overwriteFormulas: true }),
-    ).rejects.toMatchObject({ details: { reason: "office.shared_formula" } })
+    ).rejects.toMatchObject({ details: { reason: "office.shared-formula" } })
     await expect(
       editXlsxCells(budget, [
         { sheet: "Synthetic Budget", cell: "a2", value: 1 },
         { sheet: "Synthetic Budget", cell: "A2", value: 2 },
       ]),
-    ).rejects.toMatchObject({ details: { reason: "office.duplicate_edit" } })
+    ).rejects.toMatchObject({ details: { reason: "office.duplicate-edit" } })
     await expect(
       editXlsxCells(budget, [{ sheet: "Synthetic Budget", cell: "A2", value: "bell\u0007" }]),
     ).rejects.toThrow(/control character/)

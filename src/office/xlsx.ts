@@ -92,7 +92,7 @@ const parseAddress = (address: string) => {
   const column = match ? [...(match[1] as string)].reduce((sum, letter) => sum * 26 + letter.charCodeAt(0) - 64, 0) : 0
   const row = Number(match?.[2])
   if (!match || column > MAX_COLUMN || row > MAX_ROW)
-    throw refuse(`${address} is not a cell address like B7`, "office.invalid_cell")
+    throw refuse(`${address} is not a cell address like B7`, "office.invalid-cell")
   return { row, column }
 }
 
@@ -143,7 +143,7 @@ class Workbook {
     this.workbook = pack.part(path)
     this.ns = this.workbook.root.ns
     if (this.workbook.root.local !== "workbook" || !SHEET_NAMESPACES.includes(this.ns))
-      throw refuse("the file is not an Excel workbook", "office.wrong_format")
+      throw refuse("the file is not an Excel workbook", "office.wrong-format")
     const rels = pack.relationships(path)
     const sheetsElement = childrenOf(this.workbook.root, this.ns, "sheets")[0]
     this.sheets = (sheetsElement ? childrenOf(sheetsElement, this.ns, "sheet") : []).map((sheet) => {
@@ -152,7 +152,7 @@ class Workbook {
       if (!target?.type.endsWith("/worksheet"))
         throw refuse(
           "a sheet of the workbook is not a worksheet (a chart sheet or a missing part)",
-          "office.wrong_format",
+          "office.wrong-format",
         )
       return { name: attributeOf(sheet, "", "name") ?? "", path: target.path }
     })
@@ -176,7 +176,7 @@ class Workbook {
     if (!found)
       throw refuse(
         `the workbook has no sheet "${name}"; it has ${this.sheets.map((sheet) => `"${sheet.name}"`).join(", ")}`,
-        "office.no_sheet",
+        "office.no-sheet",
       )
     return found
   }
@@ -206,7 +206,7 @@ const rowsOf = (sheetData: XmlElement, ns: string): RowNode[] => {
       const reference = attributeOf(cell, "", "r")
       if (reference) {
         const address = parseAddress(reference)
-        if (address.row !== number) throw refuse(`cell ${reference} sits in row ${number}`, "office.wrong_format")
+        if (address.row !== number) throw refuse(`cell ${reference} sits in row ${number}`, "office.wrong-format")
         column = address.column
       } else column++
       return { element: cell, row: number, column }
@@ -245,7 +245,7 @@ const cellOf = (workbook: Workbook, text: string, node: CellNode): XlsxCell => {
       if (!/^\d+$/.test(saved) || string === undefined)
         throw refuse(
           `cell ${columnName(node.column)}${node.row} points at a missing shared string`,
-          "office.wrong_format",
+          "office.wrong-format",
         )
       value = string
       kind = "string"
@@ -279,9 +279,9 @@ const cellOf = (workbook: Workbook, text: string, node: CellNode): XlsxCell => {
 
 const sheetDataOf = (part: Part, ns: string) => {
   if (part.root.local !== "worksheet" || part.root.ns !== ns)
-    throw refuse(`${part.path} is not a worksheet`, "office.wrong_format")
+    throw refuse(`${part.path} is not a worksheet`, "office.wrong-format")
   const sheetData = childrenOf(part.root, ns, "sheetData")[0]
-  if (!sheetData) throw refuse(`${part.path} has no cell data`, "office.wrong_format")
+  if (!sheetData) throw refuse(`${part.path} has no cell data`, "office.wrong-format")
   return sheetData
 }
 
@@ -367,7 +367,7 @@ const valueXml = (cell: XmlElement, value: CellValue, strings: SharedStrings | u
   if (value === null) return { type: undefined, content: "" }
   if (typeof value === "boolean") return { type: "b", content: `<${v}>${value ? 1 : 0}</${v}>` }
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw refuse("a cell number must be finite", "office.invalid_value")
+    if (!Number.isFinite(value)) throw refuse("a cell number must be finite", "office.invalid-value")
     return { type: undefined, content: `<${v}>${String(value)}</${v}>` }
   }
   if (strings) return { type: "s", content: `<${v}>${strings.index(value)}</${v}>` }
@@ -436,7 +436,7 @@ const editSheet = (
       if (item.row >= label.top && item.row <= label.bottom && item.column >= label.left && item.column <= label.right)
         throw refuse(
           `${sheet.name}!${item.address} is a ${label.kind} of the table "${label.table}", whose part repeats the text; change it in Excel`,
-          "office.table_header",
+          "office.table-header",
         )
   const splices: Splice[] = []
   const changed: EditXlsxResult["changed"] = []
@@ -458,7 +458,7 @@ const editSheet = (
       if (rows.some((candidate) => !candidate.explicit))
         throw refuse(
           `${sheet.name} has rows without numbers, so row ${rowNumber} cannot be added`,
-          "office.implicit_rows",
+          "office.implicit-rows",
         )
       const next = rows.find((candidate) => candidate.row > rowNumber)
       const r = qualified(sheetData, "row")
@@ -484,7 +484,7 @@ const editSheet = (
         if (row.cells.some((cell) => attributeOf(cell.element, "", "r") === undefined))
           throw refuse(
             `row ${rowNumber} of ${sheet.name} has cells without addresses, so ${item.address} cannot be added`,
-            "office.implicit_cells",
+            "office.implicit-cells",
           )
         const next = row.cells.find((cell) => cell.column > item.column)
         inserts.push({ at: next ? next.element.start : -1, xml: newCell(item, rowStyle) })
@@ -496,7 +496,7 @@ const editSheet = (
       if (attributeOf(element, "", "vm") !== undefined)
         throw refuse(
           `${sheet.name}!${item.address} holds a picture or a linked data type, which this editor does not replace`,
-          "office.rich_value",
+          "office.rich-value",
         )
       const formula = childrenOf(element, ns, "f")[0]
       const array = arrays.find(
@@ -510,18 +510,18 @@ const editSheet = (
       if (array)
         throw refuse(
           `${sheet.name}!${item.address} is part of an array formula; change it in Excel`,
-          "office.array_formula",
+          "office.array-formula",
         )
       if (formula) {
         if (!options.overwriteFormulas)
           throw refuse(
             `${sheet.name}!${item.address} holds the formula =${before.formula}; pass overwriteFormulas to replace it with a value`,
-            "office.formula_cell",
+            "office.formula-cell",
           )
         if (attributeOf(formula, "", "t") === "shared" && attributeOf(formula, "", "ref") !== undefined)
           throw refuse(
             `${sheet.name}!${item.address} holds a formula that other cells share; replacing it would break theirs`,
-            "office.shared_formula",
+            "office.shared-formula",
           )
         formulaRemoved = true
       }
@@ -647,7 +647,7 @@ export const editXlsxCells = async (
     const { row, column } = parseAddress(edit.cell)
     const address = `${columnName(column)}${row}`
     const key = `${sheet.name}!${address}`
-    if (seen.has(key)) throw refuse(`${key} is edited twice in one call`, "office.duplicate_edit")
+    if (seen.has(key)) throw refuse(`${key} is edited twice in one call`, "office.duplicate-edit")
     seen.add(key)
     bySheet.set(sheet, [...(bySheet.get(sheet) ?? []), { edit, row, column, address }])
   }
