@@ -25,6 +25,7 @@ import {
   writeHarderSetting,
   writeHarderTimeout,
 } from "../services/search-harder.js"
+import { environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { type Body, itemOf } from "./envelope.js"
 
@@ -150,7 +151,7 @@ export const harderConsentsCommand = (app: AppIdentity, options: HarderConsentsO
         throw new CliError("validation_error", "--base-url needs --model: name the model that API serves")
       const env = options.env()
       // An agent that turned this on would decide for the owner that his records may leave the machine.
-      if (agentOf(env) && given.yes)
+      if ((environmentOf(this).agent || agentOf(env)) && given.yes)
         throw new CliError("permission_error", "only the owner allows search all --harder, not an agent", {
           reason: "search-harder.owner-only",
         })

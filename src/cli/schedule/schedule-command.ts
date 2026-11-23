@@ -30,6 +30,7 @@ import {
   type Slot,
   scheduleFile,
   scheduleName,
+  schedulesDir,
   slotsOf,
   spentToday,
   timerFor,
@@ -42,6 +43,7 @@ import { locationVariables } from "../../background/units.js"
 import { parseDuration } from "../../domain/duration.js"
 import { HOLDER, type MailWaiting } from "../../mail/marks.js"
 import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
+import { inside, realPathOf } from "../../sends/upload.js"
 import { aheadOf } from "../../services/moment.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
@@ -977,6 +979,8 @@ export const scheduleCommandFor = ({
 
   annotate(command.command("exec"), {
     effects: REMOTE_WRITE,
+    // An agent runs a saved schedule by its name with `schedule run`, never a file it names.
+    mcp: false,
     examples: [`${app.command} schedule exec ~/.local/share/${app.appName}/schedules/health/schedule.json`],
   })
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
@@ -985,6 +989,12 @@ export const scheduleCommandFor = ({
     .action(async function (this: Command, file: string, seal: string | undefined) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
+      const folder = realPathOf(schedulesDir(scheduleState({ app, env: context.env })))
+      const real = realPathOf(file)
+      if (real === folder || !inside(real, folder))
+        throw new CliError("permission_error", `schedule exec runs only a schedule saved in ${folder}, not ${file}`, {
+          reason: "schedule.outside-folder",
+        })
       // A timer left behind by a pause that could not remove it must not run the schedule.
       if (existsSync(file) && readSchedule(file).paused) return
       const checked = guardSchedule(file, { app, env: context.env, platform: system.platform, agentRuns }, { seal })

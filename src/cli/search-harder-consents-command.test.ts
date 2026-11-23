@@ -6,6 +6,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { writeEnrichmentSetting } from "../services/enrichment-setting.js"
 import { readHarderSetting } from "../services/search-harder.js"
+import { provide } from "./context.js"
 import type { Body } from "./envelope.js"
 import { modelCatalogueCommand } from "./model-catalogue-command.js"
 
@@ -26,9 +27,14 @@ const fixture = (extra: NodeJS.ProcessEnv = {}) => {
   })
   const run = (...words: string[]) =>
     new Command("fixture").addCommand(models).parseAsync(["models", "search-consents", ...words], { from: "user" })
+  const runOverMcp = (...words: string[]) => {
+    const program = new Command("fixture").addCommand(models)
+    provide(program, { agent: { result: () => {}, failure: () => {}, authority: true } })
+    return program.parseAsync(["models", "search-consents", ...words], { from: "user" })
+  }
   const item = (at: number) =>
     answers[at] && "item" in answers[at] ? (answers[at].item as Record<string, unknown>) : {}
-  return { env, run, item, lines }
+  return { env, run, runOverMcp, item, lines }
 }
 
 describe("models search-consents", () => {
@@ -59,6 +65,13 @@ describe("models search-consents", () => {
 
     await run("revoke")
     expect(item(1)).toMatchObject({ on: false, changed: true })
+    expect(readHarderSetting(env)).toBeUndefined()
+  })
+
+  it("refuses an MCP agent's yes, whatever its environment says", async () => {
+    const { env, runOverMcp } = fixture()
+
+    await expect(runOverMcp("set", "openai", "--model", "gpt-4o-mini", "--yes")).rejects.toThrow(/only the owner/)
     expect(readHarderSetting(env)).toBeUndefined()
   })
 

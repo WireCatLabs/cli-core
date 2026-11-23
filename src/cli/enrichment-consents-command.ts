@@ -14,6 +14,7 @@ import {
   writeEnrichmentSetting,
 } from "../services/enrichment-setting.js"
 import { openStore } from "../store/store.js"
+import { environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { type Body, itemOf } from "./envelope.js"
 
@@ -93,7 +94,7 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
         )
       const env = options.env()
       // An agent that turned this on would send the owner's whole store out; only the owner may.
-      if (agentOf(env) && given.yes)
+      if ((environmentOf(this).agent || agentOf(env)) && given.yes)
         throw new CliError("permission_error", "only the owner turns enrichment on, not an agent", {
           reason: "enrichment.owner-only",
         })

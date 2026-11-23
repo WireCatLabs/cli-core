@@ -24,13 +24,16 @@ const withChatDeletion = () =>
 describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-10-23)", () => {
   // `store reset` needs the global --yes, which an MCP call cannot pass: offered, it could only fail (SEC-193).
   // A whole chat or its history gone cannot be undone, and an ask level goes ahead over MCP (owner, 2026-11-14).
-  it.each(["mcp", "complete", "bot auth", "bot mcp", "store reset", "chats delete", "chats clear"])("%s", (path) => {
-    const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
+  it.each(["mcp", "complete", "bot auth", "bot mcp", "store reset", "chats delete", "chats clear", "schedule exec"])(
+    "%s",
+    (path) => {
+      const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
 
-    expect(found, path).toBeDefined()
-    expect(found?.mcp).toBe(false)
-    for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
-  })
+      expect(found, path).toBeDefined()
+      expect(found?.mcp).toBe(false)
+      for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
+    },
+  )
 
   it.each([
     "attachments jobs status",
