@@ -1,6 +1,7 @@
 import { setTimeout } from "node:timers/promises"
 import type { Link, LinkInput } from "../../conversations/link.js"
 import type { Id, Message, Page } from "../../domain/models.js"
+import { RRF_K } from "../../search/fusion.js"
 import type { ConversationBuild, ConversationSummary, StoredLink } from "../types.js"
 import { and, asc, desc, eq, isNull, type SQL, sql } from "./drizzle/core.js"
 import { linkKind } from "./link-kinds.js"
@@ -21,7 +22,7 @@ import {
 } from "./schema.js"
 import { writeBatch } from "./transaction.js"
 import { toIso } from "./values.js"
-import { purgeVectorHashes } from "./vectors.js"
+import { dot, purgeVectorHashes } from "./vectors.js"
 
 const position = (sentAt: number, pk: number) => `${sentAt}:${pk}`
 
@@ -579,6 +580,74 @@ export const chunkRepliesOf = (
     if (list && list.length < limit) list.push({ id, sender, text, outgoing: Boolean(outgoing) })
   }
   return found
+}
+
+/**
+ * Rarity counts over the conversation's own chunks, not the store: a word every chunk holds says nothing about which
+ * one is meant. A word may sit anywhere in a chunk's text, as the shown lines match it.
+ */
+export const bestChunkOf = (
+  { orm }: StoreContext,
+  accountPk: number,
+  conversationPk: number,
+  {
+    model,
+    vectors,
+    stems,
+    over,
+  }: { model: string; vectors: Float32Array[]; stems: { stem: string; weight: number }[]; over: number },
+): { firstMessageId: Id; lastMessageId: Id } | undefined => {
+  const chunks = orm.all<{
+    first: string
+    last: string
+    fs: number
+    fi: number
+    ls: number
+    li: number
+    vector: Uint8Array | null
+  }>(
+    sql`SELECT f.external_id AS first, l.external_id AS last, f.sent_at AS fs, f.id AS fi, l.sent_at AS ls, l.id AS li,
+        v.vector
+      FROM chunks k JOIN chunk_messages r ON r.chunk_id = k.id
+      JOIN conversations c ON c.id = k.chunkable_id
+      JOIN chats ch ON ch.id = c.chat_id AND ch.account_id = ${accountPk}
+      JOIN conversation_state s ON s.chat_id = c.chat_id AND s.current_build = c.build
+      JOIN messages f ON f.id = r.first_message_id JOIN messages l ON l.id = r.last_message_id
+      LEFT JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
+      WHERE k.chunkable_type = 'conversation' AND k.chunkable_id = ${conversationPk} ORDER BY k.position`,
+  )
+  if (chunks.length <= over || !vectors.length) return undefined
+  const texts = chunks.map(() => "")
+  const rows = orm.all<{ at: number; pk: number; text: string | null }>(
+    sql`SELECT m.sent_at AS at, m.id AS pk, m.text FROM conversation_messages cm JOIN messages m ON m.id = cm.message_id
+      WHERE cm.conversation_id = ${conversationPk} AND m.deleted_at IS NULL`,
+  )
+  const after = (at: number, pk: number, than: number, thanPk: number) => at > than || (at === than && pk >= thanPk)
+  for (const { at, pk, text } of rows)
+    chunks.forEach(({ fs, fi, ls, li }, index) => {
+      if (after(at, pk, fs, fi) && after(ls, li, at, pk)) texts[index] += ` ${(text ?? "").toLowerCase()}`
+    })
+  const weights = new Map<string, number>()
+  for (const { stem, weight } of stems) weights.set(stem, (weights.get(stem) ?? 0) + weight)
+  const words = texts.map(() => 0)
+  for (const [stem, weight] of weights) {
+    const holding = texts.flatMap((text, index) => (text.includes(stem) ? [index] : []))
+    const rarity = Math.log(chunks.length / holding.length)
+    for (const index of holding) words[index] = (words[index] as number) + weight * rarity
+  }
+  const meaning = chunks.map(({ vector }) =>
+    vector ? vectors.reduce((sum, query) => sum + dot(query, vector), 0) : Number.NEGATIVE_INFINITY,
+  )
+  const fused = chunks.map(() => 0)
+  for (const scores of [meaning, words])
+    scores
+      .map((_, index) => index)
+      .sort((a, b) => (scores[b] as number) - (scores[a] as number) || a - b)
+      .forEach((index, rank) => {
+        fused[index] = (fused[index] as number) + 1 / (RRF_K + rank + 1)
+      })
+  const best = chunks[fused.reduce((top, score, at) => (score > (fused[top] as number) ? at : top), 0)]
+  return best && { firstMessageId: best.first, lastMessageId: best.last }
 }
 
 const staleLink = (chatKey: number) => sql<boolean>`(${messageLinks.staleAt} IS NOT NULL

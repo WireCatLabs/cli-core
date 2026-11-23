@@ -50,6 +50,8 @@ const SHOWN_HEAD = 80
 const CHUNK_READ = 60
 /** Replies from outside a hit's chunk read per hit; the best one is shown with its lines. */
 const REPLIES_READ = 60
+/** A conversation with more chunks than this is near any question, so its nearest chunk is often another topic. */
+const BIG_CONVERSATION = 50
 /** Reciprocal rank fusion's usual constant (phase 5 E9). */
 const RRF_K = 60
 
@@ -252,9 +254,10 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     const meaning: { hit: ConversationHit; lead: number }[][] = texts.map(() => [])
     const own: ConversationHit[] = []
     const sources = words.sources
+    let vectors: Float32Array[] = []
     if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
       await withEmbedder(deps, target, choice, {}, async (embedder) => {
-        const vectors = await embedder.embed(texts, "query")
+        vectors = (await embedder.embed(texts, "query")) as Float32Array[]
         for (const [at, vector] of vectors.entries())
           for (const one of prepared.scopeAccounts) {
             const scope = scopeOf(one)
@@ -357,13 +360,33 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         locator: formatLocator({ ...source, chat: hit.summary.chatId, message: hit.chunk.firstMessageId }),
       }
     }
-    const hits = fused(
-      meaning.map((list) => list.map(({ hit }) => hit)),
-      words.hits,
-      meaningFloor(target.key),
-    )
-      .slice(0, limit)
-      .map(located)
+    // Only with a made-up reply: on the question alone it moved shown answers off their chunk.
+    const stemmed = [
+      ...chunkStems(query).map((stem) => ({ stem, weight: 2 })),
+      ...texts.slice(1).flatMap((text) => chunkStems(text).map((stem) => ({ stem, weight: 1 }))),
+    ]
+    const rechunked = async (hit: FoundConversation) => {
+      const source = sources.get(hit.summary.id)
+      if (texts.length < 2 || hit.matchedIn || !vectors.length || !source) return hit
+      const chunk = await store.conversations.bestChunk(source, hit.summary.id, {
+        model: target.key,
+        vectors,
+        stems: stemmed,
+        over: BIG_CONVERSATION,
+      })
+      return chunk ? { ...hit, chunk } : hit
+    }
+    const hits = (
+      await Promise.all(
+        fused(
+          meaning.map((list) => list.map(({ hit }) => hit)),
+          words.hits,
+          meaningFloor(target.key),
+        )
+          .slice(0, limit)
+          .map(rechunked),
+      )
+    ).map(located)
     const shown = new Set(hits.map((hit) => hit.summary.id))
     const ownOf = (keep: (hit: ConversationHit) => boolean) =>
       own
@@ -560,6 +583,15 @@ const fused = (
     .sort((a, b) => b.fused - a.fused || (b.score ?? -2) - (a.score ?? -2))
     .map(({ fused: _, ...hit }) => hit)
 }
+
+/** Every word of three letters or more, stop words too, by its first five letters. */
+const chunkStems = (text: string) => [
+  ...new Set(
+    (text.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])
+      .filter((word) => word.length >= 3)
+      .map((word) => word.slice(0, 5)),
+  ),
+]
 
 /** Each word's first five letters, lowercased: enough to match its other forms in Russian and English. */
 const wordStems = (text: string) => [...new Set(queryWords(text).map((word) => word.slice(0, 5)))]
