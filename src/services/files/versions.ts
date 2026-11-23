@@ -7,6 +7,7 @@ import { pipeline } from "node:stream/promises"
 import { CliError } from "@wirecat/cli-base"
 import { type HeldLock, heldCheck } from "../documents/mirrors.js"
 import { assertNoLink, hashFile, replaceLocal, safePath } from "../documents/push.js"
+import { KEEP_VERSIONS_FOR_DAYS } from "../documents/sync.js"
 
 /** Which way a sync moved a change; `both` is a merge or a conflict's resolution, written to both sides. */
 export type VersionDirection = "local-to-remote" | "remote-to-local" | "restored" | "both"
@@ -83,7 +84,7 @@ export interface FileVersions {
   prune(pinned?: Iterable<string>): Promise<void>
 }
 
-const RETAIN_MS = 30 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Errors of the local file system: a writer that fails with one could not write the store, whatever it was reading. */
 const LOCAL_FAILURES = new Set(["ENOSPC", "EDQUOT", "EROFS", "EACCES", "EPERM", "EIO", "EFBIG", "EMFILE", "ENFILE"])
@@ -134,11 +135,17 @@ const rolesOf = (event: VersionEvent): { role: VersionRole; sha256: string }[] =
 /**
  * A mirror's local version store: `<dir>/objects/<sha256>` holds each kept content once, `<dir>/log.jsonl` is
  * append-only. The store lives under the profile's state folder, never inside the mirrored folder. Retention: a
- * content stays while an event newer than 30 days names it; the last content of a path whose newest event is a
- * deletion, and every content a merge, a conflict or a resolution names, stay for good. A content no event names stays
- * 30 days after it was last kept, so a crash between keeping a file and logging the change loses nothing.
+ * content stays while an event newer than `keepForDays` (the profile's `keep_versions_for_days`, 365 by default) names
+ * it; the last content of a path whose newest event is a deletion, and every content a merge, a conflict or a
+ * resolution names, stay for good. A content no event names stays as long after it was last kept, so a crash between
+ * keeping a file and logging the change loses nothing.
  */
-export const fileVersions = (dir: string, now: () => number = Date.now): FileVersions => {
+export const fileVersions = (
+  dir: string,
+  now: () => number = Date.now,
+  keepForDays = KEEP_VERSIONS_FOR_DAYS,
+): FileVersions => {
+  const retainMs = keepForDays * DAY_MS
   const objects = join(dir, "objects")
   const logPath = join(dir, "log.jsonl")
   const events = (): VersionEvent[] => {
@@ -215,8 +222,7 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
       const last = new Map<string, VersionEvent>()
       for (const event of all) {
         last.set(event.path, event)
-        if (Date.parse(event.at) > now() - RETAIN_MS)
-          for (const hash of [event.old, event.new]) if (hash) keep.add(hash)
+        if (Date.parse(event.at) > now() - retainMs) for (const hash of [event.old, event.new]) if (hash) keep.add(hash)
         for (const { sha256 } of rolesOf(event)) keep.add(sha256)
       }
       for (const event of last.values()) if (event.event === "deleted" && event.old) keep.add(event.old)
@@ -233,7 +239,7 @@ export const fileVersions = (dir: string, now: () => number = Date.now): FileVer
           if (error.code === "ENOENT") return undefined
           throw error
         })
-        if (kept && kept.mtimeMs <= now() - RETAIN_MS) await rm(object, { force: true })
+        if (kept && kept.mtimeMs <= now() - retainMs) await rm(object, { force: true })
       }
     },
   }

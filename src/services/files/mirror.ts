@@ -137,6 +137,8 @@ export interface FileMirrorResult {
   downloaded: string[]
   /** Text files both sides changed, merged and written to both. */
   merged: string[]
+  /** Local files given the remote's own form of what was just uploaded, for a target that `rewrites`. */
+  rewritten?: string[]
   trashed: { path: string; side: Side }[]
   renamed: { from: string; to: string }[]
   adopted: string[]
@@ -453,7 +455,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   for (let at = 0; at < absent.length; at += CHECKS)
     await Promise.all(
       absent.slice(at, at + CHECKS).map(async (step) => {
-        const why = await target.exists(remotePath(step.path), signal).then(
+        const why = await target.exists(remotePath(step.path), signal, step.base?.id).then(
           (there) => (there ? `missing from the ${options.remote} listing, but still there` : undefined),
           (error: unknown) => {
             if (signal?.aborted) throw error
@@ -657,20 +659,56 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     const sent = await write(created ? "create" : "update", "remote", path, () =>
       target.upload(remotePath(path), from.absolute, expect, signal),
     )
-    if (sent.sha256 !== undefined && sent.sha256 !== from.hash)
+    const rewritten = sent.sha256 !== undefined && sent.sha256 !== from.hash
+    if (rewritten && !target.rewrites)
       throw new CliError("conflict", "the local file changed during the upload", { reason: "upload.mismatch" })
+    if (!merged) {
+      versions.log({
+        path,
+        event: created ? "created" : "changed",
+        direction: "local-to-remote",
+        ...("sha256" in expect ? { old: expect.sha256, from: "remote" as const } : {}),
+        new: from.hash,
+        size: from.size,
+      })
+      result.uploaded.push(path)
+    }
+    if (rewritten) return takeRewrite(path, sent, from)
     record(path, sent, from, from.hash)
     await keepBase(path, from.absolute, from.hash, from.size)
-    if (merged) return
+  }
+  /**
+   * Puts the remote's own form of an upload into the local file, so both sides hold the same bytes and the next
+   * merge has one base. The local file keeps its version first; one saved meanwhile stays, sent by the next sync.
+   */
+  const takeRewrite = async (path: string, sent: RemoteFile, from: Local) => {
+    const form = sent.sha256 as string
+    const kept = await versions.keep((temp) => target.download(remotePath(path), temp, signal))
+    if (kept !== form)
+      throw new CliError("conflict", `the ${options.remote} file changed right after the upload`, {
+        reason: "mirror.remote-changed",
+      })
+    const absolute = join(root, path)
+    await assertNoLink(root, path)
+    const old = await versions.keep(absolute)
+    const placed =
+      old === from.hash && (await write("update", "local", path, () => versions.write(form, absolute, from.hash)))
+    if (!placed) {
+      // A local size no file has: the file is hashed again and sent, never taken for the remote's form.
+      record(path, sent, { size: -1, mtimeMs: -1 }, form)
+      return
+    }
+    record(path, sent, await stat(absolute), form)
     versions.log({
       path,
-      event: created ? "created" : "changed",
-      direction: "local-to-remote",
-      ...("sha256" in expect ? { old: expect.sha256, from: "remote" as const } : {}),
-      new: from.hash,
-      size: from.size,
+      event: "changed",
+      direction: "remote-to-local",
+      old,
+      from: "local",
+      new: form,
+      size: sent.size,
     })
-    result.uploaded.push(path)
+    result.rewritten = [...(result.rewritten ?? []), path]
   }
   /**
    * False when the local file changed (or appeared) during the sync, so nothing was written. Without `recorded`, the

@@ -83,8 +83,11 @@ const tree = async (root: string): Promise<Record<string, string>> => {
   return found
 }
 
-/** A remote folder kept on disk (content) with ids and a revision in memory, strict about `expect`. */
-const fakeDisk = () => {
+/**
+ * A remote folder kept on disk (content) with ids and a revision in memory, strict about `expect`. With `rewrite`, it
+ * keeps its own form of an uploaded text, as Notion does, and says so unless `declared` is false.
+ */
+const fakeDisk = (rewrite?: (text: string, from: string) => string, declared = true) => {
   const dir = temp("file-mirror-remote-")
   const ids = new Map<string, string>()
   const trash: { path: string; content: string }[] = []
@@ -142,7 +145,8 @@ const fakeDisk = () => {
       calls.push({ op: "upload", path: at, expect })
       await check(at, expect)
       mkdirSync(dirname(join(dir, at)), { recursive: true })
-      await pipeline(createReadStream(from), createWriteStream(join(dir, at)))
+      if (rewrite) writeFileSync(join(dir, at), rewrite(readFileSync(from, "utf8"), from))
+      else await pipeline(createReadStream(from), createWriteStream(join(dir, at)))
       touch(at)
       return describe(at)
     },
@@ -160,6 +164,7 @@ const fakeDisk = () => {
       mkdirSync(join(dir, relative(path)), { recursive: true })
     },
     revision: async () => String(revision),
+    ...(rewrite && declared ? { rewrites: true } : {}),
   }
   return {
     target,
@@ -215,10 +220,13 @@ const fakeDisk = () => {
 
 class Crash extends Error {}
 
-const setup = (local: Record<string, string> = {}, remote: Record<string, string> = {}) => {
+const setup = (
+  local: Record<string, string> = {},
+  remote: Record<string, string> = {},
+  disk: ReturnType<typeof fakeDisk> = fakeDisk(),
+) => {
   const root = temp("file-mirror-local-")
   for (const [path, content] of Object.entries(local)) put(root, path, content)
-  const disk = fakeDisk()
   for (const [path, content] of Object.entries(remote)) disk.write(path, content)
   const stateDir = temp("file-mirror-state-")
   const mirror: Mirror = { id: mirrorId(root, FOLDER), path: root, folder: FOLDER }
@@ -1401,10 +1409,13 @@ describe("syncFileMirror, local versions", () => {
     ])
   })
 
-  it("keeps versions for 30 days, and the last version of a deleted file for good", async () => {
+  it.each([
+    { days: undefined, kept: 365 },
+    { days: 30, kept: 30 },
+  ])("keeps versions for $kept days, and the last version of a deleted file for good", async ({ days, kept }) => {
     const dir = temp("file-mirror-versions-")
     let clock = TODAY
-    const versions = fileVersions(dir, () => clock)
+    const versions = fileVersions(dir, () => clock, days)
     const file = join(temp("file-mirror-versions-src-"), "x")
     for (const text of ["old", "gone"]) {
       writeFileSync(file, text)
@@ -1412,7 +1423,10 @@ describe("syncFileMirror, local versions", () => {
     }
     versions.log({ path: "x", event: "changed", direction: "remote-to-local", old: hashes("old").sha256 })
     versions.log({ path: "y", event: "deleted", direction: "remote-to-local", old: hashes("gone").sha256 })
-    clock += 31 * 24 * 60 * 60 * 1000
+    clock += (kept - 1) * 86_400_000
+    await versions.prune()
+    expect(versions.list("x")[0]?.available).toBe(true)
+    clock += 2 * 86_400_000
     await versions.prune()
     expect(versions.list("x")[0]?.available).toBe(false)
     expect(versions.list("y")[0]?.available).toBe(true)
@@ -1538,7 +1552,7 @@ describe("syncFileMirror, the version store survives a crash", () => {
   it("prunes a content no log line names only 30 days after it was last kept", async () => {
     const dir = temp("file-mirror-versions-")
     let clock = TODAY
-    const versions = fileVersions(dir, () => clock)
+    const versions = fileVersions(dir, () => clock, 30)
     const file = join(temp("file-mirror-versions-src-"), "x")
     const object = join(dir, "objects", hashes("x").sha256)
     writeFileSync(file, "x")
@@ -1907,7 +1921,7 @@ describe("fileVersions.prune", () => {
   it("skips an object that vanished while it ran", async () => {
     const dir = temp("file-mirror-versions-")
     let clock = TODAY
-    const versions = fileVersions(dir, () => clock)
+    const versions = fileVersions(dir, () => clock, 30)
     const file = join(temp("file-mirror-versions-src-"), "x")
     writeFileSync(file, "x")
     await versions.keep(file)
@@ -2175,5 +2189,87 @@ describe("syncFileMirror, text merges and conflicts", () => {
         .at(-1)
         ?.versions?.map((version) => version.available),
     ).toEqual([true, true, true, true])
+  })
+})
+
+describe("syncFileMirror, a remote that rewrites the text it is sent", () => {
+  const dashes = (text: string) => text.replaceAll("* ", "- ")
+  const lock = async () => ({ assertHeld: () => {}, release: () => {} })
+
+  it("takes the remote's form into the local file, keeps the local version, and then has nothing to do", async () => {
+    const context = setup({ "a.md": "* one\n* two\n" }, {}, fakeDisk(dashes))
+    const result = await context.sync()
+    expect(result).toMatchObject({ uploaded: ["a.md"], rewritten: ["a.md"], conflicts: [], errors: [] })
+    expect(await context.local()).toEqual({ "a.md": "- one\n- two\n" })
+    expect(await context.disk.files()).toEqual({ "a.md": "- one\n- two\n" })
+    expect(context.versions.list("a.md").at(-1)).toMatchObject({
+      event: "changed",
+      direction: "remote-to-local",
+      old: hashes("* one\n* two\n").sha256,
+      new: hashes("- one\n- two\n").sha256,
+      available: true,
+    })
+    context.disk.calls.length = 0
+    expect(await context.sync()).toMatchObject({ unchanged: 1, uploaded: [], downloaded: [], conflicts: [] })
+    expect(context.disk.writes()).toEqual([])
+  })
+
+  it("merges later edits on both sides against the remote's form", async () => {
+    const context = setup({ "a.md": "# A\n\n* one\n\n## B\n\n* two\n" }, {}, fakeDisk(dashes))
+    await context.sync()
+    put(context.root, "a.md", "# A\n\n- one, here\n\n## B\n\n- two\n")
+    context.disk.write("a.md", "# A\n\n- one\n\n## B\n\n- two, there\n")
+    const result = await context.sync()
+    expect(result).toMatchObject({ merged: ["a.md"], conflicts: [], errors: [] })
+    expect(await context.local()).toEqual({ "a.md": "# A\n\n- one, here\n\n## B\n\n- two, there\n" })
+  })
+
+  it("leaves a local file saved during the upload as it is, and sends it next", async () => {
+    let saves = 1
+    const disk = fakeDisk((text, from) => {
+      if (saves-- > 0) writeFileSync(from, "* saved meanwhile\n")
+      return dashes(text)
+    })
+    const context = setup({ "a.md": "* one\n" }, {}, disk)
+    const result = await context.sync()
+    expect(result.rewritten).toBeUndefined()
+    expect(await context.local()).toEqual({ "a.md": "* saved meanwhile\n" })
+    expect(await context.sync()).toMatchObject({ uploaded: ["a.md"], rewritten: ["a.md"] })
+    expect(await context.local()).toEqual({ "a.md": "- saved meanwhile\n" })
+  })
+
+  it("is a conflict when the target does not say it rewrites", async () => {
+    const context = setup({ "a.md": "* one\n" }, {}, fakeDisk(dashes, false))
+    const result = await context.sync()
+    expect(result.conflicts).toEqual([expect.objectContaining({ path: "a.md" })])
+    expect(await context.local()).toEqual({ "a.md": "* one\n" })
+  })
+
+  it("resolves a conflict with the remote's form of the final content on both sides", async () => {
+    const context = setup({ "a.md": "- one\n" }, {}, fakeDisk(dashes))
+    await context.sync()
+    put(context.root, "a.md", "* mine\n")
+    context.disk.write("a.md", "- theirs\n")
+    expect((await context.sync()).conflicts).toHaveLength(1)
+    const resolved = await resolveFileConflict({ ...context.options(), path: "a.md", lock, choice: { keep: "local" } })
+    expect(resolved).toMatchObject({ resolution: "local", sha256: hashes("- mine\n").sha256 })
+    expect(await context.local()).toEqual({ "a.md": "- mine\n" })
+    expect(await context.disk.files()).toEqual({ "a.md": "- mine\n" })
+    expect(context.versions.list("a.md").at(-1)).toMatchObject({ event: "changed", old: hashes("* mine\n").sha256 })
+    expect(await context.sync()).toMatchObject({ unchanged: 1, conflicts: [] })
+  })
+})
+
+describe("syncFileMirror, a file missing from the listing", () => {
+  it("is asked about by its id at the last sync, and left alone while the remote says it is there", async () => {
+    const context = setup({ "a.md": "one" }, { "a.md": "one" })
+    await context.sync()
+    const id = context.disk.idOf("a.md")
+    context.disk.unlist("a.md")
+    const exists = vi.spyOn(context.disk.target, "exists")
+    const result = await context.sync()
+    expect(exists).toHaveBeenCalledWith(`${FOLDER}/a.md`, undefined, id)
+    expect(result.unknown).toEqual([expect.objectContaining({ path: "a.md", side: "remote" })])
+    expect(await context.local()).toEqual({ "a.md": "one" })
   })
 })

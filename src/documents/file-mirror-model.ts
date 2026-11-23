@@ -36,18 +36,30 @@ export interface FileTarget {
     options?: { excluded?(path: string): boolean; from?: string },
   ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean; next?: string } | undefined>
   /**
-   * Whether anything is at `path` now, read directly rather than from a listing; false only when the provider says
-   * nothing is there. A file missing from a listing is deleted only once this says so.
+   * Whether anything is at `path` now, read directly rather than from a listing; false only when the provider says the
+   * file was deleted. A file missing from a listing is deleted only once this says so. An answer that cannot tell a
+   * deletion from lost access (a 404 that may mean "no longer shared") throws, and the file is left alone. `id` is
+   * the file's id at the last sync: a provider that keeps a file's id across a move asks by it, so a file moved out of
+   * the folder is still there, not deleted.
    */
-  exists(path: string, signal?: AbortSignal): Promise<boolean>
+  exists(path: string, signal?: AbortSignal, id?: string): Promise<boolean>
   /** Streams the file into `into`, a new local file. */
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
-  /** Streams the local file `from` to `path` and returns the file as the remote now has it. */
+  /**
+   * Streams the local file `from` to `path` and returns the file as the remote now has it. With `rewrites`, its hash
+   * is of the remote's own form of the text, the bytes `download` gives.
+   */
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
   /** Moves the file to the remote's trash, where the owner can restore it. */
   trash(path: string, expect: Exclude<Expect, { absent: true }>, signal?: AbortSignal): Promise<void>
   /** Creates the folder and its parents; a folder that exists is fine. */
   ensureFolder(path: string, signal?: AbortSignal): Promise<void>
+  /**
+   * The remote keeps its own form of the text it is sent (Notion's Markdown), so an upload may read back with another
+   * hash. The mirror then writes that form into the local file, the earlier one kept, and both sides hold the same
+   * bytes again. Without it, such an upload is a conflict.
+   */
+  rewrites?: boolean
   /** A value that moves with every change on the remote, when the provider has one: a watch reads it before listing. */
   revision?(signal?: AbortSignal): Promise<string>
 }
