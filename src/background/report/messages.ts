@@ -209,6 +209,8 @@ export interface ScheduleFailure {
   cause: FailureCause
   /** The one "fix" link: the tool's sync screen. */
   refs: string[]
+  /** The command that shows what is wrong, such as `max work doctor`. */
+  check?: string
 }
 
 export const parseScheduleFailure = (json: string): ScheduleFailure => {
@@ -225,6 +227,7 @@ export const parseScheduleFailure = (json: string): ScheduleFailure => {
     failures: count(document.failures, "failures"),
     cause: document.cause as FailureCause,
     refs: stringsOf(document.refs),
+    ...(typeof document.check === "string" ? { check: document.check } : {}),
   }
 }
 
@@ -313,6 +316,8 @@ export interface NoticeView {
   plural: string
   cause: FailureCause
   links: ViewLink[]
+  /** The command that shows what is wrong; none, the line is left out. */
+  check: string | null
 }
 
 export const noticeView = (
@@ -334,4 +339,5 @@ export const noticeView = (
   plural: new Intl.PluralRules(language).select(failure.failures),
   cause: failure.cause,
   links: linkOfRefs(failure.refs, linkOf, wordsOf(language).fix),
+  check: failure.check ?? null,
 })
