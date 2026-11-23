@@ -6,6 +6,7 @@ import { CATALOG_QUERY, type CatalogEntry, type CatalogQuery } from "../../store
 import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import type { DocumentKnowledgePort } from "./knowledge.js"
 import { bindQuery, documentQueries, tagRow, termsOf } from "./queries.js"
 import { allOf, type DocumentWords, examples, nonnegative, positive, wordsOf } from "./words.js"
@@ -202,6 +203,8 @@ export const CATALOG_FIELDS = Object.keys({
 } satisfies Record<keyof ReturnType<typeof catalogOutput>, true>)
 
 const local = (command: Command, mutates = false) => annotate(command, { effects: mutates ? LOCAL_WRITE : LOCAL_READ })
+// Names, descriptions and the people seen on a file are the provider's; the owner's own tags are not in these answers.
+const read = (command: Command) => marksUntrusted(local(command), DOCUMENT_UNTRUSTED)
 const addDocumentCatalogCommandsDefinition = (program: Command, helpers: DocumentCatalogCommands) => {
   const { output } = helpers
   const wording = wordsOf(helpers.words)
@@ -235,7 +238,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
   ).action(async () => output(itemOf(await run((index, principal) => index.catalog.import(principal), true))))
   examples(
     annotate(
-      local(catalog.command("show").description("show stored metadata and the stable file or folder reference")),
+      read(catalog.command("show").description("show stored metadata and the stable file or folder reference")),
       {
         output: { entity: "document", view },
       },
@@ -265,7 +268,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
   }
   for (const action of ["list", "search"] as const) {
     const command = examples(
-      local(
+      read(
         catalog
           .command(action)
           .description(
@@ -290,7 +293,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
     annotate(command, { query: CATALOG_QUERY, output: { entity: "document", view } })
   }
   examples(
-    local(catalog.command("tree").description("show the cached hierarchy below a folder or all selected roots")),
+    read(catalog.command("tree").description("show the cached hierarchy below a folder or all selected roots")),
     [`${prefix} catalog tree --offline`, `${prefix} catalog tree FOLDER_ID --depth 3 --offline`],
   )
     .argument("[folder]", text.treeArgument)

@@ -35,6 +35,7 @@ import { writesOwnerFiles } from "../effects.js"
 import { type Body, renderAnswer } from "../envelope.js"
 import { accountFileFor, profilesHere, rememberAccount } from "../messenger/accounts.js"
 import { ProfileTokenStore } from "../profile-token.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { addDocumentCatalogCommands, type DocumentCatalogCommands } from "./catalog.js"
 import { addLocalDocumentCommands, type LocalDocumentCommands } from "./documents.js"
 import { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
@@ -726,7 +727,8 @@ const libraryOf = <M extends SourceFile>(
   const folders = find(holder, "folders")
   // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
   writesOwnerFiles(find(folders, "add"))
-  if (options.browse) annotate(find(folders, "browse"), { partial: true })
+  // The CLI's own listing of the provider's folders: names others chose.
+  if (options.browse) marksUntrusted(annotate(find(folders, "browse"), { partial: true }), DOCUMENT_UNTRUSTED)
   const start = (action: Command, side?: string, account?: string) => {
     running = action
     warnings = []

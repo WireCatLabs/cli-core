@@ -97,6 +97,27 @@ export const CHAT_UNTRUSTED = ["title", "description"] as const
 /** Other people's text in a contact: what the person says about themselves and the titles of the chats shared. */
 export const CONTACT_UNTRUSTED = ["description", "chats.title"] as const
 
+/**
+ * Other people's text in a documents CLI's copy of a provider's files: names, titles and paths others chose, a
+ * document's text and tabs, a hit's excerpt and the link text written in it. Anyone who shares a file writes these.
+ */
+export const DOCUMENT_UNTRUSTED = [
+  "name",
+  "title",
+  "path",
+  "text",
+  "description",
+  "excerpt",
+  "target_text",
+  "targetText",
+] as const
+
+/**
+ * `documents context`: the document and the links written in it. The notes, memories, facts and tags beside it are
+ * the owner's own, as a note is in `search notes`, so a bare `text` or `title` would mark them too.
+ */
+export const DOCUMENT_CONTEXT_UNTRUSTED = ["document.title", "document.text", "document.path", "links.targetText"]
+
 const DECLARED = new WeakMap<Command, readonly string[]>()
 
 /** Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. */

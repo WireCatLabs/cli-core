@@ -56,6 +56,7 @@ const strictWalk = (walk: SourceWalk): SourceWalk => ({
   folders: walk.folders,
   files: walk.files,
   discovered: walk.discovered,
+  ...(walk.deleted ? { deleted: walk.deleted } : {}),
 })
 
 const treeSync = (nodes: Map<string, SourceFile>) => {

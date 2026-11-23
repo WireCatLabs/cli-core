@@ -9,6 +9,7 @@ import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { listQuery, typedQuery, withQuery } from "../list-query.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { ageOf, type DocumentWords, documentsGroup, examples, positive, staleCopy, wordsOf } from "./words.js"
 
 /** An imported document of the selected profile, with its metadata as the CLI prints it. */
@@ -39,11 +40,17 @@ const addLocalDocumentCommandsDefinition = (program: Command, helpers: LocalDocu
   const documents = documentsGroup(program, wording)
   annotate(
     withQuery(
-      examples(annotate(documents.command("list"), { effects: LOCAL_READ }).description(text.documentsList), [
-        `${prefix} documents list`,
-        `${prefix} documents list tag:budget`,
-        `${prefix} documents list person:PERSON_UID --limit 10`,
-      ]),
+      examples(
+        marksUntrusted(
+          annotate(documents.command("list"), { effects: LOCAL_READ }).description(text.documentsList),
+          DOCUMENT_UNTRUSTED,
+        ),
+        [
+          `${prefix} documents list`,
+          `${prefix} documents list tag:budget`,
+          `${prefix} documents list person:PERSON_UID --limit 10`,
+        ],
+      ),
       IMPORTED_DOCUMENT_QUERY,
     ),
     { output: { entity: "document", view: "imported" }, partial: true },
@@ -68,7 +75,7 @@ const addLocalDocumentCommandsDefinition = (program: Command, helpers: LocalDocu
       )
     })
   examples(
-    annotate(documents.command("show"), { effects: LOCAL_READ, partial: true })
+    marksUntrusted(annotate(documents.command("show"), { effects: LOCAL_READ, partial: true }), DOCUMENT_UNTRUSTED)
       .argument("<document>", text.documentArgument)
       .description("show an imported document's text, tabs and metadata"),
     [`${prefix} documents show DOC_ID`, `${prefix} documents show document:42 --offline`],

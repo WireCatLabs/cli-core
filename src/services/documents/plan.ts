@@ -124,8 +124,17 @@ export const planDocuments = async <M extends SourceFile>(
     files.delete(id)
     removals.set(id, reason)
   }
+  // A listing's own trash is the same signal as the feed's: the row leaves the copy as deleted. A full walk has
+  // cleared `files`, so the row goes into the saved walk from here.
+  const trash = (file: M) => {
+    files.delete(file.id)
+    delta.set(file.id, file)
+    removals.set(file.id, "deleted")
+  }
   const container = (file: M) => {
-    if (options.isDocument?.(file)) keep(file)
+    if (!options.isDocument?.(file)) return
+    if (file.trashed) trash(file)
+    else keep(file)
   }
   // A folder the last finished pass walked keeps its subtree: a round lists only its direct children, and the
   // source's changes name what changed below them. A new, restored or moved-in folder is walked in full.
@@ -213,10 +222,12 @@ export const planDocuments = async <M extends SourceFile>(
   let found: M[] = []
   if (walk) {
     const visited = new Set(walk.visited)
+    const deleted = new Set(walk.deleted)
     Object.assign(folders, walk.folders)
     for (const file of walk.files) {
-      // A walk saved part way keeps no reason; one it cannot prove is a deletion keeps the text.
-      if (file.trashed) drop(file.id, "unavailable")
+      // One the saved walk cannot prove is a deletion keeps the text.
+      if (file.trashed && deleted.has(file.id)) trash(file)
+      else if (file.trashed) drop(file.id, "unavailable")
       else keep(file)
     }
     cursor = walk.cursor
@@ -224,7 +235,14 @@ export const planDocuments = async <M extends SourceFile>(
     let savedAt = now()
     const current = walk
     const record = () => {
-      walks?.save({ ...current, visited: [...visited], folders, files: [...delta.values()] })
+      const deleted = [...removals].flatMap(([id, reason]) => (reason === "deleted" && delta.has(id) ? [id] : []))
+      walks?.save({
+        ...current,
+        visited: [...visited],
+        folders,
+        files: [...delta.values()],
+        ...(deleted.length ? { deleted } : {}),
+      })
       savedAt = now()
     }
     let spent = 0
@@ -313,7 +331,8 @@ export const planDocuments = async <M extends SourceFile>(
             if (excluded(file)) continue
             if (walked(file.id)) folders[file.id] = file
             else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
-          } else keep(file)
+          } else if (file.trashed) trash(file)
+          else keep(file)
         walk.stack.pop()
         for (const entry of nested.reverse()) walk.stack.push(entry)
         // A folder with more pages goes back on top with its cursor, above its child folders.
@@ -336,13 +355,12 @@ export const planDocuments = async <M extends SourceFile>(
   } else if (query?.mode === "include" && query.list) found = await query.list()
   const matched = new Set<string>()
   for (const file of found) {
-    if (
-      (isFolder(file) && !options.isDocument?.(file)) ||
-      file.trashed ||
-      !query?.matches(file) ||
-      matched.has(file.id)
-    )
+    if ((isFolder(file) && !options.isDocument?.(file)) || !query?.matches(file) || matched.has(file.id)) continue
+    if (file.trashed) {
+      files.delete(file.id)
+      removals.set(file.id, "deleted")
       continue
+    }
     // Listed again on every sync, so only a new or changed file is work; a skipped one keeps its skip.
     const prior = state.documents[file.id]?.metadata ?? state.skipped.find((item) => item.id === file.id)?.file
     if (initial || !prior || changedSince(prior, file)) changed.add(file.id)
@@ -389,8 +407,9 @@ export const planDocuments = async <M extends SourceFile>(
   }
   // After every real edit, so a run that stops on its deadline spends it on those first.
   for (const job of again) jobs.push(job)
-  // Absent from the listing is not a deletion: only the source's own signal is (`drop`). Out of scope is `unsynced`
-  // only when the owner changed the scope; a folder above that was unshared or vanished leaves its files unavailable.
+  // Absent from the listing is not a deletion: only the source's own signal is (`drop`, `trash`). Out of scope is
+  // `unsynced` only when the owner changed the scope; a folder above that was unshared or vanished leaves its files
+  // unavailable.
   const narrowed = state.scope !== scope
   for (const id of Object.keys(state.documents)) {
     const file = files.get(id)

@@ -19,6 +19,7 @@ import { guardedFileWrite, remoteChanged } from "../../services/files/guarded-wr
 import { honoursDryRun } from "../dry-run-guard.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf } from "../envelope.js"
+import { marksUntrusted } from "../untrusted-marks.js"
 import {
   addFileUpdateCommand,
   type FileUpdateCommands,
@@ -232,7 +233,11 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     `the cells of an Excel workbook (.xlsx) on ${place}, read and changed in place`,
   )
   examples(
-    annotate(sheets.command("show"), { effects: REMOTE_READ, offline: false })
+    marksUntrusted(annotate(sheets.command("show"), { effects: REMOTE_READ, offline: false }), [
+      "sheets.name",
+      "sheets.cells.value",
+      "sheets.cells.formula",
+    ])
       .summary("show a workbook's cells and the sha256 to edit them at")
       .description(
         "show a workbook's stored cells, each with its value, type, formula and format, and the file's sha256 to pass " +
@@ -341,7 +346,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     `the paragraphs of a Word document (.docx) on ${place}, read and changed in place`,
   )
   examples(
-    annotate(documents.command("show"), { effects: REMOTE_READ, offline: false })
+    marksUntrusted(annotate(documents.command("show"), { effects: REMOTE_READ, offline: false }), ["paragraphs.text"])
       .summary("show a document's paragraphs and the sha256 to edit them at")
       .description(
         "show a Word document's paragraphs by index, with their style, whether each can be edited and why not, and " +
