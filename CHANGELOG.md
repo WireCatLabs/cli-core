@@ -20,6 +20,55 @@ shape of this file.
   "channels are not counted"; `inbox`, `inbox --new` and `review` list each in `missing` and warn with it in the
   terminal, in place of the generic note that the messenger did not list every chat.
 
+### Changed — may break callers
+
+- **Issues, projects and comments are found by other forms of their words.** `store.tracker.find`, and with it
+  `issues search` and the tracker lane of `search all`, matches a query word to a word of the same stem
+  («поставки цемента» finds «Поставка цемента», `invoice failing` finds "Invoices fail") and to a word it begins, as
+  CRM deals are matched. A word starts others from four letters, not three as before: `bug` no longer finds `bugfix`,
+  only `bug` and `bugs`. `--exact` keeps the words as written. One search reads at most 2,000 rows the word index
+  offers; when it offered more, the answer has `capped: true` and `hasMore` while the page found any. See
+  [TRACKER.md](docs/dev/TRACKER.md#storetracker).
+
+- **`search all` shows an issue, project or comment two sign-ins hold once.** Two tracker accounts on one workspace
+  showed every item twice side by side, so ten results held about five items. For a provider whose entry says
+  `globalItemIds: true` (seeded for `linear`), the copies (same provider, kind and id) now fold into the best-placed
+  one, whose new `accounts` field names every account that holds it; `account` and `ref`
+  are that copy's. A page holds more distinct items, so a caller counting hits per account sees fewer. See
+  [TRACKER.md](docs/dev/TRACKER.md#search-all).
+
+### Fixed
+
+- **A comment is found by meaning together with its issue.** Its embedded text starts with the issue's key and title
+  (`ENG-12 Fix login`), so "it works after clearing the cache" is found by what the issue is about. A comment of fewer
+  than 16 characters (`LGTM`, `+1`) is no longer embedded, and its words still find it. A retitled or moved issue's
+  comments are cut again on save, and `embedTracker` cuts the comments of a store embedded by 0.730–0.732 once, so
+  their vectors are made again. A chunk whose text no longer hashes to its hash, as one an older build cut, is never
+  embedded: its item is cut again first. Measured in cli-testing
+  [performance/search/tracker-meaning](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/tracker-meaning).
+- `people show` and `organizations show` take the `person:<id>` and `organization:<id>` a stored deal gives. They
+  answered `not_found`, so an agent could not open a deal's company or contact by the ref it was handed.
+- A failed schedule's desktop notification says since when it fails, why, and the command that shows what is wrong
+  (`max work doctor`), above the log's path, instead of only "failed (exit 12)" and a path the notification cuts off.
+  The Telegram and e-mail notices name the same command (template variable `check`).
+- A run that cannot read its sign-in no longer only says the keyring was locked: the notice says it is locked or holds
+  no sign-in, and to sign in again when the computer is unlocked.
+
+### Security
+
+- **`schedule exec` runs only a schedule file in the tool's own schedules folder, and an MCP server no longer offers
+  it.** The file's real path is compared, so a link or `..` that leads elsewhere is refused (`schedule.outside-folder`).
+  A timer installed by `schedule agent` or `schedule command` already names a file there, with or without its seal, so
+  installed schedules keep running. An agent runs a saved schedule with `schedule run <name>`.
+- **`templates preview --file` is the owner's option.** An MCP server no longer offers it; an agent previews the
+  template that applies. `templates edit`, `templates reset`, `models consents set --yes` and
+  `models search-consents set --yes` refuse an MCP run as they refuse an agent's shell, whatever its environment holds.
+- **`messages download --output-dir` refuses credential folders, the CLI's own folders and the message store**, as
+  `attachments extract --output-dir` does, for one message, `--all` and `--offline`. A file named after its message
+  stays inside the chosen folder whatever the message id holds.
+- **`documents history document:<n>` answers only for a document of the selected profile's account.** A ref of
+  another account's document is `document.not-imported`, like a source id that is not in the profile's local copy.
+
 ## 0.735.0 — 23.11.2026
 
 ### Added
