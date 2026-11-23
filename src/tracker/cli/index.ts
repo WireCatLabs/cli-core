@@ -8,7 +8,7 @@ import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import type { DocumentSyncStep } from "../../cli/documents/library.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
+import { allowDeletionsOption, FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
 import { listQuery, nativeTermLists, queryTerms, termField, typedQuery, withQuery } from "../../cli/list-query.js"
 import { aheadOf } from "../../domain/moment.js"
@@ -191,6 +191,7 @@ const trackerDocumentsSync = v.union([
 interface SyncOptions {
   maxPages?: number
   rescan?: boolean
+  allowDeletions?: number
   embed?: boolean
 }
 
@@ -394,6 +395,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       budget: runBudgetOf(command, opts.maxPages),
       ...(signal ? { signal } : {}),
       ...(opts.rescan ? { rescan: true } : {}),
+      ...(opts.allowDeletions ? { allowDeletions: opts.allowDeletions } : {}),
     })
   }
   // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
@@ -447,6 +449,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
             "starts their walk over each time, so run it once and continue with a plain sync"
         : "list everything again, every id too, dropping a round in progress",
     )
+    .addOption(allowDeletionsOption())
     .option(
       "--max-pages <pages>",
       documents

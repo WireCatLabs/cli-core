@@ -41,6 +41,8 @@ interface PendingPass {
   page: string | null
   startedAt: number
   seen: string[]
+  /** The adapter said, on a page of this pass, that it could not read the whole kind. */
+  unread?: true
 }
 
 /** What the engine keeps per kind in `store.sync` under `crm:<kind>`. */
@@ -76,7 +78,8 @@ export const parseCrmCursor = (value: string | null | undefined): CrmCursor | nu
       (!isToken(pass.page) ||
         typeof pass.startedAt !== "number" ||
         !Array.isArray(pass.seen) ||
-        pass.seen.some((id) => typeof id !== "string"))
+        pass.seen.some((id) => typeof id !== "string") ||
+        (pass.unread !== undefined && pass.unread !== true))
     )
       return null
     return {
@@ -101,6 +104,8 @@ export interface CrmSyncOptions {
   now?: number
   /** List everything again and every id, dropping a round in progress: `sync --rescan`. */
   rescan?: boolean
+  /** Let a pass the guard holds mark up to this many deleted: `sync --allow-deletions <count>`. */
+  allowDeletions?: number
   /** Asked before every request to the CRM; without one the run goes until every kind is done. */
   budget?: RunBudget
   /** Checked after every request: a cancelled run stops and keeps what it saved. */
@@ -648,6 +653,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       if (page.hasMore && page.nextCursor === undefined)
         throw new CliError("invalid_response", `${source.provider} said there are more ids but gave no cursor`)
       pass = { ...pass, seen: [...pass.seen, ...page.items], page: page.hasMore ? (page.nextCursor ?? null) : null }
+      if (run.gaps.some((gap) => gap.kind === kind)) pass = { ...pass, unread: true }
       run.moved()
       if (!page.hasMore) break
       await save({ pass })
@@ -656,14 +662,20 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     const stored = await store.crm.count(account, kind)
     const unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, { ...listedOf, dryRun: true })
     const emptied = pass.seen.length === 0 && unlisted > 0
-    if (!options.rescan && (emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
+    const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
+    // What the sign-in could not read is not gone: no flag lets that through.
+    const unread = pass.unread === true || run.gaps.some((gap) => gap.kind === kind)
+    if (unlisted > 0 && (unread || (many && unlisted > (options.allowDeletions ?? 0)))) {
       result.pass = "held"
       run.report.issues.push({
         kind,
         reason: "crm.unlisted-held",
-        message:
-          `${source.provider} listed ${pass.seen.length} ${kind} ids, so ${unlisted} of the ${stored} stored would be ` +
-          "marked deleted; nothing was — check the sign-in's rights, then run sync --rescan to let it through",
+        message: unread
+          ? `${source.provider} could not read all ${kind}s, so the ${unlisted} it did not list stay; nothing was ` +
+            "marked deleted — check the sign-in's rights, then run sync again"
+          : `${source.provider} listed ${pass.seen.length} ${kind} ids, so ${unlisted} of the ${stored} stored would ` +
+            "be marked deleted; nothing was — check the sign-in's rights, then run sync --allow-deletions " +
+            `${unlisted} to let them through`,
       })
     } else {
       result.unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, listedOf)
@@ -680,8 +692,8 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
  * the account's users and departments, deals and leads, each from its cursor or listed in full, a page at a time,
  * each page saved with the round's place in the cursor, so a run the budget stops, or one that fails, goes on from
  * there. Relationships held back for an end not stored yet are written at the end of the run. Deletions come from `changes()`, or
- * from a list of every id that marks only after its last page arrived, and never more than half of a kind without
- * `--rescan`.
+ * from a list of every id that marks only after its last page arrived, never what the adapter said it could not read,
+ * and never more than half of a kind without `--allow-deletions`.
  */
 export const syncCrm = async (
   source: CrmSource,

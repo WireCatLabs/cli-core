@@ -15,6 +15,8 @@ const MOST_DUE = 50
 interface Mode {
   drop: boolean
   full: boolean
+  /** `--allow-deletions <count>`: how many an id pass the guard holds may still mark deleted. */
+  allowed: number
 }
 
 interface ContentCursor {
@@ -70,6 +72,8 @@ export interface ContentSyncOptions {
   now?: number
   /** List everything again and every id, dropping a round in progress: `sync --rescan`. */
   rescan?: boolean
+  /** Let a pass the guard holds mark up to this many deleted: `sync --allow-deletions <count>`. */
+  allowDeletions?: number
   budget?: RunBudget
   signal?: AbortSignal
   /** How long a complete id pass holds before the next one; a day when absent. */
@@ -237,7 +241,7 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
     const moved = (run.report.moved?.length ?? 0) > 0
     const emptied = pass.ids.length === 0 && unlisted > 0
     const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
-    if (unlisted > 0 && (unread || (moved && !mode.full) || (many && !mode.full))) {
+    if (unlisted > 0 && (unread || (moved && !mode.full) || (many && unlisted > mode.allowed))) {
       result.pass = "held"
       result.held = unread
         ? `${source.provider} could not read all ${kind}s, so the ${unlisted} it did not list stay; nothing was ` +
@@ -246,7 +250,8 @@ const passIds = async (run: Run, kind: ContentKind, result: ContentSyncResult, m
           ? `the site's address changed since the last sync, so the ${unlisted} ${kind}s it did not list stay; ` +
             "nothing was marked deleted. If the site moved, run sync --rescan"
           : `${source.provider} listed ${pass.ids.length} ${kind} ids, so ${unlisted} of the ${stored} stored ` +
-            "would be marked deleted; nothing was. Check the sign-in's rights, then run sync --rescan to let it through"
+            "would be marked deleted; nothing was. Check the sign-in's rights, then run sync --allow-deletions " +
+            `${unlisted} to let them through`
     } else {
       const why = await confirmGone(run, kind, missing, result)
       if (why) {
@@ -440,7 +445,11 @@ export const syncContent = async (
     ? null
     : parsed<{ v: 1; done: ContentKind[]; rescan?: true }>((await store.sync.syncState(account, RESUME))?.value)
   const done = new Set(resumed?.done ?? [])
-  const mode: Mode = { drop: options.rescan === true, full: options.rescan === true || resumed?.rescan === true }
+  const mode: Mode = {
+    drop: options.rescan === true,
+    full: options.rescan === true || resumed?.rescan === true,
+    allowed: options.allowDeletions ?? 0,
+  }
   await readChannels(run, mode.full)
   if (resumed)
     for (const gap of await contentGapsOf(store, account))

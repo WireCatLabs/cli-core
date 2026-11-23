@@ -11,10 +11,14 @@ const DAY = 86_400_000
 const MOST_UNLISTED = 0.5
 const GUARDED_FROM = 10
 
-/** `drop`: `--rescan` itself, which drops what is in progress; `full`: a rescan, asked now or by the run it goes on. */
+/**
+ * `drop`: `--rescan` itself, which drops what is in progress; `full`: a rescan, asked now or by the run it goes on;
+ * `allowed`: `--allow-deletions <count>`, how many an id pass the guard holds may still mark deleted.
+ */
 interface Mode {
   drop: boolean
   full: boolean
+  allowed: number
 }
 
 /** Where a kind stands between runs: the cursor of its last finished round, and the round or id pass in progress. */
@@ -34,6 +38,8 @@ interface TrackerPass {
   started: number
   page: string | null
   ids: string[]
+  /** The sign-in said, during this pass, that it could not read the whole kind. */
+  unread?: true
 }
 
 const fresh = (): TrackerCursor => ({ v: 1, token: null, round: null, passAt: 0 })
@@ -58,6 +64,8 @@ export interface TrackerSyncOptions {
   now?: number
   /** List everything again and every id, dropping a round in progress: `sync --rescan`. */
   rescan?: boolean
+  /** Let a pass the guard holds mark up to this many deleted: `sync --allow-deletions <count>`. */
+  allowDeletions?: number
   /** Asked before every request; without one the run goes until every kind is done. */
   budget?: RunBudget
   signal?: AbortSignal
@@ -211,6 +219,7 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, m
       return "cancelled" as const
     }
     pass = { ...pass, ids: [...pass.ids, ...page.items] }
+    if (run.report.gaps.some((gap) => gap.kind === kind)) pass = { ...pass, unread: true }
     if (page.hasMore) {
       // A pass that ended early would mark every unread row deleted.
       if (page.nextCursor === undefined || page.nextCursor === pass.page)
@@ -223,17 +232,18 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, m
     const unlisted = await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now, {
       dryRun: true,
     })
-    const unread = run.report.gaps.some((gap) => gap.kind === kind)
+    const unread = pass.unread === true || run.report.gaps.some((gap) => gap.kind === kind)
     const emptied = pass.ids.length === 0 && unlisted > 0
     const many = emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED)
-    // What the sign-in could not read is not gone: even a rescan never marks it deleted.
-    if (unlisted > 0 && (unread || (many && !mode.full))) {
+    // What the sign-in could not read is not gone: no flag marks it deleted.
+    if (unlisted > 0 && (unread || (many && unlisted > mode.allowed))) {
       result.pass = "held"
       result.held = unread
         ? `${source.provider} could not read all ${kind}s, so the ${unlisted} it did not list stay; nothing was ` +
           "marked deleted. Check the sign-in's rights, then run sync again"
         : `${source.provider} listed ${pass.ids.length} ${kind} ids, so ${unlisted} of the ${stored} stored would be ` +
-          "marked deleted; nothing was. Check the sign-in's rights, then run sync --rescan to let it through"
+          `marked deleted; nothing was. Check the sign-in's rights, then run sync --allow-deletions ${unlisted} to ` +
+          "let them through"
     } else {
       result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
       result.pass = "complete"
@@ -310,7 +320,11 @@ export const syncTracker = async (
     : parsed<{ v: 1; done: TrackerKind[]; rescan?: true }>((await store.sync.syncState(account, RESUME))?.value)
   const done = new Set(resumed?.done ?? [])
   // A stopped rescan goes on as one: the kinds it had not reached still get their full list and their id pass.
-  const mode: Mode = { drop: options.rescan === true, full: options.rescan === true || resumed?.rescan === true }
+  const mode: Mode = {
+    drop: options.rescan === true,
+    full: options.rescan === true || resumed?.rescan === true,
+    allowed: options.allowDeletions ?? 0,
+  }
   // The kinds this run skips keep the gaps the runs that read them recorded.
   if (resumed)
     for (const gap of await trackerGapsOf(store, account))

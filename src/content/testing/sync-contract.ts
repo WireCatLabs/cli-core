@@ -123,7 +123,7 @@ export const contentSyncContract = (make: () => ContentSyncFixture | Promise<Con
       },
       { only: { author: "1" } },
     ),
-    test("a list of no ids marks nothing deleted; --rescan lets it through", async (c) => {
+    test("a list of no ids marks nothing deleted, past --rescan; --allow-deletions lets it through", async (c) => {
       await c.sync()
       for (const id of ["10", "11", "12"]) c.source.remove("post", id)
       later()
@@ -131,7 +131,11 @@ export const contentSyncContract = (make: () => ContentSyncFixture | Promise<Con
       assert.equal(held.synced.find((one) => one.kind === "post")?.pass, "held")
       assert.deepEqual(await c.posts(), ["10", "11", "12"])
       const rescan = await c.sync({ rescan: true })
-      assert.equal(rescan.synced.find((one) => one.kind === "post")?.pass, "complete")
+      assert.equal(rescan.synced.find((one) => one.kind === "post")?.pass, "held")
+      assert.deepEqual(await c.posts(), ["10", "11", "12"])
+      later()
+      const accepted = await c.sync({ allowDeletions: 3 })
+      assert.equal(accepted.synced.find((one) => one.kind === "post")?.pass, "complete")
       assert.deepEqual(await c.posts(), [])
     }),
     test("a site whose address changed holds its deletions until a rescan", async (c) => {

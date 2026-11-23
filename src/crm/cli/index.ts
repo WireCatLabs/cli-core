@@ -7,7 +7,7 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
+import { allowDeletionsOption, FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
 import {
   listQuery,
@@ -377,79 +377,89 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     "sync --embed",
   )
     .option("--rescan", "list everything again, every id too, dropping a round in progress")
+    .addOption(allowDeletionsOption())
     .option("--max-pages <pages>", "at most this many requests to the CRM in this run", integer(100_000))
     .option("--embed", "also index new activities and tasks for search all by meaning, with a model already downloaded")
-    .action(async (opts: { maxPages?: number; rescan?: boolean; embed?: boolean }, command: Command) => {
-      const { signal } = environmentOf(command)
-      await within(command, async (run) => {
-        const source = run.source()
-        const started = now()
-        const report = await syncRecorded(source, run.store, run.account, {
-          now: started,
-          budget: runBudgetOf(command, opts.maxPages),
-          ...(signal ? { signal } : {}),
-          ...(opts.rescan ? { rescan: true } : {}),
-        })
-        const stageTasks = await openStageTasks(run.store, run.account, started, {
-          history: source.stageHistory !== undefined,
-        })
-        const failed = report.synced.filter((one) => one.error !== undefined)
-        // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
-        const retried = failed.filter((one) => one.setting === undefined)
-        const settings = [...new Set(failed.flatMap((one) => one.setting ?? []))]
-        const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
-        const again = { max_pages: opts.maxPages, timeout, embed: opts.embed }
-        // The same command again, never --rescan: that would drop the round this run leaves in progress.
-        const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
-        const next: NextStep[] | undefined =
-          retried.length || (report.state === "partial" && !stuck && failed.length === 0)
-            ? [
-                {
-                  kind: "command",
-                  step: "crm.sync",
-                  command: "sync",
-                  args: Object.fromEntries(Object.entries(again).filter(([, value]) => value !== undefined)),
-                  why: retried.length
-                    ? "a kind failed to sync; running sync again retries it"
-                    : "the sync stopped before its end to answer in time; running it again goes on from there",
-                  safe_to_auto_execute: true,
-                },
-              ]
-            : undefined
-        const progressAt = lineOf(command, "store status")
-        const fixes = settings.map((setting) => lineOf(command, `config set ${setting} <value>`))
-        const hint = failed.length
-          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — ${
-              fixes.length ? `fix the setting: ${fixes.join("; ")}` : "run sync again to retry"
-            }`
-          : stuck
-            ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
-            : report.state === "partial"
-              ? `run sync again to continue; see progress: ${progressAt}`
+    .action(
+      async (
+        opts: { maxPages?: number; rescan?: boolean; embed?: boolean; allowDeletions?: number },
+        command: Command,
+      ) => {
+        const { signal } = environmentOf(command)
+        await within(command, async (run) => {
+          const source = run.source()
+          const started = now()
+          const report = await syncRecorded(source, run.store, run.account, {
+            now: started,
+            budget: runBudgetOf(command, opts.maxPages),
+            ...(signal ? { signal } : {}),
+            ...(opts.rescan ? { rescan: true } : {}),
+            ...(opts.allowDeletions ? { allowDeletions: opts.allowDeletions } : {}),
+          })
+          const stageTasks = await openStageTasks(run.store, run.account, started, {
+            history: source.stageHistory !== undefined,
+          })
+          const failed = report.synced.filter((one) => one.error !== undefined)
+          // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
+          const retried = failed.filter((one) => one.setting === undefined)
+          const settings = [...new Set(failed.flatMap((one) => one.setting ?? []))]
+          const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+          const again = { max_pages: opts.maxPages, timeout, embed: opts.embed }
+          // The same command again, never --rescan: that would drop the round this run leaves in progress.
+          const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
+          const next: NextStep[] | undefined =
+            retried.length || (report.state === "partial" && !stuck && failed.length === 0)
+              ? [
+                  {
+                    kind: "command",
+                    step: "crm.sync",
+                    command: "sync",
+                    args: Object.fromEntries(Object.entries(again).filter(([, value]) => value !== undefined)),
+                    why: retried.length
+                      ? "a kind failed to sync; running sync again retries it"
+                      : "the sync stopped before its end to answer in time; running it again goes on from there",
+                    safe_to_auto_execute: true,
+                  },
+                ]
               : undefined
-        const { hint: _hint, ...rest } = report
-        const embedded = opts.embed ? await syncEmbeddings(command, run.store, report, options.app, again) : undefined
-        // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
-        const issues = [
-          ...failed.map((one) => ({
-            code: one.setting === undefined ? ("provider_error" as const) : ("validation_error" as const),
-            reason: "sync.partial",
-            source: `crm:${one.kind}`,
-          })),
-          ...report.issues.map((one) => ({
-            code: "validation_error" as const,
-            reason: one.reason,
-            source: one.externalId === undefined ? `crm:${one.kind}` : `crm:${one.kind}/${one.externalId}`,
-          })),
-          ...(embedded?.issues ?? []),
-        ]
-        const partial = report.state === "partial" || issues.length > 0
-        return itemOf(snakeKeys({ ...rest, stageTasks, ...(hint === undefined ? {} : { hint }), ...embedded?.item }), {
-          ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
-          ...(next || embedded?.next ? { next: next ?? embedded?.next } : {}),
+          const progressAt = lineOf(command, "store status")
+          const fixes = settings.map((setting) => lineOf(command, `config set ${setting} <value>`))
+          const hint = failed.length
+            ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — ${
+                fixes.length ? `fix the setting: ${fixes.join("; ")}` : "run sync again to retry"
+              }`
+            : stuck
+              ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
+              : report.state === "partial"
+                ? `run sync again to continue; see progress: ${progressAt}`
+                : undefined
+          const { hint: _hint, ...rest } = report
+          const embedded = opts.embed ? await syncEmbeddings(command, run.store, report, options.app, again) : undefined
+          // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
+          const issues = [
+            ...failed.map((one) => ({
+              code: one.setting === undefined ? ("provider_error" as const) : ("validation_error" as const),
+              reason: "sync.partial",
+              source: `crm:${one.kind}`,
+            })),
+            ...report.issues.map((one) => ({
+              code: "validation_error" as const,
+              reason: one.reason,
+              source: one.externalId === undefined ? `crm:${one.kind}` : `crm:${one.kind}/${one.externalId}`,
+            })),
+            ...(embedded?.issues ?? []),
+          ]
+          const partial = report.state === "partial" || issues.length > 0
+          return itemOf(
+            snakeKeys({ ...rest, stageTasks, ...(hint === undefined ? {} : { hint }), ...embedded?.item }),
+            {
+              ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
+              ...(next || embedded?.next ? { next: next ?? embedded?.next } : {}),
+            },
+          )
         })
-      })
-    })
+      },
+    )
 
   const store = annotate(
     program.command("store").description("the local copy of the CRM, and the shared store file it lives in"),

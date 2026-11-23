@@ -72,8 +72,9 @@ stops keeps its ids and the page it reached.
   round, so a budget smaller than the number of kinds still moves on.
 - **Held passes.** A pass is held (`pass: "held"`, with the reason in `held`) and marks nothing when the list is empty
   while rows are stored, or when it would mark more than half of ten or more stored rows deleted: a tracker that lost
-  rights lists none of what it can no longer see. `--rescan` lets those through. A pass after the sign-in reported a
-  gap for the kind is held even then: what it could not read is not gone.
+  rights lists none of what it can no longer see. Only `--allow-deletions <count>` (`allowDeletions`), an owner-only
+  flag, lets up to that many through; `--rescan` does not. A pass after the sign-in reported a gap for the kind, in
+  this run or an earlier run of the same pass, is held even then: what it could not read is not gone.
 - **Failures.** A kind that fails is named in its result's `error` and the others still sync. A page that says there is
   more but gives no next page fails the kind.
 - **The owner's tasks.** After the kinds, a sync whose tracker has `self` and issues brings the owner's tasks in line
@@ -83,8 +84,8 @@ stops keeps its ids and the page it reached.
   or in a cancelled run, the answer has no `tasks`.
   When the budget is spent before the id is read, or the id or a task cannot be read or written, the tasks are left as
   they were and `tasks.skipped` says why; the copy is saved either way.
-- **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a
-  gap held it. A rescan that stops goes on as one in the next run.
+- **`rescan`.** Lists everything again and every id, dropping a round in progress. It keeps the held-pass guard. A
+  rescan that stops goes on as one in the next run.
 - **What the answer says.** `synced[].saved` and `progress.saved` count the rows that changed in the copy (new,
   different, deleted or back again), so a sync with nothing new answers 0; `store.tracker.save` answers the same.
   `deletions: { checked, due }` says when the id pass last ran for every kind (`null` before the first) and when it is

@@ -422,7 +422,8 @@ with it fills every deal's and lead's `assignee` (a source contract case checks 
 records it, since the copy's offline readers take its rule for that user. Out of scope is a deleted mark, as for a row the CRM
 deleted: `mine` hides those rows from lists and search, but their earlier copy stays in the store file. Deleting a
 copy touches no relationship, so the owner's confirmed links stay and return with the row. An id list that is empty
-never marks rows deleted without `--rescan`, whatever the copy's size. `store status` reads both without a sync: each deal and lead row's
+never marks rows deleted without `--allow-deletions`, whatever the copy's size, and a pass after the adapter reported
+a gap for the kind never marks any. `store status` reads both without a sync: each deal and lead row's
 `scope` gives the setting, the scope its cursor reads new pages under (`all` under a source without `self()`),
 and `held` while the cursor's `narrowing` keeps stored rows outside it.
 

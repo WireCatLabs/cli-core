@@ -565,3 +565,34 @@ it("while a narrowing is held, the id pass still marks deleted a deal in the sco
   expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 1, pass: "complete" })
   expect(await deals()).toEqual(["d1", "d3", "d4", "d5", "d6"])
 })
+
+// INT-3: the same rule as the tracker's id pass, so what a sign-in cannot read never reads as deleted.
+it("holds an id pass after the adapter said it could not read the whole kind, whatever the flags", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-gap-")), "store.db") })
+  stores.push(store)
+  const source = fakeCrmSource()
+  for (let at = 1; at <= 12; at += 1) source.put("deal", exampleDeal(`d${at}`))
+  const day = 86_400_000
+  const start = Date.now()
+  await syncCrm(source, store, PORTAL, { now: start })
+  source.delete("deal", "d3")
+  source.delete("deal", "d4")
+  const gapped = {
+    ...source,
+    ids: (async (kind, page, context) => {
+      if (kind === "deal") context?.gap({ kind, message: "the sign-in cannot read one pipeline" })
+      return source.ids?.(kind, page, context)
+    }) as typeof source.ids,
+  }
+  const live = async () => (await store.deals.list({ account: PORTAL, kind: "deal" })).items.length
+
+  const held = await syncCrm(gapped, store, PORTAL, { now: start + 2 * day })
+  expect(held.synced.find(({ kind }) => kind === "deal")).toMatchObject({ pass: "held", unlisted: 0 })
+  expect(held.issues.find(({ kind }) => kind === "deal")?.message).toMatch(/could not read all deals/)
+  const forced = await syncCrm(gapped, store, PORTAL, { now: start + 4 * day, rescan: true, allowDeletions: 100 })
+  expect(forced.synced.find(({ kind }) => kind === "deal")?.pass).toBe("held")
+  expect(await live()).toBe(12)
+
+  const whole = await syncCrm(source, store, PORTAL, { now: start + 6 * day })
+  expect(whole.synced.find(({ kind }) => kind === "deal")).toMatchObject({ pass: "complete", unlisted: 2 })
+})

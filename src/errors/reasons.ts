@@ -609,10 +609,13 @@ const OTHERS: Entry[] = [
   validation("crm.activity-field", "a comment's or task's field is not valid, or the kind does not take it"),
   validation("crm.owner-unknown", "owner: names no CRM user: me without a known sign-in user, or not a user id"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
-  validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
+  validation(
+    "crm.unlisted-held",
+    "a list of every id would mark most of a kind deleted, or the sign-in read only part; nothing was",
+  ),
   validation(
     "tracker.unlisted-held",
-    "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan",
+    "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was",
   ),
   validation("tracker.write-unsupported", "the tracker does not take this write, or does not recognise a repeated one"),
   validation("tracker.field", "a field of an issue or a comment the tracker's write does not take as given"),

@@ -8,7 +8,7 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
+import { allowDeletionsOption, FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
 import {
   listQuery,
@@ -180,8 +180,9 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
     "sync --rescan",
   )
     .option("--rescan", "list everything again, every id too, dropping a round in progress")
+    .addOption(allowDeletionsOption())
     .option("--max-pages <pages>", "at most this many requests to the source in this run", integer(100_000))
-    .action(async (opts: { maxPages?: number; rescan?: boolean }, command: Command) => {
+    .action(async (opts: { maxPages?: number; rescan?: boolean; allowDeletions?: number }, command: Command) => {
       const { signal } = environmentOf(command)
       await within(command, false, async (run) => {
         const report = await syncContent(run.source(), run.store, run.account, {
@@ -189,6 +190,7 @@ const addContentCommandsDefinition = (program: Command, options: ContentCommandO
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { rescan: true } : {}),
+          ...(opts.allowDeletions ? { allowDeletions: opts.allowDeletions } : {}),
         })
         const failed = report.synced.filter((one) => one.error !== undefined)
         const next: NextStep[] | undefined =

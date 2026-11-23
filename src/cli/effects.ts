@@ -7,7 +7,7 @@ import {
   stepTargets,
 } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
-import { type Command, Option } from "commander"
+import { type Command, InvalidArgumentError, Option } from "commander"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { keyForCommand } from "../sends/permissions.js"
 import { environmentOf } from "./context.js"
@@ -332,6 +332,20 @@ export const isOtherServiceCall = (command: Command): boolean => OTHER_SERVICE.h
 /** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
 export const ownerOnlyOption = (flags: string, description: string): Option =>
   annotateOption(new Option(flags, description), { mcp: false })
+
+/**
+ * `sync --allow-deletions <count>`: the only way past a sync's mass-deletion guard, for as many as the held pass
+ * named, and never offered to an MCP agent.
+ */
+export const allowDeletionsOption = (): Option =>
+  ownerOnlyOption(
+    "--allow-deletions <count>",
+    "let this run mark deleted up to this many of what its full list no longer has, when the guard holds it",
+  ).argParser((text) => {
+    const count = Number(text)
+    if (!Number.isSafeInteger(count) || count < 1) throw new InvalidArgumentError("a whole number, 1 or more")
+    return count
+  })
 
 /**
  * The effects a retry or an unasked step is judged on: only what the service sees. Running a sync or a
