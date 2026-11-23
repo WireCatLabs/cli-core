@@ -270,6 +270,30 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
 - `src/crm/manifest/manifest.test.ts` writes HubSpot's contacts, companies and deals as a manifest and runs
   `crmSourceContract`, faults included, against a strict fake of HubSpot's API.
 
+### Writes from a manifest
+
+`writes.<kind>` in the same manifest makes the CRM write commands work with no writer of the CLI's own. Each kind
+names its `create`, `update` (`"{id}"` in the path) and, for a deal or lead, `remove`; a body holds `"{values}"`
+where the values go, and `id` says where a create's answer keeps the new id. `fields` maps each of our fields
+(`CrmWriteFields`, and `reason` for a close) to the service's key, `to`, in the shape `each` gives one value
+(`"{value}"` is ours), as a list with `list`, a number with `number`. Rules that share a `to` merge into one entry
+(Attio's name takes `first_name`, `last_name` and `full_name` together). `implied` sends nothing (Attio's one
+pipeline), and `currency: { fixed, at }` reads the service's own currency once and refuses another. `custom` writes
+`--field` codes, `clear` is what clears a field (Attio `[]`, HubSpot `""`).
+
+- **A field with no rule is refused before anything is sent**: `validation_error` with `sent: false`, naming the
+  field and the service. So is a `--field` code that is one of the rules' keys, and `--reason` with no rule.
+- Each write is sent once and read back by the entity's `get`, mapped as a sync maps it; a read-back that fails is
+  `invalid_response` with `sent: true`. A close moves the item to its pipeline's first stage with that outcome.
+- The guard stays `crm/writes.ts`: `crmManifestWrites(manifest, { manifest: api, service, fetch, token, source, app,
+  settings })` is the CLI's `CrmRun.writes`, and its `alsoChecks` adds each operation's `api` keys, so a `deny` on
+  `api.<operation>` stops the write too. The send it uses (`serviceApiSend`) is not exported from the package.
+  `crmManifestWriteCapabilities` gives `addCrmCommands` its `writes`, `crmManifestWriteKeys` gives `crmAlsoChecks`
+  the same keys for `--dry-run`.
+- `crmManifestWriteContract(manifest, { api, definitions, hooks })` (`@wirecat/cli-core/crm/testing`) runs
+  `crmWriteContract` against `crmManifestFake`, which answers the manifest's writes: it reads each rule backwards,
+  keeps the record in our fields and answers as its schema says. `loseNextAnswer()` and `requests()` are on the fake.
+
 ### A test for a source from a manifest
 
 A CLI made from `wirecat.config.ts` tests its source with no code of its own (`@wirecat/cli-core/crm/testing`):

@@ -83,6 +83,13 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     does: "amoCRM and Kommo: deals, contacts and companies, searchable with your other WireCat data",
   },
   {
+    command: "attio",
+    appName: "attio-cli",
+    envPrefix: "WCATTIO",
+    package: "@wirecat/attio-cli",
+    does: "Attio CRM: deals, people and companies, searchable with your other WireCat data",
+  },
+  {
     command: "pbx",
     appName: "asterisk-cli",
     envPrefix: "PBX",

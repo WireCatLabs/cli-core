@@ -136,6 +136,19 @@ const formerKeyOf = (operation: ManifestOperation): PermissionKey | undefined =>
 
 const permissionsOf = (operation: ManifestOperation): readonly OperationPermission[] => operation.permissions ?? []
 
+/**
+ * The keys every call of the operation checks, whatever it sends: `api.<operation>` and the manifest's unconditional
+ * ones. For a writer that sends the operation outside the `api` group, so its door is no wider.
+ */
+export const serviceApiOwnKeys = (operation: ManifestOperation): PermissionKey[] => [
+  ...new Set([
+    keyOf(operation),
+    ...permissionsOf(operation)
+      .filter((permission) => whenOf(permission) === undefined)
+      .map(({ key }) => key),
+  ]),
+]
+
 /** By its method too: an override may have marked a DELETE as a plain write. */
 const destructive = (operation: ManifestOperation) =>
   operation.effect === "destructive" || (operation.binding.kind === "http" && operation.binding.method === "DELETE")

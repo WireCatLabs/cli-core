@@ -7,25 +7,29 @@ import {
   type SchemaNode,
   sampleOf,
 } from "@wirecat/cli-base/codegen"
-import { serviceApiCall } from "../../cli/service-api-call.js"
+import { serviceApiCall, serviceApiSend } from "../../cli/service-api-call.js"
 import { manifestBaseUrl, type ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../../domain/deals.js"
 import type { ContractCase } from "../../meetings/index.js"
 import {
+  CRM_LIST_FIELDS,
   type CrmChangesCall,
   type CrmManifest,
   type CrmManifestHooks,
+  type CrmManifestWrite,
   type CrmOperationCall,
   type CrmRule,
   parseCrmManifest,
 } from "../manifest/manifest.js"
-import { at, type Conversion, convert, evaluate, FIELDS, MISSING } from "../manifest/map.js"
+import { at, type Conversion, convert, evaluate, FIELDS, MISSING, mapRecord } from "../manifest/map.js"
 import { itemOf, resolve, step, walk } from "../manifest/paths.js"
 import { crmSourceFromManifest } from "../manifest/source.js"
+import { crmWriterFromManifest } from "../manifest/writer.js"
 import type { CrmSource } from "../source.js"
 import { type CrmRaw, id, isRaw } from "../values.js"
 import { type CrmSourceFixture, crmSourceContract } from "./source-contract.js"
+import { type CrmWriteFixture, crmWriteContract } from "./write-contract.js"
 
 type Definitions = Readonly<Record<string, SchemaNode>>
 
@@ -45,6 +49,10 @@ export interface CrmManifestFake extends FakeApi {
   deny(kind: CrmKind, id: string, status: number): void
   /** Moves one row's change time to now, for the next read of changes to list it. */
   touch(kind: CrmKind, id: string): void
+  /** Makes the next write's answer lost after the service made the change, as a dropped connection does. */
+  loseNextAnswer(): void
+  /** How many write requests reached the service so far. */
+  requests(): number
 }
 
 export const FAKE_MANIFEST_TOKEN = "fake-manifest-token"
@@ -53,6 +61,8 @@ export const FAKE_MANIFEST_TOKEN = "fake-manifest-token"
 const ROWS = 3
 const PAGE = 2
 const SEEDED = Date.parse("2026-11-01T10:00:00Z")
+/** The currency of every amount, and what a fixed currency reads. */
+const CURRENCY = "EUR"
 
 type Value = string | number | boolean | { ms: number }
 
@@ -67,21 +77,50 @@ const pathOf = (rule: CrmRule | undefined): string | undefined => {
   return rule.path
 }
 
-const placeOf = (call: CrmOperationCall, placeholder: string) => {
-  const find = (value: unknown, trail: string[]): string[] | undefined => {
-    if (value === placeholder) return trail
-    if (!Array.isArray(value) && !isRaw(value)) return undefined
-    for (const [key, inner] of Object.entries(value)) {
-      const found = find(inner, [...trail, key])
-      if (found) return found
-    }
-    return undefined
-  }
-  for (const where of ["path", "query", "body"] as const) {
-    const found = find(call[where], [])
-    if (found) return { in: where, path: found.join(".") }
+const trailOf = (value: unknown, placeholder: string, trail: string[] = []): string[] | undefined => {
+  if (value === placeholder) return trail
+  if (!Array.isArray(value) && !isRaw(value)) return undefined
+  for (const [key, inner] of Object.entries(value)) {
+    const found = trailOf(inner, placeholder, [...trail, key])
+    if (found) return found
   }
   return undefined
+}
+
+const placeOf = (call: CrmOperationCall, placeholder: string) => {
+  for (const where of ["path", "query", "body"] as const) {
+    const found = trailOf(call[where], placeholder)
+    if (found) return { in: where, path: found.length ? found.join(".") : "." }
+  }
+  return undefined
+}
+
+/**
+ * Our fields, in the names a read maps, that a write's values give: each rule read backwards, `"{value}"` in its
+ * `each` the place of ours. A value the service clears with is a cleared field.
+ */
+const givenOf = (spec: CrmManifestWrite, values: unknown): Record<string, unknown> => {
+  const given: Record<string, unknown> = {}
+  if (!isRaw(values)) return given
+  const clear = JSON.stringify(spec.clear === undefined ? null : spec.clear)
+  for (const [field, rule] of Object.entries(spec.fields)) {
+    if (typeof rule !== "object" || !("to" in rule) || !(rule.to in values)) continue
+    const name = field === "owner" ? "assignee" : field
+    const list = CRM_LIST_FIELDS.includes(field)
+    const raw = values[rule.to]
+    if (JSON.stringify(raw) === clear) {
+      given[name] = list ? [] : null
+      continue
+    }
+    const trail = rule.each === undefined ? [] : (trailOf(rule.each, "{value}") ?? [])
+    const found = (rule.list ? (Array.isArray(raw) ? raw : []) : [raw])
+      .map((one) => (trail.length ? at(one, trail.join(".")) : one))
+      .filter((one) => one !== undefined && one !== null)
+      .map(String)
+    if (list) given[name] = field === "people" ? found.map((one) => ({ externalId: one, role: "contact" })) : found
+    else if (found.length) given[name] = found[0]
+  }
+  return given
 }
 
 type Place = NonNullable<ReturnType<typeof placeOf>>
@@ -125,6 +164,9 @@ interface Route {
   call: CrmOperationCall
   rows: () => CrmRaw[]
   kind?: CrmKind
+  write?: { verb: "create" | "update" | "remove"; spec: CrmManifestWrite; id?: Place; values?: Place }
+  /** A value read once, at this path of the answer: the fixed currency. */
+  fixed?: string
   get?: Place
   /** A live search: only the rows whose text holds the words at this place. */
   query?: Place
@@ -343,14 +385,18 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     const index = manifest.kinds.indexOf(kind)
     return index < 0 ? undefined : String((index + 1) * 1000 + n + 1)
   }
-  /** A deal's people walk a list: its one entry names the contact the deal's row number holds. */
-  const linkPeople = (row: CrmRaw, rule: CrmRule | undefined, node: SchemaNode | undefined, person: string) => {
-    if (typeof rule !== "object" || !("each" in rule) || !("id" in rule)) return
+  /** A list a rule walks, one entry for each value: a deal's people, a contact's e-mails. */
+  const putEach = (row: CrmRaw, rule: CrmRule | undefined, node: SchemaNode | undefined, values: readonly string[]) => {
+    if (typeof rule !== "object" || !("each" in rule)) return
+    const inner = "id" in rule ? rule.id : rule.value
     const entry = itemOf(nodeAt(node, rule.each), definitions)
-    const made = sample(entry && narrowed(entry, rule.id.split("."), person))
-    const item = isRaw(made) ? made : {}
-    put(item, rule.id, person, entry)
-    putList(row, rule.each, [item], node)
+    const items = values.map((value) => {
+      const made = sample(entry && narrowed(entry, inner.split("."), value))
+      const item = isRaw(made) ? made : {}
+      put(item, inner, value, entry)
+      return item
+    })
+    putList(row, rule.each, items, node)
   }
 
   const rows: Partial<Record<CrmKind, CrmRaw[]>> = {}
@@ -370,11 +416,11 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
         externalId: String((index + 1) * 1000 + n + 1),
         assignee: "7001",
         ...(pipeline ? { pipeline: pipeline.id, stage: pipeline.stages[n % pipeline.stages.length] } : {}),
-        ...(money ? { amount: "100.50", currency: "EUR" } : { amount: undefined, currency: undefined }),
+        ...(money ? { amount: "100.50", currency: CURRENCY } : { amount: undefined, currency: undefined }),
         ...(pipeline && idAt("organization", n) ? { organization: idAt("organization", n) } : {}),
       })
       const person = idAt("person", n)
-      if (pipeline && person) linkPeople(row, map.people, node, person)
+      if (pipeline && person) putEach(row, map.people, node, [person])
       if (keyset) put(row, keyset, time, node)
       return row
     })
@@ -432,8 +478,99 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     routes.push({ call: spec.call, rows: () => fields })
   }
   if (manifest.users) routes.push({ call: manifest.users.call, rows: () => users })
+  for (const kind of manifest.kinds) {
+    const spec = manifest.writes?.[kind] as CrmManifestWrite | undefined
+    if (!spec) continue
+    for (const verb of ["create", "update", "remove"] as const) {
+      const call = spec[verb]
+      if (!call) continue
+      const id = placeOf(call, "{id}")
+      const values = placeOf(call, "{values}")
+      routes.push({
+        call,
+        kind,
+        rows: () => rows[kind] ?? [],
+        write: { verb, spec, ...(id ? { id } : {}), ...(values ? { values } : {}) },
+      })
+    }
+    const currency = spec.fields.currency
+    if (typeof currency === "object" && "fixed" in currency)
+      routes.push({ call: currency.fixed, rows: () => [], fixed: currency.at })
+  }
 
   const denied = new Map<string, number>()
+  let writes = 0
+  let made = 0
+  let lose = false
+
+  /** A record, in the names a read maps, as a row the read maps back: what it does not name stays out. */
+  const rowFor = (kind: CrmKind, fields: Readonly<Record<string, unknown>>): CrmRaw => {
+    const entity = manifest.entities[kind] as NonNullable<CrmManifest["entities"][CrmKind]>
+    const map = entity.map as Readonly<Record<string, CrmRule | undefined>>
+    const node = rowNodeOf(entity.list)
+    const scalar = (field: string, value: unknown): Value | undefined => {
+      if (typeof value === "number" && FIELDS[kind][field] === "epoch") return { ms: value }
+      return ["string", "number", "boolean"].includes(typeof value) ? (value as Value) : undefined
+    }
+    const given = Object.fromEntries(
+      Object.keys(map).flatMap((field) => {
+        const value = scalar(field, fields[field])
+        return value === undefined ? [] : [[field, value]]
+      }),
+    )
+    // Only the rules with a value shape the sample: one without would sample a value where the record has none.
+    const rules = Object.fromEntries(Object.entries(map).filter(([field]) => field in given || field === "pipeline"))
+    const row = rowOf(node, rules, FIELDS[kind], 0, given)
+    for (const [field, value] of Object.entries(fields)) {
+      if (!Array.isArray(value)) continue
+      const ids = value.map((one) => (isRaw(one) ? String(one.externalId) : String(one)))
+      const rule = map[field]
+      const path = pathOf(rule)
+      if (typeof rule === "object" && "each" in rule) putEach(row, rule, node, ids)
+      else if (path !== undefined && ids[0] !== undefined) put(row, path, ids[0], node)
+    }
+    return row
+  }
+
+  /** A create, update or remove of one record, as the service would make it, answered as its schema says. */
+  const written = (route: Route & { kind: CrmKind; write: NonNullable<Route["write"]> }, call: FakeCall) => {
+    writes += 1
+    const { kind, write } = route
+    const list = rows[kind] ?? []
+    rows[kind] = list
+    const root = rootOf(route.call)
+    const sampled = sample(root)
+    const answer = isRaw(sampled) ? sampled : {}
+    const externalId =
+      write.verb === "create"
+        ? String((manifest.kinds.indexOf(kind) + 1) * 1000 + 500 + ++made)
+        : String(readPlace(call, write.id as Place) ?? "")
+    const place = list.findIndex((one) => idOf(kind, one) === externalId)
+    if (write.verb !== "create" && place < 0)
+      return refuse(`${call.operation}: no ${kind} ${externalId} in the fake`, 404)
+    if (write.verb === "remove") {
+      list.splice(place, 1)
+      return { body: answer }
+    }
+    const entity = manifest.entities[kind] as NonNullable<CrmManifest["entities"][CrmKind]>
+    const before = place < 0 ? {} : (mapRecord(kind, entity, list[place] as CrmRaw) ?? {})
+    const given = givenOf(write.spec, write.values ? readPlace(call, write.values) : undefined)
+    const pipeline = pipelines.get(kind as DealKind)
+    const fields: Record<string, unknown> = {
+      ...(pipeline ? { pipeline: pipeline.id } : {}),
+      ...before,
+      ...given,
+      externalId,
+      updatedAt: Date.now(),
+    }
+    const currency = write.spec.fields.currency
+    if (typeof currency === "object" && "fixed" in currency && fields.amount != null) fields.currency = CURRENCY
+    const row = rowFor(kind, fields)
+    if (place < 0) list.push(row)
+    else list[place] = row
+    if (write.verb === "create" && write.spec.id) putList(answer, write.spec.id, externalId, root)
+    return { body: answer }
+  }
 
   const refuse = (message: string, status = 400): FakeAnswer => {
     own.push(message)
@@ -525,6 +662,14 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
   const answerOf = (call: FakeCall): FakeAnswer => {
     const route = routeOf(call)
     if (!route) return refuse(`${call.operation ?? call.url.pathname}: no call of the source manifest is this one`, 404)
+    if (route.write && route.kind) return written({ ...route, kind: route.kind, write: route.write }, call)
+    if (route.fixed !== undefined) {
+      const root = rootOf(route.call)
+      const sampled = sample(root)
+      const answer = isRaw(sampled) ? sampled : {}
+      putList(answer, route.fixed, CURRENCY, root)
+      return { body: answer }
+    }
     const changes = route.since ? route : undefined
     if (changes?.since && readPlace(call, changes.since.place) === undefined)
       return refuse(`${call.operation}: a read of changes without its since`)
@@ -577,7 +722,15 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
   })
 
   return {
-    fetch: fake.fetch,
+    async fetch(input, init) {
+      const before = writes
+      const answer = await fake.fetch(input, init)
+      if (lose && writes > before) {
+        lose = false
+        throw new TypeError("fetch failed")
+      }
+      return answer
+    },
     calls: fake.calls,
     get refusals() {
       return [...fake.refusals, ...own]
@@ -592,6 +745,10 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
       for (const path of paths) if (path) put(row, path, { ms: Date.now() }, node)
       if (timeOf(kind, row) === null) throw new Error(`the fake cannot change the time of ${kind} ${id}`)
     },
+    loseNextAnswer: () => {
+      lose = true
+    },
+    requests: () => writes,
   }
 }
 
@@ -683,6 +840,70 @@ export const crmManifestContract = (manifest: CrmManifest, options: CrmManifestF
       await run()
       const refused = fakes.flatMap((fake) => fake.refusals)
       if (refused.length) throw new Error(`the fake refused calls the source made:\n${refused.join("\n")}`)
+    },
+  }))
+}
+
+/**
+ * A `crmWriteContract` fixture for a writer built from a manifest's `writes`, over `crmManifestFake`: the writer, the
+ * first pipeline of the deal kind it writes, the service's own names of stage and owner, and the fake.
+ */
+export const crmManifestWriteFixture = async (
+  manifest: CrmManifest,
+  options: CrmManifestFixtureOptions,
+): Promise<CrmWriteFixture & { fake: CrmManifestFake }> => {
+  const fake = crmManifestFake(manifest, options)
+  const sending = {
+    manifest: options.api,
+    service: manifest.provider,
+    fetch: fake.fetch,
+    token: () => FAKE_MANIFEST_TOKEN,
+    ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+  }
+  const source = crmSourceFromManifest(manifest, {
+    api: options.api,
+    call: serviceApiCall(sending),
+    ...(options.hooks ? { hooks: options.hooks } : {}),
+  })
+  const writer = crmWriterFromManifest(manifest, {
+    api: options.api,
+    service: manifest.provider,
+    send: serviceApiSend(sending),
+    source: () => source,
+  })
+  const kind = DEAL_KINDS.find((one) => writer.capabilities.kinds.includes(one))
+  if (!kind) throw new Error("the manifest writes no deal or lead, and the write contract needs one")
+  const [pipeline] = await source.pipelines(kind)
+  if (!pipeline) throw new Error(`the fake holds no ${kind} pipeline`)
+  const fields = (manifest.writes?.[kind]?.fields ?? {}) as Readonly<Record<string, unknown>>
+  const aliases = [fields.stage, fields.owner].flatMap((rule) =>
+    isRaw(rule) && typeof rule.to === "string" ? [rule.to] : [],
+  )
+  return {
+    writer,
+    kind,
+    pipeline,
+    aliases,
+    loseNextAnswer: fake.loseNextAnswer,
+    requests: fake.requests,
+    fake,
+  }
+}
+
+/** `crmWriteContract` over `crmManifestWriteFixture`, each case failing too when the fake refused a call. */
+export const crmManifestWriteContract = (manifest: CrmManifest, options: CrmManifestFixtureOptions): ContractCase[] => {
+  const fakes: CrmManifestFake[] = []
+  return crmWriteContract(async () => {
+    const fixture = await crmManifestWriteFixture(manifest, options)
+    fakes.push(fixture.fake)
+    return fixture
+  }).map(({ name, run }) => ({
+    name,
+    async run() {
+      fakes.length = 0
+      await run()
+      const refused = fakes.flatMap((fake) => fake.refusals)
+      if (refused.length) throw new Error(`the fake refused calls the writer made:\n${refused.join("\n")}`)
     },
   }))
 }

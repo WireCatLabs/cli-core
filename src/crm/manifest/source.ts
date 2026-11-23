@@ -37,17 +37,23 @@ const MOST_PAGES = 500
 /** Contacts or companies a deal names, read one by one, per page of a sync round. */
 const LINKED_PAGE = 50
 
-interface Slots {
+export interface Slots {
   since?: string
   select?: readonly string[]
   id?: string
   query?: string
+  /** A write's values, put in whole: what they hold is never filled. */
+  values?: Readonly<Record<string, unknown>>
+  /** One value in a write rule's `each`. */
+  value?: unknown
 }
 
 const DROP = Symbol("drop")
 
-/** Fills `"{since}"`, `"{select}"`, `"{id}"` and `"{query}"`; an empty select drops the parameter it stands for. */
-const fill = (value: unknown, slots: Slots): unknown => {
+/** Fills each `"{slot}"` by its name in `Slots`; an empty select drops the parameter it stands for. */
+export const fill = (value: unknown, slots: Slots): unknown => {
+  if (value === "{values}") return slots.values ?? DROP
+  if (value === "{value}") return slots.value ?? DROP
   if (value === "{since}") return slots.since ?? DROP
   if (value === "{select}") return slots.select?.length ? [...slots.select] : DROP
   if (value === "{id}") return slots.id ?? DROP
@@ -63,7 +69,7 @@ const fill = (value: unknown, slots: Slots): unknown => {
   return value
 }
 
-const inputOf = (call: CrmOperationCall, slots: Slots): ApiCommandInput => {
+export const inputOf = (call: CrmOperationCall, slots: Slots): ApiCommandInput => {
   const path = fill(call.path ?? {}, slots) as Record<string, unknown>
   const query = fill(call.query ?? {}, slots) as Record<string, unknown>
   const body = call.body === undefined ? undefined : fill(call.body, slots)
@@ -102,6 +108,11 @@ const pageOf = (page: string | undefined, now: number) => {
   return { token: page.slice(0, cut) || undefined, started }
 }
 
+/** A source from a manifest also reads one record of any kind by its entity's `get`: a writer's read-back. */
+export interface CrmManifestSource extends CrmSource {
+  record<K extends CrmKind>(kind: K, externalId: string, context?: CrmCallContext): Promise<CrmRecords[K] | null>
+}
+
 const unseen = (error: unknown) =>
   isCliError(error) && (error.code === "not_found" || error.code === "permission_error")
 
@@ -110,7 +121,7 @@ const unseen = (error: unknown) =>
  * operation's own `pagination`, each row mapped onto the shared schema. Deletions are found by a pass over every id.
  * What the manifest cannot say comes from `hooks`.
  */
-export const crmSourceFromManifest = (input: unknown, options: CrmManifestSourceOptions): CrmSource => {
+export const crmSourceFromManifest = (input: unknown, options: CrmManifestSourceOptions): CrmManifestSource => {
   const manifest: CrmManifest = parseCrmManifest(input, options.api)
   const now = options.now ?? Date.now
   const hooks = options.hooks ?? {}
@@ -316,7 +327,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
       : { items, hasMore: true, nextCursor: `${next}@${started}` }
   }
 
-  const readOne = async <K extends CrmLiveKind>(
+  const readOne = async <K extends CrmKind>(
     kind: K,
     externalId: string,
     send: ServiceApiCall,
@@ -447,7 +458,7 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     return { ...page, items: await mapped(kind, page.items, defined, send) }
   }
 
-  const base: CrmSource = {
+  const base: CrmManifestSource = {
     provider: manifest.provider,
     traits: { kinds: manifest.kinds, removedInChanges: false },
 
@@ -490,6 +501,10 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     ...(live.length ? { list: readLive } : {}),
 
     async get<K extends CrmLiveKind>(kind: K, externalId: string, context?: CrmCallContext) {
+      return readOne(kind, externalId, metered(context), context)
+    },
+
+    async record<K extends CrmKind>(kind: K, externalId: string, context?: CrmCallContext) {
       return readOne(kind, externalId, metered(context), context)
     },
 

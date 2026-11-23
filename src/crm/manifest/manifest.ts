@@ -6,7 +6,8 @@ import { CRM_KINDS, type CrmKind, type CrmRecords } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind, STAGE_OUTCOMES, type StageOutcome } from "../../domain/deals.js"
 import { editDistance } from "../../search/correct.js"
 import type { CrmSource } from "../source.js"
-import type { CrmRaw } from "../values.js"
+import { type CrmRaw, isRaw } from "../values.js"
+import type { CrmWriteFields } from "../writer.js"
 import { FIELDS } from "./map.js"
 
 /**
@@ -136,6 +137,67 @@ export interface CrmManifestFields {
   keep?: { path: string; is: unknown } | ((raw: CrmRaw) => boolean)
 }
 
+/**
+ * How one of our fields is written under the call's `"{values}"`: at `to`, in the shape `each` gives one value, where
+ * `"{value}"` stands for ours. Rules that share a `to` merge into one entry, as Attio's personal name takes the first
+ * and last name together.
+ */
+export interface CrmWriteRule {
+  to: string
+  /** Absent, the value itself. */
+  each?: unknown
+  /** The service takes a list even for one value (Attio); without it, a list of more than one is refused. */
+  list?: true
+  /** A decimal string goes as a number: an amount. */
+  number?: true
+}
+
+/** A value the service keeps elsewhere (Attio's currency is the attribute's): read once, and another one is refused. */
+export interface CrmFixedValue {
+  fixed: CrmOperationCall
+  /** Where the value is in the answer. */
+  at: string
+}
+
+/** The fields a write of each kind may name, as `CrmWriteFields` has them; `custom` has its own rule. */
+export const CRM_WRITE_FIELDS: { readonly [K in CrmKind]: readonly string[] } = {
+  deal: ["title", "pipeline", "stage", "amount", "currency", "closeDate", "organization", "people", "owner", "reason"],
+  lead: ["title", "pipeline", "stage", "amount", "currency", "closeDate", "organization", "people", "owner", "reason"],
+  person: ["name", "firstName", "lastName", "position", "emails", "phones", "owner"],
+  organization: ["name", "emails", "phones", "owner"],
+}
+
+/** The fields that take a list: each value goes through `each`. */
+export const CRM_LIST_FIELDS: readonly string[] = ["emails", "phones", "people"]
+
+/**
+ * Writes of one kind. A field with no rule is refused before anything is sent. The item is read back by the
+ * entity's `get` after each write, so the store keeps what the service holds.
+ */
+export interface CrmManifestWrite<K extends CrmKind = CrmKind> {
+  /** Its body holds `"{values}"` where the object of values goes. */
+  create?: CrmOperationCall
+  /** `"{id}"` in its path, `"{values}"` in its body. Only the fields given are sent. */
+  update?: CrmOperationCall
+  /** `"{id}"` in its path; a deal or lead only. */
+  remove?: CrmOperationCall
+  /** Where the new record's id is in the create's answer: `data.id.record_id`. */
+  id?: string
+  /**
+   * Our fields by the names `CrmWriteFields` gives them, and `reason` for a close's reason. `implied`: the field is
+   * not sent, as Attio's one pipeline follows from the stage. `currency` may be a fixed value.
+   */
+  fields: {
+    readonly [F in Exclude<keyof CrmWriteFields[K], "custom" | "currency"> | "reason"]?: CrmWriteRule | "implied"
+  } & { readonly currency?: CrmWriteRule | CrmFixedValue }
+  /** The account's own fields, each written at its code; absent, `--field` is refused. */
+  custom?: Omit<CrmWriteRule, "to">
+  /** What clears a field: Attio `[]`, HubSpot `""`. Default `null`. */
+  clear?: unknown
+  /** The service answers a repeat of one operation id from its record (`CrmWriteCapabilities.idempotent`). */
+  idempotent?: boolean
+}
+
 /** A CRM account described as data: what to call for each kind and where each of our fields is in the answer. */
 export interface CrmManifest {
   /** The registry name: `hubspot`, `pipedrive`. */
@@ -151,6 +213,7 @@ export interface CrmManifest {
     call: CrmOperationCall
     map: { externalId: CrmRule; name?: CrmRule; email?: CrmRule; position?: CrmRule; active?: CrmRule }
   }
+  writes?: { readonly [K in CrmKind]?: CrmManifestWrite<K> }
 }
 
 /** Corrects one record after the map; `call` reads more from the service, spent from the run's budget. */
@@ -275,6 +338,24 @@ const fields = v.strictObject({
 
 const kind = v.picklist(CRM_KINDS)
 
+const writeShape = {
+  each: v.optional(v.unknown()),
+  list: v.optional(v.literal(true)),
+  number: v.optional(v.literal(true)),
+}
+const writeRule = v.strictObject({ to: v.pipe(v.string(), v.minLength(1)), ...writeShape })
+
+const write = v.strictObject({
+  create: v.optional(call),
+  update: v.optional(call),
+  remove: v.optional(call),
+  id: v.optional(path),
+  fields: v.record(v.string(), v.union([writeRule, v.literal("implied"), v.strictObject({ fixed: call, at: path })])),
+  custom: v.optional(v.strictObject(writeShape)),
+  clear: v.optional(v.unknown()),
+  idempotent: v.optional(v.boolean()),
+})
+
 const schema = v.strictObject({
   provider: v.pipe(v.string(), v.regex(/^[a-z][a-z0-9-]*$/, "a registry name such as hubspot")),
   kinds: v.pipe(v.array(kind), v.minLength(1)),
@@ -294,6 +375,7 @@ const schema = v.strictObject({
       }),
     }),
   ),
+  writes: v.optional(v.record(kind, v.optional(write))),
 })
 
 const invalid = (where: string, message: string) =>
@@ -397,5 +479,78 @@ export const parseCrmManifest = (input: unknown, api: ServiceApiManifest): CrmMa
   for (const [kind, one] of Object.entries(manifest.fields ?? {}))
     if (one) checkCall(`fields.${kind}.call`, one.call, true)
   if (manifest.users) checkCall("users.call", manifest.users.call, true)
+  for (const [kind, one] of Object.entries(manifest.writes ?? {}) as [CrmKind, CrmManifestWrite][])
+    if (one) checkWrite(kind, one, manifest, { operations, known, checkCall })
   return manifest
+}
+
+const checkWrite = (
+  kind: CrmKind,
+  one: CrmManifestWrite,
+  manifest: CrmManifest,
+  {
+    operations,
+    known,
+    checkCall,
+  }: {
+    operations: ReadonlyMap<string, ServiceApiManifest["operations"][number]>
+    known: readonly string[]
+    checkCall: (where: string, one: CrmOperationCall, pages: boolean) => void
+  },
+) => {
+  const where = `writes.${kind}`
+  if (!manifest.kinds.includes(kind)) throw invalid(where, `${kind} is not in kinds`)
+  if (!manifest.entities[kind]?.get)
+    throw invalid(where, `each write is read back by entities.${kind}.get, and it has none`)
+  if (!one.create && !one.update && !one.remove) throw invalid(where, "names no create, update or remove")
+  if (one.remove && !(DEAL_KINDS as readonly string[]).includes(kind))
+    throw invalid(`${where}.remove`, "only a deal or a lead is removed")
+  if (one.create && one.id === undefined) throw invalid(`${where}.id`, "a create says where the new record's id is")
+  for (const verb of ["create", "update", "remove"] as const) {
+    const sent = one[verb]
+    if (!sent) continue
+    const operation = operations.get(sent.operation)
+    if (!operation) {
+      const near = nearest(sent.operation, known)
+      throw invalid(
+        `${where}.${verb}.operation`,
+        `no operation ${sent.operation} in the API${near ? `; did you mean ${near}?` : ""}`,
+      )
+    }
+    if (operation.effect === "read") throw invalid(`${where}.${verb}.operation`, `${sent.operation} is a read`)
+    if (verb !== "create" && !hasPlaceholder([sent.path, sent.query, sent.body], "{id}"))
+      throw invalid(`${where}.${verb}`, 'no "{id}" in its path, query or body')
+    if (verb !== "remove" && !hasPlaceholder(sent.body, "{values}"))
+      throw invalid(`${where}.${verb}`, 'no "{values}" in its body')
+  }
+  const fields = CRM_WRITE_FIELDS[kind]
+  const shared = new Map<string, string[]>()
+  for (const [field, rule] of Object.entries(one.fields) as [string, CrmWriteRule | "implied" | CrmFixedValue][]) {
+    if (!fields.includes(field)) {
+      const near = nearest(field, fields)
+      throw invalid(
+        `${where}.fields.${field}`,
+        `a ${kind} writes no such field${near ? `; did you mean ${near}?` : ""}`,
+      )
+    }
+    if (rule === "implied") {
+      if (field !== "pipeline") throw invalid(`${where}.fields.${field}`, "only a pipeline follows from the stage")
+      continue
+    }
+    if ("fixed" in rule) {
+      if (field !== "currency") throw invalid(`${where}.fields.${field}`, "only a currency is a fixed value")
+      checkCall(`${where}.fields.${field}.fixed`, rule.fixed, false)
+      continue
+    }
+    if (rule.each !== undefined && !hasPlaceholder(rule.each, "{value}"))
+      throw invalid(`${where}.fields.${field}.each`, 'no "{value}" in it')
+    shared.set(rule.to, [...(shared.get(rule.to) ?? []), field])
+  }
+  for (const [to, named] of shared) {
+    const rules = named.map((field) => (one.fields as Record<string, CrmWriteRule>)[field] as CrmWriteRule)
+    if (named.length > 1 && !named.every((field, n) => !CRM_LIST_FIELDS.includes(field) && isRaw(rules[n]?.each)))
+      throw invalid(`${where}.fields`, `${named.join(", ")} share ${to}: only single values in objects merge`)
+  }
+  if (one.custom?.each !== undefined && !hasPlaceholder(one.custom.each, "{value}"))
+    throw invalid(`${where}.custom.each`, 'no "{value}" in it')
 }

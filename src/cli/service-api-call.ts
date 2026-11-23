@@ -47,15 +47,7 @@ export const hostsFetch = (
 // The run record and the fetch are the only things httpApiSend asks a command for, and a sync has no command of its own.
 const NO_COMMAND = new Command("source")
 
-/**
- * The `api` group's request path for code that is not a command, such as a source read from a manifest: the same
- * request building, sign-in header, redirect rule, run record and refusals as `serviceApiCommand`, without a guard. It
- * sends reads only; a write goes through `serviceApiWriter` or the `api` group, where the profile's guard asks. A
- * request is sent only under the server's address, path included: a site at `host/blog` never signs `host/other`.
- */
-export const serviceApiCall = (
-  options: ServiceApiCallOptions,
-): ServiceApiCall & { withHeaders: ServiceApiCallWithHeaders } => {
+const sender = (options: ServiceApiCallOptions, writes: boolean): ServiceApiCallWithHeaders => {
   const baseUrl = manifestBaseUrl(options.manifest, options.baseUrl, options.serverVariables)
   const operations = new Map(options.manifest.operations.map((one) => [one.id, one]))
   const exchange = httpApiExchange({
@@ -64,10 +56,10 @@ export const serviceApiCall = (
     failure: options.failure,
     failedAnswer: options.failedAnswer,
   })
-  const withHeaders: ServiceApiCallWithHeaders = async (id, input) => {
+  return async (id, input) => {
     const operation = operations.get(id)
     if (!operation) throw new CliError("configuration_error", `no ${options.service} API operation ${id}`)
-    if (operation.effect !== "read")
+    if (!writes && operation.effect !== "read")
       throw new CliError("configuration_error", `${operation.command} is not a read; a source only reads`)
     const request = httpApiRequest(operation, input, baseUrl)
     if (!underBase(request.url, baseUrl))
@@ -81,7 +73,29 @@ export const serviceApiCall = (
     const { answer, headers } = await exchange(NO_COMMAND, operation, request)
     return { body: answer, headers }
   }
+}
+
+/**
+ * The `api` group's request path for code that is not a command, such as a source read from a manifest: the same
+ * request building, sign-in header, redirect rule, run record and refusals as `serviceApiCommand`, without a guard. It
+ * sends reads only; a write goes through `serviceApiWriter` or the `api` group, where the profile's guard asks. A
+ * request is sent only under the server's address, path included: a site at `host/blog` never signs `host/other`.
+ */
+export const serviceApiCall = (
+  options: ServiceApiCallOptions,
+): ServiceApiCall & { withHeaders: ServiceApiCallWithHeaders } => {
+  const withHeaders = sender(options, false)
   return Object.assign(async (id: string, input: ApiCommandInput) => (await withHeaders(id, input)).body, {
     withHeaders,
   })
+}
+
+/**
+ * `serviceApiCall` that sends writes too, with no guard of its own: only for a writer that cli-core's CRM writes
+ * wrap in theirs (`crm/writes.ts`), which checks the operation's `api` keys. Never exported from the package: a CLI
+ * that sends a write itself goes through `serviceApiWriter`. A write is sent once; a lost answer is `outcome_unknown`.
+ */
+export const serviceApiSend = (options: ServiceApiCallOptions): ServiceApiCall => {
+  const withHeaders = sender(options, true)
+  return async (id, input) => (await withHeaders(id, input)).body
 }
