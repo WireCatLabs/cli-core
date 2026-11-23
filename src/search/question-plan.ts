@@ -168,9 +168,9 @@ export function planQuestion(text: string, strict = false) {
 }
 
 /**
- * Text as a question is searched. Its own "?" would parse as a one-character wildcard and send it to strict search
- * (BUG-395); the colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search, and
- * escaped it is syntax again, so it splits the numbers (BUG-450). A quoted timestamp keeps its colons (BUG-458).
+ * Text as a question is searched. Its own "?" would parse as a one-character wildcard and send it to strict search;
+ * the colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search, and
+ * escaped it is syntax again, so it splits the numbers. A quoted timestamp keeps its colons.
  */
 export const questionText = (text: string) =>
   text

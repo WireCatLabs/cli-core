@@ -6,7 +6,7 @@ import { capability, type MessengerAdapter } from "../ports/messenger.js"
  * Found before the chat is resolved, so a messenger without identities refuses before any lookup;
  * the returned check runs once the chat id is known, in the same connection. With no identity named,
  * a chat whose saved sender is not the account is refused: the messenger would post as that sender,
- * and nothing the owner typed said so (owner, NEED-796 C).
+ * and nothing the owner typed said so (the owner's decision).
  */
 export const sendAsCheck = (connection: MessengerAdapter, sendAs: Id | undefined) => {
   if (sendAs === undefined) {

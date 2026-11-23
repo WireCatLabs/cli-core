@@ -131,7 +131,7 @@ const PENDING_DAYS = 30
 const PENDING_MOST = 5000
 
 /**
- * A CRM account's copies in the store, written as the CRM has them: nothing waits for review (NEED-2271 A), and
+ * A CRM account's copies in the store, written as the CRM has them: nothing waits for review, and
  * nothing is ever matched by name (WC-DATA-6). Rows the CRM no longer has are marked deleted, never removed
  * (WC-DATA-7). Every write is one transaction per call.
  */
@@ -231,7 +231,7 @@ export interface CrmCopies extends CrmReads, CrmActivityWrites {
   ): Promise<CrmContactsRemoved>
   /**
    * Removes one contact from the copy, as `removeContacts` removes those outside the scope: a write made it another
-   * user's client, which the copy does not keep (NEED-2661). Answers what went.
+   * user's client, which the copy does not keep. Answers what went.
    */
   removeContact(key: AccountKey, externalId: string): Promise<CrmContactsRemoved>
   /** How many of the kind the account holds, not deleted; every contact it ever saved. */

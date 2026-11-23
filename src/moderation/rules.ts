@@ -10,7 +10,7 @@ import { LEVELS, type Level } from "../sends/permissions.js"
 export const RULE_ACTIONS = ["report", "delete", "remove"] as const
 
 /**
- * max-cli's first words for a group's consent (`NEED-308`), read as the profile's levels
+ * max-cli's first words for a group's consent, read as the profile's levels
  * (`NEED-462` B): `flag` and `confirm` both ask, `forbid` denies.
  */
 const OLD_LEVELS: Record<string, Level> = { forbid: "deny", flag: "ask", confirm: "ask", allow: "allow" }
@@ -23,7 +23,7 @@ const action = v.picklist(RULE_ACTIONS)
 const personIds = v.array(v.pipe(v.string(), v.regex(/^-?\d+$/, "a person id is digits")))
 const atLeast = (min: number) => v.pipe(v.number(), v.integer(), v.minValue(min))
 
-/** `requests` and `consent.accept|decline` were for join requests (max-cli `FIND-249`); a file with them loads and drops them. */
+/** `requests` and `consent.accept|decline` were for join requests; a file with them loads and drops them. */
 const groupRules = v.pipe(
   v.strictObject({
     title: v.nullable(v.string()),
@@ -59,7 +59,7 @@ const file = v.strictObject({
   checkedUntil: v.optional(v.record(v.string(), v.string())),
 })
 
-/** Every key written out, so the file shows all there is to set (max-cli `NEED-314`). Nothing here acts. */
+/** Every key written out, so the file shows all there is to set. Nothing here acts. */
 export const defaultRules = (title: string | null): GroupRules => ({
   title,
   trusted: [],

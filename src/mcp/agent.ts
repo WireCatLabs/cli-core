@@ -336,7 +336,7 @@ const argvOf = (
 /**
  * Runs one command for an agent through the CLI itself, in this process: the same parsing, guard, answer and
  * error as on the command line. The answer comes back as the object the command rendered, and a failure as the
- * error object the CLI would print. A write at level `ask` goes ahead (NEED-773); the server's stricter levels
+ * error object the CLI would print. A write at level `ask` goes ahead; the server's stricter levels
  * apply, to the check before the run and to the command's own guard. With `connection`, the command borrows the
  * server's open connection and never opens one of its own. Which commands are offered is the catalogue's
  * decision (`toolsFromCommands`); this runs what it is handed, except a command that never returns.

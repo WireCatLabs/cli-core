@@ -265,7 +265,7 @@ export interface CrmRecordCommandOptions {
   now: () => number
 }
 
-/** `people`, `organizations` and `users`: read live from the CRM, so `--offline` is refused (NEED-2661). */
+/** `people`, `organizations` and `users`: read live from the CRM, so `--offline` is refused. */
 export const addCrmRecordCommands = (program: Command, options: CrmRecordCommandOptions): void => {
   const { within, example } = options
   const quotaOf = (run: CrmRun) =>

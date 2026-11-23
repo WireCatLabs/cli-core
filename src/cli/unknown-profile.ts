@@ -14,7 +14,7 @@ const typo = (source: string | undefined, here: readonly string[]) =>
 
 /**
  * A "not signed in" failure for a first word this computer has never seen as a profile is most likely a typo: it
- * answers `not_found` with the profiles here (FIND-2583), and keeps the sign-in hint for a profile that is new on
+ * answers `not_found` with the profiles here, and keeps the sign-in hint for a profile that is new on
  * purpose. Only after a command failed, and never for `setup` or `session start`, which make a new one. The first word and `<PREFIX>_PROFILE` are checked, since a typo in either is as likely; a bot gets
  * its token with `bot auth set` under any new name.
  */

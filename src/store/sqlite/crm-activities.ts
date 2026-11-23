@@ -82,7 +82,7 @@ export interface ActivityFilter {
   /** The identity `<account>/user/<id>` it is assigned to; `null` is none. */
   owner?: string | null
   /**
-   * A profile that may read only part of the copy (SEC-197): the activities on its deals and leads, and those on
+   * A profile that may read only part of the copy: the activities on its deals and leads, and those on
    * contacts or companies alone that are assigned to it. A hidden deal or lead is never named in `on`.
    */
   viewer?: CopyViewer

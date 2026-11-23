@@ -98,7 +98,7 @@ export interface BaseEnvironment {
 
 /**
  * The command's answer and error go to the MCP server as objects, never as text. A write at level `ask` goes
- * ahead (NEED-773): nobody is at a terminal, and the profile's permissions already decided.
+ * ahead: nobody is at a terminal, and the profile's permissions already decided.
  */
 export interface AgentRun {
   result: (value: unknown) => void

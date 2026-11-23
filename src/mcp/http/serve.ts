@@ -127,7 +127,7 @@ export interface HttpOptions {
 }
 
 /**
- * MCP over Streamable HTTP on 127.0.0.1, behind the owner's tunnel (CLI-58). Every MCP request needs
+ * MCP over Streamable HTTP on 127.0.0.1, behind the owner's tunnel. Every MCP request needs
  * a token from the owner login; the Host header must be the tunnel's or this machine's, so a page in
  * the owner's browser cannot reach the port through a rebound DNS name.
  */

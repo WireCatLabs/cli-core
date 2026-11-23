@@ -107,7 +107,7 @@ const lockProcess =
 /**
  * `serve` in the background: `start`, `stop`, `restart`, `status`, `logs`. Without a unit, `start`
  * runs `serve` as a process of its own; with one — `install`, a systemd user unit or a launchd
- * agent — it goes through systemd or launchd. **Nothing starts now until `start` is typed** (NEED-9):
+ * agent — it goes through systemd or launchd. **Nothing starts now until `start` is typed**:
  * `install` writes the file and enables it, so it starts with every session from the next login (or boot,
  * under linger) until `uninstall`. What the server does stays each CLI's; `options.process` says how to find,
  * start and stop it.

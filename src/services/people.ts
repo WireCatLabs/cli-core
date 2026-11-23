@@ -35,7 +35,7 @@ export interface ContactSync {
 
 /**
  * A contact is somebody this account has a one-to-one chat with — a query over the chat list, never
- * a flag somebody maintains (max-cli `NEED-105`). Where the store holds who is in each one-to-one
+ * a flag somebody maintains. Where the store holds who is in each one-to-one
  * chat, it answers; otherwise the dialogs themselves do, offline from the stored chats.
  */
 export interface PeopleService {

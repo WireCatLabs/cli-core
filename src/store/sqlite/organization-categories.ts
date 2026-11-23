@@ -15,7 +15,7 @@ const OWN = "(SELECT id FROM organizations WHERE deleted_at IS NULL AND json_ext
 const EMPLOYED = "('employee', 'contractor', 'founder')"
 
 /**
- * The category as SQL over `organizations o`, derived from usable relationships at `now` (NEED-2377), as
+ * The category as SQL over `organizations o`, derived from usable relationships at `now`, as
  * `organizationCategories` derives it: `client` is `customer-of` an own organization, `supplier` one an own
  * organization is `customer-of`, `partner` `partner-of` one, `employer` one the owner's person is `member-of` as
  * employee, contractor or founder.

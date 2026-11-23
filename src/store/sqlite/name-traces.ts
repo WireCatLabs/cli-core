@@ -8,7 +8,7 @@ import { referenceOfThing } from "./things.js"
 
 /**
  * People, owner aside, by the name they share once case, quotes, word order, script and spelling are set aside:
- * `Светлана Кузнецова` and `Svetlana Kuznetsova` are one name here (BUG-678).
+ * `Светлана Кузнецова` and `Svetlana Kuznetsova` are one name here.
  */
 export const peopleByNameKey = (database: CacheDatabase): Map<string, { people: number[]; name: string }> => {
   const found = new Map<string, { people: number[]; name: string }>()

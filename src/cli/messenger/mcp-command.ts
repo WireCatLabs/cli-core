@@ -60,7 +60,7 @@ export interface ProfileSet {
 }
 
 /**
- * The profile or profiles an MCP server is for, always named (NEED-1881, WC-MCP-9): a leading profile, or
+ * The profile or profiles an MCP server is for, always named (WC-MCP-9): a leading profile, or
  * `--profiles` with a list or `all`. Neither, or both, is refused with the profiles on this computer. `--profiles`
  * takes the place of `<PREFIX>_PROFILE`; under `<PREFIX>_PROFILE_LOCK` it may name the locked profile only
  * (WC-ACCT-5).

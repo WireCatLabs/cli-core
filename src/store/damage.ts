@@ -66,7 +66,7 @@ const journalSeen = (store: string, { seen, command, at }: JournalMark) => {
     : `the store's journal file (${wal}) was deleted or replaced by another program while \`${command}\` had the store open (${at})`
 }
 
-/** How much may be gone and since when: nothing records a row that damage takes (BUG-627). */
+/** How much may be gone and since when: nothing records a row that damage takes. */
 export const lossUnknown = (lastOkAt: string | null | undefined, gone = false): string => {
   const since = lastOkAt
     ? `since the last deep check that passed (${lastOkAt})`

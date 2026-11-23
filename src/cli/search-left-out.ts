@@ -47,7 +47,7 @@ export const deniedKindsOf = <K extends SearchedKind>(
 
 /**
  * The kinds whose list the profile denies, so `search all` leaves them out rather than show their titles and excerpts
- * under another key (SEC-144). Levels as the run judged the command: the profile's, `--permission`, and an MCP
+ * under another key. Levels as the run judged the command: the profile's, `--permission`, and an MCP
  * server's own stricter ones.
  */
 export const deniedKinds = <K extends SearchedKind>(

@@ -52,7 +52,7 @@ export interface CrmDigestOptions {
   language: string
   /** The profile's name, for the sync's age. */
   profile: string
-  /** A profile that may read only part of the copy (SEC-197). */
+  /** A profile that may read only part of the copy. */
   viewer?: CopyViewer
   /** The viewer's rule hid rows it should not have: the summary says so. */
   hidden?: boolean

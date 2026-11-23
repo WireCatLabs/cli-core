@@ -40,7 +40,7 @@ const newer = (one: string, other: string): boolean => {
 }
 
 /**
- * Why this serve should stop so its unit starts the installed build (BUG-643): the store moved past what this build
+ * Why this serve should stop so its unit starts the installed build: the store moved past what this build
  * may write, or a newer version was installed over it. A store that cannot be read now is not a reason.
  */
 export const outdatedReason = async ({

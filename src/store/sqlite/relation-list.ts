@@ -42,7 +42,7 @@ export interface RelationFilter {
   accounts?: AccountKey[]
   /** No row with an end of these types, such as `deal` and `lead` a profile denies. */
   deniedKinds?: string[]
-  /** No row with a deal or lead end that one of these may not read (SEC-197); each limits only its own account. */
+  /** No row with a deal or lead end that one of these may not read; each limits only its own account. */
   viewers?: readonly CopyViewer[]
   limit?: number
   /** 1-based. */

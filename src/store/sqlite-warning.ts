@@ -4,7 +4,7 @@ const quieted = new WeakSet<object>()
 
 /**
  * Node 22 prints `ExperimentalWarning: SQLite is an experimental feature` when `node:sqlite` first loads; Node 24 does
- * not. Agents read the two stderr lines as a failure (`NEED-1448`), so this drops that one warning and passes every
+ * not. Agents read the two stderr lines as a failure, so this drops that one warning and passes every
  * other one through. It must run before `node:sqlite` loads, and a builtin loads while its importer is linked —
  * before any statement of that importer runs — so callers call it before the dynamic import, never beside a static one.
  */

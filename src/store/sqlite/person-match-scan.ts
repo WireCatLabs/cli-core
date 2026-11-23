@@ -31,13 +31,13 @@ const CURSOR = "people.scan"
 const RULES = 7
 
 /**
- * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
+ * A shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
  * The owner's word (2026-11-11): `hr@` is often one person's, so it starts below `info@`.
  */
 const SHARED_SCORE = { alone: 0.1, personLike: 0.05, name: 0.4, trace: 0.3, weakTrace: 0.2 }
 
 /**
- * NEED-2529: every rule's proposal on the scale of `SHARED_SCORE`, so the review lists the strongest first. A phone two
+ * Every rule's proposal on the scale of `SHARED_SCORE`, so the review lists the strongest first. A phone two
  * people alone have but that does not join (a CRM's or a card's), one name with a phone or an address only these two
  * hold, and a pair the owner rejected that meets new evidence of that kind are 0.7; one name with a chat or a company
  * domain in one source, and a meeting guest's typed address, 0.5; a phone or personal address 3–6 people share, 0.4;
@@ -54,9 +54,9 @@ export const PROPOSAL_SCORE = {
 }
 
 /**
- * NEED-2445, safe option until the owner rules: a number two people share joins them only when a messenger, which
+ * Safe option until the owner rules: a number two people share joins them only when a messenger, which
  * keeps its user's own number, holds it; a CRM's or a card's number is someone's word and waits as a proposal.
- * NEED-2600: a call's other side, kept as `phone:<number>`, is that number as the phone network gave it, as strong
+ * A call's other side, kept as `phone:<number>`, is that number as the phone network gave it, as strong
  * as a messenger's; it joins only on a mobile number, since an office's landline is everyone's who works there.
  */
 export const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
@@ -64,13 +64,13 @@ export const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
   (holders.some(({ externalId }) => externalId === `phone:${phone}`) && isMobilePhone(phone))
 
 /**
- * BUG-774: holders that each come from a different source are one human seen by each of them (their CRM card, their
+ * Holders that each come from a different source are one human seen by each of them (their CRM card, their
  * WhatsApp, their call), not people on one line, however many person rows they still are.
  */
 export const oneHolderPerSource = (holders: Holder[]): boolean =>
   new Set(holders.map(({ list }) => list)).size === holders.length
 
-/** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
+/** Safe option until the owner rules: an address more than two people have is shared, so it proposes. */
 const addressGroupJoins = (people: number): boolean => people <= 2
 
 export interface Holder {
@@ -88,7 +88,7 @@ const NOT_A_BOT = "i.bot IS NOT 1 AND i.provider NOT LIKE '%-bot'"
 const COMPANY = "EXISTS (SELECT 1 FROM organization_identities o WHERE o.identity_id = i.id) AS company"
 
 /**
- * SEC-177: a company's line or mailbox is everyone's who works there, so it never says two people are one. It is one
+ * A company's line or mailbox is everyone's who works there, so it never says two people are one. It is one
  * when an organization holds it, or when two people of one list have it, such as two CRM contacts with one number. A
  * CRM's contact and its user may be one person, so they are two lists. A messenger keeps one account per number, so
  * two of its accounts on one number are a number that changed hands, not a company's line.
@@ -169,7 +169,7 @@ const add = (found: Holders, key: string | undefined, holder: Holder) => {
 }
 
 /**
- * NEED-2600: a CRM keeps a number as someone typed it, `8 (912) 345-67-89`; without a `+` it is read in the store's
+ * A CRM keeps a number as someone typed it, `8 (912) 345-67-89`; without a `+` it is read in the store's
  * `phone_countries` (Russian by default), so a call from that number finds the contact. A messenger's bare digits stay
  * international (`storedPhone`).
  */
@@ -268,7 +268,7 @@ interface Pass {
 }
 
 /**
- * Joins two people unless the owner separated them, or rejected the pair (NEED-2444): then the pair is proposed when
+ * Joins two people unless the owner separated them, or rejected the pair: then the pair is proposed when
  * this evidence is new to the owner. Gives the person that stays.
  */
 const join = (
@@ -304,7 +304,7 @@ const join = (
 }
 
 /**
- * SEC-177: the scan never joins the owner or proposes anyone to them; a mailbox or number the owner reads may be
+ * The scan never joins the owner or proposes anyone to them; a mailbox or number the owner reads may be
  * someone else's, and only the owner joins anyone to themselves.
  */
 const touchesOwner = ({ context, result }: Pass, from: number, to: number, signal: string): boolean => {
@@ -353,9 +353,9 @@ const skipShared = (pass: Pass, people: Map<number, number>, signal: string) =>
   pass.result.skipped.push({ persons: [...people.keys()].map(String), signal, reason: `identity.shared-${signal}` })
 
 /**
- * A number two people have joins them (NEED-2445), and so does one each source has once (BUG-774); one that more
- * share proposes. A company's line does neither. A proposal still open for the pair never keeps it from joining
- * (BUG-775): the join settles it.
+ * A number two people have joins them, and so does one each source has once; one that more
+ * share proposes. A company's line does neither. A proposal still open for the pair never keeps it from joining:
+ * the join settles it.
  */
 const samePhone = (pass: Pass, phone: string, holders: Holder[]) => {
   const people = peopleOf(pass.context, holders)
@@ -404,7 +404,7 @@ const sharedMailboxCase = (context: StoreContext, address: string, from: number,
 }
 
 /**
- * NEED-2526: a shared mailbox never joins anyone (SEC-177), but each pair on it is proposed to the owner, scored by
+ * A shared mailbox never joins anyone, but each pair on it is proposed to the owner, scored by
  * what else they share.
  */
 const proposeShared = (pass: Pass, { address, holders, shared }: SharedGroup) => {
@@ -428,8 +428,8 @@ const proposeShared = (pass: Pass, { address, holders, shared }: SharedGroup) =>
 }
 
 /**
- * One address is one person in any scope (NEED-2382), unless more than two people have it (NEED-2446). A no-reply
- * address is no one's. A role address such as `info@` and a company's mailbox only propose (NEED-2526).
+ * One address is one person in any scope, unless more than two people have it. A no-reply
+ * address is no one's. A role address such as `info@` and a company's mailbox only propose.
  */
 const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
   if (isNoReplyAddress(address)) return
@@ -465,7 +465,7 @@ const providersOf = ({ database }: StoreContext, person: number): Set<string> =>
   )
 
 /**
- * SEC-177: a phone or address proves only when it is these two people's alone. A chat or a company's domain is weaker,
+ * A phone or address proves only when it is these two people's alone. A chat or a company's domain is weaker,
  * and is enough only between people of one source, whose names come from one place.
  */
 const strongEnough = (context: StoreContext, from: number, to: number, trace: SharedTrace): boolean => {

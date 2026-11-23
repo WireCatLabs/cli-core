@@ -55,7 +55,7 @@ export interface ChangeFilter {
   /** A pipeline's store id: only the changes of its deals or leads. */
   pipeline?: number
   /**
-   * A profile that may read only part of the copy (SEC-197): the deals and leads assigned to it, the activities on
+   * A profile that may read only part of the copy: the deals and leads assigned to it, the activities on
    * them, and the contacts linked to them or assigned to it.
    */
   viewer?: CopyViewer

@@ -33,7 +33,7 @@ export const boundOf = (value: string | undefined, what: string, zone: string, e
   }
 }
 
-/** A stage the CRM removed stays in a pipeline only while a row stands in it (BUG-7). */
+/** A stage the CRM removed stays in a pipeline only while a row stands in it. */
 export const SHOWN_STAGE =
   "(s.deleted_at IS NULL OR EXISTS (SELECT 1 FROM deals d WHERE d.stage_id = s.id AND d.deleted_at IS NULL) " +
   "OR EXISTS (SELECT 1 FROM leads l WHERE l.stage_id = s.id AND l.deleted_at IS NULL))"

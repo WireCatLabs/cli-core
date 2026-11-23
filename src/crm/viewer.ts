@@ -9,7 +9,7 @@ import type { CrmSource } from "./source.js"
 const VIEWERS = "crm:viewers"
 
 interface Viewers {
-  /** The CRM limits what its users see (NEED-2660): it names the sign-in's user or answers `isAdmin`. */
+  /** The CRM limits what its users see: it names the sign-in's user or answers `isAdmin`. */
   limited: boolean
   /** Each user a sync signed in as, and whether the CRM said it is the administrator then. */
   admins: Record<string, boolean>
@@ -50,7 +50,7 @@ export interface CrmViewing {
 }
 
 /**
- * Whose deals and leads of the copy a profile reads offline (SEC-197): every one when the CRM limits nobody or a sync
+ * Whose deals and leads of the copy a profile reads offline: every one when the CRM limits nobody or a sync
  * found `user` its administrator; otherwise, a copy no sync recorded the rule of too, only those assigned to `user`,
  * and none when `user` is unknown. The network is never asked.
  */
@@ -92,7 +92,7 @@ export const viewerOf = async (run: { store: MessageStore; account: AccountKey; 
 }
 
 /**
- * The row with `deal`, the deal a lead became, left out when a viewer may not read that deal (SEC-197): a lead the
+ * The row with `deal`, the deal a lead became, left out when a viewer may not read that deal: a lead the
  * profile reads must not name a colleague's deal.
  */
 export const withReadableDeal = async <T extends { deal: string | null }>(

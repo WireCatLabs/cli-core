@@ -490,7 +490,7 @@ export const serveOverStdio = async (
   }
 }
 
-/** The same server over HTTP, until Ctrl-C (CLI-58). */
+/** The same server over HTTP, until Ctrl-C. */
 export const serveOverHttpUntilStopped = async (
   command: Invocation,
   context: MessengerContext,

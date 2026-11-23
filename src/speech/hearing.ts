@@ -52,7 +52,7 @@ export interface Kept {
 
 /**
  * Transcripts already heard, in the shared store, for the account this profile last logged in as
- * (owner, NEED-418 B). A profile that has never been online has no account yet: nothing is kept for
+ * (the owner's decision). A profile that has never been online has no account yet: nothing is kept for
  * it, and a voice message is heard again next time.
  */
 export const openKept = async (messenger: Messenger, profile: string, env: NodeJS.ProcessEnv): Promise<Kept> => {

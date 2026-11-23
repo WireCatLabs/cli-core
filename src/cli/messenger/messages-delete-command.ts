@@ -11,7 +11,7 @@ import { type Messenger, messengerContext } from "./context.js"
 /**
  * Deletes without a question at the default level, `allow` (owner, 2026-11-14); a profile at `ask` gets the
  * question, and `--allow-dangerous` is the yes. For everyone only
- * with `--for-everyone` (max-cli `NEED-239`), and never for an agent (NEED-1423).
+ * with `--for-everyone`, and never for an agent.
  */
 export const deleteCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("delete"), {

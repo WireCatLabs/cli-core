@@ -23,7 +23,7 @@ export interface ChatCompleteness {
 }
 
 /**
- * Three facts per chat (NEED-455 A): the newest held against the chat list's, the stretches, and the start reached.
+ * Three facts per chat: the newest held against the chat list's, the stretches, and the start reached.
  * A start mark that a later fetch reached past was wrong, so it stops counting.
  */
 export const chatCompleteness = ({ database }: StoreContext, accountKey: number, chatIds: Id[]): ChatCompleteness[] => {

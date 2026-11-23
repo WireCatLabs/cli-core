@@ -93,7 +93,7 @@ export interface OrganizationContextOptions {
   /** The kinds the profile denies: none of their rows, titles or counts is answered. */
   deniedKinds?: readonly DealKind[]
   /**
-   * Each CRM copy's rule for the profile (`crmViewerOf`, SEC-197): a deal or lead it may not read is left out, and
+   * Each CRM copy's rule for the profile (`crmViewerOf`): a deal or lead it may not read is left out, and
    * `coverage.notRead` carries the rule's note.
    */
   viewing?: readonly CrmViewing[]

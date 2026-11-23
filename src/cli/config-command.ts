@@ -266,7 +266,7 @@ const migrateCommand = (app: AppIdentity, config: Configuration): Command =>
     })
 
 /**
- * Mends JSON syntax with one reading and keeps every value (NEED-2178): no network, no AI, since the file may hold
+ * Mends JSON syntax with one reading and keeps every value: no network, no AI, since the file may hold
  * keys. Anything else is refused with nothing changed.
  */
 const repairCommand = (app: AppIdentity, config: Configuration): Command =>
@@ -337,7 +337,7 @@ const repairCommand = (app: AppIdentity, config: Configuration): Command =>
     })
 
 /**
- * A key no command or write is checked against would be saved and do nothing (BUG-137) — whether it
+ * A key no command or write is checked against would be saved and do nothing — whether it
  * comes as `permissions.<key>` or inside a whole `permissions` object.
  */
 export const refuseUnknownKey = (
@@ -372,8 +372,7 @@ export const refuseUnknownKey = (
 
 /**
  * An agent may hold `mcp.authority` or `bot.api` and change other settings, but never the key that let it in: on any
- * profile, in the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off
- * (NEED-1662, NEED-1679).
+ * profile, in the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off.
  */
 export const refuseGuardedKey = (setting: string, value: string | undefined, ownerOnly: OwnerOnlySettings): void => {
   if (ownerOnly.settings?.includes(setting))
