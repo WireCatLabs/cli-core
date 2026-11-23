@@ -607,6 +607,34 @@ describe("why a document left the copy", () => {
       expect(await historyOf(f, "a")).toMatchObject({ removal: "deleted" })
       expect(await historyOf(f, "b")).toMatchObject({ removal: "unavailable" })
     })
+    it("keeps a resumed trashed row's text when the CLI's walk file drops `deleted`", async () => {
+      const f = await setup()
+      f.files.set("later", file("later", ["root"], "inode/directory"))
+      const base = feedless(f)
+      const saveWalk: typeof base.state.saveWalk = ({ deleted: _deleted, ...walk }) => base.state.saveWalk(walk)
+      const options = { ...base, maxEntries: 1, state: { ...base.state, saveWalk } }
+      await syncDocuments({ ...options, maxEntries: 10000 })
+      f.files.set("a", { ...must(f.files.get("a")), trashed: true })
+      let last = await syncDocuments(options)
+      for (let call = 0; call < 10 && !(last.complete && last.pending === 0); call++)
+        last = await syncDocuments(options)
+      expect(f.state().documents.a).toBeUndefined()
+      expect(await historyOf(f, "a")).toMatchObject({ removal: "unavailable", versions: [{ current: true }] })
+    })
+    it("removes a trashed page with sub-pages as deleted, and the pages below it as unavailable", async () => {
+      const f = await setup()
+      const options = {
+        ...f.options,
+        isDocument: (item: SourceFile) => item.id === "nested",
+        skipReason: () => undefined,
+      }
+      await syncDocuments(options)
+      expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested"])
+      f.files.set("nested", { ...must(f.files.get("nested")), trashed: true })
+      expect(await syncDocuments({ ...options, rescan: true })).toMatchObject({ removed: 2 })
+      expect(await historyOf(f, "nested")).toMatchObject({ removal: "deleted" })
+      expect(await historyOf(f, "a")).toMatchObject({ removal: "unavailable", versions: [{ current: true }] })
+    })
     it("for a file a saved query lists in the trash", async () => {
       const f = await setup()
       const shared = { ...file("shared", ["someone-elses-folder"]), name: "shared - Transcript" }

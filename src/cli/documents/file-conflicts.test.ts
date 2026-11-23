@@ -6,13 +6,22 @@ import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { type FileTarget, fileSyncState, fileVersions, type Mirror } from "../../documents.js"
-import { provide } from "../context.js"
-import type { Body } from "../envelope.js"
+import { outputFor, provide } from "../context.js"
+import { type Body, renderAnswer } from "../envelope.js"
 import { fileConflictsCommand } from "./file-conflicts.js"
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex")
 
-const setup = async () => {
+const MARK = "0123456789abcdef"
+const identity = {
+  command: "ydisk",
+  appName: "ydisk-cli",
+  envPrefix: "YDISK",
+  description: "ydisk",
+  version: "1.0.0",
+}
+
+const setup = async (env: NodeJS.ProcessEnv = {}) => {
   const root = mkdtempSync(join(tmpdir(), "file-conflicts-root-"))
   const stateDir = mkdtempSync(join(tmpdir(), "file-conflicts-state-"))
   const mirror: Mirror = { id: "m1", path: root, folder: "/Notes" }
@@ -48,19 +57,17 @@ const setup = async () => {
   } as unknown as FileTarget
   const bodies: Body[] = []
   const program = new Command("host").option("--json").exitOverride()
-  provide(program, { streams: captureStreams(), env: {}, tty: false })
+  const streams = captureStreams()
+  provide(program, { streams, env, tty: false, app: identity })
   program.addCommand(
     new Command("mirrors").addCommand(
       fileConflictsCommand({
-        identity: {
-          command: "ydisk",
-          appName: "ydisk-cli",
-          envPrefix: "YDISK",
-          description: "ydisk",
-          version: "1.0.0",
-        },
+        identity,
         remote: "disk",
-        output: (_command, body) => bodies.push(body),
+        output: (command, body) => {
+          bodies.push(body)
+          renderAnswer(command, outputFor(command), body)
+        },
         mirrors: () => [mirror],
         pathOf: (_mirror, input) => input,
         stateOf: () => port,
@@ -87,7 +94,7 @@ const setup = async () => {
     await program.parseAsync(["mirrors", "conflicts", ...args], { from: "user" })
     return bodies.at(-1) as Body & { item?: Record<string, unknown>; items?: Record<string, unknown>[] }
   }
-  return { root, port, run, runs }
+  return { root, port, run, runs, program, streams }
 }
 
 describe("mirrors conflicts", () => {
@@ -101,6 +108,20 @@ describe("mirrors conflicts", () => {
     expect(readFileSync(join(root, "plan.md"), "utf8")).toBe("a\ntheirs\n")
     expect(port.read().conflicts).toBeUndefined()
     expect(runs.done).toBe(1)
+  })
+
+  it("marks the three versions, the merge and the path for a scheduled agent", async () => {
+    const { program, streams } = await setup({ YDISK_READ_ONLY: "1", YDISK_UNTRUSTED_MARK: MARK })
+    await program.parseAsync(["--json", "mirrors", "conflicts", "show", "m1", "plan.md"], { from: "user" })
+    const { item } = JSON.parse(streams.stdout.join(""))
+    const marked = (text: string) => `⟧${text}⟦/untrusted:${MARK}⟧`
+    expect(item.remote.text).toContain(marked("a\ntheirs\n"))
+    expect(item.local.text).toContain(marked("a\nmine\n"))
+    expect(item.base.text).toContain(marked("a\nb\n"))
+    expect(item.merged).toMatch(new RegExp(`^⟦untrusted:${MARK} `))
+    expect(item.hunks[0].remote).toContain(marked("theirs\n"))
+    expect(item.path).toContain(marked("plan.md"))
+    expect(item.remote.sha256).toBe(sha("a\ntheirs\n"))
   })
 
   it("refuses a final file from the app's own folders, which hold sign-ins and state", async () => {

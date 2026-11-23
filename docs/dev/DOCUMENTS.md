@@ -173,7 +173,9 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   changes. A document a finished walk did not find stays `unavailable` with its text kept: absence is never a
   deletion. So a `--rescan` that first sees a trashed document removes its text then, where it used to keep it for
   good. A stopped walk saves the ids it found deleted in `deleted`, so the call that resumes it removes them as
-  deleted too; a CLI whose walk-file schema drops `deleted` removes them as `unavailable`. A source that sets
+  deleted too. That holds for a round of changes as well: a file the feed deleted before the round's walk stopped
+  used to resume as `unavailable`, and now stays `deleted`. A CLI whose walk-file schema drops `deleted` removes them
+  as `unavailable`, with the text kept. A source that sets
   `trashed` on nothing in a listing walks as before.
 - **A folder gone since the walk saved it is dropped.** When listing a folder answers `not_found` (through
   `errorOf`), the engine reads the folder again with `metadata`. Only a second `not_found`, or the folder in the
@@ -364,12 +366,19 @@ so the shared reads declare its fields with `marksUntrusted`
 In a run locked read-only with a mark (`schedule agent`), each such text comes between the run's markers; elsewhere
 the answer is as before, and no answer gains a field. `DOCUMENT_UNTRUSTED` (`name`, `title`, `path`, `text`,
 `description`, `excerpt`, a link's `target_text`, at any depth) covers `documents list|show|history`, `changes`,
-`search`, `folders list`, `relationships list` and `catalog show|list|search|tree`, whatever the CLI's row holds.
+`search`, `folders list`, a library CLI's `folders browse` and `catalog show|list|search|tree`, whatever the CLI's
+row holds. `relationships list` marks only the link text written in the document (`targetText`): the rest of a
+relationship is the owner's or an agent's.
 `documents context` marks only `document.title|text|path` and the links' `targetText`: the notes, memories, facts
 and tags beside it are the owner's, as a note is in `search notes`, and `notes`, `memories` and `facts` stay
 unmarked. `files sheets show` marks a sheet's name and its cells' values and formulas, `files documents show` the
-paragraphs' text. `documents export` answers only the owner's own `--output` path, so it marks nothing. A CLI with
-its own copies of these commands (drive-cli) declares the same list on them.
+paragraphs' text, and `mirrors conflicts show` the path, the three versions' text, the merge and each hunk.
+`documents export` answers only the owner's own `--output` path, so it marks nothing.
+
+A CLI with its own reads of the same text marks them itself: drive-cli's own `documents`, `catalog` and knowledge
+commands, notion-cli's `documents get` and `folders browse`, yandex-disk-cli's `files` reads. It imports
+`DOCUMENT_UNTRUSTED` (or `DOCUMENT_CONTEXT_UNTRUSTED` for a context answer) and `marksUntrusted` from
+`@wirecat/cli-core/documents/cli` and wraps each such command: `marksUntrusted(command, DOCUMENT_UNTRUSTED)`.
 
 `@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
 for pages with sub-pages, `change` to check the change feed, and `change` with `remove` for a source without one), and `documentCommandsContract` the CLI's mounted

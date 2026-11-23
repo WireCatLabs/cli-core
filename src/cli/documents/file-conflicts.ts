@@ -17,6 +17,7 @@ import { refusedPlace } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf, snakeKeys } from "../envelope.js"
+import { marksUntrusted } from "../untrusted-marks.js"
 
 /** What a file-mirror CLI gives `fileConflictsCommand`: its mirrors, their state and stores, and its remote. */
 export interface FileConflictCommands {
@@ -46,6 +47,16 @@ export type FileConflictConnection = Pick<
 
 const ID = "mirror id from mirrors list"
 const PATH = "the file's path inside the mirror, like notes/plan.md"
+const CONFLICT_UNTRUSTED = [
+  "path",
+  "base.text",
+  "local.text",
+  "remote.text",
+  "merged",
+  "hunks.base",
+  "hunks.local",
+  "hunks.remote",
+]
 
 /**
  * `mirrors conflicts list|show|resolve` for a file mirror: the conflicts the last sync left, each with its three
@@ -82,10 +93,14 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
         }),
     )
     .addCommand(
-      annotate(new Command("show"), {
-        effects: LOCAL_READ,
-        examples: [`${app} personal mirrors conflicts show 1a2b3c4d notes/plan.md --json`],
-      })
+      // The remote side is someone else's, and the base and the merge hold it too.
+      marksUntrusted(
+        annotate(new Command("show"), {
+          effects: LOCAL_READ,
+          examples: [`${app} personal mirrors conflicts show 1a2b3c4d notes/plan.md --json`],
+        }),
+        CONFLICT_UNTRUSTED,
+      )
         .summary("show a conflict's three versions and the lines that conflict")
         .description(
           "show a conflict's three versions (the last sync's, the local and the remote) and each changed stretch " +
