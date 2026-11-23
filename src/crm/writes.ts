@@ -30,10 +30,10 @@ import {
 export interface CrmWrites extends ProfileWrites {
   writer: CrmWriter
   /**
-   * The CRM user the sign-in acts as; left out, the source's `self()`. An owner other than it checks
-   * `crm.assign-others`; with neither, every owner does.
+   * The CRM user the sign-in acts as, or how to ask the CRM for it when a write needs it. An owner other than it
+   * checks `crm.assign-others`; left out, or answered empty, every owner does.
    */
-  self?: string
+  self?: string | (() => Promise<string | undefined>)
   /** The kinds a new item of which is the sign-in's user's when no --owner is given: Attio refuses a deal with none. */
   ownedByDefault?: readonly CrmKind[]
   /**
@@ -348,11 +348,8 @@ const customOf = async (
   pairs?.length ? crmCustomValues(await context.store.crm.fields(context.account, kind), pairs) : undefined
 
 /** Every key the write checks: its own, and each action its fields also take (WC-PERM-22). */
-const selfOf = async (context: CrmWriteContext): Promise<string | undefined> => {
-  if (context.writes.self !== undefined) return context.writes.self
-  const self = context.source?.().self
-  return self ? String(await self()) : undefined
-}
+const selfOf = async ({ writes: { self } }: CrmWriteContext): Promise<string | undefined> =>
+  (typeof self === "function" ? await self() : self) || undefined
 
 const keysOf = async (
   context: CrmWriteContext,

@@ -625,8 +625,7 @@ describe("CRM write commands over a manifest's writes", () => {
   ) => {
     const fake = crmManifestFake(ATTIO, { api, definitions })
     const sending = { manifest: api, service: "Attio", fetch: fake.fetch, token: () => FAKE_MANIFEST_TOKEN }
-    const read = crmSourceFromManifest(ATTIO, { api, call: serviceApiCall(sending), hooks })
-    const source = self === undefined ? read : { ...read, self: () => self }
+    const source = crmSourceFromManifest(ATTIO, { api, call: serviceApiCall(sending), hooks })
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-manifest-")), "store.db") })
     opened.push(store)
     await store.accounts.registerProvider({
@@ -650,6 +649,7 @@ describe("CRM write commands over a manifest's writes", () => {
           source: () => source,
           app: APP,
           env,
+          ...(self ? { self: async () => self } : {}),
           ...(ownedByDefault ? { ownedByDefault } : {}),
           settings: () => ({ profile: "work", permissions, permissionSources: {} }),
         }),
