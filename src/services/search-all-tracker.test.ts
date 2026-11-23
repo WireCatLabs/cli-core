@@ -1,8 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, expect, it } from "vitest"
-import { holdsKind } from "../domain/providers.js"
+import { afterEach, describe, expect, it } from "vitest"
+import { holdsKind, isDocumentAccountProvider } from "../domain/providers.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
@@ -27,8 +27,10 @@ const withIssues = async (...accounts: { provider: string; account: string }[]) 
   return store
 }
 
-it("knows linear as a tracker before linear-cli has written anything", () => {
+it("knows linear as a tracker and a documents account before linear-cli has written anything", () => {
   expect(holdsKind("linear", "tracker")).toBe(true)
+  expect(holdsKind("linear", "documents")).toBe(true)
+  expect(isDocumentAccountProvider("linear")).toBe(true)
 })
 
 it("finds issues, projects and comments by their words, titled as people say an issue", async () => {
@@ -90,4 +92,55 @@ it("shows no hits of a provider the registry does not call a tracker", async () 
   const found = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"] })
   expect(new Set(found.items.map(({ provider }) => provider))).toEqual(new Set(["linear"]))
   expect(found.accounts).toEqual([{ resource: "tracker", provider: "linear", account: "user-1" }])
+})
+
+describe("a Linear account with issues and documents", () => {
+  const withDocuments = async () => {
+    const store = await withIssues(LINEAR)
+    const folder = await store.notes.documentsAccount(LINEAR, true)
+    await store.notes.saveFileNote({
+      folderId: folder?.id ?? "",
+      path: "doc-1.md",
+      title: "Invoicing runbook",
+      text: "How we send an invoice each month",
+      frontMatter: { source: "linear", fileId: "doc-1" },
+      contentHash: "doc-1",
+    })
+    await store.searchIndex.fillSearchIndex({})
+    return { store, notes: { resource: "notes", provider: "notes", account: folder?.id ?? "" } }
+  }
+  const linearIn = (found: Awaited<ReturnType<typeof searchAll>>) =>
+    found.accounts.filter(({ provider, account }) =>
+      provider === "linear" ? account === LINEAR.account : provider === "notes" && account !== "internal",
+    )
+
+  it("lists the account once in the notes lane and once in the tracker lane, and finds both", async () => {
+    const { store, notes } = await withDocuments()
+    const found = await searchAll(store, ME, { text: "invoic", limit: 20, only: ["notes", "tracker"] })
+    expect(linearIn(found)).toEqual([notes, { resource: "tracker", ...LINEAR }])
+    expect(found.items.map(({ kind }) => kind)).toEqual(expect.arrayContaining(["issue", "document"]))
+  })
+
+  it("reads it once in each lane when --source names the provider or the account", async () => {
+    const { store, notes } = await withDocuments()
+    for (const source of ["linear", "linear:user-1", `linear,notes:${notes.account}`]) {
+      const found = await searchAll(store, ME, { text: "invoic", limit: 20, only: ["notes", "tracker"], source })
+      expect(linearIn(found), source).toEqual([notes, { resource: "tracker", ...LINEAR }])
+      expect(
+        found.items.map(({ kind }) => kind),
+        source,
+      ).toEqual(expect.arrayContaining(["issue", "document"]))
+    }
+  })
+
+  it("leaves the tracker lane out when --source names only the documents", async () => {
+    const { store, notes } = await withDocuments()
+    const found = await searchAll(store, ME, {
+      text: "invoic",
+      limit: 20,
+      only: ["notes", "tracker"],
+      source: `notes:${notes.account}`,
+    })
+    expect(linearIn(found)).toEqual([notes])
+  })
 })

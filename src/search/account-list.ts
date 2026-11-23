@@ -100,14 +100,24 @@ type Held = ListedAccount & { name: string | null; stored?: AccountKey }
 const kindHere = (provider: Provider, running: ListContext["running"]): Kind | undefined =>
   provider === running.provider ? kindOf(provider) : kindIn(provider)
 
+// A documents account's documents are listed as `notes:<id>`, so its own key keeps only the other kinds it holds.
+const listedKinds = (provider: Provider) =>
+  kindsIn(provider).filter((kind) => kind !== "documents" || !isDocumentAccountProvider(provider))
+
 const kindsOfHere = (provider: Provider, running: ListContext["running"]) => {
-  const kinds = kindsIn(provider)
+  const kinds = listedKinds(provider)
   return { kind: kindHere(provider, running), ...(kinds.length > 1 ? { kinds } : {}) }
 }
 
+/** A documents account that holds another kind too, as Linear's holds a tracker's copy: listed under both keys. */
+const alsoListedByKey = (provider: Provider) => isDocumentAccountProvider(provider) && listedKinds(provider).length > 0
+
 const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored
-    .filter(({ provider }) => kindIn(provider) !== "notes" && !isDocumentAccountProvider(provider))
+    .filter(
+      ({ provider }) =>
+        kindIn(provider) !== "notes" && (!isDocumentAccountProvider(provider) || alsoListedByKey(provider)),
+    )
     .map(({ provider, account, name }) => ({ provider, account, name, ...kindsOfHere(provider, running) })),
   { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
   ...stored
@@ -157,7 +167,11 @@ const profilesOf = (provider: Provider, profiles: Profiles): [string, AccountKey
 
 const accountOf = (prefix: string, ref: string, held: readonly Held[], context: ListContext): Held => {
   const provider = providerOf(prefix, held, context)
-  if (isDocumentAccountProvider(provider) && !context.profiles[prefix.toLowerCase()]?.[ref]) {
+  if (
+    isDocumentAccountProvider(provider) &&
+    !alsoListedByKey(provider) &&
+    !context.profiles[prefix.toLowerCase()]?.[ref]
+  ) {
     const stored = storedAs(held, { provider, account: ref })[0]
     if (stored) return stored
   }
@@ -225,7 +239,7 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
     return Object.keys(recorded).map((profile) => accountOf(word, profile, held, context))
   const provider = providerOf(word, held, context)
   if (isDocumentAccountProvider(provider) || isFolderProvider(provider))
-    return storedAs(held, { provider, account: "" })
+    return [...held.filter((one) => one.provider === provider), ...storedAs(held, { provider, account: "" })]
   return held.filter((one) => one.provider === provider)
 }
 

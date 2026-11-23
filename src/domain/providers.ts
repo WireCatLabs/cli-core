@@ -48,8 +48,9 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   // Google Meet has no tool of its own: its meetings are gcal's, since every meeting is on the calendar.
   { name: "google-meet", kind: "meetings", aliases: [], command: "gcal" },
   { name: "google-drive", kind: "documents", aliases: [] },
-  // Seeded: linear-cli registers no entry, and without one its accounts would count as a messenger's.
-  { name: "linear", kind: "tracker", aliases: [], command: "linear" },
+  // Seeded: linear-cli registers no entry, and without one its accounts would count as a messenger's. One sign-in holds
+  // the issues and the documents, so the account is a tracker's and a documents account at once.
+  { name: "linear", kind: "tracker", kinds: ["tracker", "documents"], aliases: [], command: "linear" },
   // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
   { name: "telemost", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
@@ -92,11 +93,13 @@ export const folderProviderOf = (format: "obsidian" | "markdown"): "obsidian" | 
   format === "markdown" ? "local" : "obsidian"
 /**
  * Providers whose account holds documents the way a notes folder does: one account per remote principal, its
- * files as `documents` rows. Any registry entry of kind `documents` that a sync fills; an import-only one (`import`)
- * keeps its documents beside its other records instead.
+ * files as `documents` rows. Any registry entry holding `documents` that a sync fills, as its first kind or beside
+ * another (Linear's tracker); an import-only one (`import`) keeps its documents beside its other records instead.
  */
 export const documentAccountProviders = (): string[] =>
-  registry.filter((entry) => entry.kind === "documents" && entry.imported !== true).map(({ name }) => name)
+  registry
+    .filter((entry) => kindsOfEntry(entry).includes("documents") && entry.imported !== true)
+    .map(({ name }) => name)
 export const isDocumentAccountProvider = (provider: unknown): boolean =>
   typeof provider === "string" && documentAccountProviders().includes(provider)
 /** The documents account providers as a SQL list, for `IN (…)`; names are checked words, so they need no binding. */

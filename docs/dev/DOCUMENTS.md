@@ -323,7 +323,11 @@ account check (`claimDocumentAccount`: one provider account per profile) and the
 `source(command, events, run)` (built inside cli-core's run, so each request lands in the run record), `ingestion`,
 `idOf`, `isFolder`, a `documents list` `row`, its limits and `coverage`, and optionally `folder` (how `folders add`
 reads what the user typed: Yandex Disk reads a path) and `browse`. It answers the commands to add to the program.
-notion-cli and drive-cli predate it and keep their own wiring.
+notion-cli and drive-cli predate it and keep their own wiring. `documentLibrary(options)` answers the same commands
+without `sync`, and that sync as a step (`DocumentSyncStep`) for a CLI whose own `sync` brings the documents too: a
+tracker's ([TRACKER.md](TRACKER.md#one-sync-with-documents)). The step answers what the shared `sync` would have, its
+meta, next steps and lines for the person. A provider whose accounts hold documents beside another kind (`linear`,
+`kinds: ["tracker", "documents"]`) is a documents account provider as Drive is.
 
 The `documents` group the builders return takes the CLI's live subcommands (`get`, `create`, `update`, …), added after
 the shared ones. `folders` takes the CLI's `browse`, which stays outside the shared contract. Catalog entries use the

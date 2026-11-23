@@ -97,7 +97,10 @@ export {
   type DocumentLibraryOptions,
   type DocumentLibraryTools,
   type DocumentSourceRun,
+  type DocumentSyncOutcome,
+  type DocumentSyncStep,
   type DocumentWarning,
+  documentLibrary,
   documentLibraryCommands,
   documentProfile,
 } from "./library.js"

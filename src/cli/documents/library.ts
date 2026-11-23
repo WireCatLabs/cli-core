@@ -3,9 +3,10 @@ import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, type ErrorCode, isCliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate, metaOf } from "@wirecat/cli-base/commands"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { resolveAISettings } from "../../analysis/settings.js"
-import type { Deadline } from "../../background/budget.js"
+import type { Deadline, RunBudget } from "../../background/budget.js"
 import { progressOf } from "../../background/checkpoints.js"
 import {
   catalogFiles,
@@ -42,8 +43,14 @@ import type { DocumentKnowledgePort } from "./knowledge.js"
 import { addDocumentKnowledgeCommands, type DocumentKnowledgeCommands } from "./knowledge.js"
 import { factItem, memoryItem } from "./queries.js"
 import { addDocumentSearchCommand, type DocumentSearchCommands } from "./search.js"
-import { addDocumentSyncCommands, type DocumentSyncCommands } from "./sync.js"
-import type { DocumentWords } from "./words.js"
+import {
+  addDocumentSyncCommands,
+  DOCUMENT_SYNC_LIMIT,
+  type DocumentSyncAnswer,
+  type DocumentSyncCommands,
+  documentSyncPart,
+} from "./sync.js"
+import { type DocumentWords, wordsOf } from "./words.js"
 
 type Resolve = Parameters<typeof baseContext>[1]
 type Group<T> = Omit<T, "words" | "output">
@@ -261,12 +268,34 @@ export const claimDocumentAccount = (
 
 const DOCUMENT_REF = /^document:[1-9]\d*$/u
 
+/** The documents half of a `sync` another group mounts, as the shared `sync` would have answered it. */
+export interface DocumentSyncOutcome {
+  /** The shared `sync`'s answer, its warnings included. */
+  item: DocumentSyncAnswer & { warnings: unknown[] }
+  meta: { complete?: false; issues?: { code: ErrorCode; reason: string; source: string }[] }
+  next: NextStep[]
+  diagnostics: string[]
+}
+
+/** Runs the documents sync inside the command another group mounted as `sync`. */
+export type DocumentSyncStep = (
+  command: Command,
+  args: { rescan?: boolean; embed?: boolean; budget: RunBudget; deadline?: Deadline },
+) => Promise<DocumentSyncOutcome>
+
 /**
- * cli-core's shared `folders`, `sync`, `status`, `documents`, `search`, `catalog` and knowledge groups over a CLI's
- * document source, its files under the CLI's state folder and the shared store. The CLI gives the source, how it
- * files a document and its words. Returned as commands to add to the program.
+ * `documentLibraryCommands` without its `sync`, and that sync as a step, for a CLI whose own `sync` brings the
+ * documents too: linear-cli's tracker `sync` (`addTrackerCommands({ documents })`), so the owner and Desktop keep one
+ * `<cli> sync`.
  */
-export const documentLibraryCommands = <M extends SourceFile>(options: DocumentLibraryOptions<M>): Command[] => {
+export const documentLibrary = <M extends SourceFile>(
+  options: DocumentLibraryOptions<M>,
+): { commands: Command[]; sync: DocumentSyncStep } => libraryOf(options, false)
+
+const libraryOf = <M extends SourceFile>(
+  options: DocumentLibraryOptions<M>,
+  withSync: boolean,
+): { commands: Command[]; sync: DocumentSyncStep } => {
   const { app } = options
   const holder = new Command(app.command)
   // The shared helpers take no command, so each run's command is caught as it starts; an MCP server builds the tree
@@ -313,14 +342,17 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
   const locked = <T>(write: boolean, fn: (assertHeld: () => void) => Promise<T>) =>
     write ? files().locked(fn) : fn(() => undefined)
   const writes = () => metaOf(command()).effects?.local === "write"
-  const output = (body: Body) => {
+  const warningIssues = () => {
     const seen = new Set<string>()
-    const issues = warnings.flatMap((warning) => {
+    return warnings.flatMap((warning) => {
       const key = `${warning.code}:${warning.reason}`
       if (seen.has(key)) return []
       seen.add(key)
       return [{ code: warning.code, reason: warning.reason, source: options.provider.name }]
     })
+  }
+  const output = (body: Body) => {
+    const issues = warningIssues()
     renderAnswer(command(), outputFor(command()), {
       ...body,
       ...(issues.length ? { meta: { ...body.meta, issues: [...(body.meta?.issues ?? []), ...issues] } } : {}),
@@ -671,10 +703,42 @@ export const documentLibraryCommands = <M extends SourceFile>(options: DocumentL
   // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
   writesOwnerFiles(find(folders, "add"))
   if (options.browse) annotate(find(folders, "browse"), { partial: true })
-  for (const group of holder.commands)
-    group.hook("preAction", (_group, action) => {
-      running = action
-      warnings = []
+  const start = (action: Command) => {
+    running = action
+    warnings = []
+  }
+  for (const group of holder.commands) group.hook("preAction", (_group, action) => start(action))
+  const sync: DocumentSyncStep = async (action, { rescan, embed, budget, deadline }) => {
+    start(action)
+    const item = await groups.sync.sync({
+      limit: DOCUMENT_SYNC_LIMIT,
+      budget,
+      ...(rescan ? { rescan } : {}),
+      ...(embed ? { embed } : {}),
+      ...(deadline ? { deadline } : {}),
     })
-  return [...holder.commands]
+    const timeout = action.optsWithGlobals<{ timeout?: string }>().timeout
+    const part = documentSyncPart(item, {
+      again: `${app.command} ${profile()} sync`,
+      source: wordsOf(options.words).source,
+      resume: { ...(timeout === undefined ? {} : { timeout }), ...(embed ? { embed: true } : {}) },
+      longer: {},
+    })
+    const issues = [...(part.meta.issues ?? []), ...warningIssues()]
+    return {
+      item: item as DocumentSyncOutcome["item"],
+      meta: { ...part.meta, ...(issues.length ? { complete: false, issues } : {}) },
+      next: part.next,
+      diagnostics: part.diagnostics,
+    }
+  }
+  return { commands: holder.commands.filter((one) => withSync || one.name() !== "sync"), sync }
 }
+
+/**
+ * cli-core's shared `folders`, `sync`, `status`, `documents`, `search`, `catalog` and knowledge groups over a CLI's
+ * document source, its files under the CLI's state folder and the shared store. The CLI gives the source, how it
+ * files a document and its words. Returned as commands to add to the program.
+ */
+export const documentLibraryCommands = <M extends SourceFile>(options: DocumentLibraryOptions<M>): Command[] =>
+  libraryOf(options, true).commands

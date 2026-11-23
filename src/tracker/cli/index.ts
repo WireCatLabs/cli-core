@@ -1,10 +1,12 @@
+import { type ErrorCode, isCliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { QueryRegistry } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
-import { type Command, InvalidArgumentError } from "commander"
+import { type Command, InvalidArgumentError, Option } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
+import type { DocumentSyncStep } from "../../cli/documents/library.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
@@ -47,6 +49,11 @@ export interface TrackerCommandOptions {
   open: (command: Command, access: { readOnly: boolean }) => Promise<TrackerRun>
   /** What the tracker's writer takes (`TrackerWriter.writes`): mounts `issues create`, `update` and `comment`. */
   writes?: readonly TrackerWrite[]
+  /**
+   * The documents half of `sync`, from `documentLibrary`, for a CLI that mounts the shared documents commands too:
+   * one `sync` then brings both and answers the documents under `documents`.
+   */
+  documents?: DocumentSyncStep
   now?: () => number
 }
 
@@ -144,6 +151,132 @@ const trackerSync = v.strictObject({
   ),
 })
 
+const partError = v.strictObject({ code: text, reason: v.optional(text), message: text })
+
+/** The tracker's answer as `tracker_sync` has it, or the error it failed with, and the documents' answer or error. */
+const trackerDocumentsSync = v.union([
+  v.strictObject({
+    ...trackerSync.entries,
+    documents: v.union([v.looseObject({}), v.strictObject({ error: partError })]),
+  }),
+  v.strictObject({ complete: v.literal(false), error: partError, documents: v.looseObject({}) }),
+])
+
+interface SyncOptions {
+  maxPages?: number
+  rescan?: boolean
+}
+
+type TrackerReport = Awaited<ReturnType<typeof syncTracker>>
+type DocumentsOutcome = Awaited<ReturnType<DocumentSyncStep>>
+type Settled<T> = { value: T } | { error: unknown }
+
+const resumeStep = (opts: SyncOptions, why: string, extra: Record<string, unknown> = {}): NextStep => ({
+  kind: "command",
+  step: "tracker.sync",
+  command: "sync",
+  args: { ...(opts.maxPages === undefined ? {} : { max_pages: opts.maxPages }), ...extra },
+  why,
+  safe_to_auto_execute: true,
+})
+
+const trackerIssues = (report: TrackerReport) => [
+  ...report.synced
+    .filter((one) => one.error !== undefined)
+    .map((one) => ({ code: "provider_error" as const, reason: "sync.partial", source: `tracker:${one.kind}` })),
+  ...report.synced
+    .filter((one) => one.pass === "held")
+    .map((one) => ({
+      code: "validation_error" as const,
+      reason: "tracker.unlisted-held",
+      source: `tracker:${one.kind}`,
+    })),
+]
+
+const trackerNext = (report: TrackerReport, opts: SyncOptions): NextStep[] =>
+  report.state === "partial" && report.progress.steps > 0
+    ? [
+        resumeStep(
+          opts,
+          report.synced.some((one) => one.error !== undefined)
+            ? "a kind failed to sync; running sync again retries it"
+            : "the sync stopped before its end; running it again goes on from there",
+        ),
+      ]
+    : []
+
+const trackerAnswer = (report: TrackerReport, opts: SyncOptions): Body => {
+  const issues = trackerIssues(report)
+  const next = trackerNext(report, opts)
+  return itemOf(report, {
+    ...(report.state === "partial" || issues.length
+      ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } }
+      : {}),
+    ...(next.length ? { next } : {}),
+  })
+}
+
+const errorOf = (error: unknown): { code: ErrorCode; reason?: string; message: string } => {
+  if (!isCliError(error))
+    return {
+      code: "provider_error",
+      reason: "sync.failed",
+      message: error instanceof Error ? error.message : String(error),
+    }
+  const reason = error.details.reason
+  return { code: error.code, ...(typeof reason === "string" ? { reason } : {}), message: error.message }
+}
+
+/**
+ * Both parts in one answer: the tracker's report as `tracker_sync` has it, the documents' under `documents`. A part that
+ * failed is named in its place and in `meta.issues`, so the other's answer still shows; `complete` is both parts'.
+ */
+const combinedAnswer = (
+  tracker: Settled<TrackerReport>,
+  documents: Settled<DocumentsOutcome>,
+  opts: SyncOptions & { embed?: boolean },
+): Body => {
+  const failed = (part: string, error: { code: ErrorCode; reason?: string }) => ({
+    code: error.code,
+    reason: error.reason ?? "sync.failed",
+    source: part,
+  })
+  const trackerError = "error" in tracker ? errorOf(tracker.error) : undefined
+  const documentsError = "error" in documents ? errorOf(documents.error) : undefined
+  const report = "value" in tracker ? tracker.value : undefined
+  const outcome = "value" in documents ? documents.value : undefined
+  const issues = [
+    ...(report ? trackerIssues(report) : []),
+    ...(trackerError ? [failed("tracker", trackerError)] : []),
+    ...(outcome?.meta.issues ?? []),
+    ...(documentsError ? [failed("documents", documentsError)] : []),
+  ]
+  const complete =
+    report?.state === "complete" && outcome !== undefined && outcome.meta.complete !== false && issues.length === 0
+  const resume =
+    (report ? trackerNext(report, opts) : []).length > 0 || outcome?.next.some(({ step }) => step === "sync.run")
+  const next: NextStep[] = [
+    ...(resume
+      ? [
+          resumeStep(
+            opts,
+            "the sync stopped before its end, or a part failed; running it again goes on from there",
+            opts.embed ? { embed: true } : {},
+          ),
+        ]
+      : []),
+    ...(outcome?.next.filter(({ step }) => step !== "sync.run") ?? []),
+  ]
+  const documentsPart = outcome ? outcome.item : { error: documentsError }
+  const item = report
+    ? { ...report, complete, documents: documentsPart }
+    : { complete: false as const, error: trackerError, documents: documentsPart }
+  return itemOf(item, {
+    ...(complete ? {} : { meta: { complete: false, ...(issues.length ? { issues } : {}) } }),
+    ...(next.length ? { next } : {}),
+  })
+}
+
 const trackerWrite = v.strictObject({
   operation_id: text,
   issue: v.optional(trackerView),
@@ -207,70 +340,97 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       .option("--limit <n>", `rows per page, 1–${MOST}`, integer(MOST), 50)
       .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
 
-  example(
+  const syncOf = (command: Command, opts: SyncOptions) => (run: TrackerRun) => {
+    const { signal } = environmentOf(command)
+    return syncTracker(run.source(), run.store, run.account, {
+      now: now(),
+      budget: runBudgetOf(command, opts.maxPages),
+      ...(signal ? { signal } : {}),
+      ...(opts.rescan ? { rescan: true } : {}),
+    })
+  }
+  const trackerPart = (command: Command, opts: SyncOptions) =>
+    inCommandRun(command, async () => {
+      const run = await options.open(command, { readOnly: false })
+      try {
+        return await syncOf(command, opts)(run)
+      } finally {
+        await run.close?.()
+      }
+    })
+  const { documents } = options
+  const sync = example(
     answerEntity(
       annotate(program.command("sync"), { effects: FETCH, offline: false, cooperative: true, partial: true }),
-      "tracker_sync",
-      trackerSync,
+      documents ? "tracker_documents_sync" : "tracker_sync",
+      documents ? trackerDocumentsSync : trackerSync,
     ).description(
       "bring the tracker's copy in the local store up to date: teams, users, states, labels, projects, issues and " +
         "comments that changed since the last sync, or everything with --rescan; once a day it also finds what the " +
         "tracker deleted. Open issues assigned to you become your tasks, and close when the issue is done, " +
-        "canceled, deleted or goes to someone else. A run stops before its deadline or --max-pages and the next " +
-        "one goes on from there",
+        "canceled, deleted or goes to someone else. " +
+        (documents
+          ? "It also imports what changed in the chosen document folders, answered under documents; a part that " +
+            "fails leaves the other's answer. "
+          : "") +
+        "A run stops before its deadline or --max-pages and the next one goes on from there",
     ),
     "sync",
     "sync --rescan",
   )
-    .option("--rescan", "list everything again, every id too, dropping a round in progress")
-    .option("--max-pages <pages>", "at most this many requests to the tracker in this run", integer(100_000))
-    .action(async (opts: { maxPages?: number; rescan?: boolean }, command: Command) => {
-      const { signal } = environmentOf(command)
-      await within(command, false, async (run) => {
-        const report = await syncTracker(run.source(), run.store, run.account, {
-          now: now(),
-          budget: runBudgetOf(command, opts.maxPages),
-          ...(signal ? { signal } : {}),
-          ...(opts.rescan ? { rescan: true } : {}),
-        })
-        const failed = report.synced.filter((one) => one.error !== undefined)
-        const next: NextStep[] | undefined =
-          report.state === "partial" && report.progress.steps > 0
-            ? [
-                {
-                  kind: "command",
-                  step: "tracker.sync",
-                  command: "sync",
-                  args: opts.maxPages === undefined ? {} : { max_pages: opts.maxPages },
-                  why: failed.length
-                    ? "a kind failed to sync; running sync again retries it"
-                    : "the sync stopped before its end; running it again goes on from there",
-                  safe_to_auto_execute: true,
-                },
-              ]
-            : undefined
-        const issues = [
-          ...failed.map((one) => ({
-            code: "provider_error" as const,
-            reason: "sync.partial",
-            source: `tracker:${one.kind}`,
-          })),
-          ...report.synced
-            .filter((one) => one.pass === "held")
-            .map((one) => ({
-              code: "validation_error" as const,
-              reason: "tracker.unlisted-held",
-              source: `tracker:${one.kind}`,
-            })),
-        ]
-        return itemOf(report, {
-          ...(report.state === "partial" || issues.length
-            ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } }
-            : {}),
-          ...(next ? { next } : {}),
-        })
-      })
+    .option(
+      "--rescan",
+      documents
+        ? "list everything again, issues and documents, dropping a round in progress; a rescan of the documents " +
+            "starts their walk over each time, so run it once and continue with a plain sync"
+        : "list everything again, every id too, dropping a round in progress",
+    )
+    .option(
+      "--max-pages <pages>",
+      documents
+        ? "at most this many requests for the issues in this run, and as many for the documents"
+        : "at most this many requests to the tracker in this run",
+      integer(100_000),
+    )
+  if (!documents)
+    sync.action(async (opts: SyncOptions, command: Command) => {
+      await within(command, false, async (run) => trackerAnswer(await syncOf(command, opts)(run), opts))
     })
+  else
+    sync
+      .option("--embed", "also index the documents' pending text for meaning search, with a model already downloaded")
+      .addOption(
+        new Option("--limit <n>").hideHelp().argParser(() => {
+          throw new InvalidArgumentError(
+            "--limit counts documents only, and this sync brings the issues too; --max-pages bounds both parts",
+          )
+        }),
+      )
+      .action(async (opts: SyncOptions & { embed?: boolean }, command: Command) => {
+        const settled = async <T>(part: () => Promise<T>): Promise<Settled<T>> => {
+          try {
+            return { value: await part() }
+          } catch (error) {
+            // A cancel ends the whole command: it is not one part's failure.
+            if (environmentOf(command).signal?.aborted) throw error
+            return { error }
+          }
+        }
+        const tracker = await settled(() => trackerPart(command, opts))
+        const deadline = environmentOf(command).deadline?.()
+        const docs = await settled(() =>
+          documents(command, {
+            budget: runBudgetOf(command, opts.maxPages),
+            ...(opts.rescan ? { rescan: true } : {}),
+            ...(opts.embed ? { embed: true } : {}),
+            ...(deadline ? { deadline } : {}),
+          }),
+        )
+        if ("error" in tracker && "error" in docs) throw tracker.error
+        const answer = combinedAnswer(tracker, docs, opts)
+        renderAnswer(command, outputFor(command), answer)
+        if ("value" in docs) for (const line of docs.value.diagnostics) outputFor(command).streams.diagnostic(line)
+      })
 
   const issues = annotate(program.command("issues"), { effects: NO_EFFECTS }).description(
     "the tracker's issues as last synced: state, team, project, assignee and labels",

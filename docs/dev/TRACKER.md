@@ -108,11 +108,39 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
 
 ## Commands
 
-`addTrackerCommands(program, { app, open, writes? })` mounts `sync`, `issues list|show|search|assign`, and `list` for
-`projects`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
-`TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)). Every text field from the
+`addTrackerCommands(program, { app, open, writes?, documents? })` mounts `sync`, `issues list|show|search|assign`, and
+`list` for `projects`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
+`TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)); with `documents`, a `sync`
+that brings the documents too ([One sync with documents](#one-sync-with-documents)). Every text field from the
 tracker is named in the row's `untrusted`. Each list narrows by its query, as `deals list` does:
 `issues list team:<id> assignee:none type:started`, and `archived:include` for archived rows too.
+
+## One sync with documents
+
+A tracker whose sign-in also reads documents (Linear's) mounts the shared documents commands beside these, and keeps
+one `<cli> sync`, the command the owner and Desktop know. `documentLibrary(options)` answers the documents commands
+without their `sync` (`status` stays) and that sync as a step; `addTrackerCommands({ documents: library.sync })` runs
+it after the tracker's part ([DOCUMENTS.md](DOCUMENTS.md#shared-commands)):
+
+```ts
+const library = documentLibrary({ app, provider, words, source, ingestion, ... })
+addTrackerCommands(holder, { app, open, documents: library.sync })
+return [...library.commands, ...holder.commands]
+```
+
+- **The answer** is the tracker's report as `tracker_sync` has it, with the documents' answer under `documents`, as the
+  shared documents `sync` gives it (entity `tracker_documents_sync`). `complete` and `meta.complete` are true only when
+  both parts finished. Desktop reads the tracker's `synced` and `complete`, as for any tracker.
+- **A part that fails** is named in its place (`documents: { error }`, or `error` in place of the report) and in
+  `meta.issues` with `source` `tracker` or `documents`; the other part's answer still shows, as a partial
+  answer that exits 0 (`meta.complete: false`), as a failed kind does. When both fail, the tracker's error is the answer. A cancel ends both.
+- **Flags.** `--rescan` lists both again; the documents' walk starts over at each one, so run it once and continue with
+  a plain `sync`. `--max-pages` bounds each part's requests. `--embed` indexes the documents' pending text for meaning
+  search (issues are found by words). `--limit`, the shared documents `sync`'s count of documents, is refused: it would
+  bound one part only.
+- **Going on.** One `tracker.sync` step, with `max_pages` and `embed` as given, when either part stopped before its
+  end; the documents' `sync.longer` step as they give it.
+- A CLI without `documents` keeps its `sync`, its answer and its permission key `sync` unchanged.
 
 ## Writes
 
@@ -159,7 +187,8 @@ marks `tracker`, or those
 as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 Fix login`), a `project` or an
 `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue under the same
 id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane with the
-reason. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
+reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is read by this lane
+under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
 tracker, since linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by
 `issues.list` and projects by `projects.list`.
 
