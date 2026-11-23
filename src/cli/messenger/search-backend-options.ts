@@ -33,8 +33,14 @@ export const backendRequest = (command: Command): { backend?: Backend; server?: 
 export const noteServer = (context: Pick<MessengerContext, "renderer">, server: ServerSearched | undefined): void => {
   if (!server) return
   if (server.skipped) context.renderer.note(`server search skipped: ${server.skipped} — the answer is the archive's`)
-  else if (!server.complete)
-    context.renderer.note(
-      `server search incomplete${server.failed.length ? `: ${[...new Set(server.failed.map(({ reason }) => reason))].join(", ")}` : ""}`,
-    )
+  else if (!server.complete) {
+    const reasons = [
+      ...new Set(
+        server.failed.map(({ reason, error }) =>
+          error ? `${reason} (${[error.code, error.reason].filter(Boolean).join(": ")})` : reason,
+        ),
+      ),
+    ]
+    context.renderer.note(`server search incomplete${reasons.length ? `: ${reasons.join(", ")}` : ""}`)
+  }
 }

@@ -34,7 +34,12 @@ export interface ServerSearched {
   returned: number
   /** Messages the store did not hold before this search. */
   new: number
-  failed: { chat: string | null; reason: "rate_limited" | "search_failed" | "time_or_abort_bound" }[]
+  failed: {
+    chat: string | null
+    reason: "rate_limited" | "search_failed" | "time_or_abort_bound"
+    /** The messenger's error by its keys alone, such as a missing permission: its words may carry private detail. */
+    error?: { code: string; reason?: string }
+  }[]
   /** Candidates stored from their first `SERVER_BOUNDS.textBytes`, without the attachments; a sync reads them whole. */
   partial?: number
   complete: boolean
@@ -44,6 +49,11 @@ export interface ServerStep {
   report: ServerSearched
   /** `chat id`/`message id` of each message the server returned → whether the store held it already. */
   sources: Map<string, "server" | "both">
+}
+
+const keysOf = (error: CliError) => {
+  const { reason } = error.details
+  return { code: error.code, ...(typeof reason === "string" ? { reason } : {}) }
 }
 
 export const sourceKey = (chatId: Id, id: Id) => JSON.stringify([chatId, id])
@@ -178,10 +188,14 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
   const pending = new Set(calls)
   const found: { items: MessageHit[]; chats: Chat[] }[] = []
   let open = true
-  const fail = (branch: Branch, reason: ServerSearched["failed"][number]["reason"]) => {
+  const fail = (branch: Branch, reason: ServerSearched["failed"][number]["reason"], error?: unknown) => {
     pending.delete(branch)
     report.complete = false
-    report.failed.push({ chat: branch.chat ?? null, reason })
+    report.failed.push({
+      chat: branch.chat ?? null,
+      reason,
+      ...(error instanceof CliError ? { error: keysOf(error) } : {}),
+    })
   }
   const ask = async (adapter: MessengerAdapter) => {
     const search = capability(adapter, "searchMessages", "search messages on its server")
@@ -197,7 +211,11 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
           found.push(page)
         } catch (error) {
           if (!open) return
-          fail(branch, error instanceof CliError && error.code === "rate_limited" ? "rate_limited" : "search_failed")
+          fail(
+            branch,
+            error instanceof CliError && error.code === "rate_limited" ? "rate_limited" : "search_failed",
+            error,
+          )
         }
       }),
     )

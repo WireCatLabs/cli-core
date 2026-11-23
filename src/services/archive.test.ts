@@ -260,6 +260,45 @@ describe("fetching every chat", () => {
     expect(since.slice(1).every((one) => typeof one === "number")).toBe(true)
   })
 
+  it("saves thread replies batch by batch, and a sync stopped between them keeps the first and reads again", async () => {
+    const store = await emptyStore()
+    const history = [1, 2, 3].map(messageAt)
+    const reply = (id: number): Message => ({ ...messageAt(id), threadId: "2" })
+    const stop = new AbortController()
+    const since: (number | undefined)[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, lastMessageAt: history[2]?.timestamp ?? null }], hasMore: false }),
+      history: async (reference: string) => {
+        await store.messages.saveMessages(account, reference, history, { via: "history" })
+        return { items: history, hasMore: false }
+      },
+      threadReplies: (_chat: string, window: { since?: number }) => {
+        since.push(window.since)
+        return (async function* () {
+          // The stop comes while the first batch is read.
+          stop.abort()
+          yield [reply(50)]
+          yield [reply(51)]
+        })()
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+    })
+    const run = (signal: AbortSignal) =>
+      service.fetchAll({ limit: 100, pageSize: 100, pauseMs: 0, note: () => {}, stop: signal, onPage: () => {} })
+    const held = async () => (await store.messages.messages(account, "7", { limit: 100 })).items.map((one) => one.id)
+
+    await run(stop.signal)
+    expect(await held()).toEqual(["1", "2", "3", "50"])
+    await run(new AbortController().signal)
+    expect(await held()).toEqual(["1", "2", "3", "50", "51"])
+    expect(since).toEqual([undefined, undefined])
+  })
+
   it("still asks for a chat whose stored history does not reach back as far as the run wants", async () => {
     const store = await emptyStore()
     await store.messages.saveMessages(account, "7", [messageAt(5)], { via: "history" })

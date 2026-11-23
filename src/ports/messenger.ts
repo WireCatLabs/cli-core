@@ -338,9 +338,10 @@ export interface ThreadReplies {
   /**
    * Replies `history` leaves out, such as Slack's thread replies: those sent after `since` (epoch milliseconds, left
    * out on the chat's first read) to the roots the adapter picks, oldest first. `messages sync` asks after the chat's
-   * history and saves them without marking a stretch held.
+   * history and saves them without marking a stretch held. A chat with many threads answers in batches: each is saved
+   * as it comes, so a stopped or killed sync keeps what it read; the next one reads from the same point again.
    */
-  threadReplies(chatId: Id, window: { since?: number }): Promise<Message[]>
+  threadReplies(chatId: Id, window: { since?: number }): Promise<Message[]> | AsyncIterable<Message[]>
 }
 
 export interface MessageButtons {
