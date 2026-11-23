@@ -239,11 +239,11 @@ it("names the sign-in it keeps in the group's help", () => {
 })
 
 it("shows its guide before the question at a terminal and in the help, never before piped input", async () => {
-  const guide = "1. Open https://pages.example/tokens\n2. Copy the token"
-  const signIn = async (argv: string[], tty: boolean) => {
+  const guide = "## Get a token\n\n1. Open [the tokens page](https://pages.example/tokens)\n2. Copy **the token**"
+  const signIn = async (argv: string[], tty: boolean, more: NodeJS.ProcessEnv = {}) => {
     const root = mkdtempSync(join(tmpdir(), "token-session-"))
     roots.push(root)
-    const env = { HOME: root, PAGES_STATE_DIR: join(root, "s"), PAGES_CONFIG_DIR: join(root, "c") }
+    const env = { HOME: root, PAGES_STATE_DIR: join(root, "s"), PAGES_CONFIG_DIR: join(root, "c"), ...more }
     const stdin = Object.assign(new PassThrough(), { isTTY: tty, setRawMode: () => stdin })
     const streams = captureStreams()
     const commands = () => [
@@ -259,9 +259,12 @@ it("shows its guide before the question at a terminal and in the help, never bef
     const code = await run(argv, { app, commands }, { streams, tty, env, keyring: memoryKeyring(), stdin })
     return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
   }
+  const plain = "Get a token\n\n1. Open the tokens page (https://pages.example/tokens)\n2. Copy the token"
   const asked = await signIn(["personal", "session", "start"], true)
   expect(asked.code).toBe(0)
-  expect(asked.err).toContain(guide.split("\n")[0])
+  expect(asked.err.startsWith(plain)).toBe(true)
+  const drawn = await signIn(["personal", "session", "start"], true, { VTE_VERSION: "7600" })
+  expect(drawn.err).toContain("\u001b]8;;https://pages.example/tokens\u0007the tokens page\u001b]8;;\u0007")
   expect((await signIn(["personal", "session", "start", "--json"], false)).err).not.toContain("pages.example")
-  expect((await signIn(["personal", "session", "start", "--help"], false)).out).toContain(guide)
+  expect((await signIn(["personal", "session", "start", "--help"], false)).out).toContain(plain)
 })

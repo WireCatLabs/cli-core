@@ -6,6 +6,8 @@ import { at as valueAt } from "../crm/manifest/map.js"
 import type { CliVerify } from "../manifest/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { EventSink } from "../runs/events.js"
+import { plainSetupText } from "../setup/plain.js"
+import { drawsHyperlinks, hyperlink } from "../terminal/hyperlink.js"
 import { readSecret } from "../terminal/prompt.js"
 import { baseContext, environmentOf, outputFor, secretInputOf } from "./context.js"
 import { refuseOffline } from "./early-refusal.js"
@@ -63,8 +65,10 @@ export interface TokenSessionOptions {
   /** One sentence more for `session start --help`: which token, and what it can see. */
   about?: string
   /**
-   * How a person who never made one gets the token: the steps and their links, in plain words. `session start` prints
-   * it before the question at a terminal, and `session start --help` ends with it.
+   * How a person who never made one gets the token: the steps and their links, in plain words, as the restricted
+   * Markdown of a setup text (a `##` heading, `**bold**`, `[words](link)`). `session start` prints it before the
+   * question at a terminal, its links drawn as links where the terminal shows them, and `session start --help` ends
+   * with it.
    */
   guide?: string
   /** One sentence more for `session end --help`, such as what of the service's own tools it leaves alone. */
@@ -159,7 +163,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       storageOf,
       "keyring" as TokenStorage,
     )
-  if (options.guide) start.addHelpText("after", `\n${options.guide}`)
+  if (options.guide) start.addHelpText("after", `\n${plainSetupText(options.guide)}`)
   if (options.login) start.option("--login <name>", `the ${service} user name the password belongs to`)
   if (options.site)
     start.option(
@@ -170,7 +174,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     this: Command,
     args: { credentialStorage: TokenStorage; site?: string; login?: string },
   ) {
-    const { env, profile, tokens, run, renderer, keyring } = contextOf(this)
+    const { env, profile, tokens, run, renderer, keyring, streams } = contextOf(this)
     refuseCommandName(profile, commandWords(rootOf(this)), app.command)
     if (options.site && args.site === undefined)
       throw new CliError("validation_error", `give the ${service} site: --site ${options.site.example}`)
@@ -184,7 +188,10 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     const input = secretInputOf(this).input ?? process.stdin
     // Only a person at a terminal pastes it; piped in, the note would stand before the answer on stderr.
     if ((input as { isTTY?: boolean }).isTTY) {
-      if (options.guide) renderer.note(options.guide)
+      if (options.guide) {
+        const link = drawsHyperlinks(env) ? hyperlink : undefined
+        streams.diagnostic(`${plainSetupText(options.guide, link ? { link } : {})}\n\n`)
+      }
       if (page) renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
     }
     // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
