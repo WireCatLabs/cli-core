@@ -367,8 +367,8 @@ interface FileTarget {
   list(
     root: string,
     signal?: AbortSignal,
-    options?: { excluded?(path: string): boolean },
-  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean } | undefined>
+    options?: { excluded?(path: string): boolean; from?: string },
+  ): Promise<{ rootId: string; files: RemoteFile[]; complete: boolean; next?: string } | undefined>
   exists(path: string, signal?: AbortSignal): Promise<boolean>
   download(path: string, into: string, signal?: AbortSignal): Promise<void>
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
@@ -381,7 +381,9 @@ type Expect = { absent: true } | { sha256: string; md5?: string }
 
 `list` returns each file's path relative to `root`, its `id` (kept across a move and an overwrite), `size`, `sha256`
 (the plain hash of the content), `md5` and `modifiedAt`, plus the root folder's own id and `complete`, false when a page was skipped or a cap was hit. Files at paths
-`excluded` names are listed too, so a file moved there is found by its id, but count toward no cap. `exists` reads one
+`excluded` names are listed too, so a file moved there is found by its id, but count toward no cap. An incomplete
+listing that can go on later (a run's deadline stopped it, a page failed) returns `next`, its position, such as an
+offset; given back as `from`, the listing returns only the files from there on. `exists` reads one
 path directly, false only when the provider says nothing is there. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
 size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
 `conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
@@ -462,7 +464,22 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     the store keeps what they replace. When a drive would keep less free than a tenth of what the run writes there
     (at least 100 MB, at most 1 GB), the run stops with one `mirror.no-space` error at path `.` (`noSpace` says the
     drive, the bytes needed and free); a dry run reports it. The local scan takes at most 100,000 files
-    (`maxFiles`).
+    (`maxFiles`), and so does a listing that spans runs.
+12. A listing too big for one run goes on in the next. An incomplete listing with `next` is kept in the state
+    (`listing`: the root's id, when it started, `next` and the files so far), saved before any refusal, so a guard
+    stop or a full drive does not list the same pages again. The next run asks for `from: next` and merges: this
+    run's files win over the saved ones by path and by id, so a file met twice as pages shift is kept once, and a
+    file moved between runs once, at its new path. Until the listing completes the run is incomplete, as point 7
+    says, while what it has listed already syncs. Once a run completes it, every check of point 7 runs on the merged
+    files, and the saved progress is cleared only after the guard and the space check let the run through. A saved
+    listing is started over when it is more than 7 days old, when the root now has another id (its pages went on in
+    another folder), when the run returns no `next`, or when the merged files pass `maxFiles` (100,000). A moving
+    revision does not restart it: a remote that changes all the time would never finish. Offset pages can skip a
+    file that moved while they were read, over runs as within one: a skipped file at its old path is still read
+    with `exists` before a local deletion, and one that moved is trashed at its old path and downloaded at the new
+    one on a later run, kept in the version store meanwhile. A saved file the remote changed or deleted since its
+    page only makes a conditional write fail as a conflict. A dry run goes on from the saved position and saves
+    none.
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
