@@ -27,7 +27,7 @@ import { questionLookup, questionText } from "../search/question-plan.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
-import type { AccountKey, EnrichmentSubject, MessageStore, StoredAccount } from "../store/store.js"
+import type { AccountKey, EnrichmentSubject, MessageStore, StoredAccount, TrackerNearest } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
 import { documentSource } from "./document-source.js"
 import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
@@ -212,7 +212,7 @@ const stopsAt = (deadline: Deadline | undefined) =>
 
 const embedChunks = async (
   store: MessageStore,
-  source: Pick<MessageStore["notes"] | MessageStore["calendar"], "chunksToEmbed"> & {
+  source: Pick<MessageStore["notes"] | MessageStore["calendar"] | MessageStore["tracker"], "chunksToEmbed"> & {
     chunksLeft?(model: string): Promise<number>
   },
   {
@@ -321,6 +321,49 @@ export const embedNotes = (store: MessageStore, options: NotesEmbedOptions & { c
 /** Embeds calendar events' pieces as notes' are embedded; the occurrences of a series share one vector. */
 export const embedEvents = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
   embedChunks(store, store.calendar, options)
+
+/**
+ * Embeds issues', projects' and comments' chunks as notes' are embedded. Items gone since lose theirs first, and items
+ * saved before tracker items were searched by meaning get theirs.
+ */
+export const embedTracker = async (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) => {
+  await store.tracker.refreshChunks()
+  return embedChunks(store, store.tracker, options)
+}
+
+/**
+ * Issues, projects and comments of these accounts nearest in meaning to plain words, nearer than the model's floor,
+ * best first; only items already embedded are found.
+ */
+export const nearestTracker = async (
+  store: MessageStore,
+  words: string,
+  {
+    limit,
+    accounts,
+    env,
+    command,
+    embedders,
+  }: Pick<NearestOptions, "env" | "command" | "embedders"> & { limit: number; accounts: readonly AccountKey[] },
+): Promise<TrackerNearest[]> => {
+  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
+  if (!(await store.tracker.embedded(key, accounts)))
+    throw new CliError(
+      "not_found",
+      `no issue, project or comment has vectors of ${model.id} yet, so only words were matched`,
+    )
+  const [vector] = await withLocal(
+    model,
+    directory,
+    undefined,
+    (embedder) => embedder.embed([words], "query"),
+    embedders,
+  )
+  const floor = meaningFloor(key)
+  return (await store.tracker.nearest(key, vector as Float32Array, { limit, accounts })).filter(
+    ({ score }) => score > floor,
+  )
+}
 
 /** Embeds mail's chunks as notes' are embedded: same model and key, so search by meaning reads both. */
 export const embedMail = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>

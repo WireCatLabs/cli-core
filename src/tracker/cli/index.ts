@@ -21,6 +21,7 @@ import {
 } from "../../domain/tracker.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { embedTracker } from "../../services/notes-search.js"
 import type { TrackerFilter, TrackerItem } from "../../store/sqlite/tracker.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -60,6 +61,7 @@ export interface TrackerCommandOptions {
 const MOST = 500
 // The documents' own answer has a `skipped` list of files; a part that did not run says why in a string.
 const isSkipped = (item: object): boolean => typeof (item as { skipped?: unknown }).skipped === "string"
+const EMBED_MAX = 600
 
 const integer = (most: number) => (value: string) => {
   const number = Number(value)
@@ -151,6 +153,16 @@ const trackerSync = v.strictObject({
       v.strictObject({ skipped: text }),
     ]),
   ),
+  /** What `sync --embed` embedded of the issues, projects and comments: `embedTracker`'s answer. */
+  embeddings: v.optional(
+    v.strictObject({
+      model: text,
+      embedded: count,
+      left: v.boolean(),
+      stopped: v.optional(v.picklist(["deadline", "cancelled"])),
+      remaining: v.optional(count),
+    }),
+  ),
 })
 
 const partError = v.strictObject({ code: text, reason: v.optional(text), message: text })
@@ -172,9 +184,10 @@ const trackerDocumentsSync = v.union([
 interface SyncOptions {
   maxPages?: number
   rescan?: boolean
+  embed?: boolean
 }
 
-type TrackerReport = Awaited<ReturnType<typeof syncTracker>>
+type TrackerReport = Awaited<ReturnType<typeof syncTracker>> & { embeddings?: Awaited<ReturnType<typeof embedTracker>> }
 type DocumentsOutcome = Awaited<ReturnType<DocumentSyncStep>>
 type Settled<T> = { value: T } | { error: unknown }
 
@@ -182,7 +195,11 @@ const resumeStep = (opts: SyncOptions, why: string, extra: Record<string, unknow
   kind: "command",
   step: "tracker.sync",
   command: "sync",
-  args: { ...(opts.maxPages === undefined ? {} : { max_pages: opts.maxPages }), ...extra },
+  args: {
+    ...(opts.maxPages === undefined ? {} : { max_pages: opts.maxPages }),
+    ...(opts.embed ? { embed: true } : {}),
+    ...extra,
+  },
   why,
   safe_to_auto_execute: true,
 })
@@ -241,7 +258,9 @@ const errorOf = (error: unknown): { code: ErrorCode; reason?: string; message: s
 const combinedAnswer = (
   tracker: Settled<TrackerReport>,
   documents: Settled<DocumentsOutcome>,
-  opts: SyncOptions & { embed?: boolean; timeout?: string },
+  opts: SyncOptions & { timeout?: string },
+  /** Why `--embed` failed after the tracker's part saved its report: a model not downloaded. */
+  embedError?: unknown,
 ): Body => {
   const failed = (part: string, error: { code: ErrorCode; reason?: string }) => ({
     code: error.code,
@@ -255,6 +274,7 @@ const combinedAnswer = (
   const issues = [
     ...(report ? trackerIssues(report) : []),
     ...(trackerError ? [failed("tracker", trackerError)] : []),
+    ...(embedError === undefined ? [] : [failed("tracker:embeddings", errorOf(embedError))]),
     ...(outcome?.meta.issues ?? []),
     ...(documentsError ? [failed("documents", documentsError)] : []),
   ]
@@ -267,7 +287,6 @@ const combinedAnswer = (
       ? [
           resumeStep(opts, trackerStep?.why ?? "the sync stopped before its end; running it again goes on from there", {
             ...(opts.timeout === undefined ? {} : { timeout: opts.timeout }),
-            ...(opts.embed ? { embed: true } : {}),
           }),
         ]
       : []),
@@ -355,6 +374,20 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       ...(opts.rescan ? { rescan: true } : {}),
     })
   }
+  // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
+  const embedOf = async (command: Command, run: TrackerRun, report: TrackerReport): Promise<TrackerReport> => {
+    if (report.stopped) return report
+    const { signal, env } = environmentOf(command)
+    const deadline = environmentOf(command).deadline?.()
+    const embeddings = await embedTracker(run.store, {
+      maxChunks: EMBED_MAX,
+      ...(deadline ? { deadline } : {}),
+      ...(signal ? { signal } : {}),
+      ...(env ? { env } : {}),
+      command: options.app.command,
+    })
+    return { ...report, embeddings }
+  }
   const trackerPart = (command: Command, opts: SyncOptions, opened: (account: AccountKey) => void = () => {}) =>
     inCommandRun(command, async () => {
       const run = await options.open(command, { readOnly: false })
@@ -400,12 +433,24 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       integer(100_000),
     )
   if (!documents)
-    sync.action(async (opts: SyncOptions, command: Command) => {
-      await within(command, false, async (run) => trackerAnswer(await syncOf(command, opts)(run), opts))
-    })
+    sync
+      .option(
+        "--embed",
+        "also index new issues, projects and comments for meaning search, with a model already downloaded",
+      )
+      .action(async (opts: SyncOptions, command: Command) => {
+        await within(command, false, async (run) => {
+          const report = await syncOf(command, opts)(run)
+          return trackerAnswer(opts.embed ? await embedOf(command, run, report) : report, opts)
+        })
+      })
   else
     sync
-      .option("--embed", "also index the documents' pending text for meaning search, with a model already downloaded")
+      .option(
+        "--embed",
+        "also index new issues, projects and comments and the documents' pending text for meaning search, with a " +
+          "model already downloaded",
+      )
       .addOption(
         new Option("--limit <n>", "refused: it would count documents only").hideHelp().argParser(() => {
           throw new InvalidArgumentError(
@@ -437,6 +482,18 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
         )
         // A skipped documents part did not run, so a failed tracker part is the whole answer, as without documents.
         if ("error" in tracker && "value" in docs && isSkipped(docs.value.item)) throw tracker.error
+        // After both parts, so the documents get their sync's time first; outside the tracker's run, which has ended.
+        const embedded =
+          opts.embed && "value" in tracker
+            ? await settled(async () => {
+                const run = await options.open(command, { readOnly: false })
+                try {
+                  return await embedOf(command, run, tracker.value)
+                } finally {
+                  await run.close?.()
+                }
+              })
+            : undefined
         if ("error" in tracker && "error" in docs) {
           const failed = errorOf(docs.error)
           // An error envelope has no meta and keeps only the details its reason registers, so the documents'
@@ -451,7 +508,12 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
             : tracker.error
         }
         const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
-        const answer = combinedAnswer(tracker, docs, { ...opts, ...(timeout === undefined ? {} : { timeout }) })
+        const answer = combinedAnswer(
+          embedded && "value" in embedded ? embedded : tracker,
+          docs,
+          { ...opts, ...(timeout === undefined ? {} : { timeout }) },
+          embedded && "error" in embedded ? embedded.error : undefined,
+        )
         renderAnswer(command, outputFor(command), answer)
         if ("value" in docs) for (const line of docs.value.diagnostics) outputFor(command).streams.diagnostic(line)
       })

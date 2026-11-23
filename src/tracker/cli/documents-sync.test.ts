@@ -319,6 +319,20 @@ describe("one sync for a tracker that holds documents too", () => {
     expect(done.stderr).toContain("--max-pages bounds both parts")
   })
 
+  it("keeps the tracker's report when --embed finds no model, naming the embedding as its own issue", async () => {
+    const { answer, env } = setup()
+    env.WIRECAT_STATE_DIR = join(String(env.LIN_STATE_DIR), "wirecat")
+    const synced = await answer(["sync", "--embed"])
+    expect(synced.exit).toBe(0)
+    expect(synced.item).toMatchObject({ state: "complete", complete: false, tasks: { opened: 1 } })
+    expect(synced.item.embeddings).toBeUndefined()
+    expect(synced.meta.issues).toContainEqual({
+      code: "not_found",
+      reason: "model.not-downloaded",
+      source: "tracker:embeddings",
+    })
+  })
+
   it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {
     const { cli, answer } = setup()
     await cli(["folders", "add", "root"])

@@ -574,6 +574,7 @@ export {
   embedEvents,
   embedMail,
   embedNotes,
+  embedTracker,
   type FoundNote,
   type LinkedRecord,
   type NotesEmbedded,
