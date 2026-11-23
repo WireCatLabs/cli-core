@@ -641,8 +641,9 @@ const savedReplies = async (
   if (!connection.threadReplies || stop.aborted) return 0
   const startedAt = Date.now()
   const point = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
-  const answer = connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
-  const batches = Symbol.asyncIterator in answer ? answer : [await answer]
+  // Awaited first: the flood wrapper turns every adapter method async, so batches arrive inside a promise.
+  const answer = await connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
+  const batches = Symbol.asyncIterator in answer ? answer : [answer]
   let saved = 0
   for await (const replies of batches) {
     if (replies.length > 0)

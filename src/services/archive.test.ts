@@ -273,7 +273,8 @@ describe("fetching every chat", () => {
         await store.messages.saveMessages(account, reference, history, { via: "history" })
         return { items: history, hasMore: false }
       },
-      threadReplies: (_chat: string, window: { since?: number }) => {
+      // Async, as the flood wrapper makes every adapter method: the batches arrive inside a promise.
+      threadReplies: async (_chat: string, window: { since?: number }) => {
         since.push(window.since)
         return (async function* () {
           // The stop comes while the first batch is read.
