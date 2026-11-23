@@ -5,6 +5,76 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.722.0 — 23.11.2026
+
+### Added
+
+- **`account remove` for every CRM CLI, with its guard.** `addCrmCommands({ account })` mounts cli-core's
+  `account remove`, which refuses `--delete-data` while another profile here holds the same account, whose one copy
+  the store shares (`account-remove.account-shared`); `--dry-run` warns instead. `refuseTakenCrmAccount` and
+  `crmAccountClaim` (the `claim` of `tokenSessionCommand`) refuse a sign-in to an account and user another profile is
+  signed in to (`session.duplicate`), and a profile named `files` or `foreign-contacts`, the folders every account
+  shares (`profile.reserved`). A `held` hook says which account a profile holds; unset, it is the account
+  `session start` remembered. bitrix24-cli, amo-cli and hubspot-cli can drop their own copies
+  ([CRM.md](docs/dev/CRM.md#one-account-one-profile)).
+- **`tokenSessionCommand`'s `claim` gets the run's keyring** as its fifth argument, so a check of the other profiles'
+  sign-ins reads the same keyring a test hands in.
+- **Earlier versions of every synced document, and a change log (store version 72).** The store keeps a document's
+  text, title and front matter before each change and before each removal, so a deleted page's last text is never
+  lost. `documents history <document>` lists the versions and `--revision <n>` shows one. `changes --since 1d` lists
+  what was added, changed, deleted, no longer visible, left the synced folders or came back, with titles. Both are
+  local reads, so agents get them over MCP too. `documentLibraryCommands` mounts them, and `addDocumentCommands` does
+  when the CLI gives `history`. A CLI with its own `documents` group calls `addDocumentHistoryCommands`
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#history-and-the-change-log)).
+- **`keep_versions_for_days`, 365 by default.** A sync that completes its pass drops older versions and change log
+  rows of that account. A CLI adds `DOCUMENT_HISTORY_SETTINGS` to `settingsFor` and passes `keepVersionsForDays` to
+  `syncDocuments`. Without it the sync keeps one year.
+- **A source can say a document is no longer visible rather than deleted.** A change takes `gone: "deleted"` or
+  `gone: "unavailable"`, and `SourceIndex.remove` and `deleteFileNotes` take the reason.
+- **Office files edited in place, and earlier versions put back.** `addFileEditCommands` mounts under a CLI's files
+  group `sheets show|update` for .xlsx cells, `documents show|update` for .docx paragraphs, `history` for what this
+  profile's writes replaced, and `restore <path> [version]`, besides `update`. A show gives the file's sha256; every
+  edit and restore takes it as `--expected-fingerprint` and writes through `guardedFileWrite`, so a change made
+  meanwhile is a conflict with nothing uploaded and the replaced content is kept. The Office editors' refusals pass
+  through with their reasons ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#edit-office-files-in-place)).
+
+### Changed — may break callers
+
+- **A file mirror's guard on mass replacements names the count to allow.** A sync stopped before more than 50
+  replacements now says to pass `--allow-replacements <count>` with the count filled in, where its default hint said
+  `--replace`; `allowReplacements` already took a count. A CLI that offers neither option and relied on the default
+  hint should add `--allow-replacements <count>`. One that keeps its `--replace` switch passes
+  `allowReplacements: Number.POSITIVE_INFINITY` and its own `allowReplacements` hint, as before
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#plain-files-both-ways)).
+- **Uses `@wirecat/cli-base` 0.127.0**, whose vocabulary has `mirrors`, `conflicts`, `--keep <side>`,
+  `--allow-deletions <count>`, `--allow-replacements <count>` and `--repin`: the mirror's conflict commands pass
+  `cli-dev lint` with no override for them.
+- **`files update` refuses a .pdf, .docx or .xlsx** (`file.not-plain-text`): a read gives their extracted text, which
+  would replace the whole document. A CLI leaves the sha256 out of a truncated or extracted text read
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#write-one-file-at-the-hash-read)).
+
+### Fixed
+
+- **Only a direct signal deletes a synced document's text.** A removal from a change feed without `gone`, a 404 or a
+  refusal when the content is read, and a file a finished walk did not find now mark the document no longer visible.
+  It leaves lists and search but keeps its text, and comes back as it was. Before, its text was blanked. The trash or
+  `gone: "deleted"` still deletes. A file that left the scope because the owner changed the chosen folders is marked
+  unsynced.
+- **A messenger's `never` hides ten more commands, and a group left empty.** `messages forward`, `contacts block`
+  and `unblock`, `chats links show` and `reset`, `chats requests list`, `confirm` and `reject`, and `chats admins add`
+  and `remove` now refuse before connecting when their one method is in `lacks` or `never`, and `never` hides them
+  from help, `commands` and MCP. A group whose every command is hidden, such as `account sessions` or `chats folders`,
+  is hidden too, so a messenger can put those methods in `never` instead of `lacks`.
+- **A server search no longer erases what the store knew about a message.** A hit is a partial copy: saved over a
+  held message, it now adds to its provider metadata instead of replacing it, so a Slack thread root found by
+  `search.messages` keeps the reply count a sync saved. A fetch from history still replaces the metadata.
+- **A file mirror no longer merges edits to neighbouring lines.** Two changes with no unchanged line between them,
+  one on each side, are now a conflict, as in Git's merge. They used to be combined silently. This includes an
+  insertion right after the other side's edit, and edits to neighbouring Markdown blocks such as two list items.
+  Changes with at least one unchanged line between them still merge, and a checklist tick still merges with a text
+  edit. Document push keeps merging neighbouring blocks as before
+  ([DOCUMENTS.md](docs/dev/DOCUMENTS.md#plain-files-both-ways)).
+
 ## 0.721.0 — 23.11.2026
 
 ### Added
