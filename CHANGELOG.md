@@ -5,6 +5,40 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.724.0 — 23.11.2026
+
+### Added
+
+- **CRM writes described by a source manifest.** `writes.<kind>` names a service's create, update and remove calls
+  and how each of our fields is sent (`to`, `each`, `list`, `number`, `decimals`, `implied`, a fixed currency,
+  `clear`), so a CRM CLI built from `wirecat.config.ts` gets `deals create|update|move|close|delete` and
+  `people create|update` with no writer of its own. A field with no rule, and a `--field` code the service does not
+  define, are refused before anything is sent. `crmManifestWrites` builds
+  `CrmRun.writes` over the CLI's fetch and token, and each write also checks its operation's `api` keys;
+  `crmManifestWriteCapabilities` and `crmManifestWriteKeys` give `addCrmCommands` and `crmAlsoChecks` the same.
+  `crmManifestWriteContract` runs `crmWriteContract` against `crmManifestFake`, which now answers writes, with
+  `loseNextAnswer()` and `requests()` ([CRM.md](docs/dev/CRM.md#writes-from-a-manifest)).
+- **`crmSourceFromManifest` reads one record of any kind**: `record(kind, id)` by the entity's `get`, as a writer's
+  read-back.
+- **attio in "Works with".** `WIRECAT_TOOLS` lists `attio` (`@wirecat/attio-cli`) beside the other CRM CLIs.
+- **A tracker CLI creates, changes and comments on issues with its own commands.** `addTrackerCommands({ writes })`
+  mounts `issues create`, `issues update <issue>` and `issues comment <issue>`: a team, state, label, project or user
+  is named by its id or by a name only one row of the copy has (a label among the issue's team's and the workspace's),
+  an empty value clears a field, and a reference the copy does not hold is refused before anything is sent. Each write
+  passes the profile's guard on `issues.create`, `issues.update` or `issues.comment`, is journaled with the
+  `operation_id` it answers, previews under `--dry-run`, and stores the tracker's answer as a sync does, so
+  `issues show` has it at once. An `--assignee` other than the sign-in's own user also checks `issues.assign-others`,
+  denied by default as `crm.assign-others` is. A manifest's `writes` section maps each write to a mutation (Linear's
+  `issueCreate`, `issueUpdate`, `commentCreate`); `trackerWriterFromManifest` sends it through `serviceApiWriter`, so
+  the operation's own `api.*` key still applies. `trackerWriteContract` and `trackerManifestWriteContract` check a
+  writer, over a fake that answers the mutations strictly by the schema ([TRACKER.md](docs/dev/TRACKER.md#writes)).
+
+### Fixed
+
+- **`changes` takes `--since <time>` and `--until <time>`**, the vocabulary's value name, where it said `<when>`. With
+  cli-base 0.129.0, which adds the `changes` view, `--since` and `--event`, the shared history commands pass
+  `cli-dev lint` in a documents CLI with no override. The flags take the same values as before.
+
 ## 0.723.0 — 23.11.2026
 
 ### Added
