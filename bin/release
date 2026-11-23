@@ -7,6 +7,7 @@
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine: NPM_TOKEN if exported, else the keyring
 #   bin/release --app-ref <branch>   # Parity builds each downstream CLI at <branch>, or its main when it lacks one
+#   bin/release --major   # also allows a new major version; without it, a version that raises the major stops
 #
 # The npm token is never printed and never written to a file — not on success, not in an error.
 set -eu
@@ -26,12 +27,14 @@ package=@wirecat/cli-core
 
 mode=ci
 app_ref=main
-usage() { echo 'usage: bin/release [--local] [--app-ref <branch>]' >&2; exit 2; }
+major=""
+usage() { echo 'usage: bin/release [--local] [--app-ref <branch>] [--major]' >&2; exit 2; }
 # A function, so the arguments survive for the exec after the merge below.
 parse() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --local) mode=local ;;
+      --major) major=1 ;;
       --app-ref) [ $# -gt 1 ] || usage; app_ref=$2; shift ;;
       *) usage ;;
     esac
@@ -119,11 +122,15 @@ rerun_if_changed "$@"
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
 versions=$(npm view "$package" versions --json --prefer-online 2>/dev/null || true)
-next=$(node scripts/next-version.mjs "$version" "$latest" "$versions")
+# With the root, the number also rises to the level the changelog and the changes/ fragments need.
+next=$(node scripts/next-version.mjs "$version" "$latest" "$versions" .)
 fragments=$(find changes -maxdepth 1 -type f -name '*.md' ! -name README.md 2>/dev/null | wc -l)
 if [ "$next" != "$version" ]; then
   taken=""
-  if published; then taken=1; why="$version is already on npm"; else why="$version is not above npm's latest $latest"; fi
+  if published; then taken=1; why="$version is already on npm"
+  elif [ "$(node scripts/next-version.mjs "$version" "$latest" "$versions")" = "$version" ]; then
+    why="the changelog's headings need $next, not $version"
+  else why="$version is not above npm's latest $latest"; fi
   echo "$why — publishing $next instead"
   # A version npm already has keeps its changelog section; the unreleased one becomes the new version.
   # Renaming it instead moved 0.51.0's section under 0.52.0 (beb54e9, repaired in #155).
@@ -151,6 +158,11 @@ elif [ "$fragments" -gt 0 ]; then
 fi
 if published; then
   echo "$version is already on npm — raise the version first" >&2
+  exit 1
+fi
+# A major breaks every caller of the stable API, so it ships only when the owner chose to (WC-REL-7).
+if [ -n "$latest" ] && [ "${version%%.*}" != "${latest%%.*}" ] && [ -z "$major" ]; then
+  echo "$version raises the major version over npm's $latest — run bin/release --major if that is meant" >&2
   exit 1
 fi
 
@@ -204,7 +216,9 @@ trap 'rm -f "$config"' EXIT
 printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$config"
 
 echo "== publishing $version =="
-npm publish --access public --userconfig "$config"
+# npm 11 refuses a pre-release without a tag, and one must never become `latest`.
+case "$version" in *-*) tag=next ;; *) tag=latest ;; esac
+npm publish --access public --userconfig "$config" --tag "$tag"
 
 echo "== waiting for npm to show $version (up to three minutes) =="
 seen=""

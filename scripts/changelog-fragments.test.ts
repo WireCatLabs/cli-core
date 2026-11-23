@@ -77,7 +77,7 @@ describe("fragmentProblems", () => {
       "changes/Feat/X.md:1: text before the first ### heading",
       'changes/Feat/X.md:2: only "### <heading>" headings; the release adds the version',
       "changes/Feat/X.md:2: text before the first ### heading",
-      'changes/Feat/X.md:3: "Fixes" is not one of: Added, Changed — may break callers, Fixed, Security, Removed',
+      'changes/Feat/X.md:3: "Fixes" is not one of: Added, Changed — may break callers, Changed — experimental, Deprecated, Fixed, Security, Removed',
       'changes/Feat/X.md:7: "Fixed" twice',
       "changes/Feat/X.md:8: internal id IDEA-260 — say what changed instead",
     ])

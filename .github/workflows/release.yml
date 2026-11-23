@@ -231,7 +231,8 @@ jobs:
         with:
           name: package
       # Permit checking an already published version; this job has no publishing permissions.
-      - run: npm publish ./*.tgz --access public --dry-run --force
+      # A pre-release goes to the next tag: npm refuses one without a tag, and latest must stay a release.
+      - run: npm publish ./*.tgz --access public --dry-run --force $(case "$(ls ./*.tgz)" in *[0-9]-*.tgz) echo --tag next ;; esac)
 
   publish:
     needs: build
@@ -254,7 +255,7 @@ jobs:
 
       # npm, not pnpm: npm's trusted publishing is the documented path. A tarball runs no
       # lifecycle scripts, and nothing is installed here.
-      - run: npm publish "wirecat-cli-core-$VERSION.tgz" --access public
+      - run: npm publish "wirecat-cli-core-$VERSION.tgz" --access public $(case "$VERSION" in *-*) echo --tag next ;; esac)
 
       - name: wait for npm to show the version
         if: ${{ !inputs.dry_run }}
