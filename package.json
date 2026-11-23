@@ -219,6 +219,10 @@
       "types": "./dist/mount/index.d.ts",
       "default": "./dist/mount/index.js"
     },
+    "./office": {
+      "types": "./dist/office/index.d.ts",
+      "default": "./dist/office/index.js"
+    },
     "./sql": {
       "types": "./dist/sql/index.d.ts",
       "default": "./dist/sql/index.js"
