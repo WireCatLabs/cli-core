@@ -314,6 +314,8 @@ const syncRound = async (
   const refreshed = new Map<string, { read?: boolean; flagged?: boolean }>()
   /** Folders whose server refused SEARCH: nothing of them is known, so nothing of them is proved or moved. */
   const refused = new Set<string>()
+  // A UID the search found and the listing left out is not seen this run, which proves nothing about it.
+  const listedShort = new Set<string>()
   const holdsMail = async (folder: string) =>
     (await store.mail.emails({ accountId, mailbox: folder, limit: 1 })).length > 0
   for (const folder of folders) {
@@ -456,16 +458,18 @@ const syncRound = async (
       headers: rules.length > 0,
       ...(wanted === undefined ? {} : { searched: wanted }),
     })
-    if (plan !== undefined && wanted !== undefined) {
+    if (wanted !== undefined) {
       const got = new Set(found.map(({ uid }) => uid))
-      for (const uid of wanted.uids) {
-        const key = keyOf(folder, uid)
-        if (got.has(uid)) plan.unlisted.delete(key)
-        else {
-          plan.failed.add(key)
-          plan.unlisted.add(key)
+      if (wanted.uids.some((uid) => !got.has(uid))) listedShort.add(folder)
+      if (plan !== undefined)
+        for (const uid of wanted.uids) {
+          const key = keyOf(folder, uid)
+          if (got.has(uid)) plan.unlisted.delete(key)
+          else {
+            plan.failed.add(key)
+            plan.unlisted.add(key)
+          }
         }
-      }
     }
     // Spreading a whole mailbox into push() overflows the stack past ~120,000 emails.
     for (const item of found) collected.push(item)
@@ -521,6 +525,10 @@ const syncRound = async (
   if (snapshot) skipped = "an mbox file is a snapshot; mail missing from it is not proven deleted"
   else if (refused.size > 0)
     skipped = `the server refused to search ${[...refused].join(", ")}; no deletion is checked until it answers`
+  else if (listedShort.size > 0)
+    skipped =
+      `the server left out of its listing mail its search found in ${[...listedShort].join(", ")}; no deletion is ` +
+      "checked until a listing returns all of it"
   else if (plan !== undefined && (capped || plan.tried.size > plan.asked || plan.only !== undefined))
     skipped = "this run read the window in parts; a run that lists all of it at once checks deletions"
   else if (quickRan.size > 0) {
