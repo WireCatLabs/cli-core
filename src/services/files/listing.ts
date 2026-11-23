@@ -44,7 +44,7 @@ export const listRemote = async (
   }
 }
 
-const remoteFileSchema = v.object({
+export const remoteFileSchema = v.object({
   path: v.string(),
   id: v.string(),
   size: v.number(),

@@ -25,6 +25,7 @@ import { skippedName } from "../../documents/index.js"
 import type { Keep } from "../../documents/push-model.js"
 import { type Mirror, mirrorId } from "../documents/mirrors.js"
 import { hashFile, localTemp, placeNew, safePath } from "../documents/push.js"
+import { listFileConflicts, resolveFileConflict, showFileConflict } from "./conflicts.js"
 import { excludedBy, exclusionPattern } from "./exclusions.js"
 import {
   type FileMirrorOptions,
@@ -346,9 +347,14 @@ describe("syncFileMirror, the three-way table", () => {
     const result = await context.sync()
     expect(result.adopted).toEqual(["same.md"])
     expect(result.conflicts).toEqual([
-      expect.objectContaining({ path: "torn.md", reason: "changed on both sides", remoteSize: 8, localSize: 7 }),
+      expect.objectContaining({
+        path: "torn.md",
+        reason: "changed on both sides in the same lines",
+        remoteSize: 8,
+        localSize: 7,
+      }),
     ])
-    expect(context.disk.writes()).toEqual([])
+    expect(context.disk.writes()).toEqual([{ op: "download", path: "torn.md" }])
     expect(await context.local()).toMatchObject({ "torn.md": "y local" })
   })
 
@@ -770,24 +776,24 @@ describe("syncFileMirror, crash and resume", () => {
   })
 
   it("reports a remote file changed after the listing as a conflict and keeps both versions", async () => {
-    const context = setup({ "a.md": "a" }, { "a.md": "a" })
+    const context = setup({ "a.bin": "a" }, { "a.bin": "a" })
     await context.sync()
-    put(context.root, "a.md", "local")
+    put(context.root, "a.bin", "local")
     const list = context.disk.target.list
     const target: FileTarget = {
       ...context.disk.target,
       list: async (...args) => {
         const listed = await list(...args)
-        context.disk.write("a.md", "sneaked in")
+        context.disk.write("a.bin", "sneaked in")
         return listed
       },
     }
     const result = await context.sync(undefined, { target })
     expect(result.conflicts).toEqual([
-      expect.objectContaining({ path: "a.md", reason: "the disk file changed during the sync" }),
+      expect.objectContaining({ path: "a.bin", reason: "the disk file changed during the sync" }),
     ])
-    expect(await context.disk.files()).toEqual({ "a.md": "sneaked in" })
-    expect(await context.local()).toEqual({ "a.md": "local" })
+    expect(await context.disk.files()).toEqual({ "a.bin": "sneaked in" })
+    expect(await context.local()).toEqual({ "a.bin": "local" })
     expect(context.versions.has(hashes("sneaked in").sha256)).toBe(true)
   })
 
@@ -1314,7 +1320,7 @@ describe("syncFileMirror, a listing that spans runs", () => {
 
 describe("syncFileMirror, local versions", () => {
   const synced = async () => {
-    const files = { "a.md": "1", "b.md": "2", "c.md": "3", "d.md": "4" }
+    const files = { "a.bin": "1", "b.bin": "2", "c.bin": "3", "d.bin": "4" }
     const context = setup(files, files)
     await context.sync()
     return context
@@ -1322,9 +1328,9 @@ describe("syncFileMirror, local versions", () => {
 
   it("keeps the local content before a pull overwrites it, and logs the change", async () => {
     const context = await synced()
-    context.disk.write("a.md", "1, from the disk")
+    context.disk.write("a.bin", "1, from the disk")
     await context.sync()
-    const [event] = context.versions.list("a.md")
+    const [event] = context.versions.list("a.bin")
     expect(event).toMatchObject({
       event: "changed",
       direction: "remote-to-local",
@@ -1333,27 +1339,27 @@ describe("syncFileMirror, local versions", () => {
       available: true,
     })
     const lock = { assertHeld: vi.fn(), release: vi.fn() }
-    expect(await restoreFileVersion(context.root, "a.md", hashes("1").sha256, context.versions, async () => lock)).toBe(
-      true,
-    )
+    expect(
+      await restoreFileVersion(context.root, "a.bin", hashes("1").sha256, context.versions, async () => lock),
+    ).toBe(true)
     expect(lock.assertHeld).toHaveBeenCalled()
     expect(lock.release).toHaveBeenCalledOnce()
-    expect(await context.local()).toMatchObject({ "a.md": "1" })
-    expect(context.versions.list("a.md").at(-1)).toMatchObject({
+    expect(await context.local()).toMatchObject({ "a.bin": "1" })
+    expect(context.versions.list("a.bin").at(-1)).toMatchObject({
       direction: "restored",
       old: hashes("1, from the disk").sha256,
     })
-    expect(await context.sync()).toMatchObject({ uploaded: ["a.md"] })
+    expect(await context.sync()).toMatchObject({ uploaded: ["a.bin"] })
   })
 
   it("keeps a local file before --keep disk overwrites it and before a crossed deletion", async () => {
     const context = await synced()
-    put(context.root, "a.md", "mine")
-    context.disk.write("a.md", "theirs")
-    context.disk.remove("b.md")
+    put(context.root, "a.bin", "mine")
+    context.disk.write("a.bin", "theirs")
+    context.disk.remove("b.bin")
     await context.sync("remote")
-    expect(context.versions.list("a.md")[0]).toMatchObject({ old: hashes("mine").sha256, available: true })
-    expect(context.versions.list("b.md")[0]).toMatchObject({
+    expect(context.versions.list("a.bin")[0]).toMatchObject({ old: hashes("mine").sha256, available: true })
+    expect(context.versions.list("b.bin")[0]).toMatchObject({
       event: "deleted",
       old: hashes("2").sha256,
       available: true,
@@ -1362,13 +1368,13 @@ describe("syncFileMirror, local versions", () => {
 
   it("logs the remote version an upload replaced", async () => {
     const context = await synced()
-    put(context.root, "a.md", "1, edited")
-    rmSync(join(context.root, "b.md"))
+    put(context.root, "a.bin", "1, edited")
+    rmSync(join(context.root, "b.bin"))
     await context.sync()
-    expect(context.versions.list("a.md")).toEqual([
+    expect(context.versions.list("a.bin")).toEqual([
       expect.objectContaining({ event: "changed", direction: "local-to-remote", old: hashes("1").sha256 }),
     ])
-    expect(context.versions.list("b.md")).toEqual([
+    expect(context.versions.list("b.bin")).toEqual([
       expect.objectContaining({ event: "deleted", direction: "local-to-remote", old: hashes("2").sha256 }),
     ])
   })
@@ -1392,15 +1398,15 @@ describe("syncFileMirror, local versions", () => {
 
   it("keeps the remote content an upload replaces, downloading only what the store lacks", async () => {
     const context = await synced()
-    put(context.root, "a.md", "1, edited")
-    await context.versions.keep(join(context.root, "c.md"))
-    put(context.root, "c.md", "3, edited")
+    put(context.root, "a.bin", "1, edited")
+    await context.versions.keep(join(context.root, "c.bin"))
+    put(context.root, "c.bin", "3, edited")
     context.disk.calls.length = 0
-    expect(await context.sync()).toMatchObject({ uploaded: ["a.md", "c.md"] })
-    expect(context.disk.calls.filter((call) => call.op === "download").map((call) => call.path)).toEqual(["a.md"])
+    expect(await context.sync()).toMatchObject({ uploaded: ["a.bin", "c.bin"] })
+    expect(context.disk.calls.filter((call) => call.op === "download").map((call) => call.path)).toEqual(["a.bin"])
     for (const [path, old] of [
-      ["a.md", "1"],
-      ["c.md", "3"],
+      ["a.bin", "1"],
+      ["c.bin", "3"],
     ])
       expect(context.versions.list(path as string)).toEqual([
         expect.objectContaining({ old: hashes(old as string).sha256, from: "remote", available: true }),
@@ -1409,23 +1415,23 @@ describe("syncFileMirror, local versions", () => {
 
   it("downloads nothing before a remote deletion: the provider's trash holds the content", async () => {
     const context = await synced()
-    await context.versions.keep(join(context.root, "b.md"))
-    rmSync(join(context.root, "a.md"))
-    rmSync(join(context.root, "b.md"))
+    await context.versions.keep(join(context.root, "b.bin"))
+    rmSync(join(context.root, "a.bin"))
+    rmSync(join(context.root, "b.bin"))
     context.disk.calls.length = 0
     expect((await context.sync()).trashed).toHaveLength(2)
     expect(context.disk.calls.filter((call) => call.op === "download")).toEqual([])
-    expect(context.versions.list("a.md")).toEqual([
+    expect(context.versions.list("a.bin")).toEqual([
       expect.objectContaining({ event: "deleted", from: "remote", oldIn: "remote-trash", available: false }),
     ])
-    expect(context.versions.list("b.md")[0]).toMatchObject({ old: hashes("2").sha256, available: true })
-    expect(context.versions.list("b.md")[0]).not.toHaveProperty("oldIn")
+    expect(context.versions.list("b.bin")[0]).toMatchObject({ old: hashes("2").sha256, available: true })
+    expect(context.versions.list("b.bin")[0]).not.toHaveProperty("oldIn")
   })
 
   it("keeps the remote side of --keep both from the server when the copy was edited before it was kept", async () => {
     const context = await synced()
-    put(context.root, "a.md", "mine")
-    context.disk.write("a.md", "theirs")
+    put(context.root, "a.bin", "mine")
+    context.disk.write("a.bin", "theirs")
     const keep = context.versions.keep
     const versions = {
       ...context.versions,
@@ -1456,12 +1462,12 @@ describe("syncFileMirror, local versions", () => {
 
   it("keeps the remote side of --keep both from its local copy, with no second download", async () => {
     const context = await synced()
-    put(context.root, "a.md", "mine")
-    context.disk.write("a.md", "theirs")
+    put(context.root, "a.bin", "mine")
+    context.disk.write("a.bin", "theirs")
     context.disk.calls.length = 0
     await context.sync("both")
     expect(context.disk.calls.filter((call) => call.op === "download")).toHaveLength(1)
-    expect(context.versions.list("a.md")[0]).toMatchObject({ old: hashes("theirs").sha256, from: "remote" })
+    expect(context.versions.list("a.bin")[0]).toMatchObject({ old: hashes("theirs").sha256, from: "remote" })
     expect(context.versions.has(hashes("theirs").sha256)).toBe(true)
   })
 
@@ -1470,27 +1476,27 @@ describe("syncFileMirror, local versions", () => {
     const broken = temp("file-mirror-broken-")
     writeFileSync(join(broken, "objects"), "")
     const versions = fileVersions(broken, () => TODAY)
-    await expect(versions.keep(join(context.root, "a.md"))).rejects.toMatchObject({
+    await expect(versions.keep(join(context.root, "a.bin"))).rejects.toMatchObject({
       code: "provider_error",
       details: { reason: "mirror.version-not-kept" },
     })
-    context.disk.write("a.md", "from the disk")
-    put(context.root, "b.md", "2, edited")
+    context.disk.write("a.bin", "from the disk")
+    put(context.root, "b.bin", "2, edited")
     const result = await context.sync(undefined, { versions })
     expect(result.errors).toEqual([
-      expect.objectContaining({ path: "a.md", message: expect.stringContaining("could not be kept") }),
-      expect.objectContaining({ path: "b.md", message: expect.stringContaining("could not be kept") }),
+      expect.objectContaining({ path: "a.bin", message: expect.stringContaining("could not be kept") }),
+      expect.objectContaining({ path: "b.bin", message: expect.stringContaining("could not be kept") }),
     ])
-    expect(await context.local()).toMatchObject({ "a.md": "1", "b.md": "2, edited" })
-    expect(await context.disk.files()).toMatchObject({ "a.md": "from the disk", "b.md": "2" })
+    expect(await context.local()).toMatchObject({ "a.bin": "1", "b.bin": "2, edited" })
+    expect(await context.disk.files()).toMatchObject({ "a.bin": "from the disk", "b.bin": "2" })
     expect(context.port.read().pending).toEqual({})
   })
 
   it("writes no version and no log on a dry run", async () => {
     const context = await synced()
-    context.disk.write("a.md", "changed")
+    context.disk.write("a.bin", "changed")
     await context.sync(undefined, { dryRun: true })
-    expect(context.versions.list("a.md")).toEqual([])
+    expect(context.versions.list("a.bin")).toEqual([])
   })
 })
 
@@ -1802,17 +1808,17 @@ describe("syncFileMirror, a download cut off by a crash", () => {
 
 describe("syncFileMirror, a download that replaced a file", () => {
   it("is never taken as cut off: a replacement is renamed into place whole", async () => {
-    const context = setup({ "a.md": "1" }, { "a.md": "1" })
+    const context = setup({ "a.bin": "1" }, { "a.bin": "1" })
     await context.sync()
-    put(context.root, "a.md", "mine")
-    context.disk.write("a.md", "theirs")
+    put(context.root, "a.bin", "mine")
+    context.disk.write("a.bin", "theirs")
     const state = context.port.read()
-    state.pending["a.md"] = { op: "download", operationId: "op-over", created: false }
+    state.pending["a.bin"] = { op: "download", operationId: "op-over", created: false }
     context.port.save(state)
     expect((await context.sync()).conflicts).toEqual([
-      expect.objectContaining({ path: "a.md", reason: "changed on both sides" }),
+      expect.objectContaining({ path: "a.bin", reason: "changed on both sides" }),
     ])
-    expect(await context.sync("local")).toMatchObject({ uploaded: ["a.md"], conflicts: [] })
+    expect(await context.sync("local")).toMatchObject({ uploaded: ["a.bin"], conflicts: [] })
   })
 })
 
@@ -1892,5 +1898,234 @@ describe("fileVersions.prune", () => {
       vanished.delete(object)
     }
     expect(existsSync(object)).toBe(true)
+  })
+})
+
+describe("syncFileMirror, text merges and conflicts", () => {
+  const PLAN = "# Plan\n\nintro\n\n## Monday\n\ngym\n\n## Friday\n\nrest\n"
+  const LIST = "one\ntwo\nthree\nfour\nfive\n"
+  const synced = async (files: Record<string, string> = { "plan.md": PLAN, "list.txt": LIST }) => {
+    const context = setup(files, files)
+    await context.sync()
+    context.disk.calls.length = 0
+    return context
+  }
+  const lock = async () => ({ assertHeld: () => {}, release: () => {} })
+  const resolveWith = (
+    context: Awaited<ReturnType<typeof synced>>,
+    path: string,
+    choice: { keep: Keep } | { file: string },
+  ) =>
+    resolveFileConflict({
+      ...context.options(),
+      path,
+      lock,
+      choice,
+    })
+  const torn = async () => {
+    const context = await synced()
+    put(context.root, "plan.md", PLAN.replace("gym", "gym at 7"))
+    context.disk.write("plan.md", PLAN.replace("gym", "swim"))
+    const result = await context.sync()
+    return { context, result }
+  }
+
+  it("merges edits to different sections of Markdown and of a text file, on both sides", async () => {
+    const context = await synced()
+    put(context.root, "plan.md", PLAN.replace("gym", "gym at 7"))
+    context.disk.write("plan.md", PLAN.replace("rest", "rest, read"))
+    put(context.root, "list.txt", LIST.replace("one", "ONE"))
+    context.disk.write("list.txt", LIST.replace("five", "FIVE"))
+    const result = await context.sync()
+    expect(result).toMatchObject({ merged: ["list.txt", "plan.md"], conflicts: [], errors: [] })
+    const plan = PLAN.replace("gym", "gym at 7").replace("rest", "rest, read")
+    const list = "ONE\ntwo\nthree\nfour\nFIVE\n"
+    expect(await context.local()).toEqual({ "plan.md": plan, "list.txt": list })
+    expect(await context.disk.files()).toEqual({ "plan.md": plan, "list.txt": list })
+    expect(context.disk.calls.find((call) => call.op === "upload" && call.path === "plan.md")?.expect).toEqual(
+      hashes(PLAN.replace("rest", "rest, read")),
+    )
+    expect(context.versions.list("plan.md").at(-1)).toMatchObject({
+      event: "merged",
+      direction: "both",
+      new: hashes(plan).sha256,
+      versions: [
+        { role: "base", sha256: hashes(PLAN).sha256, available: true },
+        { role: "local", sha256: hashes(PLAN.replace("gym", "gym at 7")).sha256, available: true },
+        { role: "remote", sha256: hashes(PLAN.replace("rest", "rest, read")).sha256, available: true },
+        { role: "result", sha256: hashes(plan).sha256, available: true },
+      ],
+    })
+    expect(await context.sync()).toMatchObject({ unchanged: 2, uploaded: [], downloaded: [], merged: [] })
+  })
+
+  it("keeps CRLF line endings and a byte-order mark through a merge", async () => {
+    const base = "﻿a\r\nb\r\nc\r\nd\r\n"
+    const context = await synced({ "w.txt": base })
+    put(context.root, "w.txt", base.replace("a", "A"))
+    context.disk.write("w.txt", base.replace("d", "D"))
+    expect(await context.sync()).toMatchObject({ merged: ["w.txt"] })
+    expect(readFileSync(join(context.root, "w.txt"), "utf8")).toBe("﻿A\r\nb\r\nc\r\nD\r\n")
+  })
+
+  it("lists overlapping edits as a conflict, and shows its three versions and the lines that conflict", async () => {
+    const { context, result } = await torn()
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        path: "plan.md",
+        reason: "changed on both sides in the same lines",
+        parts: [{ base: "gym\n", local: "gym at 7\n", remote: "swim\n" }],
+      }),
+    ])
+    expect(await context.local()).toMatchObject({ "plan.md": PLAN.replace("gym", "gym at 7") })
+    expect(await context.disk.files()).toMatchObject({ "plan.md": PLAN.replace("gym", "swim") })
+    expect(listFileConflicts([context.mirror], () => context.port)).toEqual([
+      expect.objectContaining({ id: context.mirror.id, path: "plan.md", kept: true }),
+    ])
+    const view = await showFileConflict({ ...context.options(), path: "plan.md" })
+    expect(view).toMatchObject({
+      base: { text: PLAN, available: true },
+      local: { text: PLAN.replace("gym", "gym at 7") },
+      remote: { text: PLAN.replace("gym", "swim") },
+      localChanged: false,
+      hunks: [{ kind: "conflict", line: 7, base: "gym\n", local: "gym at 7\n", remote: "swim\n" }],
+    })
+    expect(view.merged).toContain("<<<<<<< local\ngym at 7\n||||||| base\ngym\n=======\nswim\n>>>>>>> disk\n")
+    expect(context.versions.list("plan.md").at(-1)).toMatchObject({ event: "conflict", available: true })
+    context.disk.calls.length = 0
+    expect((await context.sync()).conflicts).toHaveLength(1)
+    expect(context.disk.calls.filter((call) => call.op === "download")).toEqual([])
+    expect(context.versions.list("plan.md").filter((event) => event.event === "conflict")).toHaveLength(1)
+  })
+
+  for (const [keep, expected] of [
+    ["local", PLAN.replace("gym", "gym at 7")],
+    ["remote", PLAN.replace("gym", "swim")],
+  ] as const)
+    it(`resolves a conflict by keeping the ${keep} side on both sides`, async () => {
+      const { context } = await torn()
+      expect(await resolveWith(context, "plan.md", { keep })).toMatchObject({ resolution: keep })
+      expect(await context.local()).toMatchObject({ "plan.md": expected })
+      expect(await context.disk.files()).toMatchObject({ "plan.md": expected })
+      expect(context.port.read().conflicts).toBeUndefined()
+      expect(context.versions.list("plan.md").at(-1)).toMatchObject({ event: "resolved", resolution: keep })
+      expect(await context.sync()).toMatchObject({ unchanged: 2, conflicts: [], adopted: [] })
+    })
+
+  it("resolves a conflict by keeping both: the remote version lands beside the local one", async () => {
+    const { context } = await torn()
+    const resolved = await resolveWith(context, "plan.md", { keep: "both" })
+    expect(resolved.copy).toBe("plan (conflict 2026-11-18 disk).md")
+    const both = { "plan.md": PLAN.replace("gym", "gym at 7"), [resolved.copy as string]: PLAN.replace("gym", "swim") }
+    expect(await context.local()).toMatchObject(both)
+    expect(await context.disk.files()).toMatchObject(both)
+    expect(await context.sync()).toMatchObject({ unchanged: 3, conflicts: [], adopted: [] })
+  })
+
+  it("resolves a conflict with a final file written to both sides, every version kept for good", async () => {
+    const { context } = await torn()
+    const final = join(temp("file-mirror-final-"), "plan.md")
+    writeFileSync(final, PLAN.replace("gym", "swim at 7"))
+    expect(await resolveWith(context, "plan.md", { file: final })).toMatchObject({
+      resolution: "file",
+      sha256: hashes(PLAN.replace("gym", "swim at 7")).sha256,
+    })
+    expect(await context.local()).toMatchObject({ "plan.md": PLAN.replace("gym", "swim at 7") })
+    expect(await context.disk.files()).toMatchObject({ "plan.md": PLAN.replace("gym", "swim at 7") })
+    const later = fileVersions(join(context.stateDir, "versions", context.mirror.id), () => TODAY + 400 * 86_400_000)
+    await later.prune()
+    for (const event of later.list("plan.md").filter((one) => one.versions))
+      expect(event.versions?.every((version) => version.available)).toBe(true)
+    expect(later.list("plan.md").map((event) => event.event)).toEqual(["conflict", "resolved"])
+  })
+
+  it("refuses a final file when the remote changed since the conflict, writing nothing", async () => {
+    const { context } = await torn()
+    context.disk.write("plan.md", "someone else")
+    const final = join(temp("file-mirror-final-"), "plan.md")
+    writeFileSync(final, "final")
+    await expect(resolveWith(context, "plan.md", { file: final })).rejects.toMatchObject({ code: "conflict" })
+    expect(await context.local()).toMatchObject({ "plan.md": PLAN.replace("gym", "gym at 7") })
+    expect(await context.disk.files()).toMatchObject({ "plan.md": "someone else" })
+    expect(context.port.read().conflicts?.["plan.md"]).toBeDefined()
+  })
+
+  it("refuses a resolution when the local file changed since the conflict", async () => {
+    const { context } = await torn()
+    put(context.root, "plan.md", "edited again")
+    await expect(resolveWith(context, "plan.md", { keep: "remote" })).rejects.toMatchObject({
+      details: { reason: "mirror.local-changed" },
+    })
+    expect(await context.local()).toMatchObject({ "plan.md": "edited again" })
+  })
+
+  it("settles a merge conflict with --keep as a whole-file conflict", async () => {
+    const context = await synced()
+    put(context.root, "plan.md", PLAN.replace("gym", "gym at 7"))
+    context.disk.write("plan.md", PLAN.replace("gym", "swim"))
+    expect(await context.sync("remote")).toMatchObject({ downloaded: ["plan.md"], conflicts: [] })
+    expect(await context.local()).toMatchObject({ "plan.md": PLAN.replace("gym", "swim") })
+    expect(context.port.read().conflicts).toBeUndefined()
+  })
+
+  it("reports a conflict when the base to merge against is no longer kept", async () => {
+    const context = await synced()
+    rmSync(join(context.stateDir, "versions", context.mirror.id, "objects"), { recursive: true })
+    put(context.root, "list.txt", LIST.replace("one", "ONE"))
+    context.disk.write("list.txt", LIST.replace("five", "FIVE"))
+    expect((await context.sync()).conflicts).toEqual([
+      expect.objectContaining({ path: "list.txt", reason: "changed on both sides" }),
+    ])
+  })
+
+  it("keeps an unchanged file's content as its base for a mirror synced before merges", async () => {
+    const context = await synced()
+    rmSync(join(context.stateDir, "versions", context.mirror.id, "objects"), { recursive: true })
+    await context.sync()
+    expect(context.versions.has(hashes(LIST).sha256)).toBe(true)
+  })
+
+  for (const when of ["before", "after"] as const)
+    it(`settles a crash ${when} the upload of a merge with no second merge`, async () => {
+      const context = await synced()
+      put(context.root, "list.txt", LIST.replace("one", "ONE"))
+      context.disk.write("list.txt", LIST.replace("two", "TWO"))
+      context.crashOn("update", "remote", when)
+      await expect(context.sync()).rejects.toBeInstanceOf(Crash)
+      context.recover()
+      const resumed = await context.sync()
+      expect(resumed).toMatchObject({ conflicts: [], errors: [], merged: [] })
+      expect(resumed[when === "before" ? "uploaded" : "adopted"]).toEqual(["list.txt"])
+      const merged = "ONE\nTWO\nthree\nfour\nfive\n"
+      expect(await context.local()).toMatchObject({ "list.txt": merged })
+      expect(await context.disk.files()).toMatchObject({ "list.txt": merged })
+    })
+
+  it("counts merged files toward the replacement guard", async () => {
+    const files = Object.fromEntries(Array.from({ length: 51 }, (_, n) => [`n${n}.txt`, LIST]))
+    const context = await synced(files)
+    for (const path of Object.keys(files)) {
+      put(context.root, path, LIST.replace("one", "ONE"))
+      context.disk.write(path, LIST.replace("five", "FIVE"))
+    }
+    const result = await context.sync()
+    expect(result).toMatchObject({ tooManyReplacements: 51, merged: [] })
+    expect(result.errors).toEqual([expect.objectContaining({ reason: "mirror.too-many-replacements" })])
+    expect((await context.sync(undefined, { allowReplacements: 51 })).merged).toHaveLength(51)
+  })
+
+  it("keeps a merge's versions for good, past the 30 days", async () => {
+    const context = await synced()
+    put(context.root, "list.txt", LIST.replace("one", "ONE"))
+    context.disk.write("list.txt", LIST.replace("five", "FIVE"))
+    await context.sync()
+    const later = fileVersions(join(context.stateDir, "versions", context.mirror.id), () => TODAY + 400 * 86_400_000)
+    await later.prune()
+    expect(
+      later
+        .list("list.txt")
+        .at(-1)
+        ?.versions?.map((version) => version.available),
+    ).toEqual([true, true, true, true])
   })
 })

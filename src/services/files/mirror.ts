@@ -1,36 +1,50 @@
 import { createHash } from "node:crypto"
-import { mkdir, rm, stat, statfs, unlink } from "node:fs/promises"
+import { mkdir, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join, posix } from "node:path"
-import { CliError, isCliError } from "@wirecat/cli-base"
-import * as v from "valibot"
+import { CliError } from "@wirecat/cli-base"
 import type {
   Expect,
+  FileConflict,
   FileEntry,
-  FileMirrorState,
   FileMirrorStatePort,
   FileStepKind,
   FileTarget,
   RemoteFile,
 } from "../../documents/file-mirror-model.js"
-import type { Keep, LocalDocument } from "../../documents/push-model.js"
-import { eachMirror, type HeldLock, heldCheck, jsonState, type Mirror } from "../documents/mirrors.js"
+import type { ConflictPart, Keep } from "../../documents/push-model.js"
+import { eachMirror, type HeldLock, heldCheck, type Mirror } from "../documents/mirrors.js"
 import {
   assertNoLink,
-  hashFile,
   localTemp,
   type MirrorAction,
   type PushConflict,
-  placeNew,
   replaceLocal,
   safePath,
-  scanLocal,
   skippedName,
 } from "../documents/push.js"
 import { excludedBy } from "./exclusions.js"
-import { listingSchema, listRemote } from "./listing.js"
-import type { FileVersions } from "./versions.js"
+import { listRemote } from "./listing.js"
+import {
+  ancestors,
+  copyName,
+  freeSpace,
+  gigabytes,
+  type Local,
+  linkFree,
+  MAX_FILES,
+  renameLocal,
+  scan,
+  shortOfSpace,
+  spareFor,
+  trashLocal,
+  under,
+  whole,
+} from "./local-files.js"
+import { mergeable, mergeText } from "./text-merge.js"
+import type { FileVersions, VersionParts } from "./versions.js"
 
-type Local = LocalDocument & { size: number; mtimeMs: number }
+export { fileMirrorStatus, fileSyncState } from "./mirror-state.js"
+
 type Side = "local" | "remote"
 
 export interface FileMirrorOptions {
@@ -118,6 +132,8 @@ export interface FileStep {
 export interface FileMirrorResult {
   uploaded: string[]
   downloaded: string[]
+  /** Text files both sides changed, merged and written to both. */
+  merged: string[]
   trashed: { path: string; side: Side }[]
   renamed: { from: string; to: string }[]
   adopted: string[]
@@ -157,11 +173,9 @@ interface Step extends FileStep {
  */
 export const MAX_DELETIONS = 10
 export const MAX_REPLACEMENTS = 50
-/** What a run leaves free on a drive it writes to: a tenth of what it writes, from 100 MB up to 1 GB. */
-const spareFor = (needed: number) => Math.min(1024 ** 3, Math.max(100 * 1024 ** 2, needed / 10))
-const MAX_FILES = 100_000
+/** The whole-file step `keep` settles a conflict with when both sides changed. */
+const KEPT: Record<Keep, FileStepKind> = { local: "upload", remote: "download", both: "keep-both" }
 const CHECKS = 8
-const TRASH = ".wirecat-trash"
 const SAVE_EVERY_MS = 1_000
 
 /** A temporary file's tag from any operation id, safe in a file name. */
@@ -180,6 +194,7 @@ const decide = (
   remote?: RemoteFile,
   base?: FileEntry,
   keep?: Keep,
+  merges = false,
 ): Step | undefined => {
   const step = (kind: FileStepKind, reason?: string): Step => ({
     kind,
@@ -206,6 +221,7 @@ const decide = (
   if (remoteSame) return step(local ? "upload" : "trash-remote")
   if (!local) return settle("deleted here, changed on the remote", "trash-remote", "download", "download")
   if (!remote) return settle("changed here, deleted on the remote", "upload", "trash-local", "upload")
+  if (merges) return step("merge")
   return settle("changed on both sides", "upload", "download", "keep-both")
 
   function settle(reason: string, ...[ifLocal, ifRemote, ifBoth]: [FileStepKind, FileStepKind, FileStepKind]) {
@@ -216,111 +232,8 @@ const decide = (
   }
 }
 
-/** `name (conflict 2026-11-18 disk).ext`, numbered when that name is taken. */
-const copyName = (path: string, remote: string, date: string, taken: (path: string) => boolean) => {
-  const extension = posix.extname(path)
-  const stem = path.slice(0, path.length - extension.length)
-  for (let n = 1; ; n++) {
-    const candidate = `${stem} (conflict ${date} ${remote}${n > 1 ? ` ${n}` : ""})${extension}`
-    if (!taken(candidate)) return candidate
-  }
-}
-
-/** Moves a file into `<root>/.wirecat-trash/<date>/` while it still has `hash`; false when it changed. */
-const trashLocal = async (root: string, path: string, hash: string, date: string) => {
-  await assertNoLink(root, path)
-  await assertNoLink(root, posix.join(TRASH, date, path))
-  const from = join(root, path)
-  if ((await hashFile(from)).sha256 !== hash) return false
-  const into = join(root, TRASH, date, path)
-  await mkdir(dirname(into), { recursive: true })
-  for (let n = 1; ; n++) {
-    try {
-      await placeNew(from, n > 1 ? `${into}.${n}` : into)
-      break
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-    }
-  }
-  await unlink(from)
-  return true
-}
-
-/** Renames a local file while it still has `hash` and nothing holds the new name; false otherwise. */
-const renameLocal = async (root: string, from: string, to: string, hash: string) => {
-  await assertNoLink(root, from)
-  await assertNoLink(root, to)
-  const source = join(root, from)
-  if ((await hashFile(source)).sha256 !== hash) return false
-  await mkdir(dirname(join(root, to)), { recursive: true })
-  try {
-    await placeNew(source, join(root, to))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
-    throw error
-  }
-  await unlink(source)
-  return true
-}
-
-/** Every local file but excluded ones, hashed only when its size or mtime moved since the last sync. */
-const scan = async (
-  root: string,
-  entries: Record<string, FileEntry>,
-  excluded: (path: string) => boolean,
-  maxFiles = MAX_FILES,
-) => {
-  const { files, links } = await scanLocal(
-    root,
-    () => "file",
-    maxFiles,
-    (path) => {
-      const entry = entries[path]
-      return entry && { size: entry.localSize, mtimeMs: entry.localMtimeMs, hash: entry.sha256 }
-    },
-    excluded,
-  )
-  return { files: files as Local[], links }
-}
-
 /** Remote files the mirror covers: hidden files and editor leftovers are skipped, as they are locally. */
 const mirrored = (files: RemoteFile[]) => files.filter((file) => !file.path.split("/").some(skippedName))
-
-/** False when `path` or a folder on the way to it is a symbolic link, so nothing under it is touched. */
-const linkFree = (root: string, path: string) =>
-  assertNoLink(root, path).then(
-    () => true,
-    (error: unknown) => {
-      if (isCliError(error) && error.details?.reason === "mirror.symlink") return false
-      throw error
-    },
-  )
-
-/** True when the file at `absolute` is missing or has one of `hashes`: no partial copy is left there. */
-const whole = async (absolute: string, hashes: (string | undefined)[]) => {
-  try {
-    return hashes.includes((await hashFile(absolute)).sha256)
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT"
-  }
-}
-
-/** True when `path` is `link` or lies under it. */
-const under = (path: string, link: string) => path === link || path.startsWith(`${link}/`)
-
-/** Free bytes and the device of the file system holding `path`, or of its nearest folder that exists. */
-const freeSpace = async (path: string): Promise<{ free: number; dev: number }> => {
-  for (let at = path; ; at = dirname(at)) {
-    try {
-      const [{ bavail, bsize }, { dev }] = await Promise.all([statfs(at), stat(at)])
-      return { free: bavail * bsize, dev }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dirname(at) === at) throw error
-    }
-  }
-}
-
-const gigabytes = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`
 
 /**
  * Syncs a local folder and a remote folder of plain files both ways, whole files at a time. Each path is compared
@@ -425,6 +338,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const result: FileMirrorResult = {
     uploaded: [],
     downloaded: [],
+    merged: [],
     trashed: [],
     renamed: [],
     adopted: [],
@@ -502,7 +416,23 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
       continue
     }
     // A re-pinned run settles nothing: whatever `keep` says, different content is a conflict.
-    const step = decide(path, sure, here, file, entry, repin ? undefined : keep)
+    const merges =
+      here !== undefined &&
+      file !== undefined &&
+      entry !== undefined &&
+      mergeable(path, here.size, file.size, entry.size) &&
+      versions.has(entry.sha256)
+    const step = decide(path, sure, here, file, entry, repin ? undefined : keep, merges)
+    // The same three contents the last run could not merge are not downloaded and merged again at every watch cycle.
+    const known = state.conflicts?.[path]
+    if (
+      step?.kind === "merge" &&
+      known?.kept &&
+      known.base === entry?.sha256 &&
+      known.local === here?.hash &&
+      known.remote === file?.sha256
+    )
+      Object.assign(step, keep ? { kind: KEPT[keep] } : { kind: "conflict", reason: known.reason })
     if (step) steps.push(step)
     else unchanged++
     // Saved without a write, so the next scan does not read a file only touched since the last sync.
@@ -527,13 +457,35 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         if (why) Object.assign(step, { kind: "unknown", reason: "remote", why })
       }),
     )
-  const conflict = (step: Step, reason: string) =>
+  const earlier = state.conflicts ?? {}
+  const conflicts: Record<string, FileConflict> = {}
+  /** Reports and records a conflict; `kept` are the contents a failed merge kept, logged once per set of them. */
+  const conflict = (step: Step, reason: string, kept?: { parts: VersionParts; segments?: ConflictPart[] }) => {
     result.conflicts.push({
       path: step.path,
       reason,
+      ...(kept?.segments ? { parts: kept.segments } : {}),
       ...(step.local ? { localChangedAt: new Date(step.local.mtimeMs).toISOString(), localSize: step.local.size } : {}),
       ...(step.remote ? { remoteChangedAt: step.remote.modifiedAt, remoteSize: step.remote.size } : {}),
     })
+    const found: FileConflict = {
+      reason,
+      at: new Date(now()).toISOString(),
+      ...(step.base ? { base: step.base.sha256 } : {}),
+      ...(step.local ? { local: step.local.hash } : {}),
+      ...(step.remote ? { remote: step.remote.sha256 as string, remoteFile: step.remote } : {}),
+    }
+    const before = earlier[step.path]
+    const same = before?.base === found.base && before?.local === found.local && before?.remote === found.remote
+    if (kept) {
+      found.kept = true
+      // A conflict `keep` settles at once is no conflict anyone resolves later.
+      if (!keep && (!same || !before?.kept))
+        versions.log({ path: step.path, event: "conflict", direction: "both", parts: kept.parts })
+    } else if (same && before?.kept) found.kept = true
+    // A conflict seen again keeps the time it was first found.
+    conflicts[step.path] = same && before ? { ...found, at: before.at } : found
+  }
   for (const step of steps) {
     if (step.kind === "conflict") conflict(step, step.reason ?? "")
     if (step.kind === "unknown")
@@ -547,7 +499,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
   const deletions = steps.filter((step) => step.kind === "trash-local" || step.kind === "trash-remote").length
   const replacements = steps.filter(
     (step) =>
-      (step.kind === "upload" && step.remote) || (step.kind === "download" && step.local) || step.kind === "keep-both",
+      (step.kind === "upload" && step.remote) ||
+      (step.kind === "download" && step.local) ||
+      step.kind === "keep-both" ||
+      step.kind === "merge",
   ).length
   const over = [
     ...(deletions > MAX_DELETIONS
@@ -674,7 +629,19 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         reason: "mirror.remote-changed",
       })
   }
-  const upload = async (path: string, from: Local, expect: Expect, created: boolean, replaced?: RemoteFile) => {
+  /** Keeps a mergeable file's synced content, the base of its next merge; a file that changed meanwhile has none. */
+  const keepBase = async (path: string, absolute: string, sha256: string, size: number) => {
+    // A base that could not be kept costs a conflict at the next change on both sides, never this run's write.
+    if (mergeable(path, size) && !versions.has(sha256)) await versions.keep(absolute).catch(() => undefined)
+  }
+  const upload = async (
+    path: string,
+    from: Local,
+    expect: Expect,
+    created: boolean,
+    replaced?: RemoteFile,
+    merged = false,
+  ) => {
     if (replaced) await keepRemote(path, replaced)
     for (const up of ancestors(path))
       if (!folders.has(up)) {
@@ -687,6 +654,8 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     if (sent.sha256 !== undefined && sent.sha256 !== from.hash)
       throw new CliError("conflict", "the local file changed during the upload", { reason: "upload.mismatch" })
     record(path, sent, from, from.hash)
+    await keepBase(path, from.absolute, from.hash, from.size)
+    if (merged) return
     versions.log({
       path,
       event: created ? "created" : "changed",
@@ -731,7 +700,10 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     }
     delete state.pending[path]
     if (!written) return false
-    if (recorded) record(path, file, await stat(absolute), written.sha256)
+    if (recorded) {
+      record(path, file, await stat(absolute), written.sha256)
+      await keepBase(path, absolute, written.sha256, file.size)
+    }
     versions.log({
       path,
       event: old ? "changed" : "created",
@@ -747,13 +719,80 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
     file ? { sha256: file.sha256 as string, ...(file.md5 ? { md5: file.md5 } : {}) } : { absent: true }
   const changedHere = (step: Step) => conflict(step, "the local file changed during the sync")
 
+  /**
+   * Merges a text file both sides changed: the remote and the local contents are kept first, the merge reads all
+   * three from the store, and the result is written locally, then uploaded over the remote the listing saw. False
+   * when the lines conflict, so `keep` can settle the file whole.
+   */
+  const merge = async (step: Step, here: Local, there: RemoteFile, last: FileEntry) => {
+    const { path } = step
+    const remoteHash = there.sha256 as string
+    await keepRemote(path, there)
+    if ((await versions.keep(here.absolute)) !== here.hash) {
+      changedHere(step)
+      return true
+    }
+    const parts = { base: last.sha256, local: here.hash, remote: remoteHash }
+    const [base, mine, theirs] = await Promise.all(
+      [last.sha256, here.hash, remoteHash].map((hash) => versions.read(hash)),
+    )
+    if (!base || !mine || !theirs) {
+      conflict(step, "changed on both sides, and the earlier version to merge against is no longer kept")
+      return false
+    }
+    const merged = await mergeText(path, base, mine, theirs)
+    if (!("merged" in merged)) {
+      conflict(step, "changed on both sides in the same lines", {
+        parts,
+        segments: merged.conflicts.map(({ base, local, remote }) => ({ base, local, remote })),
+      })
+      return false
+    }
+    const outcome = await versions.keep((temp) => writeFile(temp, merged.merged, { flag: "wx", mode: 0o600 }))
+    const absolute = join(root, path)
+    await assertNoLink(root, path)
+    const operationId = options.operationId()
+    const written = await write(
+      "update",
+      "local",
+      path,
+      () => replaceLocal(absolute, here.hash, merged.merged, { tag: tagOf(operationId), sha256: outcome }),
+      operationId,
+    )
+    if (!written) {
+      changedHere(step)
+      return true
+    }
+    const placed = await stat(absolute)
+    // Both sides as the remote is now, with a local size no file has: a crash before the upload leaves the merged
+    // file a local change, hashed again and sent by the next run, never merged twice.
+    state.entries[path] = {
+      id: there.id,
+      size: there.size,
+      sha256: remoteHash,
+      ...(there.md5 ? { md5: there.md5 } : {}),
+      remoteModified: there.modifiedAt,
+      localMtimeMs: -1,
+      localSize: -1,
+      syncedAt: new Date(now()).toISOString(),
+    }
+    save(true)
+    versions.log({ path, event: "merged", direction: "both", parts, new: outcome, size: placed.size })
+    const sent = { ...here, hash: outcome, size: placed.size, mtimeMs: placed.mtimeMs }
+    await upload(path, sent, expectOf(there), false, undefined, true)
+    result.merged.push(path)
+    return true
+  }
   const run = async (step: Step) => {
     const { path, local: here, remote: there, base: last } = step
     switch (step.kind) {
       case "conflict":
         return
       case "adopt":
-        if (here && there) record(path, there, here, here.hash)
+        if (here && there) {
+          record(path, there, here, here.hash)
+          await keepBase(path, here.absolute, here.hash, here.size)
+        }
         result.adopted.push(path)
         return
       case "forget":
@@ -812,6 +851,14 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         result.renamed.push({ from: path, to })
         return
       }
+      case "merge":
+        if (!here || !there || !last) return
+        if (!(await merge(step, here, there, last)) && keep) {
+          result.conflicts.pop()
+          delete conflicts[path]
+          return run({ ...step, kind: KEPT[keep] })
+        }
+        return
       case "keep-both": {
         if (!here || !there) return
         // The remote version lands beside the local one first, so the overwrite below loses nothing. The copy is
@@ -856,118 +903,28 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
           state.pending[step.path] = { op: step.kind, operationId: lastOperation }
       }
     }
+    // A mirror synced before merges existed has no bases: an unchanged text file's content becomes its base now.
+    const stepped = new Set(steps.map((step) => step.path))
+    for (const [path, entry] of Object.entries(state.entries)) {
+      if (signal?.aborted) break
+      const here = local.get(path)
+      if (here?.hash === entry.sha256 && !stepped.has(path))
+        await keepBase(path, here.absolute, entry.sha256, here.size)
+    }
   } finally {
     // Forgotten, so a file whose exclusion is removed later is a new file, never a deletion.
     for (const path of Object.keys(state.entries)) if (excluded(path)) delete state.entries[path]
+    if (Object.keys(conflicts).length) state.conflicts = conflicts
+    else delete state.conflicts
     save(true)
   }
   await options.assertHeld()
-  await versions.prune()
+  await versions.prune(
+    Object.entries(state.entries)
+      .filter(([path, entry]) => mergeable(path, entry.size))
+      .map(([, entry]) => entry.sha256),
+  )
   return result
-}
-
-/**
- * The free space a run needs that a file system lacks: downloads land under `root`, and the store keeps every
- * content they replace or a deletion removes, plus each remote content an upload replaces that it lacks.
- */
-const shortOfSpace = async (
-  steps: Step[],
-  root: string,
-  versions: FileVersions,
-  space: (path: string) => Promise<{ free: number; dev: number }>,
-) => {
-  let incoming = 0
-  let kept = 0
-  for (const step of steps) {
-    const local = step.local?.size ?? 0
-    const remote = step.remote?.size ?? 0
-    if (step.kind === "download") {
-      incoming += remote
-      kept += local
-    }
-    if (step.kind === "keep-both") {
-      incoming += remote
-      kept += remote
-    }
-    if (step.kind === "trash-local") kept += local
-    if (step.kind === "upload" && step.remote && !versions.has(step.remote.sha256 as string)) kept += remote
-  }
-  if (!incoming && !kept) return undefined
-  const here = await space(root)
-  const store = versions.dir === undefined ? here : await space(versions.dir)
-  const needs =
-    store.dev === here.dev
-      ? [{ path: root, needed: incoming + kept, free: here.free }]
-      : [
-          { path: root, needed: incoming, free: here.free },
-          { path: versions.dir as string, needed: kept, free: store.free },
-        ]
-  return needs.find((need) => need.needed > 0 && need.free < need.needed + spareFor(need.needed))
-}
-
-const ancestors = (path: string) => {
-  const found: string[] = []
-  for (let up = posix.dirname(path); up !== "."; up = posix.dirname(up)) found.unshift(up)
-  return found
-}
-
-const entrySchema = v.object({
-  id: v.string(),
-  size: v.number(),
-  sha256: v.string(),
-  md5: v.optional(v.string()),
-  remoteModified: v.string(),
-  localMtimeMs: v.number(),
-  localSize: v.number(),
-  syncedAt: v.string(),
-})
-const stateSchema = v.object({
-  version: v.literal(1),
-  principal: v.string(),
-  root: v.string(),
-  target: v.string(),
-  rootId: v.optional(v.string()),
-  localRoot: v.optional(v.object({ dev: v.number(), ino: v.number() })),
-  entries: v.record(v.string(), entrySchema),
-  pending: v.record(
-    v.string(),
-    v.object({ op: v.string(), operationId: v.string(), created: v.optional(v.boolean()) }),
-  ),
-  listing: v.optional(listingSchema),
-})
-
-/** A file mirror's state in `<dir>/<id>.json`, refused rather than reset when invalid. */
-export const fileSyncState = (dir: string, mirror: Mirror, principal: string): FileMirrorStatePort =>
-  jsonState<FileMirrorState>(join(dir, `${mirror.id}.json`), stateSchema, () => ({
-    version: 1,
-    principal,
-    root: mirror.path,
-    target: mirror.folder,
-    entries: {},
-    pending: {},
-  }))
-
-/** What each mirror's next sync would send from local changes alone; the remote is not asked. */
-export const fileMirrorStatus = async (mirrors: Mirror[], stateOf: (mirror: Mirror) => FileMirrorStatePort) => {
-  const items = []
-  for (const mirror of mirrors) {
-    const excluded = excludedBy(mirror.exclude)
-    const entries = Object.fromEntries(
-      Object.entries(stateOf(mirror).read().entries).filter(([path]) => !excluded(path)),
-    )
-    const { files, links } = await scan(mirror.path, entries, excluded)
-    const seen = new Set(files.map((file) => file.path))
-    items.push({
-      id: mirror.id,
-      path: mirror.path,
-      folder: mirror.folder,
-      upload: files.filter((file) => entries[file.path]?.sha256 !== file.hash).map((file) => file.path),
-      delete: Object.keys(entries).filter((path) => !seen.has(path) && !links.some((link) => under(path, link))),
-      unchanged: files.length - files.filter((file) => entries[file.path]?.sha256 !== file.hash).length,
-      remote_checked: false,
-    })
-  }
-  return items
 }
 
 /**

@@ -358,8 +358,8 @@ tried again at the next poll. The CLI takes the lock inside `sync`, so a manual 
 ### Plain files, both ways
 
 A remote folder that keeps files as they are (Yandex Disk, a WebDAV share) uses the whole-file engine,
-`syncFileMirror`, instead of `pushDocuments`: it copies bytes, never merges text, and reads the remote with one
-listing per run instead of one read per file. The provider implements `FileTarget`:
+`syncFileMirror`, instead of `pushDocuments`: it copies whole files, merges only small text files both sides
+changed (point 13), and reads the remote with one listing per run instead of one read per file. The provider implements `FileTarget`:
 
 ```ts
 interface FileTarget {
@@ -480,6 +480,38 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     one on a later run, kept in the version store meanwhile. A saved file the remote changed or deleted since its
     page only makes a conditional write fail as a conflict. A dry run goes on from the saved position and saves
     none.
+13. A text file both sides changed is merged, in every mirror: `.md`, `.markdown`, `.txt`, `.csv` and `.tsv` up
+    to 1 MB on every side (`mergeable`, `MAX_MERGE_BYTES`). The base is the last synced content, which the store
+    keeps for each such file after its upload, download or adoption (an unchanged file of a mirror synced before
+    merges gets it at the next run); a base the store lacks makes the file a conflict, as before. The plan shows a
+    `merge` step, counted as a replacement for the guard and as the three contents for the space check. The run
+    keeps the remote content (downloaded unless the store has it) and the local one, and merges the three from the
+    store with `mergeText`: a line-level three-way merge on the bytes (read as latin1, so any 8-bit encoding, CRLF,
+    a byte-order mark and a missing last newline pass through), where changes to different lines merge, the same
+    change on both sides merges once, and lines both sides changed differently conflict. Markdown that conflicts by
+    lines gets a second try with `mergeBlocks` and `spliceMarkdown` (a tick and a text edit on one item no longer
+    collide), taken only when the remote's text is exactly what its blocks write over the base, so a change the
+    blocks cannot see (front matter, a link definition, `_` for `*`) is never dropped. A merge writes the result
+    locally while the file still has the scanned hash, saves the entry as the remote now is (with a local size no
+    file has, so the next scan hashes the file), then uploads expecting the listed remote: a crash before the upload
+    leaves a local change the next run sends, one after it an identical pair the next run adopts, and neither merges
+    twice. The result lists it in `merged`; the log has one `merged` event, direction `both`. A merge that conflicts
+    is a conflict with `parts` (each stretch's base, local and remote text) and its three contents kept; `keep`
+    still settles it, whole file, as before. A NUL byte or a UTF-16 byte-order mark makes a file a conflict.
+14. Each run records its conflicts in the state (`conflicts`, by path: reason, time, the three hashes, the listed
+    remote file, `kept`), replacing the last run's. The same three contents are not downloaded or merged again at
+    the next run or watch cycle. `listFileConflicts(mirrors, stateOf)` lists them; `showFileConflict` returns the
+    three versions (text when kept), whether the local file changed since, each changed stretch of the line merge
+    (`hunks`, with `kind` `local`, `remote`, `both` or `conflict` and the base line) and `merged`, the whole file with
+    Git's markers, a start for a final version. `resolveFileConflict` settles one, under the sync lock and through
+    `guard`, with `keep` (`local`, `remote`, `both`: the remote's version lands beside the local one, as a sync's
+    `keep: "both"`) or `file`, the final content's local path. It refuses with nothing written when the local file
+    no longer has the recorded hash, or the remote not the recorded one: the remote is written first, by an upload
+    or trash that expects that hash, then the local file while it still has its own. Both sides get the final
+    content, the entry is recorded, the conflict removed, and a `resolved` event logs it. `fileConflictsCommand`
+    (`@wirecat/cli-core/cli/documents`) mounts them as `mirrors conflicts list [id]`, `show <id> <path>` and
+    `resolve <id> <path> (--keep local|<remote>|both | --file <file>)`, `--file` owner-only, with the app's mirrors,
+    state, stores and a connected target as its helpers.
 
 `versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
@@ -491,13 +523,17 @@ when the copy was edited meanwhile. A remote deletion downloads nothing: the pro
 deleting a large folder must not fetch it all. Its log event names the hash, and says `oldIn: "remote-trash"` when the
 store does not hold it. When the store cannot keep a content (a full disk during the download included), the file
 fails with `mirror.version-not-kept` and nothing is replaced. Each change is appended to `<dir>/log.jsonl`: path,
-event (`created`, `changed`, `deleted`, `renamed`), direction, old and new hash, `from` (the side `old` was kept
-from), size and time. Retention is one rule, applied after each sync under its lock:
-a content stays while a log event newer than 30 days names it, and the last content of a path whose newest event is
-a deletion stays for good. A content no event names (a crash between keeping it and logging the change) stays 30
-days after it was last kept; one that vanishes while prune runs is skipped. Call `versions.prune()` only under the
-sync lock.
-`versions.list(path)` lists a path's events with `available` (bytes still kept); `restoreFileVersion(root, path,
+event (`created`, `changed`, `deleted`, `renamed`, `merged`, `conflict`, `resolved`), direction (`both` for the last
+three), old and new hash, `from` (the side `old` was kept from), size and time; a merge, a conflict and a resolution
+name their contents in `parts` (`base`, `local`, `remote`), and a resolution says how in `resolution`. Retention,
+applied after each sync under its lock: a content stays while a log event newer than 30 days names it; the last
+content of a path whose newest event is a deletion, every content a merge, a conflict or a resolution names, and the
+last synced content of each mergeable file (`prune(pinned)`, the next merge's base) stay for good. A content no event
+names (a crash between keeping it and logging the change) stays 30 days after it was last kept; one that vanishes
+while prune runs is skipped. Call `versions.prune()` only under the sync lock. `versions.read(sha256)` returns a kept
+content's bytes, for the text a merge reads whole.
+`versions.list(path)` lists a path's events with `available` (bytes still kept) and, for a merge, a conflict or a
+resolution, `versions`: each content with its role (`base`, `local`, `remote`, `result`) and whether it is kept; `restoreFileVersion(root, path,
 sha256, versions, lock)` puts one back under the same lock as a sync, keeping the current file first, and the next
 sync sends it. `versions.dir` is the store's folder, whose drive the free-space check reads.
 
