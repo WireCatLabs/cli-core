@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { CliError, captureStreams, memoryKeyring } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { documentLibrary } from "../../cli/documents/library.js"
 import { documentCommandsContract, FAKE_FOLDER, fakeDocumentSource } from "../../cli/documents/testing/index.js"
 import type { DocumentWords } from "../../cli/documents/words.js"
@@ -18,6 +18,18 @@ import { type MessageStore, openStore } from "../../store/store.js"
 import type { TrackerSource } from "../source.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../testing/index.js"
 import { addTrackerCommands } from "./index.js"
+
+const embedNotesWith = vi.hoisted(() => [] as Record<string, unknown>[])
+vi.mock("../../services/notes-search.js", async (original) => {
+  const real = await original<typeof import("../../services/notes-search.js")>()
+  return {
+    ...real,
+    embedNotes: async (_store: unknown, options: Record<string, unknown>) => {
+      embedNotesWith.push(options)
+      return { model: "example-model", embedded: 0, left: false }
+    },
+  }
+})
 
 const app = {
   command: "lin",
@@ -331,6 +343,15 @@ describe("one sync for a tracker that holds documents too", () => {
       reason: "model.not-downloaded",
       source: "tracker:embeddings",
     })
+  })
+
+  it("embeds the documents within the run's deadline", async () => {
+    const { cli, answer } = setup()
+    await cli(["folders", "add", "root"])
+    embedNotesWith.length = 0
+    const synced = await answer(["sync", "--embed", "--timeout", "5m"])
+    expect(synced.item.documents.embeddings).toMatchObject({ model: "example-model" })
+    expect(embedNotesWith).toEqual([expect.objectContaining({ deadline: expect.objectContaining({ ms: 300_000 }) })])
   })
 
   it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {

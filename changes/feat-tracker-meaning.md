@@ -7,3 +7,9 @@
   the combined sync with documents too, within the deadline. Items synced before are embedded at the next
   `sync --embed` ([TRACKER.md](../docs/dev/TRACKER.md#search-all)).
 
+
+### Fixed
+
+- **A documents `sync --embed` stops embedding before the run's deadline.** `embedNotes` now gets the deadline the
+  sync had, so `--timeout` bounds the embedding too and the answer says when it stopped
+  ([DOCUMENTS.md](../docs/dev/DOCUMENTS.md#shared-commands)).
