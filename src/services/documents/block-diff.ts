@@ -90,6 +90,8 @@ export const touches = (a: Hunk<unknown>, b: Hunk<unknown>) =>
   a.from === b.from ||
   (a.from === a.to && b.from < a.from && a.from < b.to) ||
   (b.from === b.to && a.from < b.from && b.from < a.to)
+/** Two hunks touch or sit side by side with no unchanged item between them: Git's diff3 conflicts on both. */
+export const adjoins = (a: Hunk<unknown>, b: Hunk<unknown>) => touches(a, b) || a.to === b.from || b.to === a.from
 /** `base[from, to)` with `hunks`, which lie inside it in order, applied. */
 export const applied = <T>(base: T[], from: number, to: number, hunks: Hunk<T>[]) => {
   let out: T[] = []
@@ -106,6 +108,7 @@ export const applied = <T>(base: T[], from: number, to: number, hunks: Hunk<T>[]
  * side as the last sync left it; they hold the same blocks, though a tick may differ. Blocks line up by their
  * shape, so a checklist tick never collides with a text edit: each tick follows the side that changed it, the
  * remote when neither did. A stretch both sides changed differently is a conflict, settled by `keep` when given.
+ * `overlap` decides which hunks share a stretch; `adjoins` also joins neighbours, as a file merge needs.
  */
 export const mergeBlocks = (
   baseLocal: Block[],
@@ -113,6 +116,7 @@ export const mergeBlocks = (
   local: Block[],
   remote: Block[],
   keep?: Keep,
+  overlap: (a: Hunk<unknown>, b: Hunk<unknown>) => boolean = touches,
 ): Merged => {
   if (
     baseLocal.length !== baseRemote.length ||
@@ -126,7 +130,7 @@ export const mergeBlocks = (
   const clusters: (typeof tagged)[] = []
   for (const hunk of tagged) {
     const last = clusters.at(-1)
-    if (last?.some((other) => touches(other, hunk))) last.push(hunk)
+    if (last?.some((other) => overlap(other, hunk))) last.push(hunk)
     else clusters.push([hunk])
   }
 

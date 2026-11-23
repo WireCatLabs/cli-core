@@ -488,10 +488,12 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     `merge` step, counted as a replacement for the guard and as the three contents for the space check. The run
     keeps the remote content (downloaded unless the store has it) and the local one, and merges the three from the
     store with `mergeText`: a line-level three-way merge on the bytes (read as latin1, so any 8-bit encoding, CRLF,
-    a byte-order mark and a missing last newline pass through), where changes to different lines merge, the same
-    change on both sides merges once, and lines both sides changed differently conflict. Markdown that conflicts by
-    lines gets a second try with `mergeBlocks` and `spliceMarkdown` (a tick and a text edit on one item no longer
-    collide), taken only when the remote's text is exactly what its blocks write over the base, so a change the
+    a byte-order mark and a missing last newline pass through), where changes with at least one unchanged line
+    between them merge, the same change on both sides merges once, and lines both sides changed differently
+    conflict, as do changes on neighbouring lines (as in Git: two edits that read fine alone can read wrong
+    together). Markdown that conflicts by lines gets a second try with `mergeBlocks` and `spliceMarkdown` (a tick
+    and a text edit on one item no longer collide, edits to neighbouring blocks still conflict), taken only when
+    the remote's text is exactly what its blocks write over the base, so a change the
     blocks cannot see (front matter, a link definition, `_` for `*`) is never dropped. A merge writes the result
     locally while the file still has the scanned hash, saves the entry as the remote now is (with a local size no
     file has, so the next scan hashes the file), then uploads expecting the listed remote: a crash before the upload

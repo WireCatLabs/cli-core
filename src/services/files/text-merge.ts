@@ -1,7 +1,7 @@
 import { posix } from "node:path"
 import { markdownBlocks } from "../../documents/markdown-blocks.js"
 import type { ConflictPart } from "../../documents/push-model.js"
-import { applied, diffSequence, type Hunk, mergeBlocks, touches } from "../documents/block-diff.js"
+import { adjoins, applied, diffSequence, type Hunk, mergeBlocks } from "../documents/block-diff.js"
 import { spliceMarkdown } from "../documents/markdown-splice.js"
 
 const MERGEABLE = new Set([".md", ".markdown", ".txt", ".csv", ".tsv"])
@@ -28,7 +28,10 @@ export type TextMerge =
 const linesOf = (text: string): string[] => text.match(/[^\n]*\n|[^\n]+$/g) ?? []
 const same = (line: string) => line
 
-/** A three-way merge of line arrays, diff3 style: stretches both sides changed, unless changed the same, conflict. */
+/**
+ * A three-way merge of line arrays, diff3 style: stretches both sides changed, unless changed the same, conflict.
+ * Edits on neighbouring lines conflict too, as in Git: two edits can read fine alone and wrong together.
+ */
 const mergeLines = (base: string[], local: string[], remote: string[]): TextSegment[] => {
   const tagged = [
     ...diffSequence(base, local, same).map((hunk) => ({ ...hunk, side: "local" as const })),
@@ -37,7 +40,7 @@ const mergeLines = (base: string[], local: string[], remote: string[]): TextSegm
   const clusters: (typeof tagged)[] = []
   for (const hunk of tagged) {
     const last = clusters.at(-1)
-    if (last?.some((other) => touches(other, hunk))) last.push(hunk)
+    if (last?.some((other) => adjoins(other, hunk))) last.push(hunk)
     else clusters.push([hunk])
   }
   const segments: TextSegment[] = []
@@ -106,7 +109,7 @@ const mergeMarkdown = async (base: Buffer, local: Buffer, remote: Buffer): Promi
   )
   if (!baseBlocks || !localBlocks || !remoteBlocks) return undefined
   if ((await spliceMarkdown(baseText, remoteBlocks)) !== remoteText) return undefined
-  const merged = mergeBlocks(baseBlocks, baseBlocks, localBlocks, remoteBlocks)
+  const merged = mergeBlocks(baseBlocks, baseBlocks, localBlocks, remoteBlocks, undefined, adjoins)
   if (merged.status !== "clean") return undefined
   const text = await spliceMarkdown(localText, merged.blocks)
   return text === undefined ? undefined : Buffer.from(text, "utf8")
