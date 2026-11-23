@@ -30,18 +30,18 @@ nothing now.
 ## Releases
 
 - **Merge freely, release in batches** (owner's rule, 2026-11-09, in
-  [issue #849](https://github.com/WireCatLabs/cli-core/issues/849)). Releasing one pull request at a time made every
+  [issue #849](https://github.com/WireCatLabs/cli-core/issues/849); it reached GitHub's 2500-comment limit on 2026-11-19, and announcements continue in [issue #3157](https://github.com/WireCatLabs/cli-core/issues/3157)). Releasing one pull request at a time made every
   session wait hours.
   - **Merging needs no lock.** Squash merge your pull request into `main` as soon as it is green and merges cleanly,
-    then comment one line on #849: `merged #NNN`. `main` does not require a pull request to be up to date, so merge
+    then comment one line on #3157: `merged #NNN`. `main` does not require a pull request to be up to date, so merge
     `main` in only when GitHub reports a conflict.
   - **No release per pull request.** Never release only for your own work; the next release carries everything
     merged by then.
-  - **The lock is for running a release.** Before `bin/release`, read the latest comments on #849, `git fetch` and
+  - **The lock is for running a release.** Before `bin/release`, read the latest comments on #3157, `git fetch` and
     check `gh run list --workflow release.yml`; merge every green pull request you know of; post
     `release X.Y.Z from <sha>`; run `bin/release`; then post `main free: X.Y.Z`. Downstream CLIs bump cli-core once
     per release, not per pull request; when a release makes them change their code, bump all six the same day.
-  - **Hold the lock only while the release is green** (#849, rule 4): if its pull request or run turns red, post
+  - **Hold the lock only while the release is green** (#3157, rule 4): if its pull request or run turns red, post
     `main free` and queue again at the end. **A holder silent for 45 minutes without a merge or progress loses it**
     (rule 5, owner's rule 2026-11-08): the next session in the queue posts "taking main (stale: <holder> since HH:MM
     UTC)" and goes ahead, and the old holder queues again at the end.
