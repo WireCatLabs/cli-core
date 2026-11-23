@@ -5,7 +5,7 @@ import { clockMeta, type Effects, type NextStep } from "@wirecat/cli-base/standa
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
+import { allowDeletionsOption, changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { type Body, renderAnswer } from "../../cli/envelope.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
@@ -173,6 +173,13 @@ const minutes = (text: string) => {
 const readsOnly = (command: Command): boolean =>
   metaOf(command).effects?.local !== "write" && pathOf(command)[0] !== "search"
 
+interface CalendarSyncFlags {
+  embed?: boolean
+  maxPages?: number
+  rescan?: boolean
+  allowDeletions?: number
+}
+
 const addCalendarCommandsDefinition = (program: Command, options: CalendarCommandOptions): void => {
   const mounted = new Set(program.commands)
   const now = () => options.now?.() ?? Date.now()
@@ -339,13 +346,14 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
     "sync --timeout 2m",
   )
     .option("--rescan", "list every synced calendar's window again, dropping a round in progress")
+    .addOption(allowDeletionsOption())
     .option(
       "--max-pages <pages>",
       "at most this many requests to the provider in this run; as many as fit the deadline if not given",
       integer,
     )
     .option("--embed", "also index new events for meaning search, with a model already downloaded")
-    .action(async (opts: { embed?: boolean; maxPages?: number; rescan?: boolean }, command: Command) => {
+    .action(async (opts: CalendarSyncFlags, command: Command) => {
       // --full is the shared program's output flag; it used to start the round over here, and silently would not now.
       if (command.optsWithGlobals<{ full?: boolean }>().full)
         throw new CliError("validation_error", "sync starts over with --rescan; --full only widens output")
@@ -359,6 +367,7 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { full: true } : {}),
+          ...(opts.allowDeletions ? { allowDeletions: opts.allowDeletions } : {}),
           ...(run.expand ? { expand: run.expand } : {}),
         })
         // A run its budget stopped has no time left for the model; the run that finishes the round embeds.

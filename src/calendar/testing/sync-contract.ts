@@ -135,7 +135,8 @@ export const calendarSyncContract = (make: () => CalendarSyncFixture | Promise<C
         source,
         sync,
       }) => {
-        source.put("primary", single("e1"))
+        // e2 stays: a full list that returns nothing at all is held, not taken as every entry deleted.
+        source.put("primary", single("e1"), single("e2", AT + HOUR))
         await sync(NOW)
         source.remove("primary", "e1")
         const after = (await sync(NOW + HOUR)).synced[0]

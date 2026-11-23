@@ -29,6 +29,11 @@ export interface ChangePage {
    * answered 404). Never an entry that only left the window.
    */
   removed: string[]
+  /**
+   * Entries the source still has but could not read this time (an ICS event that no longer parses): a full round
+   * counts them as seen and keeps their stored fields, since not reading one is no sign it was deleted.
+   */
+  kept?: string[]
   /** More pages in this round, read from `nextCursor`. */
   hasMore: boolean
   nextCursor?: string

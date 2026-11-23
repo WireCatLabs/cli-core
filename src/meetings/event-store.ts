@@ -293,9 +293,17 @@ export interface EventStore {
   removeEntries(calendarId: number, externalIds: string[], now: number): Promise<number>
   /**
    * After a full list: entries not seen since `seenBefore` get `deleted_at`. A full list holds only what falls in the
-   * window, so only entries `entryInWindow` puts there count. Events, series and links stay.
+   * window, so only entries `entryInWindow` puts there count. Events, series and links stay. `keep` names entries the
+   * source still has but could not read: they and a kept series' slots are not marked. `dryRun` marks nothing and
+   * answers how many it would.
    */
-  markUnseen(calendarId: number, seenBefore: number, window: { from: number; to: number }, now: number): Promise<number>
+  markUnseen(
+    calendarId: number,
+    seenBefore: number,
+    window: { from: number; to: number },
+    now: number,
+    options?: { keep?: readonly string[]; dryRun?: boolean },
+  ): Promise<number>
   /**
    * Takes `deleted_at` off the entries a full list marked although they were outside the window it listed:
    * `windowAt(deletedAt)` is the window of the list that marked one. Their events take their fields again. Returns how
