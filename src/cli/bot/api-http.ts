@@ -1,5 +1,5 @@
 import { CliError, type ErrorCode, wallClock } from "@wirecat/cli-base"
-import { type GraphqlBinding, graphqlDocument, type ManifestOperation } from "@wirecat/cli-base/codegen"
+import { type GraphqlBinding, graphqlDocument, type ManifestOperation } from "@wirecat/cli-base/codegen/runtime"
 import { type FetchLike, providerWaitMs, readJsonResponse, statusToCode } from "@wirecat/cli-base/http"
 import type { Command } from "commander"
 import { providerRequest } from "../command-runs.js"

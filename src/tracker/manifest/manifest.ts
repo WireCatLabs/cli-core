@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { parseSelection, type Selection } from "@wirecat/cli-base/codegen"
+import { parseSelection, type Selection } from "@wirecat/cli-base/codegen/runtime"
 import * as v from "valibot"
 import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"

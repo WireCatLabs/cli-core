@@ -3,8 +3,8 @@ import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { signRequest } from "./service-api-manifest.js"
 
 // A cli-base that signs Basic itself, as cli-base #643 makes it: cli-core's own rules must still hold over it.
-vi.mock("@wirecat/cli-base/codegen", async (original) => {
-  const real = await original<typeof import("@wirecat/cli-base/codegen")>()
+vi.mock("@wirecat/cli-base/codegen/runtime", async (original) => {
+  const real = await original<typeof import("@wirecat/cli-base/codegen/runtime")>()
   return {
     ...real,
     signInPlace: (scheme: Parameters<typeof real.signInPlace>[0]) =>

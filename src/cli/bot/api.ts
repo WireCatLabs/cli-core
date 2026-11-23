@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"

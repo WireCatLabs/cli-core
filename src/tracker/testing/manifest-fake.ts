@@ -3,10 +3,9 @@ import {
   type GraphqlFakeAnswer,
   type GraphqlFakeCall,
   graphqlFake,
-  type SchemaNode,
-  type Selection,
   sampleOf,
 } from "@wirecat/cli-base/codegen"
+import type { SchemaNode, Selection } from "@wirecat/cli-base/codegen/runtime"
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import { manifestBaseUrl, type ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import { crmValues } from "../../crm/index.js"

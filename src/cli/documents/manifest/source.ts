@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Pagination } from "@wirecat/cli-base/codegen"
+import type { Pagination } from "@wirecat/cli-base/codegen/runtime"
 import type {
   DocumentSource,
   FeedlessDocumentSource,

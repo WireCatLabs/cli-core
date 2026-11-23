@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { Pagination } from "@wirecat/cli-base/codegen"
+import type { Pagination } from "@wirecat/cli-base/codegen/runtime"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import { nextPage, parameterValue, type ServiceApiManifest, withValue } from "../../cli/service-api-manifest.js"
