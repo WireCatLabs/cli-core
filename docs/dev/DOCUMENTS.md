@@ -88,7 +88,7 @@ the value it needs, an unknown operation names the one most likely meant) and an
 |---|---|---|
 | `identity` | the call that names the account, and the paths joined by `:` (`["bot.workspace_id", "id"]`) | |
 | `get` | one file by its id, and `map`: the paths of a row's id, name, parent or parents, URL, times, version, trashed, and which rows are folders | `"{id}"` |
-| `children` | a folder's children, a page at a time by the operation's `pagination` (`childrenPage`) | `"{id}"` |
+| `children` | a folder's children, a page at a time by the operation's `pagination` (`childrenPage`); a row its map finds `trashed` is a deletion, as in `changes` ([trashed rows](#a-trashed-row-in-a-listing)) | `"{id}"` |
 | `changes` | what changed since a time (`since`: `iso`, `ms` or `seconds`), with an overlap (`overlapMs`, ten minutes by default); a trashed row is a removal, and a row older than the since at `time` is left out | `"{since}"` |
 | `content` | the document's Markdown, at the path `markdown` of the answer | `"{id}"` |
 | `reread` | a saved document read again while its `providerMetadata` has no value at `missing` (see below) | |
@@ -147,7 +147,7 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   file, and both keep their work.
 - **The walk is saved through `saveWalk`** every 2 s and when the call stops: the folders still to list, the
   folders and files found. Only the fields of `SourceWalk` are used, so a CLI that validates the walk file with a
-  strict schema keeps all of it. A round of changes is saved under the scope `<scope>:changes:<cursor>`, which names
+  strict schema keeps all of it, and accepts the optional `listing` and `deleted`. A round of changes is saved under the scope `<scope>:changes:<cursor>`, which names
   the cursor it started from.
 - **The answer says the pass is not done:** `complete: false`, `stopped` (`entries`, `requests`, `deadline`,
   `cancelled`) and `walk: { folders_left, entries, listed }`. The shared `sync` command answers it as partial
@@ -165,6 +165,16 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   plain `sync`; `sync --help` says so. Work a dropped batch had saved to the
   index without the state knowing is removed when the batch is dropped, and the state is saved right after, so a
   call cut short does not remove it again.
+<a id="a-trashed-row-in-a-listing"></a>
+- **A row the listing puts in the trash is deleted; a row it leaves out is not.** A source may list rows in its trash
+  (Linear's `includeArchived`) with `trashed: true`, the same signal the change feed gives. A walk (`children`,
+  `childrenPage`, a saved query's `list`) removes such a document with the reason `deleted`, as a change would; a
+  page with sub-pages (`isDocument`) is removed itself, and what is below it leaves as `unavailable`, as in a round of
+  changes. A document a finished walk did not find stays `unavailable` with its text kept: absence is never a
+  deletion. So a `--rescan` that first sees a trashed document removes its text then, where it used to keep it for
+  good. A stopped walk saves the ids it found deleted in `deleted`, so the call that resumes it removes them as
+  deleted too; a CLI whose walk-file schema drops `deleted` removes them as `unavailable`. A source that sets
+  `trashed` on nothing in a listing walks as before.
 - **A folder gone since the walk saved it is dropped.** When listing a folder answers `not_found` (through
   `errorOf`), the engine reads the folder again with `metadata`. Only a second `not_found`, or the folder in the
   trash, drops it and what was below it from the scope, and the walk goes on. On any doubt (the folder is there, or
@@ -213,7 +223,8 @@ yesterday, even after a page is deleted".
   last text the same way before the body is blanked. The first read of a catalog entry, which had no text, is not a
   version.
 - **A removal has a reason**, `SourceRemoval`: `deleted`, `unavailable` or `unsynced`. Only `deleted` is a deletion,
-  and only a source's own signal gives it: the file in the trash (`trashed: true`) or a change with
+  and only a source's own signal gives it: the file in the trash (`trashed: true`, in a change or a
+  [listing](#a-trashed-row-in-a-listing)) or a change with
   `gone: "deleted"`. A bare `removed: true` in the feed, a 404 or a refusal when the content is read, a folder that
   vanished with what was below it, and a file a finished walk did not find are `unavailable`: the document leaves the live copy (lists and
   search) but keeps its text on its row, marked in `documents.removal`, and comes back as it was when the source
@@ -345,6 +356,20 @@ CLI's run; the builders honour a global `--dry-run`.
 - **`mirrors watch`** polls the connection's `changes`. When the feed cannot go on from its cursor (expired, or
   over its bound), `changes` throws a `listing.too-large` CliError: watch then starts a new feed and checks every
   mirror once.
+
+**Other people's text is marked for a scheduled agent.** A file on a drive is named and written by whoever shares it,
+so the shared reads declare its fields with `marksUntrusted`
+([WC-SECR-11](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-11--text-from-outside-is-made-safe-before-a-terminal-or-an-agent-sees-it),
+[WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)).
+In a run locked read-only with a mark (`schedule agent`), each such text comes between the run's markers; elsewhere
+the answer is as before, and no answer gains a field. `DOCUMENT_UNTRUSTED` (`name`, `title`, `path`, `text`,
+`description`, `excerpt`, a link's `target_text`, at any depth) covers `documents list|show|history`, `changes`,
+`search`, `folders list`, `relationships list` and `catalog show|list|search|tree`, whatever the CLI's row holds.
+`documents context` marks only `document.title|text|path` and the links' `targetText`: the notes, memories, facts
+and tags beside it are the owner's, as a note is in `search notes`, and `notes`, `memories` and `facts` stay
+unmarked. `files sheets show` marks a sheet's name and its cells' values and formulas, `files documents show` the
+paragraphs' text. `documents export` answers only the owner's own `--output` path, so it marks nothing. A CLI with
+its own copies of these commands (drive-cli) declares the same list on them.
 
 `@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
 for pages with sub-pages, `change` to check the change feed, and `change` with `remove` for a source without one), and `documentCommandsContract` the CLI's mounted

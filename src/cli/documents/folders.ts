@@ -3,6 +3,7 @@ import type { Command } from "commander"
 import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { bindQuery, documentQueries, folderRow, termsOf } from "./queries.js"
 import { allOf, type DocumentWords, examples, wordsOf } from "./words.js"
 
@@ -36,7 +37,9 @@ const addDocumentFolderCommandsDefinition = (program: Command, helpers: Document
   })
   bindQuery(
     examples(
-      annotate(folders.command("list"), { effects: LOCAL_READ }).description("list the folder ids sync imports"),
+      marksUntrusted(annotate(folders.command("list"), { effects: LOCAL_READ }), DOCUMENT_UNTRUSTED).description(
+        "list the folder ids sync imports",
+      ),
       [`${prefix} folders list`],
     ),
     queries.folders,

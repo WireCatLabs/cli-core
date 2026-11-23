@@ -8,6 +8,7 @@ import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { queryHelp, queryTerms, withQuery } from "../list-query.js"
+import { DOCUMENT_CONTEXT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import {
   bindQuery,
   documentQueries,
@@ -64,7 +65,7 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
   const scopes = ["personal", "work"]
   const documents = documentsGroup(program, wording)
   examples(
-    annotate(documents.command("context"), { effects: LOCAL_READ })
+    marksUntrusted(annotate(documents.command("context"), { effects: LOCAL_READ }), DOCUMENT_CONTEXT_UNTRUSTED)
       .argument("<document>", documentArgument)
       .description("show a document with its tags, relationships, notes, memories and editors"),
     [`${prefix} documents context DOC_ID`],
@@ -98,7 +99,10 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
   )
   bindQuery(
     examples(
-      annotate(relationships.command("list"), { effects: LOCAL_READ }).description("list a document's relationships"),
+      marksUntrusted(annotate(relationships.command("list"), { effects: LOCAL_READ }), [
+        "targetText",
+        "target_text",
+      ]).description("list a document's relationships"),
       [`${prefix} relationships list DOC_ID`],
     ).argument("<document>", documentArgument),
     queries.links,

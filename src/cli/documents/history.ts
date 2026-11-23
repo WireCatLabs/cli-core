@@ -9,6 +9,7 @@ import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { count, fromFile, type Settings } from "../settings.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { type DocumentWords, documentsGroup, examples, positive, wordsOf } from "./words.js"
 
 /** The local history `documentIngestion` gives: what a CLI hands these commands. */
@@ -60,7 +61,7 @@ const addDocumentHistoryCommandsDefinition = (program: Command, helpers: Documen
     return found
   }
   examples(
-    annotate(documents.command("history"), { effects: LOCAL_READ })
+    marksUntrusted(annotate(documents.command("history"), { effects: LOCAL_READ }), DOCUMENT_UNTRUSTED)
       .argument("<document>", text.documentArgument)
       .description("list the versions of a document kept in the local copy, or show one with --revision"),
     [`${prefix} documents history DOC_ID`, `${prefix} documents history DOC_ID --revision 3`],
@@ -77,7 +78,7 @@ const addDocumentHistoryCommandsDefinition = (program: Command, helpers: Documen
       }),
     )
   return examples(
-    annotate(program.command("changes"), { effects: LOCAL_READ }).description(
+    marksUntrusted(annotate(program.command("changes"), { effects: LOCAL_READ }), DOCUMENT_UNTRUSTED).description(
       "list the documents the sync added, changed, removed or brought back, newest first",
     ),
     [`${prefix} changes`, `${prefix} changes --since 7d --event deleted,unavailable`],

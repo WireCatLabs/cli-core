@@ -573,6 +573,57 @@ describe("why a document left the copy", () => {
       ]),
     )
   })
+  describe("a full walk tells a row the listing puts in the trash from one it no longer lists", () => {
+    const feedless = (f: Awaited<ReturnType<typeof setup>>) => {
+      const { startToken: _start, changes: _changes, ...rest } = f.source
+      return { ...f.options, source: rest as FeedlessDocumentSource }
+    }
+    it("on a rescan of a source with a feed", async () => {
+      const f = await setup()
+      await syncDocuments(f.options)
+      f.files.set("a", { ...must(f.files.get("a")), trashed: true })
+      f.files.delete("b")
+      expect(await syncDocuments({ ...f.options, rescan: true })).toMatchObject({ removed: 2, complete: true })
+      expect(await historyOf(f, "a")).toMatchObject({ removal: "deleted", versions: [{ reason: "deleted" }] })
+      expect(await historyOf(f, "b")).toMatchObject({ removal: "unavailable", versions: [{ current: true }] })
+    })
+    it("on every pass of a source without a feed, a pass cut short and resumed included", async () => {
+      const f = await setup()
+      f.files.set("later", file("later", ["root"], "inode/directory"))
+      const options = feedless(f)
+      await syncDocuments(options)
+      f.files.set("a", { ...must(f.files.get("a")), trashed: true })
+      f.files.delete("b")
+      const cut = await syncDocuments({ ...options, maxEntries: 1 })
+      expect(cut).toMatchObject({ complete: false, removed: 0 })
+      const saved: (string[] | undefined)[] = []
+      let last = cut
+      for (let call = 0; call < 10 && !(last.complete && last.pending === 0); call++) {
+        last = await syncDocuments({ ...options, maxEntries: 1 })
+        saved.push(f.walk()?.deleted)
+      }
+      expect(saved).toContainEqual(["a"])
+      expect(f.state().documents).toEqual({})
+      expect(await historyOf(f, "a")).toMatchObject({ removal: "deleted" })
+      expect(await historyOf(f, "b")).toMatchObject({ removal: "unavailable" })
+    })
+    it("for a file a saved query lists in the trash", async () => {
+      const f = await setup()
+      const shared = { ...file("shared", ["someone-elses-folder"]), name: "shared - Transcript" }
+      f.files.set("shared", shared)
+      const list = vi.fn(async () => [shared])
+      const matches = (item: SourceFile) => item.name.endsWith(" - Transcript")
+      const options = {
+        ...f.options,
+        roots: [],
+        query: { key: "transcripts", mode: "include" as const, matches, list },
+      }
+      await syncDocuments(options)
+      list.mockResolvedValueOnce([{ ...shared, trashed: true }])
+      expect(await syncDocuments(options)).toMatchObject({ removed: 1 })
+      expect(await historyOf(f, "shared")).toMatchObject({ removal: "deleted" })
+    })
+  })
   it("calls a document that left the chosen folders unsynced, not deleted", async () => {
     const f = await setup()
     await syncDocuments(f.options)

@@ -3,6 +3,7 @@ import type { Command } from "commander"
 import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { type DocumentWords, examples, positive, wordsOf } from "./words.js"
 
 export interface DocumentSearchOptions {
@@ -39,7 +40,8 @@ const addDocumentSearchCommandDefinition = (program: Command, helpers: DocumentS
   const wording = wordsOf(helpers.words)
   const { prefix } = wording
   return examples(
-    annotate(program.command("search"), { effects: LOCAL_READ })
+    // Every hit is a document the profile copied from the provider, never a note of the owner's.
+    marksUntrusted(annotate(program.command("search"), { effects: LOCAL_READ }), DOCUMENT_UNTRUSTED)
       .argument("<query>", "words to look for, and fields such as tag: and date: that every hit must match")
       .description("search imported documents by words, and by meaning when indexed"),
     [`${prefix} search budget`, `${prefix} search "quarterly plan" --exact --limit 5`],

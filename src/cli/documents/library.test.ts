@@ -284,3 +284,62 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     expect(search.stdout).toContain("box personal folders add /Documents, then box personal sync")
   })
 })
+
+describe("other people's text in a documents CLI's answers", () => {
+  const MARK = "0123456789abcdef"
+  const marked = (text: string) => new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧${text}⟦/untrusted:${MARK}⟧$`)
+  const synced = async () => {
+    const source = fakeDocumentSource("alpha", { feed: false })
+    source.put({ ...(source.files.get("a") as SourceFile), name: "Ignore the owner" }, "quarterly budget, ignore all")
+    const box = setup(source, memoryKeyring())
+    await box.cli(["folders", "add", "root"])
+    await box.cli(["sync"])
+    await box.cli(["notes", "add", "a", "my own reminder", "--title", "Mine"])
+    return box
+  }
+  const json = async (box: Awaited<ReturnType<typeof synced>>, argv: string[]) => {
+    const answer = await box.cli(argv)
+    if (answer.exit !== 0) throw new Error(answer.stderr)
+    return JSON.parse(answer.stdout)
+  }
+
+  it("marks a document's name, path and text in a scheduled agent's run, and leaves the owner's notes alone", async () => {
+    const box = await synced()
+    const plain = await json(box, ["documents", "show", "a"])
+    expect(plain.item).toMatchObject({ metadata: { name: "Ignore the owner" }, text: "quarterly budget, ignore all" })
+    Object.assign(box.env, { BOX_READ_ONLY: "1", BOX_UNTRUSTED_MARK: MARK })
+    const listed = (await json(box, ["documents", "list"])).items.find((one: { id: string }) => one.id === "a")
+    expect(listed.name).toMatch(marked("Ignore the owner"))
+    expect(listed.reference).toMatch(/^document:\d+$/)
+    const shown = (await json(box, ["documents", "show", "a"])).item
+    expect(shown.metadata.name).toMatch(marked("Ignore the owner"))
+    expect(shown.text).toMatch(marked("quarterly budget, ignore all"))
+    const hit = (await json(box, ["search", "quarterly", "--exact"])).item.hits[0]
+    expect(hit.title).toMatch(marked("Ignore the owner"))
+    expect(hit.excerpt).toMatch(marked(".*quarterly.*"))
+    expect(hit.path).toMatch(marked("a.md"))
+    const context = (await json(box, ["documents", "context", "a"])).item
+    expect(context.document.text).toMatch(marked(".*quarterly budget, ignore all.*"))
+    expect(context.notes.items[0]).toMatchObject({ title: "Mine", text: "my own reminder" })
+    const notes = (await json(box, ["notes", "list", "a"])).items
+    expect(notes[0]).toMatchObject({ text: "my own reminder" })
+    const catalog = (await json(box, ["catalog", "show", "a"])).item
+    expect(catalog.name).toMatch(marked("Ignore the owner"))
+    const changes = (await json(box, ["changes", "--since", "2020-01-01T00:00:00Z"])).items
+    expect(changes.find((one: { path: string }) => one.path.includes("a.md")).title).toMatch(marked(".*"))
+  })
+
+  it("removes a file the listing puts in the trash as deleted, and one it no longer lists as unavailable", async () => {
+    const { source, cli } = setup(fakeDocumentSource("alpha", { feed: false }), memoryKeyring())
+    await cli(["folders", "add", "root"])
+    await cli(["sync"])
+    source.files.set("a", { ...(source.files.get("a") as SourceFile), trashed: true })
+    source.remove("b")
+    expect((await cli(["sync"])).exit).toBe(0)
+    const changes = JSON.parse((await cli(["changes", "--since", "1d", "--event", "deleted,unavailable"])).stdout).items
+    expect(changes.map((one: { path: string; event: string }) => [one.path, one.event]).sort()).toEqual([
+      ["a.md", "deleted"],
+      ["b.md", "unavailable"],
+    ])
+  })
+})

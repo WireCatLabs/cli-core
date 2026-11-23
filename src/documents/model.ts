@@ -136,6 +136,8 @@ export interface SourceWalk<M extends SourceFile = SourceFile> {
   folders: Record<string, M>
   files: M[]
   discovered: number
+  /** Ids of `files` the source itself marked deleted, so a walk resumed in a later call still removes them so. */
+  deleted?: string[]
 }
 export interface SourceIndex<M extends SourceFile = SourceFile> {
   catalog?: { import(principal: string, files: M[]): Promise<unknown> }
