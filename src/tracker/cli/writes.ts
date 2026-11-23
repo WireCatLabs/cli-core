@@ -3,11 +3,12 @@ import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import type * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
-import { REMOTE_WRITE } from "../../cli/effects.js"
+import { NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf } from "../../cli/envelope.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
+import { markRenamedPermissionKeys } from "../../cli/permission-keys.js"
 import type { TrackerItem } from "../../store/sqlite/tracker.js"
-import type { TrackerWrite } from "../writer.js"
+import { TRACKER_WRITE_KEYS, type TrackerWrite } from "../writer.js"
 import {
   commentTrackerIssue,
   createTrackerIssue,
@@ -37,15 +38,16 @@ export interface TrackerWriteCommandOptions<R extends WriteRun> {
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 
-type Typed = Omit<TrackerIssueInput, "labels"> & { label?: string[] }
+type Typed = Omit<TrackerIssueInput, "labels" | "state"> & { label?: string[]; status?: string }
 
-const inputOf = ({ label, ...rest }: Typed): TrackerIssueInput => ({
+const inputOf = ({ label, status, ...rest }: Typed): TrackerIssueInput => ({
   ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+  ...(status === undefined ? {} : { state: status }),
   // The empty default marks the flag as repeatable; left empty, the labels are not changed.
   ...(label?.length ? { labels: label } : {}),
 })
 
-/** `issues create|update|comment` for each write the tracker takes, under the `issues` group. */
+/** `issues create|update` and `issues comments create`, for each write the tracker takes, under the `issues` group. */
 export const addTrackerWriteCommands = <R extends WriteRun>(
   issues: Command,
   options: TrackerWriteCommandOptions<R>,
@@ -69,9 +71,9 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
       untrusted: shown.untrusted.map((field) => `${kind}.${field}`),
     })
   }
-  const write = (name: TrackerWrite, description: string) =>
+  const write = (group: Command, name: string, description: string) =>
     answerEntity(
-      annotate(issues.command(name), { effects: REMOTE_WRITE, offline: false }),
+      annotate(group.command(name), { effects: REMOTE_WRITE, offline: false }),
       "tracker_write",
       options.answer,
     ).description(description)
@@ -79,12 +81,15 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
     command
       .option("--description <text>", "the issue's text; an empty value clears it")
       .option("--team <team>", "the team, by its id, key or name; left out, the copy's only team")
-      .option("--state <state>", "the workflow state, by its id or a name only one of the team's states has")
       .option(
         "--assignee <user>",
         "the user, by id, name or e-mail; empty for none; anyone but you checks issues.assign-others",
       )
-      .option("--priority <priority>", "0 to 4, or none, urgent, high, medium, low; empty for none")
+      .option(
+        "--priority <n>",
+        "critical or urgent (1), high (2), medium (3), low (4), none or empty (0), a 0.0–1.0 score or the old 0–4",
+      )
+      .option("--status <state>", "the workflow state, by its id or a name only one of the team's states has")
       .option(
         "--label <label>",
         "a label by its id or name; repeat it for each; replaces the issue's labels, and one empty value clears them",
@@ -92,14 +97,14 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
         [] as string[],
       )
       .option("--project <project>", "the project, by its id or name; empty for none")
-      .option("--parent <issue>", "the issue this one is part of, by its key or id; empty for none")
+      .option("--parent <id>", "the issue this one is part of, by its key or id; empty for none")
   const reference = (command: Command) => command.argument("<issue>", "the issue's key (ENG-12) or id")
 
   if (options.writes.includes("create"))
     options
       .example(
         fields(
-          write("create", "make an issue in the tracker, then store the tracker's copy of it").requiredOption(
+          write(issues, "create", "make an issue in the tracker, then store the tracker's copy of it").requiredOption(
             "--title <title>",
             "the issue's title",
           ),
@@ -119,12 +124,13 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
         fields(
           reference(
             write(
+              issues,
               "update",
               "change an issue in the tracker; what is left out keeps its value; the tracker's copy is stored again",
             ),
           ).option("--title <title>", "the issue's title"),
         ),
-        'issues update ENG-12 --state "In Progress"',
+        'issues update ENG-12 --status "In Progress"',
         'issues update ENG-12 --assignee ""',
       )
       .action(async (issue: string, typed: Typed, command: Command) => {
@@ -133,19 +139,24 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
           return answered(run, done.operationId, "issue", done.issue)
         })
       })
-  if (options.writes.includes("comment"))
+  if (options.writes.includes("comment")) {
+    const comments = annotate(issues.command("comments"), { effects: NO_EFFECTS }).description(
+      "comments on the tracker's issues; issues show lists an issue's",
+    )
+    markRenamedPermissionKeys(comments, new Map([["issues.comment", TRACKER_WRITE_KEYS.comment]]))
     options
       .example(
-        reference(write("comment", "add a comment to an issue in the tracker, then store it")).requiredOption(
-          "--body <text>",
+        reference(write(comments, "create", "add a comment to an issue in the tracker, then store it")).requiredOption(
+          "--text <text>",
           "the comment, as it is to read",
         ),
-        'issues comment ENG-12 --body "Example: fixed in the next release"',
+        'issues comments create ENG-12 --text "Example: fixed in the next release"',
       )
-      .action(async (issue: string, typed: { body: string }, command: Command) => {
+      .action(async (issue: string, typed: { text: string }, command: Command) => {
         await options.within(command, false, async (run) => {
-          const done = await commentTrackerIssue(contextOf(run, command), issue, typed.body)
+          const done = await commentTrackerIssue(contextOf(run, command), issue, typed.text)
           return answered(run, done.operationId, "comment", done.comment)
         })
       })
+  }
 }

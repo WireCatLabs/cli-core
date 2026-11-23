@@ -38,7 +38,7 @@ export interface TrackerWriteOptions {
  */
 export interface TrackerWriter {
   readonly provider: string
-  /** What this tracker takes: `issues create`, `issues update` and `issues comment` are mounted for these. */
+  /** What this tracker takes: `issues create`, `issues update` and `issues comments create` are mounted for these. */
   readonly writes: readonly TrackerWrite[]
   createIssue(draft: TrackerIssueDraft, options: TrackerWriteOptions): Promise<TrackerIssue>
   updateIssue(externalId: string, patch: TrackerIssueFields, options: TrackerWriteOptions): Promise<TrackerIssue>
@@ -50,7 +50,7 @@ export interface TrackerWriter {
 export const TRACKER_WRITE_KEYS: Readonly<Record<TrackerWrite, PermissionKey>> = {
   create: "issues.create",
   update: "issues.update",
-  comment: "issues.comment",
+  comment: "issues.comments.create",
 }
 
 /** Giving an issue to a tracker user other than the one the sign-in acts as, as `crm.assign-others` for a CRM. */
@@ -69,9 +69,8 @@ export const TRACKER_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = { 
 export const trackerAlsoChecks =
   (also?: (write: TrackerWrite) => readonly PermissionKey[]) =>
   (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
-    const [noun, command] = path
-    const write = TRACKER_WRITES.find((one) => one === command)
-    if (path.length !== 2 || noun !== "issues" || write === undefined) return []
+    const write = TRACKER_WRITES.find((one) => TRACKER_WRITE_KEYS[one] === path.join("."))
+    if (write === undefined) return []
     const assign = { key: TRACKER_ASSIGN_OTHERS_KEY, when: "--assignee other than the sign-in's user" }
     return [...(write === "comment" ? [] : [assign]), ...(also?.(write) ?? [])]
   }

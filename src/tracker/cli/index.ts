@@ -16,6 +16,7 @@ import {
   STATE_TYPES,
   type StateType,
   TRACKER_KINDS,
+  TRACKER_PRIORITY_LABELS,
   type TrackerKind,
   type TrackerRecords,
 } from "../../domain/tracker.js"
@@ -48,7 +49,10 @@ export interface TrackerCommandOptions {
   app: AppIdentity
   /** Opens the selected profile for one command; `readOnly` when the command only reads the store. */
   open: (command: Command, access: { readOnly: boolean }) => Promise<TrackerRun>
-  /** What the tracker's writer takes (`TrackerWriter.writes`): mounts `issues create`, `update` and `comment`. */
+  /**
+   * What the tracker's writer takes (`TrackerWriter.writes`): mounts `issues create`, `issues update` and
+   * `issues comments create`.
+   */
   writes?: readonly TrackerWrite[]
   /**
    * The documents half of `sync`, from `documentLibrary`, for a CLI that mounts the shared documents commands too:
@@ -332,8 +336,11 @@ const withNames = async (run: TrackerRun, items: TrackerItem<"issue">[]) => {
     const assignee = item.record.assignee
       ? (users.get(item.record.assignee) as TrackerRecords["user"] | undefined)
       : undefined
+    const { priority } = item.record
     return viewOf(item, {
       ...(state ? { state_name: state.name, state_type: state.type } : {}),
+      // Beside the tracker's number, the family's word, which --priority takes back.
+      ...(typeof priority === "number" ? { priority_label: TRACKER_PRIORITY_LABELS[priority] ?? null } : {}),
       ...(assignee ? { assignee_name: assignee.name } : {}),
       ...(item.record.assignee && people.has(item.record.assignee)
         ? { assignee_person: people.get(item.record.assignee) }
@@ -703,7 +710,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
 }
 
 /**
- * The tracker's commands: `sync`, `issues list|show|search|assign`, `issues create|update|comment` for the writes in
- * `writes`, and a `list` of each other kind.
+ * The tracker's commands: `sync`, `issues list|show|search|assign`, `issues create|update` and
+ * `issues comments create` for the writes in `writes`, and a `list` of each other kind.
  */
 export const addTrackerCommands = honoursDryRun(sharedCommand(addTrackerCommandsDefinition))
