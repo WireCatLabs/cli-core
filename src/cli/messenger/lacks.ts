@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { hide, isHidden } from "../commander-internals.js"
 
 type Need = readonly [method: keyof MessengerAdapter, what: string]
 
@@ -68,8 +69,6 @@ export const refuseLacking = (messenger: Lacking | undefined, path: readonly str
   if (need) throw new CliError("validation_error", `this messenger cannot ${need[1]}`)
 }
 
-type Hideable = Command & { _hidden: boolean }
-
 /**
  * Hides under `group` each command whose one method this messenger can `never` have, from help, `commands` and MCP;
  * typed anyway, it still refuses. A group left with nothing in sight is hidden too, since an empty group lists
@@ -80,10 +79,9 @@ export const hideNever = <T extends Command>(messenger: Lacking, group: T): T =>
     for (const child of command.commands) {
       const at = [...path, child.name()]
       const need = COMMAND_NEEDS[at.join(" ")]
-      if (need && messenger.never?.includes(need[0])) (child as Hideable)._hidden = true
+      if (need && messenger.never?.includes(need[0])) hide(child)
       walk(child, at)
-      if (child.commands.length > 0 && child.commands.every((one) => (one as Hideable)._hidden))
-        (child as Hideable)._hidden = true
+      if (child.commands.length > 0 && child.commands.every(isHidden)) hide(child)
     }
   }
   walk(group, [group.name()])

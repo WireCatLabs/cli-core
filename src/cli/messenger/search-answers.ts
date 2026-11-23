@@ -15,7 +15,6 @@ import { MAX_SEARCH_OFFSET } from "../../services/messages-archive-search.js"
 import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
 import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
-import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-deprecated.js"
 import type { StoredHistorySkip } from "../../store/store.js"
 import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
@@ -447,7 +446,7 @@ export const notesAnswer = (
 /** `search all`, CLI and MCP alike. A meeting account whose index is still being built says so. */
 export const allAnswer = (
   command: string,
-  found: SearchAllFound | SearchAllIncludingMeetingsFound,
+  found: SearchAllFound,
   { limit, page, again }: Paging,
   exact = false,
   skips: StoredHistorySkip[] = [],

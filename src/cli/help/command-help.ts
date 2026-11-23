@@ -2,6 +2,7 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
+import { hasOwnAction, isHidden } from "../commander-internals.js"
 import { environmentOf } from "../context.js"
 import { takesProfile } from "../profile.js"
 import { commandAt } from "../steps.js"
@@ -104,13 +105,12 @@ export const nextUsually = <T extends Command>(command: T, choice: NextChoice): 
 
 const kindOfArgument = (argument: Argument): Kind | undefined => ARGUMENT_KINDS[argument.name()]
 
-const runs = (command: Command): boolean =>
-  command.commands.length === 0 || Boolean((command as Command & { _actionHandler?: unknown })._actionHandler)
+const runs = (command: Command): boolean => command.commands.length === 0 || hasOwnAction(command)
 
 /** Every command that runs: the leaves, and a group that also runs on its own, such as `doctor`. */
 const leaves = (command: Command): Command[] =>
   command.commands
-    .filter((child) => !(child as Command & { _hidden?: boolean })._hidden)
+    .filter((child) => !isHidden(child))
     .flatMap((child) => [...(runs(child) ? [child] : []), ...leaves(child)])
 
 const rootOf = (command: Command): Command => {
