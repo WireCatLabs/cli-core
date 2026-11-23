@@ -59,8 +59,12 @@
       "default": "./dist/sqlite-runtime.js"
     },
     "./store": {
-      "types": "./dist/store/index.d.ts",
-      "default": "./dist/store/index.js"
+      "types": "./dist/store/public.d.ts",
+      "default": "./dist/store/public.js"
+    },
+    "./store/areas": {
+      "types": "./dist/store/areas.d.ts",
+      "default": "./dist/store/areas.js"
     },
     "./cli": {
       "types": "./dist/cli/index.d.ts",

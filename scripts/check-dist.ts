@@ -34,7 +34,7 @@ const rows = await store.orm.select().from(accounts)
 store.database.close()
 if (rows.length !== 1) throw new Error(`bundled Drizzle read ${rows.length} rows, not 1`)
 
-const { openStore } = await import(join(root, "store/index.js"))
+const { openStore } = await import(join(root, "store/public.js"))
 const messages = await openStore({ path: join(scratch("cli-messaging-dist-"), "messages.db") })
 const key = { provider: "telegram", account: "1" }
 const message = {
