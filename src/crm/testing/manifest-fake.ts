@@ -118,7 +118,7 @@ const givenOf = (spec: CrmManifestWrite, values: unknown): Record<string, unknow
       .filter((one) => one !== undefined && one !== null)
       .map(String)
     if (list) given[name] = field === "people" ? found.map((one) => ({ externalId: one, role: "contact" })) : found
-    // A key several rules write together is replaced whole: a part it leaves out is gone.
+    // One value replaces the field whole, so a part of a key several rules share that the write leaves out is gone.
     else given[name] = found[0] ?? null
   }
   return given
@@ -219,7 +219,8 @@ export const crmManifestFake = (input: CrmManifest, options: CrmManifestFakeOpti
     if (typeof value === "object")
       return type === "integer" || type === "number" ? value.ms : new Date(value.ms).toISOString()
     if (type === "integer" || type === "number") return Number.isFinite(Number(value)) ? Number(value) : undefined
-    if (type === "string" && found?.type === "string" && found.enum) return undefined
+    if (type === "string" && found?.type === "string" && found.enum)
+      return found.enum.includes(String(value)) ? String(value) : undefined
     return ["string", "unknown"].includes(type) ? String(value) : undefined
   }
 

@@ -61,7 +61,8 @@ const definitions: Record<string, SchemaNode> = {
     target_record_id: str,
     referenced_actor_id: str,
     currency_value: num,
-    currency_code: str,
+    // Attio's own list, of which a sample takes the first: a written EUR must stay EUR.
+    currency_code: { type: "string", enum: ["ARS", "EUR", "USD"] },
     status: obj({ id: obj({ status_id: str }), title: str }),
   }),
   Row: obj({ id: obj({ record_id: str }, ["record_id"]), created_at: str, values: open(list(ref("Entry"))) }, [

@@ -90,7 +90,6 @@ export const crmManifestWriteKeys = (
 const refused = (message: string, param?: string) =>
   new CliError("validation_error", message, { reason: "crm.record-field", sent: false, ...(param ? { param } : {}) })
 
-/** A merge of the entries rules that share a key give: each object's keys beside the others'. */
 /** Our fields that write one key of the service together, by that key: Attio's name and its parts. */
 const sharedOf = (one: CrmManifestWrite): string[][] => {
   const by = new Map<string, string[]>()
@@ -99,6 +98,7 @@ const sharedOf = (one: CrmManifestWrite): string[][] => {
   return [...by.values()].filter((fields) => fields.length > 1)
 }
 
+/** A merge of the entries rules that share a key give: each object's keys beside the others'. */
 const merged = (entries: readonly unknown[], list: boolean): unknown => {
   const given = entries.filter((one) => one !== CLEAR)
   if (given.length === 0) return CLEAR
