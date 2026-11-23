@@ -24,7 +24,7 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
    ([`scripts/parity/downstream.json`](scripts/parity/downstream.json) lists them).
 5. **Merge when green, release in batches** ([COORDINATION.md, "Releases"](docs/dev/COORDINATION.md#releases)).
    Squash merge your green pull request yourself and comment `merged #NNN` on
-   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849); never release only for your own pull request.
+   [issue #3157](https://github.com/WireCatLabs/cli-core/issues/3157); never release only for your own pull request.
    `bin/release` publishes the next free version through GitHub; a change that may break a
    caller goes under "Changed — may break callers" in the changelog.
 
