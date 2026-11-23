@@ -60,6 +60,14 @@ const SIGN_IN: Entry[] = [
   ),
   ["profile.unknown", "not_found", "no profile by this name on this computer; details.profiles lists the ones here"],
   ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
+  ["account-remove.account-shared", "conflict", "another profile reads the same account, whose copy the store shares"],
+  ["session.duplicate", "conflict", "another profile here already signs in to this account as this user"],
+  [
+    "account-remove.account-unknown",
+    "conflict",
+    "which account another profile holds could not be read, so --delete-data waits",
+  ],
+  validation("profile.reserved", "the profile name is a folder every CRM account shares; pick another"),
   ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
   ["account-remove.path-outside", "configuration_error", "the tool named a path outside its own folders"],
   [
@@ -841,6 +849,7 @@ export const REASONS: ErrorReason[] = defineReasons([
  * that can hold a provider's or SQLite's raw text.
  */
 export const DETAILS = [
+  "account",
   "holders",
   "profile",
   "contracts",

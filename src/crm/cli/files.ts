@@ -33,6 +33,7 @@ import type { CrmFileLimits, CrmFileRow } from "../../store/store.js"
 import { parseCrmFileId } from "../files.js"
 import { foreignContacts, foreignContactsPathFor } from "../foreign-contacts.js"
 import type { CrmCallContext, CrmFileOwner, CrmFiles, CrmGap, CrmOpenableFile, CrmSource } from "../source.js"
+import { CRM_SHARED_FOLDERS } from "../state-folders.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 import { integer } from "./records.js"
 
@@ -103,7 +104,7 @@ const accountFolder = (app: AppIdentity, run: CrmRun) =>
   join(
     resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: run.env ?? process.env }).state,
     "crm",
-    "files",
+    CRM_SHARED_FOLDERS.files,
     segment(`${run.account.provider}-${run.account.account}`),
   )
 

@@ -780,7 +780,7 @@
       }
     },
     {
-      "includes": ["src/store/sqlite/emails.ts", "src/store/sqlite/notes.ts"],
+      "includes": ["src/crm/cli/index.ts", "src/store/sqlite/emails.ts", "src/store/sqlite/notes.ts"],
       "linter": {
         "rules": {
           "style": {

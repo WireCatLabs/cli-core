@@ -6,6 +6,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { withFileLockAsync } from "../sends/file-lock.js"
 import type { AccountKey } from "../store/types.js"
 import type { CrmLiveKind, CrmSource } from "./source.js"
+import { CRM_SHARED_FOLDERS } from "./state-folders.js"
 
 /**
  * The owner's rule (NEED-2487, NEED-2703 B): a user sees at most this many other people's records a UTC day: a
@@ -27,7 +28,7 @@ export const foreignContactsPathFor = (
   join(
     resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state,
     "crm",
-    "foreign-contacts",
+    CRM_SHARED_FOLDERS.foreignContacts,
     `${[account.provider, account.account, ...(user ? [user] : [])].join("-").replace(/[^\w.-]+/gu, "_")}.json`,
   )
 

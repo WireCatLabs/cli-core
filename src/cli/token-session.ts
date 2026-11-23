@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -51,7 +51,13 @@ export interface TokenSessionOptions {
    * Keeps the account a profile signed in to; by default only remembers it. A CLI that refuses a taken one says so.
    * With `site`, `id` is `<site>:<id>`, the site as `--site` was cleaned.
    */
-  claim?: (env: NodeJS.ProcessEnv, profile: string, id: string, tokens: ProfileTokenStore) => void
+  claim?: (
+    env: NodeJS.ProcessEnv,
+    profile: string,
+    id: string,
+    tokens: ProfileTokenStore,
+    keyring: KeyringStore | undefined,
+  ) => void
   /** What the token is, for the prompt and help: "API token" when not given. */
   token?: string
   /** One sentence more for `session start --help`: which token, and what it can see. */
@@ -158,7 +164,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     this: Command,
     args: { credentialStorage: TokenStorage; site?: string; login?: string },
   ) {
-    const { env, profile, tokens, run, renderer } = contextOf(this)
+    const { env, profile, tokens, run, renderer, keyring } = contextOf(this)
     refuseCommandName(profile, commandWords(rootOf(this)), app.command)
     if (options.site && args.site === undefined)
       throw new CliError("validation_error", `give the ${service} site: --site ${options.site.example}`)
@@ -183,6 +189,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       profile,
       siteAccount(site, id),
       tokens,
+      keyring,
     )
     const storedIn = tokens.write(profile, token, args.credentialStorage, site === undefined ? {} : { site })
     answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...siteOf(site), ...account })
