@@ -10,6 +10,7 @@ import { ProfileTokenStore } from "../../cli/profile-token.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../../cli/settings.js"
 import type { TokenSessionOptions } from "../../cli/token-session.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { CRM_SHARED_FOLDERS } from "../state-folders.js"
 
 export interface CrmAccountContext {
   env: NodeJS.ProcessEnv
@@ -41,6 +42,8 @@ export interface CrmAccountOptions {
   /** Unset: the one `run()` set. */
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
 }
+
+const SHARED: ReadonlySet<string> = new Set(Object.values(CRM_SHARED_FOLDERS))
 
 const savedToken = (tokens: ProfileTokenStore, profile: string) => {
   const saved = tokens.read(profile)
@@ -156,7 +159,8 @@ const removalOf = (app: AppIdentity, options: CrmAccountOptions): AccountRemoval
         accounts: [`token:${profile}`],
       },
     ],
-    stateFiles: (profile, { env }) => [join(folders(env).state, "crm", profile)],
+    // A profile named after a folder every account shares has no folder of its own there.
+    stateFiles: (profile, { env }) => (SHARED.has(profile) ? [] : [join(folders(env).state, "crm", profile)]),
     ...options.removal,
   }
 }

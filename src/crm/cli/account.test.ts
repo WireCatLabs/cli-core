@@ -160,6 +160,21 @@ describe("account remove of a CRM", () => {
     expect(await accountsInStore(given.env)).toEqual(["portal-2"])
   })
 
+  it("never removes a folder every account shares, even for a profile named after it", async () => {
+    const given = await setup({ files: "portal-1", work: "portal-2" })
+    const downloads = join(given.root, "state", "crm", "files", `${PROVIDER}-portal-2`)
+    const counts = join(given.root, "state", "crm", "foreign-contacts")
+    mkdirSync(downloads, { recursive: true })
+    mkdirSync(counts, { recursive: true })
+    const result = await call(["files", "--json", "account", "remove", "--delete-data", "--yes"], given)
+
+    expect(result.code).toBe(0)
+    expect(result.item.removed).not.toContainEqual({ kind: "file", target: join(given.root, "state", "crm", "files") })
+    expect(existsSync(downloads)).toBe(true)
+    expect(existsSync(counts)).toBe(true)
+    expect(await accountsInStore(given.env)).toEqual(["portal-2"])
+  })
+
   it("asks the CLI's own hook which account a profile holds, and takes its own sign-out", async () => {
     const given = await setup({ personal: "remembered-1", work: "remembered-2" })
     const held = (): CrmHeld => ({ account: "portal-9", signedIn: true })

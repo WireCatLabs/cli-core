@@ -311,7 +311,8 @@ instead. `refuseTakenCrmAccount` refuses a sign-in to an account and user anothe
   one account has several users, `signedIn` while a sign-in is saved here. Unset, it is the account `session start`
   remembered (`recalledAccount`), signed in while the profile's entry keeps a token; `<PREFIX>_TOKEN` is no profile's.
 - `removal` replaces parts of the removal: the sign-out's words, an OAuth entry among `secrets`. By default the
-  sign-out only forgets `token:<profile>`, and `<state>/crm/<profile>` is removed.
+  sign-out only forgets `token:<profile>`, and `<state>/crm/<profile>` is removed, never one of the folders every
+  account shares there (`CRM_SHARED_FOLDERS`: `files`, `foreign-contacts`).
 
 ## Adapter helpers
 
