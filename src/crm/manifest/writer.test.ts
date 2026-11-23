@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { provide } from "../../cli/context.js"
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
+import type { CrmKind } from "../../domain/crm.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -491,6 +492,10 @@ describe("crmWriterFromManifest", () => {
       data: { values: { name: [{ first_name: "Ann", last_name: "Example", full_name: "Ann Example" }] } },
     })
     expect(changed).toMatchObject({ firstName: "Ann", lastName: "Example", name: "Ann Example" })
+    await fixture.writer.update("person", made.externalId, { name: "Madonna" }, OPERATION)
+    expect(bodyOf(fixture, "replace")).toEqual({
+      data: { values: { name: [{ full_name: "Madonna", first_name: "Madonna", last_name: "" }] } },
+    })
     await fixture.writer.update("person", made.externalId, { name: "Ann Lee" }, OPERATION)
     expect(bodyOf(fixture, "replace")).toEqual({
       data: { values: { name: [{ full_name: "Ann Lee", first_name: "Ann", last_name: "Lee" }] } },
@@ -614,10 +619,14 @@ afterEach(async () => {
 })
 
 describe("CRM write commands over a manifest's writes", () => {
-  const setup = async (permissions: Record<string, Level> = {}) => {
+  const setup = async (
+    permissions: Record<string, Level> = {},
+    { self, ownedByDefault }: { self?: string; ownedByDefault?: CrmKind[] } = {},
+  ) => {
     const fake = crmManifestFake(ATTIO, { api, definitions })
     const sending = { manifest: api, service: "Attio", fetch: fake.fetch, token: () => FAKE_MANIFEST_TOKEN }
-    const source = crmSourceFromManifest(ATTIO, { api, call: serviceApiCall(sending), hooks })
+    const read = crmSourceFromManifest(ATTIO, { api, call: serviceApiCall(sending), hooks })
+    const source = self === undefined ? read : { ...read, self: () => self }
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-manifest-")), "store.db") })
     opened.push(store)
     await store.accounts.registerProvider({
@@ -641,6 +650,7 @@ describe("CRM write commands over a manifest's writes", () => {
           source: () => source,
           app: APP,
           env,
+          ...(ownedByDefault ? { ownedByDefault } : {}),
           settings: () => ({ profile: "work", permissions, permissionSources: {} }),
         }),
     }
@@ -674,6 +684,27 @@ describe("CRM write commands over a manifest's writes", () => {
     expect(fake.requests()).toBe(1)
     expect(journal()).toEqual([expect.objectContaining({ outcome: "sent", key: "deals.create" })])
     expect(fake.refusals).toEqual([])
+  })
+
+  it("a new deal is the sign-in's user's when no --owner is given, and that owner is not someone else's", async () => {
+    const { fake, cli } = await setup({}, { self: "7001", ownedByDefault: ["deal"] })
+    await cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1")
+    expect(fake.calls.find((call) => call.operation === "create")?.body).toMatchObject({
+      data: { values: { owner: [{ referenced_actor_type: "workspace-member", referenced_actor_id: "7001" }] } },
+    })
+    await cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1", "--owner", "7001")
+    await expect(
+      cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1", "--owner", "7002"),
+    ).rejects.toMatchObject({ code: "permission_error" })
+    expect(fake.refusals).toEqual([])
+  })
+
+  it("a new deal that must have an owner is refused when the sign-in names no user", async () => {
+    const { fake, cli } = await setup({}, { ownedByDefault: ["deal"] })
+    await expect(cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    expect(fake.requests()).toBe(0)
   })
 
   it("a deny on the operation's api key stops the write before anything is sent", async () => {

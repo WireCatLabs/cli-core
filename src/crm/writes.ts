@@ -29,8 +29,13 @@ import {
 /** What a CLI hands the CRM writes for one profile. */
 export interface CrmWrites extends ProfileWrites {
   writer: CrmWriter
-  /** The CRM user the sign-in acts as. An owner other than it checks `crm.assign-others`; left out, every owner does. */
+  /**
+   * The CRM user the sign-in acts as; left out, the source's `self()`. An owner other than it checks
+   * `crm.assign-others`; with neither, every owner does.
+   */
   self?: string
+  /** The kinds a new item of which is the sign-in's user's when no --owner is given: Attio refuses a deal with none. */
+  ownedByDefault?: readonly CrmKind[]
   /**
    * The CLI's own keys a write also checks, such as Bitrix24's `api.crm.deal.update`; pass the same function to
    * `crmAlsoChecks` so `--dry-run` names them.
@@ -343,16 +348,22 @@ const customOf = async (
   pairs?.length ? crmCustomValues(await context.store.crm.fields(context.account, kind), pairs) : undefined
 
 /** Every key the write checks: its own, and each action its fields also take (WC-PERM-22). */
-const keysOf = (
+const selfOf = async (context: CrmWriteContext): Promise<string | undefined> => {
+  if (context.writes.self !== undefined) return context.writes.self
+  const self = context.source?.().self
+  return self ? String(await self()) : undefined
+}
+
+const keysOf = async (
   context: CrmWriteContext,
   kind: CrmKind,
   verb: CrmVerb,
   { stage, owner }: { stage?: { outcome: string } | undefined; owner?: string | null | undefined },
-): { key: PermissionKey; extra: PermissionKey[] } => {
+): Promise<{ key: PermissionKey; extra: PermissionKey[] }> => {
   const extra: PermissionKey[] = []
   if (stage && verb !== "move") extra.push(keyOf(kind, "move"))
   if (stage && stage.outcome !== "open") extra.push(keyOf(kind, "close"))
-  if (owner != null && owner !== context.writes.self) extra.push(CRM_ASSIGN_OTHERS_KEY)
+  if (owner != null && owner !== (await selfOf(context))) extra.push(CRM_ASSIGN_OTHERS_KEY)
   return { key: keyOf(kind, verb), extra: [...extra, ...(context.writes.alsoChecks?.(kind, verb) ?? [])] }
 }
 
@@ -448,10 +459,15 @@ export const createCrmItem = async (
   const { fields, stage } = fieldsOf({ ...input, pipeline: pipeline.ref }, pipeline, null)
   const custom = await customOf(context, kind, input.custom)
   if (custom) fields.custom = custom
+  if (fields.owner === undefined && context.writes.ownedByDefault?.includes(kind)) {
+    const self = await selfOf(context)
+    if (self === undefined) throw invalid(`a new ${kind} needs --owner: the sign-in names no CRM user`, "--owner")
+    fields.owner = self
+  }
   const operationId = operationOf(context, options.operationId)
   const item = await written(
     context,
-    keysOf(context, kind, "create", { stage, owner: fields.owner }),
+    await keysOf(context, kind, "create", { stage, owner: fields.owner }),
     operationId,
     () => writer.create(kind, fields as CrmDraft, { operationId }) as Promise<CrmItem>,
   )
@@ -481,7 +497,7 @@ export const updateCrmItem = async (
   const operationId = operationOf(context, options.operationId)
   const item = await written(
     context,
-    keysOf(context, kind, "update", { stage, owner: fields.owner }),
+    await keysOf(context, kind, "update", { stage, owner: fields.owner }),
     operationId,
     () => writer.update(kind, copy.externalId as string, fields, { operationId }) as Promise<CrmItem>,
   )
@@ -500,7 +516,7 @@ export const moveCrmItem = async (
   const copy = await copyOf(context, kind, reference)
   const stage = stageOf(await pipelineOf(context, kind, copy.pipeline), stageName)
   const operationId = operationOf(context, options.operationId)
-  const item = await written(context, keysOf(context, kind, "move", { stage }), operationId, () =>
+  const item = await written(context, await keysOf(context, kind, "move", { stage }), operationId, () =>
     writer.move(kind, copy.externalId as string, stage.externalId as string, { operationId }),
   )
   return { operationId, item: await kept(context, kind, item, operationId) }
@@ -521,7 +537,7 @@ export const closeCrmItem = async (
   if (reason !== undefined && (reason === "" || reason.length > 2000))
     throw invalid("--reason is 1 to 2000 characters", "--reason")
   const operationId = operationOf(context, options.operationId)
-  const item = await written(context, keysOf(context, kind, "close", {}), operationId, () =>
+  const item = await written(context, await keysOf(context, kind, "close", {}), operationId, () =>
     writer.close(kind, copy.externalId as string, outcome, { operationId, ...(reason ? { reason } : {}) }),
   )
   return { operationId, item: await kept(context, kind, item, operationId) }
@@ -537,7 +553,7 @@ export const removeCrmItem = async (
   supported(writer, kind, "remove")
   const copy = await copyOf(context, kind, reference)
   const operationId = operationOf(context, options.operationId)
-  await written(context, keysOf(context, kind, "remove", {}), operationId, () =>
+  await written(context, await keysOf(context, kind, "remove", {}), operationId, () =>
     writer.remove(kind, copy.externalId as string, { operationId }),
   )
   const removed = await context.store.crm.remove(context.account, kind, [copy.externalId as string])
@@ -663,7 +679,7 @@ const writeRecord = async <K extends CrmRecordKind>(
   if (!context.source)
     throw new CliError("configuration_error", "a contact or company write needs the CRM source to tell your clients")
   const rule = foreignContacts(context.source(), undefined)
-  const record = await written(context, keysOf(context, kind, verb, { owner: fields.owner }), operationId, act)
+  const record = await written(context, await keysOf(context, kind, verb, { owner: fields.owner }), operationId, act)
   const stored = await rule.own(kind, record)
   let removed: boolean | undefined
   try {
