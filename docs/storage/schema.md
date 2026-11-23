@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-144 tables, 28 full-text indexes.
+145 tables, 28 full-text indexes.
 
 ## Conventions
 
@@ -986,6 +986,7 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `pinned_file_id` | integer |  |  | the file the owner chose for the document to show; NULL shows the most recently changed (a `files` row, no foreign key: an older build may delete a file it does not know) |
+| `removal` | text |  |  | why `deleted_at` is set: deleted at the source, unavailable (no longer visible to the account, its text kept) or unsynced (left the synced folders). NULL while live and for a row removed before store version 72 |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
 
@@ -1020,7 +1021,7 @@ One item in one place, the source record of a document: a file under a local or 
 
 ### `document_revisions`
 
-Earlier bodies of a document.
+Earlier versions of a document, each kept before a sync or an import replaced or removed it.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -1028,9 +1029,29 @@ Earlier bodies of a document.
 | `document_id` | integer | not null | → `documents.id` | the `document` it belongs to |
 | `body` | text | not null |  | the body as it was before that revision |
 | `revision` | integer | not null |  | edit counter, raised on every change; an edit names the revision it read, so two writers cannot overwrite each other |
-| `created_at` | integer | not null |  | when this row was saved here |
+| `created_at` | integer | not null |  | when this version was replaced or removed |
+| `title` | text |  |  | the title this version had, NULL in a row kept before store version 72 |
+| `front_matter` | text |  |  | JSON, the front matter this version had |
+| `reason` | text |  |  | what replaced it: edited, deleted, unavailable (no longer visible to the account) or unsynced (left the synced folders). NULL before store version 72 means edited |
 
 *Keys and indexes:* `INDEX (document_id)`
+
+### `document_changes`
+
+The change log of synced documents: one row per document a sync or an import added, changed, removed or brought back. It outlives the document row, so it keeps the title and the path. A trigger drops an account's rows with the account.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null |  | the documents account (no foreign key: an older build purging an account does not know this table) |
+| `document_id` | integer | not null |  | no foreign key: the row stays after the document goes |
+| `path` | text | not null |  | the document's external id, as `documents.external_id` |
+| `title` | text |  |  |  |
+| `event` | text | not null |  | added, changed, deleted, unavailable, unsynced or restored |
+| `revision` | integer | not null |  | the document's revision after the change |
+| `at` | integer | not null |  |  |
+
+*Keys and indexes:* `INDEX (account_id, at)`
 
 ### `document_words`
 

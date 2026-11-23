@@ -6,7 +6,7 @@ import { contentTables } from "./content.mjs"
 import { conversationReadinessTables } from "./conversation-readiness.mjs"
 import { crmTables } from "./crm.mjs"
 import { decisionRequestTables } from "./decision-requests.mjs"
-import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
+import { annotationTransferTable, documentHistoryTables, documentRemoval } from "./document-transfers.mjs"
 import { enrichmentTables } from "./enrichments.mjs"
 import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
@@ -786,6 +786,7 @@ const NEW = {
         c("pinned_file_id", "integer", {
           note: "the file the owner chose for the document to show; NULL shows the most recently changed (a `files` row, no foreign key: an older build may delete a file it does not know)",
         }),
+        documentRemoval(),
       ],
       keys: ["UNIQUE (account_id, external_id)"],
     },
@@ -829,7 +830,7 @@ const NEW = {
         "INDEX (id) WHERE path_folded IS NULL",
       ],
     },
-    documentRevisionsTable,
+    ...documentHistoryTables,
     fts("document_words", "Word index over documents.", "normalized_text, scope"),
     fts("document_stems", "Stem index, the pair of document_words.", "stems, scope"),
     {

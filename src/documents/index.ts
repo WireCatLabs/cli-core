@@ -39,7 +39,7 @@ export {
   scanLocal,
   skippedName,
 } from "../services/documents/push.js"
-export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
+export { KEEP_VERSIONS_FOR_DAYS, type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export {
   type FileConflictResolution,
   type FileConflictResolveOptions,
@@ -109,6 +109,7 @@ export type {
   SourceContent,
   SourceFile,
   SourceIndex,
+  SourceRemoval,
   SourceSkip,
   SourceState,
   SourceStatePort,

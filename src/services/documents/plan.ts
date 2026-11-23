@@ -5,6 +5,7 @@ import {
   feedOf,
   type IndexedSource,
   type SourceFile,
+  type SourceRemoval,
   type SourceState,
   type SourceWalk,
   type SourceWork,
@@ -86,7 +87,7 @@ export const planDocuments = async <M extends SourceFile>(
         cursor: state.cursor ?? "",
         folders: {},
         skipped: [],
-        jobs: Object.keys(state.documents).map((id) => ({ id, kind: "remove" })),
+        jobs: Object.keys(state.documents).map((id) => ({ id, kind: "remove", reason: "unsynced" })),
       },
     }
   if (!source)
@@ -116,10 +117,12 @@ export const planDocuments = async <M extends SourceFile>(
     if (!before || changedSince(before, file) || moved(before, file)) changed.add(file.id)
     delta.set(file.id, file)
   }
-  const drop = (id: string) => {
+  const removals = new Map<string, SourceRemoval>()
+  const drop = (id: string, reason: SourceRemoval) => {
     const known = files.get(id)
     if (known) delta.set(id, { ...known, trashed: true })
     files.delete(id)
+    removals.set(id, reason)
   }
   const container = (file: M) => {
     if (options.isDocument?.(file)) keep(file)
@@ -159,7 +162,7 @@ export const planDocuments = async <M extends SourceFile>(
     // Apply all ancestry changes before classifying document scope.
     for (const change of latest.values()) {
       if (change.removed || change.file?.trashed) {
-        drop(change.id)
+        drop(change.id, change.file?.trashed ? "deleted" : (change.gone ?? "unavailable"))
         if (folders[change.id]) folders[change.id] = { ...(folders[change.id] as M), trashed: true }
       } else if (change.file && isFolder(change.file)) {
         folders[change.id] = change.file
@@ -212,7 +215,8 @@ export const planDocuments = async <M extends SourceFile>(
     const visited = new Set(walk.visited)
     Object.assign(folders, walk.folders)
     for (const file of walk.files) {
-      if (file.trashed) drop(file.id)
+      // A walk saved part way keeps no reason; one it cannot prove is a deletion keeps the text.
+      if (file.trashed) drop(file.id, "unavailable")
       else keep(file)
     }
     cursor = walk.cursor
@@ -293,7 +297,7 @@ export const planDocuments = async <M extends SourceFile>(
           walk.stack.pop()
           visited.add(folder.id)
           folders[folder.id] = { ...folder, trashed: true }
-          drop(folder.id)
+          drop(folder.id, "unavailable")
           spent++
           listed++
           continue
@@ -385,9 +389,15 @@ export const planDocuments = async <M extends SourceFile>(
   }
   // After every real edit, so a run that stops on its deadline spends it on those first.
   for (const job of again) jobs.push(job)
+  // Absent from the listing is not a deletion: only the source's own signal is (`drop`). Out of scope is `unsynced`
+  // only when the owner changed the scope; a folder above that was unshared or vanished leaves its files unavailable.
+  const narrowed = state.scope !== scope
   for (const id of Object.keys(state.documents)) {
     const file = files.get(id)
-    if (!file || !inScope(file, roots, folders, matched, scoped)) jobs.push({ id, kind: "remove" })
+    const known = file ?? state.documents[id]?.metadata
+    if (file && inScope(file, roots, folders, matched, scoped)) continue
+    const outside = narrowed && known !== undefined && !inScope(known, roots, folders, matched, scoped)
+    jobs.push({ id, kind: "remove", reason: removals.get(id) ?? (outside ? "unsynced" : "unavailable") })
   }
   // Only retain metadata for selected ancestry; the account-wide feed includes unrelated folders.
   const scopedFolders = Object.fromEntries(

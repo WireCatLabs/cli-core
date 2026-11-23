@@ -20,6 +20,8 @@ import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import type { AddedSources } from "./added-sources.js"
+import type { DocumentHistoryStore, DocumentRemoval } from "./document-history.js"
+import { documentHistoryOver, keepRevision, logDocumentChange, removeDocument } from "./document-history.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
 import { fileNoteRow } from "./file-note.js"
@@ -154,7 +156,7 @@ export interface MessageDocument {
   fileId: string
 }
 
-export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources {
+export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources, DocumentHistoryStore {
   addFolder(input: { name: string; format?: NoteFolder["format"] }): Promise<NoteFolder>
   /** The notes folders only; a documents account is not one (`documentsAccounts`). */
   folders(): Promise<NoteFolder[]>
@@ -170,8 +172,11 @@ export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources 
    * as an edit: text, revision and `updatedAt` stay. Answers how many notes it changed.
    */
   dateFileNotes(folderId: string, dates: { path: string; modifiedAt: string }[]): Promise<number>
-  /** Marks the folder's notes at these paths deleted; answers how many were live. */
-  deleteFileNotes(folderId: string, paths: string[]): Promise<number>
+  /**
+   * Takes the folder's notes at these paths out of the live copy; answers how many were live. `deleted` (the default)
+   * and `unsynced` keep the last text as a version and blank it; `unavailable` keeps the text on the document.
+   */
+  deleteFileNotes(folderId: string, paths: string[], reason?: DocumentRemoval): Promise<number>
   /** A note about the things named, the first of them its subject; about nothing, a note to self. */
   addNote(input: { text: string; title?: string; about?: string[] }): Promise<Note>
   /** By reference (`note:12`, `document:5`); a bare id is a note's. */
@@ -221,14 +226,7 @@ const optionalIso = (value: unknown) => (value == null ? null : iso(value))
 /** What a link's written target is matched by: case, accents and a leading `@` do not count. */
 export const targetKey = (text: string): string => fold(text).trim().replace(/^@/, "")
 
-/**
- * Keeps a document's text under its current revision before the caller writes the new text with `revision + 1`, so
- * a citation reads back the words it cited and the source check sees the change.
- */
-export const keepRevision = (database: CacheDatabase, row: Row, at: number) =>
-  database
-    .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
-    .run(Number(row.id), String(row.body ?? ""), Number(row.revision), at)
+export { keepRevision }
 
 export const documentOf = (row: Row): Note => ({
   id: String(row.id),
@@ -566,6 +564,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
   })
 
   return {
+    ...documentHistoryOver(context),
     addFolder: async ({ name, format = "obsidian" }) => {
       const at = now()
       const checked = oneOf(format, NOTE_FORMATS, "a folder's format")
@@ -632,10 +631,12 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         if (candidates.length === 1) {
           const id = candidates[0] as number
           const joined = documentRow(String(id))
-          if (joined.deleted_at != null)
+          if (joined.deleted_at != null) {
             database
-              .prepare("UPDATE documents SET deleted_at = NULL, body = ?, updated_at = ? WHERE id = ?")
+              .prepare("UPDATE documents SET deleted_at = NULL, removal = NULL, body = ?, updated_at = ? WHERE id = ?")
               .run(text, at, id)
+            logDocumentChange(database, id, "restored", at)
+          }
           syncFile(database, at, id, { place: here, method: "content-hash" })
           followPreferred(id, at)
           return { note: noteAt(id, folder, path), changed: true }
@@ -669,6 +670,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
               at,
             )
           const id = Number(row?.id)
+          logDocumentChange(database, id, "added", at)
           const file = syncFile(database, at, id)
           if (candidates.length > 1 && file)
             reviewLink(database, { type: "file", id: file.id }, "document", candidates, "content-hash", at)
@@ -687,23 +689,24 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           (found.content_hash ?? null) === hash &&
           found.deleted_at == null
         if (!same) {
-          if ((found.body ?? "") !== text) keepRevision(database, found, at)
+          const back = found.deleted_at != null
+          // A catalog entry has no text until its first read: that read adds the document.
+          const unread = found.body == null
+          const revised =
+            (found.body ?? "") !== text ||
+            (found.title ?? null) !== title ||
+            (found.front_matter ?? null) !== keptFrontMatter
+          // A removed document whose last text was already kept holds only a blank body.
+          if (revised && !unread && !(back && (found.body ?? "") === "")) keepRevision(database, found, at)
           database
             .prepare(
               "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, metadata = ?, language = ?, " +
-                "revision = revision + ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
+                "revision = revision + ?, updated_at = ?, deleted_at = NULL, removal = NULL WHERE id = ?",
             )
-            .run(
-              title,
-              text,
-              keptFrontMatter,
-              hash,
-              keptMetadata,
-              language,
-              (found.body ?? "") === text ? 0 : 1,
-              at,
-              id,
-            )
+            .run(title, text, keptFrontMatter, hash, keptMetadata, language, revised && !unread ? 1 : 0, at, id)
+          if (back) logDocumentChange(database, id, "restored", at)
+          else if (unread) logDocumentChange(database, id, "added", at)
+          else if (revised) logDocumentChange(database, id, "changed", at)
         }
         syncFile(database, at, id, own ? {} : { place: here })
         if (!same) followPreferred(id, at)
@@ -755,7 +758,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       }),
     dateFileNotes: async (folderId, dates) =>
       write(database, () => dateFileNotes(database, Number(folderRow(folderId, true).id), dates)),
-    deleteFileNotes: async (folderId, paths) =>
+    deleteFileNotes: async (folderId, paths, reason = "deleted") =>
       write(database, () => {
         const folder = Number(folderRow(folderId, true).id)
         let deleted = 0
@@ -763,13 +766,14 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           const at = now()
           const place = fileAt(folder, path, true)
           if (!place) {
-            const marked = database
-              .prepare(
-                "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL RETURNING id",
-              )
-              .all(at, folder, path)
-            for (const row of marked) syncFile(database, at, Number(row.id), { seen: false })
-            deleted += marked.length
+            const live = database
+              .prepare("SELECT id FROM documents WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")
+              .all(folder, path)
+            for (const row of live) {
+              removeDocument(database, Number(row.id), at, reason)
+              syncFile(database, at, Number(row.id), { seen: false })
+            }
+            deleted += live.length
             continue
           }
           database.prepare("UPDATE files SET deleted_at = ?, updated_at = ? WHERE id = ?").run(at, at, Number(place.id))
@@ -781,10 +785,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
             .prepare("SELECT 1 FROM files WHERE document_id = ? AND deleted_at IS NULL AND kind <> 'folder' LIMIT 1")
             .get(id)
           if (elsewhere) followPreferred(id, at)
-          else
-            database
-              .prepare("UPDATE documents SET deleted_at = ?, body = '' WHERE id = ? AND deleted_at IS NULL")
-              .run(at, id)
+          else removeDocument(database, id, at, reason)
         }
         return deleted
       }),

@@ -1424,5 +1424,22 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER content_post_words_au AFTER UPDATE OF normalized_text ON content_posts\n  WHEN old.normalized_text IS NOT new.normalized_text BEGIN\n  DELETE FROM content_post_words WHERE rowid = old.id;\n  INSERT INTO content_post_words (rowid, normalized_text)\n    SELECT new.id, new.normalized_text WHERE new.normalized_text <> '';\nEND;",
       "-- Taggings are polymorphic, with no foreign key: a post row that goes takes its tags along.\nCREATE TRIGGER content_post_words_ad AFTER DELETE ON content_posts BEGIN\n  DELETE FROM content_post_words WHERE rowid = old.id;\n  DELETE FROM taggings WHERE taggable_type = 'post' AND taggable_id = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261123022342_version-72-document-history",
+    "statements": [
+      "CREATE TABLE `document_changes` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`document_id` integer NOT NULL,\n\t`path` text NOT NULL,\n\t`title` text,\n\t`event` text NOT NULL,\n\t`revision` integer NOT NULL,\n\t`at` integer NOT NULL\n);",
+      "ALTER TABLE `document_revisions` ADD `title` text;",
+      "ALTER TABLE `document_revisions` ADD `front_matter` text;",
+      "ALTER TABLE `document_revisions` ADD `reason` text;",
+      "ALTER TABLE `documents` ADD `removal` text;",
+      "CREATE INDEX `document_changes_by_account_id_at` ON `document_changes` (`account_id`,`at`);"
+    ]
+  },
+  {
+    "name": "20261123022347_version-72-document-changes-trigger",
+    "statements": [
+      "-- No foreign key on the change log, so an older build that purges an account still can; this drops its rows with it.\nCREATE TRIGGER document_changes_account_bd BEFORE DELETE ON accounts BEGIN\n  DELETE FROM document_changes WHERE account_id = old.id;\nEND;"
+    ]
   }
 ]
