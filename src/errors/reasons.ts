@@ -699,6 +699,11 @@ const OTHERS: Entry[] = [
   validation("identity.agent-unnamed", "an agent's link names the agent, and never as the owner"),
   validation("identity.not-shared", "only a match on a shared mailbox can say the mailbox is a company's"),
   ["organization.not-found", "not_found", "no stored organization has that id"],
+  validation("organization.own", "the organization is one of your own companies and is never deleted"),
+  validation(
+    "organization.erase-blocked",
+    "an invoice, order, subscription or a row the organization wrote still names it; change those first, nothing was deleted",
+  ),
   validation("organization.unnamed", "a free mailbox names no company; name the organization or the company"),
   validation("organization.ambiguous", "more than one organization matches; name the one meant as a reference"),
   validation("identity.shared-phone", "more than six people share the phone number, so it proposes no one"),
