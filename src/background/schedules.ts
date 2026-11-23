@@ -14,7 +14,7 @@ import { tmpdir } from "node:os"
 import { basename, dirname, join, relative } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { linkConfigOf, linkFor } from "../domain/links.js"
-import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
+import { type AppIdentity, envName, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
 import { storePath } from "../store/path.js"
@@ -639,6 +639,11 @@ export const runSchedule = async (
   for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
+  const messageOptions = async () => ({
+    language: await ownerLanguage(runEnv).catch(() => "ru"),
+    linkOf: (ref: string) => linkFor(ref, { form: "web", config: sharedLinks(runEnv), env: runEnv }),
+    ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
+  })
   // Routes the owner named for this run go whatever the schedule's notify says; none named, nobody is told.
   const mode = chosen === undefined ? notifyOf(schedule) : chosen.length ? "always" : "never"
   if (answered && exitCode === 0) {
@@ -657,7 +662,10 @@ export const runSchedule = async (
       )
     }
   } else if (exitCode !== 0 && mode !== "never") {
-    await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
+    // The notice's lines under its title (the notification's own title): since when, why, and the command to check.
+    const notice = await failureNotice(app, schedule, last, now(), await messageOptions())
+    const lines = notice?.text.split("\n").slice(1).join("\n")
+    await notify(system, env, title, lines ? `${lines}\n${errors}` : `failed (exit ${exitCode}) — ${errors}`)
   }
 
   const routes = chosen ?? schedule.to ?? []
@@ -674,11 +682,6 @@ export const runSchedule = async (
     }
     return deliveries
   }
-  const messageOptions = async () => ({
-    language: await ownerLanguage(runEnv).catch(() => "ru"),
-    linkOf: (ref: string) => linkFor(ref, { form: "web", config: sharedLinks(runEnv), env: runEnv }),
-    ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
-  })
   if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
     const at = shortTime(last.at)
     const notice = exitCode === 0 ? undefined : await failureNotice(app, schedule, last, now(), await messageOptions())
@@ -749,6 +752,7 @@ const failureNotice = async (
     failures: last.failures ?? 1,
     cause: lockedOut(last) ? ("locked" as const) : causeOf(last.errorCode, last.exitCode),
     refs: [`sync:${app.command}`],
+    check: [app.command, schedule.environment?.[envName(app, "PROFILE")], "doctor"].filter(Boolean).join(" "),
   }
   return prepareMessage(
     "schedule-failed",

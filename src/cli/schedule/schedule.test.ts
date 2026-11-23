@@ -908,7 +908,13 @@ describe("a run", () => {
       expect(last).toMatchObject({ exitCode: 12, reason: "provider_unavailable (credentials.unreachable)" })
       expect(waits.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(12 * 60 * 60_000)
       expect(Math.max(...waits)).toBe(15 * 60_000)
-      expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(1)
+      const notices = ran.filter((one) => one.argv[0] === "notify-send")
+      expect(notices).toHaveLength(1)
+      // The desktop notice says why and what to run, not only where the log is.
+      const body = notices[0]?.argv.at(-1) ?? ""
+      expect(body).toMatch(/sign in again|войдите заново/)
+      expect(body).toMatch(new RegExp(`${app.command}( \\S+)? doctor`))
+      expect(body).toContain(join(env.CHAT_STATE_DIR, "schedules", "sync", "runs"))
     })
 
     it("sits out a wait the provider asked for, up to six hours, then runs once more", async () => {
@@ -1608,7 +1614,7 @@ describe("delivery after a run", () => {
     expect(bot?.argv).toContain("--html")
     expect(bot?.argv).not.toContain("--file")
     expect(bot?.argv.at(-1)).toMatch(
-      /^⚠️ <b>Расписание «chat digest» не работает<\/b>\nСбой сегодня в \d\d:\d\d\nПричина: нужно заново войти в аккаунт\n<a href="https:\/\/wirecat\.dev\/o#\/v1\/sync\/chat">исправить<\/a>$/,
+      /^⚠️ <b>Расписание «chat digest» не работает<\/b>\nСбой сегодня в \d\d:\d\d\nПричина: нужно заново войти в аккаунт\nПроверить: chat work doctor\n<a href="https:\/\/wirecat\.dev\/o#\/v1\/sync\/chat">исправить<\/a>$/,
     )
     expect(mail?.argv.slice(-6)).toEqual([
       "send",
@@ -1620,6 +1626,7 @@ describe("delivery after a run", () => {
     ])
     expect(mail?.input).toMatch(/^<div style=/)
     expect(mail?.input).toContain("Причина: нужно заново войти в аккаунт")
+    expect(mail?.input).toContain("Проверить: chat work doctor")
     for (const sent of [bot?.argv.join(" "), mail?.input]) {
       expect(sent).not.toContain("half a report")
       expect(sent).not.toContain("Анна")
