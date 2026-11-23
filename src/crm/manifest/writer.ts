@@ -98,10 +98,13 @@ const sharedOf = (one: CrmManifestWrite): string[][] => {
   return [...by.values()].filter((fields) => fields.length > 1)
 }
 
-/** A merge of the entries rules that share a key give: each object's keys beside the others'. */
-const merged = (entries: readonly unknown[], list: boolean): unknown => {
-  const given = entries.filter((one) => one !== CLEAR)
-  if (given.length === 0) return CLEAR
+/**
+ * A merge of the entries rules that share a key give: each object's keys beside the others'. A part cleared beside a
+ * part given is sent empty, not left out: Attio refuses a name without all three of its parts.
+ */
+const merged = (entries: readonly { value: unknown; blank: unknown }[], list: boolean): unknown => {
+  if (entries.every(({ value }) => value === CLEAR)) return CLEAR
+  const given = entries.map(({ value, blank }) => (value === CLEAR ? blank : value))
   if (given.length === 1) return given[0]
   const first = (one: unknown) => (list && Array.isArray(one) ? one[0] : one)
   const whole = Object.assign({}, ...given.map((one) => (isRaw(first(one)) ? first(one) : {})))
@@ -221,9 +224,9 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
   const valuesOf = async (kind: CrmKind, one: CrmManifestWrite, written: object) => {
     const fields = written as Readonly<Record<string, unknown>>
     const given = kind === "person" ? namesOf(one, fields) : fields
-    const parts = new Map<string, { list: boolean; entries: unknown[] }>()
-    const add = (to: string, list: boolean, entry: unknown) =>
-      parts.set(to, { list, entries: [...(parts.get(to)?.entries ?? []), entry] })
+    const parts = new Map<string, { list: boolean; entries: { value: unknown; blank: unknown }[] }>()
+    const add = (to: string, list: boolean, value: unknown, blank: unknown = value) =>
+      parts.set(to, { list, entries: [...(parts.get(to)?.entries ?? []), { value, blank }] })
     for (const [field, value] of Object.entries(given)) {
       if (value === undefined || field === "custom") continue
       const rule = ruleOf(one, field)
@@ -237,7 +240,12 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
           throw refused(`${service} keeps a ${kind}'s amount in ${currency}; give that ${field} or none`, field)
         continue
       }
-      add(rule.to, rule.list === true, encode(kind, field, rule, value))
+      add(
+        rule.to,
+        rule.list === true,
+        encode(kind, field, rule, value),
+        value === null ? encode(kind, field, rule, "") : undefined,
+      )
     }
     const custom = Object.entries((given.custom as Readonly<Record<string, unknown>> | undefined) ?? {})
     if (custom.length && !one.custom) throw refused(`${service} takes no --field of a ${kind} here`, "--field")
@@ -356,13 +364,14 @@ export interface CrmManifestWritesOptions
  * `api` keys of each operation it sends as `alsoChecks`. The writes' guard asks before each one and journals it.
  */
 export const crmManifestWrites = (input: unknown, options: CrmManifestWritesOptions): CrmWrites => {
-  const { manifest: api, service, source, app, settings, self, env, warn } = options
+  const { manifest: api, service, source, app, settings, self, ownedByDefault, env, warn } = options
   return {
     writer: crmWriterFromManifest(input, { api, service, send: serviceApiSend(options), source }),
     alsoChecks: crmManifestWriteKeys(input, api, options.bodyPermissions),
     app,
     settings,
     ...(self === undefined ? {} : { self }),
+    ...(ownedByDefault === undefined ? {} : { ownedByDefault }),
     ...(env === undefined ? {} : { env }),
     ...(warn === undefined ? {} : { warn }),
   }
