@@ -11,8 +11,8 @@ import { openSqlite } from "../store/sqlite/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { addTrackerCommands } from "../tracker/index.js"
 import { fakeTrackerSource } from "../tracker/testing/index.js"
-import { embedTracker } from "./notes-search.js"
 import { searchAll } from "./search-all.js"
+import { embedTracker } from "./tracker-meaning.js"
 
 const tiny: TextModel = {
   id: "e5-small",
@@ -31,6 +31,18 @@ const tiny: TextModel = {
 vi.mock("../embeddings/models.js", async (original) => {
   const real = await original<typeof import("../embeddings/models.js")>()
   return { ...real, textModel: (id: string) => (id === "e5-small" ? tiny : real.textModel(id)), meaningFloor: () => 0 }
+})
+
+const embedTrackerWith = vi.hoisted(() => [] as object[])
+vi.mock("./tracker-meaning.js", async (original) => {
+  const real = await original<typeof import("./tracker-meaning.js")>()
+  return {
+    ...real,
+    embedTracker: (store: MessageStore, options: Parameters<typeof real.embedTracker>[1] = {}) => {
+      embedTrackerWith.push(options)
+      return real.embedTracker(store, options)
+    },
+  }
 })
 
 const ME = { provider: "telegram", account: "100" }
@@ -95,7 +107,22 @@ describe("issues, projects and comments by meaning", () => {
       "words",
       "meaning",
     ])
+    expect(both.tracker?.by).toBe("words and meaning")
     expect(new Set(both.items.map(({ account }) => account))).toEqual(new Set(["user-1", "user-2"]))
+  })
+
+  it("searches an OR query by meaning too", async () => {
+    download()
+    const store = await trackerStore()
+    await embedTracker(store, { threads: 1 })
+    const found = await tracker(store, "kitten OR zebra", { scope: { tracker: [LINEAR] } })
+    expect(found.tracker).toEqual({ by: "words and meaning" })
+    expect(found.items.map(({ ref, foundBy }) => [ref, foundBy])).toEqual(
+      expect.arrayContaining([
+        ["tracker:linear/user-1/issue/i1", ["meaning"]],
+        ["tracker:linear/user-1/issue/i2", ["words"]],
+      ]),
+    )
   })
 
   it("never brings an account it was not asked to read", async () => {
@@ -118,7 +145,7 @@ describe("issues, projects and comments by meaning", () => {
     expect(exact.tracker).toEqual({ by: "words", meaningSkipped: "--exact searches words as written" })
     expect(exact.items).toEqual([])
     expect((await tracker(store, "title:kitten")).tracker?.meaningSkipped).toBe(
-      "the query has fields or operators, which meaning cannot follow",
+      "the query names a title, which meaning cannot follow",
     )
   })
 
@@ -144,11 +171,9 @@ describe("issues, projects and comments by meaning", () => {
     expect(await embedTracker(store, { threads: 1 })).toMatchObject({ embedded: 4, left: false })
   })
 
-  it("indexes new issues on sync --embed, and keeps --embed in the step that goes on", async () => {
-    download()
-    const store = await trackerStore()
+  const cliOf = (store: MessageStore, environment: Record<string, unknown> = {}) => {
     const source = fakeTrackerSource({ rows: { issue: [issue("n1", "dog"), issue("n2", "fish")] }, pageSize: 1 })
-    const cli = async (...args: string[]) => {
+    return async (...args: string[]) => {
       let data = ""
       const root = new Command("tracker").exitOverride().option("--json")
       addTrackerCommands(root, {
@@ -156,17 +181,44 @@ describe("issues, projects and comments by meaning", () => {
         open: async () => ({ account: LINEAR, store, source: () => source }),
         now: () => NOW,
       })
-      provide(root, { streams: { data: (text: string) => (data += text), diagnostic: () => {} } } as never)
+      provide(root, {
+        streams: { data: (text: string) => (data += text), diagnostic: () => {} },
+        ...environment,
+      } as never)
       await root.parseAsync([...args, "--json"], { from: "user" })
-      return JSON.parse(data) as { item: Record<string, unknown>; next?: { args: Record<string, unknown> }[] }
+      return JSON.parse(data) as {
+        item: Record<string, unknown>
+        meta?: { complete?: boolean; issues?: unknown[] }
+        next?: { args: Record<string, unknown> }[]
+      }
     }
+  }
+
+  it("indexes new issues on sync --embed within the deadline, and keeps --embed in the step that goes on", async () => {
+    download()
+    const store = await trackerStore()
+    const deadline = { endsAt: Date.now() + 3_600_000, ms: 3_600_000 }
+    const cli = cliOf(store, { deadline: () => deadline })
     const cut = await cli("sync", "--embed", "--max-pages", "1")
     expect(cut.item.embeddings).toBeUndefined()
     expect(cut.next?.[0]?.args).toEqual({ max_pages: 1, embed: true })
+    embedTrackerWith.length = 0
     const done = await cli("sync", "--embed")
     expect(done.item.embeddings).toMatchObject({ model: "e5-small", left: false })
+    expect(embedTrackerWith).toEqual([expect.objectContaining({ deadline })])
     expect((await tracker(store, "dog", { scope: { tracker: [LINEAR] } })).tracker).toEqual({
       by: "words and meaning",
+    })
+  })
+
+  it("keeps the sync's report when --embed finds no model, naming the model in meta.issues", async () => {
+    const store = await trackerStore()
+    const done = await cliOf(store)("sync", "--embed")
+    expect(done.item).toMatchObject({ state: "complete" })
+    expect(done.item.embeddings).toBeUndefined()
+    expect(done.meta).toMatchObject({
+      complete: false,
+      issues: [{ code: "not_found", reason: "model.not-downloaded", source: "tracker:embeddings" }],
     })
   })
 })

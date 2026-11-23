@@ -13,6 +13,7 @@ import { formatMeetingReference } from "../meetings/index.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting, type ListedAccount, listedHolds } from "../search/account-list.js"
 import { RRF_K } from "../search/fusion.js"
+import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { type Period, questionPeriod } from "../search/question-period.js"
@@ -33,13 +34,13 @@ import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
 import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
 import type { SearchCoverage } from "./messages-search.js"
-import { importAccounts, nearestTracker, notesScopeOf, searchNotes } from "./notes-search.js"
-import { plainQueryWords } from "./notes-title-tier.js"
+import { importAccounts, notesScopeOf, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
+import { nearestTracker } from "./tracker-meaning.js"
 
 export const RESOURCES_SEARCHED = [
   "messages",
@@ -350,7 +351,21 @@ const trackerTitle = ({ kind, record }: TrackerItem): string => {
   return key ? `${key} ${title}` : title
 }
 
-/** A meaning hit's excerpt: around a word of the query in its title and text, as a words hit's is. */
+/**
+ * What the meaning half embeds: the words and phrases asked for, OR included, as notes take them. `title:` narrows to
+ * the title, which a hit by meaning cannot be held to, so such a query is searched by words only.
+ */
+const trackerMeaningWords = (text: string): string | undefined => {
+  try {
+    const { root } = parseLucene(text, SEARCH_QUERY)
+    const nodes = root.kind === "boolean" ? root.clauses.map(({ node }) => node) : [root]
+    if (!nodes.every((node) => node.kind === "predicate" && node.field === "text")) return undefined
+    return meaningWords(root) || undefined
+  } catch {
+    return undefined
+  }
+}
+
 const trackerExcerpt = ({ kind, record }: TrackerItem, query: string): string =>
   excerpt([trackerTitleOf(kind, record), trackerBodyOf(kind, record)].filter(Boolean).join("\n"), query)
 
@@ -668,12 +683,11 @@ export const searchAll = async (
             foundBy,
           })
           const byWords = found.items.map(({ account: at, item, excerpt: text }) => hitOf(at, item, text, ["words"]))
-          const plain = plainQueryWords(discover ? questionText(request.text) : request.text)
+          const plain = trackerMeaningWords(discover ? questionText(request.text) : request.text)
           let near: TrackerNearest[] | undefined
           let meaningSkipped: string | undefined
           if (request.exact) meaningSkipped = "--exact searches words as written"
-          else if (plain === undefined)
-            meaningSkipped = "the query has fields or operators, which meaning cannot follow"
+          else if (plain === undefined) meaningSkipped = "the query names a title, which meaning cannot follow"
           else
             try {
               near = await nearestTracker(store, plain, {
