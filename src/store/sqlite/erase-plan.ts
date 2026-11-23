@@ -7,13 +7,17 @@ const AUTHORS = new Set(["author", "confirmed_by", "decided_by", "proposed_by", 
 /** A link is about both ends: one that loses an end means nothing, so it goes. */
 const LINK_ROWS = new Set(["links", "mentions", "task_assignments"])
 
-const hasChildren = (database: CacheDatabase, table: string) =>
+/** A row's own history: it goes before the row, and never keeps the row alive. */
+const HISTORY = new Set(["note_revisions"])
+
+const childrenOf = (database: CacheDatabase, table: string) =>
   database
     .prepare(
-      `SELECT 1 FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f WHERE m.type = 'table' AND f."table" = ?
-        LIMIT 1`,
+      `SELECT m.name AS child, f."from" AS col, coalesce(f."to", 'id') AS parent FROM sqlite_master m
+        JOIN pragma_foreign_key_list(m.name) f WHERE m.type = 'table' AND f."table" = ?`,
     )
-    .get(table) !== undefined
+    .all(table)
+    .map((row) => ({ child: String(row.child), col: String(row.col), parent: String(row.parent) }))
 
 const nullable = (database: CacheDatabase, table: string, column: string) =>
   Number(database.prepare(`SELECT "notnull" AS n FROM pragma_table_info('${table}') WHERE name = ?`).get(column)?.n) ===
@@ -42,7 +46,7 @@ export class ErasePlan {
       if (n === 0) continue
       const key = `${table}.${pointer}`
       if (LINK_ROWS.has(table) || !nullable(this.database, table, `${pointer}_id`)) {
-        if (!LINK_ROWS.has(table) && (AUTHORS.has(pointer) || hasChildren(this.database, table))) {
+        if (!LINK_ROWS.has(table) && (AUTHORS.has(pointer) || !this.#history(table, where, params))) {
           this.blocked.push(`${n} ${table} (${pointer})`)
           continue
         }
@@ -87,6 +91,23 @@ export class ErasePlan {
 
   run(): void {
     for (const step of this.#steps) step()
+  }
+
+  /**
+   * Whether the rows `where` picks in `table` can go: rows of other tables that hang on them must be their history,
+   * which then goes first. Another table's row, such as an invoice under a contract, keeps them.
+   */
+  #history(table: string, where: string, params: (string | number)[]): boolean {
+    const steps: [string, number, string][] = []
+    for (const { child, col, parent } of childrenOf(this.database, table)) {
+      const hanging = `"${col}" IN (SELECT "${parent}" FROM "${table}" WHERE ${where})`
+      const n = count(this.database, `"${child}" WHERE ${hanging}`, ...params)
+      if (n === 0) continue
+      if (!HISTORY.has(child)) return false
+      steps.push([`${child}.${col}`, n, `DELETE FROM "${child}" WHERE ${hanging}`])
+    }
+    for (const [key, n, sql] of steps) this.#add(this.deleted, key, n, sql, params)
+    return true
   }
 
   #add(into: Record<string, number>, key: string, n: number, sql: string, params: (string | number)[]) {

@@ -104,3 +104,60 @@ it("purging an import takes the people only its records made, and keeps one anot
   expect(await names()).not.toContain("Anna Test")
   expect(await names()).toContain("Boris Both")
 })
+
+const owner = { method: "manual", by: "owner" } as const
+
+const email = { provider: "email", id: "anna@example.org" }
+const telegram = { provider: "telegram", id: "77" }
+
+it.each([
+  ["the import into the Telegram contact, with a note", telegram, email, true],
+  ["the import into the Telegram contact", telegram, email, false],
+  ["the Telegram contact into the import", email, telegram, true],
+])(
+  "removing an account keeps a person it was merged with (%s), and does not fail on them",
+  async (_, from, to, note) => {
+    const { store } = await fixture()
+    await ingest(
+      store,
+      {
+        schema_version: 1,
+        source: { provider: "n8n", account: "crm", batch_id: "b1" },
+        records: [upsert("person", "anna", { name: "Anna Test", email: "anna@example.org" })],
+      },
+      { account: "crm" },
+    )
+    await store.people.savePeople({ provider: "telegram", account: "1" }, [{ id: "77", name: "Anna Telegram" }])
+    const merged = await store.people.linkIdentities(from, to, owner)
+    if (note) await store.notes.addNote({ text: "Prefers calls", about: [`person:${merged.uid}`] })
+
+    await store.accounts.purge({ provider: "n8n", account: "crm" })
+
+    const after = await store.people.personByUid(String(merged.uid))
+    expect(after?.identities.map(({ provider, id }) => `${provider}:${id}`)).toContain("telegram:77")
+  },
+)
+
+it("deleting a person also deletes the people merged into them, and the owner's notes about them", async () => {
+  const { store, names } = await fixture()
+  await store.people.savePeople({ provider: "telegram", account: "1" }, [
+    { id: "1", name: "Ana One" },
+    { id: "2", name: "Ana Two" },
+  ])
+  const kept = await store.people.linkIdentities(
+    { provider: "telegram", id: "2" },
+    { provider: "telegram", id: "1" },
+    owner,
+  )
+  const uid = `person:${kept.uid}`
+  await store.notes.addNote({ text: "Met at the harbour fair", about: [uid] })
+
+  const preview = await store.people.erase(uid, "owner", { apply: false })
+  expect(preview.merged).toHaveLength(1)
+  expect(preview.deleted).toMatchObject({ "notes.notable": 1 })
+
+  await store.people.erase(uid, "owner", { apply: true })
+  expect(await names()).not.toContain("Ana One")
+  expect(await names()).not.toContain("Ana Two")
+  for (const gone of [uid, ...preview.merged]) expect(await store.people.personByUid(gone)).toBeUndefined()
+})

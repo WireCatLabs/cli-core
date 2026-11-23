@@ -3,6 +3,7 @@ import { dropOrphanPeople, unreferenced } from "./accounts.js"
 import { calendarCursorKey, calendarWritesOver } from "./calendar.js"
 import { forgetCalendarRows } from "./calendar-forget.js"
 import { eq, inArray, sql } from "./drizzle/core.js"
+import { ErasePlan } from "./erase-plan.js"
 import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
 import type { StoreContext } from "./open.js"
 import { eraseImportedOrganizations, importedOrganizations } from "./organization-erase.js"
@@ -158,6 +159,9 @@ export const purgeAccount = (context: StoreContext, accountKey: number): void =>
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`
   orm.run(sql`DELETE FROM record_relations WHERE record_id IN ${recordsOf} OR target_id IN ${recordsOf}`)
   orm.run(sql`DELETE FROM records WHERE account_id = ${accountKey}`)
+  // Relationships the account reported carry its id and no foreign key: left behind, the next account given that id
+  // would own them.
+  orm.run(sql`DELETE FROM links WHERE account_id = ${accountKey}`)
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
   dropOrphanPeople(database, unseenBefore)
   eraseImportedPeople(context, imported)
@@ -178,27 +182,10 @@ const purgeCrmCopies = (database: CacheDatabase, accountKey: number): void => {
   const leadsOf = "(SELECT id FROM leads WHERE account_id = ?)"
   const pipelinesOf = "(SELECT id FROM pipelines WHERE account_id = ?)"
   const stagesOf = `(SELECT id FROM pipeline_stages WHERE pipeline_id IN ${pipelinesOf})`
-  for (const [type, ids] of [
-    ["deal", dealsOf],
-    ["lead", leadsOf],
-  ] as const) {
-    run(
-      `DELETE FROM links WHERE (from_type = ? AND from_id IN ${ids}) OR (to_type = ? AND to_id IN ${ids})`,
-      type,
-      accountKey,
-      type,
-      accountKey,
-    )
-    for (const [table, pointer] of [
-      ["taggings", "taggable"],
-      ["aliases", "aliasable"],
-      ["attachments", "attachable"],
-      ["link_reviews", "linkable"],
-      ["entity_link_events", "linkable"],
-    ])
-      run(`DELETE FROM ${table} WHERE ${pointer}_type = ? AND ${pointer}_id IN ${ids}`, type, accountKey)
-    run(`DELETE FROM pipeline_stage_changes WHERE item_type = ? AND item_id IN ${ids}`, type, accountKey)
-  }
+  new ErasePlan(database)
+    .pointers("deal", dealsOf.slice(1, -1), [accountKey])
+    .pointers("lead", leadsOf.slice(1, -1), [accountKey])
+    .run()
   run(`DELETE FROM pipeline_stage_changes WHERE pipeline_id IN ${pipelinesOf}`, accountKey)
   for (const table of ["leads", "orders", "contracts"])
     run(`UPDATE ${table} SET deal_id = NULL WHERE deal_id IN ${dealsOf}`, accountKey)

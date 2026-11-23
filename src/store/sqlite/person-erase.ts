@@ -6,7 +6,7 @@ import { count, ErasePlan } from "./erase-plan.js"
 import { forgetDanglingEvidence } from "./evidence-signature.js"
 import { forgetErasedLinks } from "./identity-link-rows.js"
 import { forgetErasedSplits } from "./identity-split-proposals.js"
-import { currentPerson } from "./merged-persons.js"
+import { currentPerson, samePersons } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { ownerOnly } from "./person-merges.js"
 import { forgetErasedTestData } from "./test-people.js"
@@ -16,6 +16,8 @@ export interface PersonErasure {
   name: string | null
   /** `false`: what `erase` would do, nothing changed. */
   erased: boolean
+  /** People merged into this one earlier: the same person, so they go too. */
+  merged: string[]
   /** Identities that go with the person. */
   identities: string[]
   /**
@@ -40,7 +42,8 @@ const personOf = (context: StoreContext, uid: string): number => {
 
 /**
  * Deletes a person and what memo knows of them alone: their identities, the tags, links, aliases and mentions that
- * name them, their involvements. A fact, a note, a record or a task that names them stays and loses the name. A
+ * name them, their involvements, the owner's notes about them, and the people merged into them earlier. A fact, a
+ * record or a task that names them stays and loses the name. A
  * message, mail or meeting is the source's: its sender stays as an identity with no person. Refused for the owner,
  * and while an invoice, order, subscription or a row they wrote cannot be without them. `apply: false` answers the
  * same without changing anything.
@@ -75,17 +78,19 @@ export const erasePerson = (context: StoreContext, uid: string, by: Decider, app
   const going = linked.filter(({ id }) => !named.has(id))
   const kept = linked.filter(({ id }) => named.has(id))
   const goingIds = JSON.stringify(going.map(({ id }) => id))
+  const chain = samePersons(database, person)
+  const chainIds = JSON.stringify(chain)
 
-  const plan = new ErasePlan(database).pointers("person", "?", [person]).pointers("identity", theirs, [goingIds])
+  const plan = new ErasePlan(database).pointers("person", theirs, [chainIds]).pointers("identity", theirs, [goingIds])
   const { deleted, detached, blocked } = plan
   const involvements = count(
     database,
-    `involvements WHERE person_id = ? OR identity_id IN (${theirs})`,
-    person,
+    `involvements WHERE person_id IN (${theirs}) OR identity_id IN (${theirs})`,
+    chainIds,
     goingIds,
   )
   if (involvements > 0) deleted["involvements.person"] = (deleted["involvements.person"] ?? 0) + involvements
-  const bots = count(database, "bots WHERE owner_person_id = ?", person)
+  const bots = count(database, `bots WHERE owner_person_id IN (${theirs})`, chainIds)
   if (bots > 0) detached["bots.owner_person"] = bots
 
   if (blocked.length > 0)
@@ -98,6 +103,7 @@ export const erasePerson = (context: StoreContext, uid: string, by: Decider, app
     person: `person:${person}`,
     name: row?.name == null ? null : String(row.name),
     erased,
+    merged: chain.filter((one) => one !== person).map((one) => `person:${one}`),
     identities: going.map(({ ref }) => ref),
     kept: kept.map(({ id, ref }) => ({ identity: ref, references: named.get(id) ?? 0 })),
     deleted,
@@ -106,17 +112,21 @@ export const erasePerson = (context: StoreContext, uid: string, by: Decider, app
   if (!apply) return answer(false)
 
   plan.run()
-  database.prepare(`DELETE FROM involvements WHERE person_id = ? OR identity_id IN (${theirs})`).run(person, goingIds)
-  database.prepare("UPDATE bots SET owner_person_id = NULL WHERE owner_person_id = ?").run(person)
+  database
+    .prepare(`DELETE FROM involvements WHERE person_id IN (${theirs}) OR identity_id IN (${theirs})`)
+    .run(chainIds, goingIds)
+  database.prepare(`UPDATE bots SET owner_person_id = NULL WHERE owner_person_id IN (${theirs})`).run(chainIds)
   for (const table of ["account_identities", "organization_identities", "identity_revisions"])
     database.prepare(`DELETE FROM ${table} WHERE identity_id IN (${theirs})`).run(goingIds)
   database
-    .prepare(`DELETE FROM identity_link_events WHERE to_person_id = ? OR identity_id IN (${theirs})`)
-    .run(person, goingIds)
-  database.prepare("UPDATE identity_link_events SET from_person_id = NULL WHERE from_person_id = ?").run(person)
-  database.prepare("DELETE FROM identity_links WHERE person_id = ?").run(person)
+    .prepare(`DELETE FROM identity_link_events WHERE to_person_id IN (${theirs}) OR identity_id IN (${theirs})`)
+    .run(chainIds, goingIds)
+  database
+    .prepare(`UPDATE identity_link_events SET from_person_id = NULL WHERE from_person_id IN (${theirs})`)
+    .run(chainIds)
+  database.prepare(`DELETE FROM identity_links WHERE person_id IN (${theirs})`).run(chainIds)
   database.prepare(`DELETE FROM identities WHERE id IN (${theirs})`).run(goingIds)
-  database.prepare("DELETE FROM persons WHERE id = ?").run(person)
+  database.prepare(`DELETE FROM persons WHERE id IN (${theirs})`).run(chainIds)
   forgetErasedLinks(database)
   forgetErasedSplits(database)
   forgetErasedTestData(database)
@@ -136,8 +146,8 @@ export const importedPeople = (database: CacheDatabase, accountKey: number): num
 
 /**
  * After a purge, the people only its records made go too: nothing else names them, and no message, mail or meeting
- * names their identities; their involvements are derived and go with them. One the owner tagged, linked or gave a
- * task to stays.
+ * names their identities; their involvements are derived and go with them. One the owner tagged, linked, gave a task
+ * to or merged with another person stays: a merge says the owner knows them from somewhere else too.
  */
 export const eraseImportedPeople = (context: StoreContext, people: readonly number[]): void => {
   const { database } = context
@@ -151,7 +161,12 @@ export const eraseImportedPeople = (context: StoreContext, people: readonly numb
     if (database.prepare("SELECT 1 FROM persons WHERE id = ? AND owner = 0").get(person) === undefined) continue
     const params = Array.from({ length: others.split("IN (?)").length - 1 }, () => person)
     if (database.prepare(`SELECT 1 FROM (${others}) LIMIT 1`).get(...params) !== undefined) continue
-    const plan = erasePerson(context, String(person), "owner", false)
-    if (plan.kept.length === 0) erasePerson(context, String(person), "owner", true)
+    if (samePersons(database, person).length > 1) continue
+    try {
+      const plan = erasePerson(context, String(person), "owner", false)
+      if (plan.kept.length === 0) erasePerson(context, String(person), "owner", true)
+    } catch (error) {
+      if (!(error instanceof CliError)) throw error
+    }
   }
 }
