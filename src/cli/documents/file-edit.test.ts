@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest"
 import type { FileTarget } from "../../documents/file-mirror-model.js"
 import { readDocxParagraphs, readXlsxCells } from "../../office/index.js"
 import { fileVersions } from "../../services/files/versions.js"
+import { commandPathOf } from "../command-contract.js"
 import type { Body } from "../envelope.js"
 import { addFileEditCommands, cellEditsOf, sheetRangeOf } from "./file-edit.js"
 
@@ -61,6 +62,8 @@ const harness = (start: Record<string, Uint8Array | string> = {}) => {
   }
   const versions = fileVersions(join(mkdtempSync(join(tmpdir(), "file-edit-")), "files.versions"))
   const asked: (readonly string[])[] = []
+  const ran: string[] = []
+  const running = (command: Command) => ran.push(commandPathOf(command).join(" "))
   const answers: Body[] = []
   const trashed: string[] = []
   const group = new Command("files").exitOverride()
@@ -70,12 +73,17 @@ const harness = (start: Record<string, Uint8Array | string> = {}) => {
     path: (input) => input,
     reread: (input) => `disk personal files show ${input}`,
     stdin: () => undefined,
-    read: (act) => act({ target, versions }),
-    write: async (extra, act) => {
+    read: (act, command) => {
+      running(command)
+      return act({ target, versions })
+    },
+    write: async (extra, act, command) => {
+      running(command)
       asked.push(extra)
       return { operation_id: "op-1", ...(await act({ target, versions })) }
     },
-    restoreFromTrash: async (input) => {
+    restoreFromTrash: async (input, command) => {
+      running(command)
       trashed.push(input)
       return { path: input, restored: "trash" }
     },
@@ -84,7 +92,7 @@ const harness = (start: Record<string, Uint8Array | string> = {}) => {
   const item = <T = Record<string, unknown>>() => (answers.at(-1) as { item: T }).item
   const command = (...path: string[]) =>
     path.reduce((at, name) => at.commands.find((child) => child.name() === name) as Command, group)
-  return { files, uploads, versions, asked, trashed, run, item, command }
+  return { files, uploads, versions, asked, ran, trashed, run, item, command }
 }
 
 describe("files sheets", () => {
@@ -112,6 +120,7 @@ describe("files sheets", () => {
       { sheet: "Synthetic Budget", cell: "B2", after: 950 },
     ])
     expect(disk.asked).toEqual([["files.delete"]])
+    expect(disk.ran).toEqual(["sheets show", "sheets update"])
     expect(item.replaced.sha256).toBe(sha256(budget))
     expect(readFileSync(item.replaced.kept_at)).toEqual(Buffer.from(budget))
     const [sheet] = await readXlsxCells(disk.files.get("/budget.xlsx") as Uint8Array, { range: "A2:B2" })
@@ -239,6 +248,7 @@ describe("files history and restore", () => {
     expect(disk.asked.at(-1)).toEqual(["files.delete"])
     expect(disk.versions.list("/notes.md").at(-1)).toMatchObject({ direction: "restored", old: sha256("second") })
     expect(disk.versions.has(sha256("second"))).toBe(true)
+    expect(new Set(disk.ran)).toEqual(new Set(["update", "history", "restore"]))
   })
 
   it("a version not kept is not found; without a version it is the CLI's own trash restore", async () => {
@@ -246,6 +256,7 @@ describe("files history and restore", () => {
     await expect(disk.run("restore", "/gone.md", sha256("never"))).rejects.toMatchObject({ code: "not_found" })
     await disk.run("restore", "trash:/old.pdf")
     expect(disk.trashed).toEqual(["trash:/old.pdf"])
+    expect(disk.ran).toEqual(["restore", "restore"])
     expect(disk.uploads).toEqual([])
   })
 

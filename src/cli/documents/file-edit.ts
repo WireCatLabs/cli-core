@@ -29,13 +29,16 @@ import {
 import { examples, wordsOf } from "./words.js"
 
 export interface FileEditCommands extends FileUpdateCommands {
-  /** The CLI's read path, signed in: the target and the profile's version store, for a command that changes nothing. */
-  read(act: (port: FileUpdatePort) => Promise<object>): Promise<object>
+  /**
+   * The CLI's read path, signed in: the target and the profile's version store, for a command that changes nothing.
+   * `command` is the one running.
+   */
+  read(act: (port: FileUpdatePort) => Promise<object>, command: Command): Promise<object>
   /**
    * `restore <path>` with no version: the CLI's own restore from the provider's trash, which answers what it did. A
    * CLI without one leaves it out, and the version is then required.
    */
-  restoreFromTrash?(input: string): Promise<object>
+  restoreFromTrash?(input: string, command: Command): Promise<object>
 }
 
 /** The whole file is held in memory to edit it. */
@@ -172,6 +175,7 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
 
   /** Downloads the file, edits it only at the sha256 it was read at, and writes it back as `files update` does. */
   const editInPlace = async (
+    command: Command,
     kind: "sheets" | "documents",
     input: string,
     fingerprint: string | undefined,
@@ -188,36 +192,40 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
         },
       )
     const path = helpers.path(input)
-    const answer = await helpers.write([deleteKey], async (port) => {
-      const read = await downloaded(port, path)
-      if (read.sha256 !== expected) throw remoteChanged(path, "changed since it was read", reread)
-      const edited = await edit(read.bytes)
-      return inTemp(async (folder) => {
-        const from = join(folder, "edited")
-        await writeFile(from, edited.bytes, { mode: 0o600 })
-        const { target, versions, signal } = port
-        const done = await guardedFileWrite({
-          target,
-          versions,
-          path,
-          from,
-          expected,
-          reread,
-          ...(signal ? { signal } : {}),
+    const answer = await helpers.write(
+      [deleteKey],
+      async (port) => {
+        const read = await downloaded(port, path)
+        if (read.sha256 !== expected) throw remoteChanged(path, "changed since it was read", reread)
+        const edited = await edit(read.bytes)
+        return inTemp(async (folder) => {
+          const from = join(folder, "edited")
+          await writeFile(from, edited.bytes, { mode: 0o600 })
+          const { target, versions, signal } = port
+          const done = await guardedFileWrite({
+            target,
+            versions,
+            path,
+            from,
+            expected,
+            reread,
+            ...(signal ? { signal } : {}),
+          })
+          return { path, sha256: done.file.sha256 ?? null, replaced: replacedOf(done, versions), ...edited.answer }
         })
-        return { path, sha256: done.file.sha256 ?? null, replaced: replacedOf(done, versions), ...edited.answer }
-      })
-    })
-    helpers.output(itemOf(answer))
+      },
+      command,
+    )
+    helpers.output(itemOf(answer), command)
   }
 
-  const readOffice = async (input: string, answer: (bytes: Uint8Array) => Promise<object>) => {
+  const readOffice = async (command: Command, input: string, answer: (bytes: Uint8Array) => Promise<object>) => {
     const path = helpers.path(input)
     const item = await helpers.read(async (port) => {
       const read = await downloaded(port, path)
       return { path, sha256: read.sha256, ...(await answer(read.bytes)) }
-    })
-    helpers.output(itemOf(item))
+    }, command)
+    helpers.output(itemOf(item), command)
   }
 
   const sheets = annotate(files.command("sheets"), { effects: REMOTE_READ }).description(
@@ -236,9 +244,9 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
         "the cells to show: Sheet1!A1:C10, a sheet's name, or A1:C10 on every sheet; all without it",
       ),
     [`${prefix} ${group} sheets show /budget.xlsx "Sheet1!A1:C10"`, `${prefix} ${group} sheets show /budget.xlsx`],
-  ).action(async (input: string, range: string | undefined) => {
+  ).action(async function (this: Command, input: string, range: string | undefined) {
     const wanted = sheetRangeOf(range)
-    await readOffice(input, async (bytes) => ({
+    await readOffice(this, input, async (bytes) => ({
       sheets: (await readXlsxCells(bytes, wanted)).map((sheet) => ({
         name: sheet.name,
         cells: sheet.cells.map((cell) => ({
@@ -274,61 +282,60 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     [
       `${prefix} ${group} sheets update /budget.xlsx "Sheet1!B2:C2" --values '[[120, "paid"]]' --expected-fingerprint 9f86d081…`,
     ],
-  ).action(
-    async (
-      input: string,
-      range: string,
-      args: { values?: string; expectedFingerprint?: string; replace?: boolean },
-    ) => {
-      if (args.values === undefined)
-        throw new CliError("validation_error", `give the cells' values with --values: ${VALUES_SHAPE}`, {
-          param: "--values",
-        })
-      const values = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
-      const wanted = sheetRangeOf(range)
-      if (wanted.range === undefined)
-        throw new CliError("validation_error", `${range} names no cell; give one like Sheet1!B2`, {
-          reason: "office.invalid_cell",
-        })
-      cellEditsOf("", wanted.range, values)
-      await editInPlace("sheets", input, args.expectedFingerprint, async (bytes) => {
-        let sheet = wanted.sheet
-        if (sheet === undefined) {
-          const names = (await readXlsxCells(bytes, { range: "A1" })).map((one) => one.name)
-          if (names.length !== 1)
-            throw new CliError(
-              "validation_error",
-              `the workbook has ${names.length} sheets (${names.map((name) => `"${name}"`).join(", ")}); name one, like ${names[0] ?? "Sheet1"}!${wanted.range}`,
-              { reason: "office.no_sheet" },
-            )
-          sheet = names[0] as string
-        }
-        try {
-          const done = await editXlsxCells(bytes, cellEditsOf(sheet, wanted.range as string, values), {
-            overwriteFormulas: args.replace === true,
-          })
-          return {
-            bytes: done.bytes,
-            answer: {
-              changed: done.changed,
-              calc_chain_dropped: done.calcChainDropped,
-              warnings: done.calcChainDropped
-                ? ["a formula was replaced, so Excel rebuilds the workbook's calculation order when it opens it"]
-                : [],
-            },
-          }
-        } catch (error) {
-          if (isCliError(error) && error.details?.reason === "office.formula_cell")
-            throw new CliError(
-              "validation_error",
-              error.message.replace("pass overwriteFormulas", "pass --replace"),
-              error.details,
-            )
-          throw error
-        }
+  ).action(async function (
+    this: Command,
+    input: string,
+    range: string,
+    args: { values?: string; expectedFingerprint?: string; replace?: boolean },
+  ) {
+    if (args.values === undefined)
+      throw new CliError("validation_error", `give the cells' values with --values: ${VALUES_SHAPE}`, {
+        param: "--values",
       })
-    },
-  )
+    const values = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
+    const wanted = sheetRangeOf(range)
+    if (wanted.range === undefined)
+      throw new CliError("validation_error", `${range} names no cell; give one like Sheet1!B2`, {
+        reason: "office.invalid_cell",
+      })
+    cellEditsOf("", wanted.range, values)
+    await editInPlace(this, "sheets", input, args.expectedFingerprint, async (bytes) => {
+      let sheet = wanted.sheet
+      if (sheet === undefined) {
+        const names = (await readXlsxCells(bytes, { range: "A1" })).map((one) => one.name)
+        if (names.length !== 1)
+          throw new CliError(
+            "validation_error",
+            `the workbook has ${names.length} sheets (${names.map((name) => `"${name}"`).join(", ")}); name one, like ${names[0] ?? "Sheet1"}!${wanted.range}`,
+            { reason: "office.no_sheet" },
+          )
+        sheet = names[0] as string
+      }
+      try {
+        const done = await editXlsxCells(bytes, cellEditsOf(sheet, wanted.range as string, values), {
+          overwriteFormulas: args.replace === true,
+        })
+        return {
+          bytes: done.bytes,
+          answer: {
+            changed: done.changed,
+            calc_chain_dropped: done.calcChainDropped,
+            warnings: done.calcChainDropped
+              ? ["a formula was replaced, so Excel rebuilds the workbook's calculation order when it opens it"]
+              : [],
+          },
+        }
+      } catch (error) {
+        if (isCliError(error) && error.details?.reason === "office.formula_cell")
+          throw new CliError(
+            "validation_error",
+            error.message.replace("pass overwriteFormulas", "pass --replace"),
+            error.details,
+          )
+        throw error
+      }
+    })
+  })
 
   const documents = annotate(files.command("documents"), { effects: REMOTE_READ }).description(
     `the paragraphs of a Word document (.docx) on ${place}, read and changed in place`,
@@ -342,8 +349,8 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
       )
       .argument("<path>", `the .docx file on ${place}`),
     [`${prefix} ${group} documents show /report.docx`],
-  ).action(async (input: string) => {
-    await readOffice(input, async (bytes) => ({
+  ).action(async function (this: Command, input: string) {
+    await readOffice(this, input, async (bytes) => ({
       paragraphs: (await readDocxParagraphs(bytes)).map((paragraph) => ({
         index: paragraph.index,
         text: paragraph.text,
@@ -372,11 +379,11 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     [
       `${prefix} ${group} documents update /report.docx --payload '[{"index": 2, "text": "Revenue grew 12%."}]' --expected-fingerprint 9f86d081…`,
     ],
-  ).action(async (input: string, args: { payload?: string; expectedFingerprint?: string }) => {
+  ).action(async function (this: Command, input: string, args: { payload?: string; expectedFingerprint?: string }) {
     if (args.payload === undefined)
       throw new CliError("validation_error", `give the edits with --payload: ${PAYLOAD_SHAPE}`, { param: "--payload" })
     const edits = docxEditsOf(jsonOf(args.payload, "--payload", PAYLOAD, PAYLOAD_SHAPE))
-    await editInPlace("documents", input, args.expectedFingerprint, async (bytes) => {
+    await editInPlace(this, "documents", input, args.expectedFingerprint, async (bytes) => {
       const done = await editDocxParagraphs(bytes, edits)
       return {
         bytes: done.bytes,
@@ -399,23 +406,26 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
       )
       .argument("<path>", `the file on ${place}`),
     [`${prefix} ${group} history /budget.xlsx`],
-  ).action(async (input: string) => {
+  ).action(async function (this: Command, input: string) {
     const path = helpers.path(input)
-    const item = await helpers.read(async ({ versions }) => ({
-      path,
-      versions: versions.list(path).map((event) => ({
-        at: event.at,
-        event: event.event,
-        direction: event.direction,
-        version: event.old ?? null,
-        available: event.available,
-        ...(event.new === undefined ? {} : { new: event.new }),
-        ...(event.size === undefined ? {} : { size: event.size }),
-        ...(event.to === undefined ? {} : { to: event.to }),
-        ...(event.oldIn === undefined ? {} : { old_in: event.oldIn }),
-      })),
-    }))
-    helpers.output(itemOf(item))
+    const item = await helpers.read(
+      async ({ versions }) => ({
+        path,
+        versions: versions.list(path).map((event) => ({
+          at: event.at,
+          event: event.event,
+          direction: event.direction,
+          version: event.old ?? null,
+          available: event.available,
+          ...(event.new === undefined ? {} : { new: event.new }),
+          ...(event.size === undefined ? {} : { size: event.size }),
+          ...(event.to === undefined ? {} : { to: event.to }),
+          ...(event.oldIn === undefined ? {} : { old_in: event.oldIn }),
+        })),
+      }),
+      this,
+    )
+    helpers.output(itemOf(item), this)
   })
 
   const trash = helpers.restoreFromTrash
@@ -435,41 +445,49 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
       .argument(trash ? "[version]" : "<version>", "the version's sha256, from history")
       .option("--expected-fingerprint <hash>", "the sha256 the file has now; required when it exists"),
     [`${prefix} ${group} restore /budget.xlsx 2c26b46b… --expected-fingerprint 9f86d081…`],
-  ).action(async (input: string, versionInput: string | undefined, args: { expectedFingerprint?: string }) => {
+  ).action(async function (
+    this: Command,
+    input: string,
+    versionInput: string | undefined,
+    args: { expectedFingerprint?: string },
+  ) {
     if (versionInput === undefined) {
       if (!trash) throw new CliError("validation_error", `give the version from ${group} history`, { param: "version" })
-      helpers.output(itemOf(await trash(input)))
+      helpers.output(itemOf(await trash(input, this)), this)
       return
     }
     const version = sha256Of(versionInput, "the version") as string
     const expected = sha256Of(args.expectedFingerprint)
     const path = helpers.path(input)
     const reread = helpers.reread(input)
-    const answer = await helpers.write(expected ? [deleteKey] : [], async ({ target, versions, signal }) =>
-      inTemp(async (folder) => {
-        const from = join(folder, "version")
-        if (!(await versions.write(version, from)))
-          throw new CliError(
-            "not_found",
-            `version ${version} of ${path} is no longer kept here; see ${group} history`,
-            {
-              reason: "item.not-found",
-            },
-          )
-        const done = await guardedFileWrite({
-          target,
-          versions,
-          path,
-          from,
-          reread,
-          direction: "restored",
-          ...(expected ? { expected } : {}),
-          ...(signal ? { signal } : {}),
-        })
-        return { path, sha256: done.file.sha256 ?? null, restored: version, replaced: replacedOf(done, versions) }
-      }),
+    const answer = await helpers.write(
+      expected ? [deleteKey] : [],
+      async ({ target, versions, signal }) =>
+        inTemp(async (folder) => {
+          const from = join(folder, "version")
+          if (!(await versions.write(version, from)))
+            throw new CliError(
+              "not_found",
+              `version ${version} of ${path} is no longer kept here; see ${group} history`,
+              {
+                reason: "item.not-found",
+              },
+            )
+          const done = await guardedFileWrite({
+            target,
+            versions,
+            path,
+            from,
+            reread,
+            direction: "restored",
+            ...(expected ? { expected } : {}),
+            ...(signal ? { signal } : {}),
+          })
+          return { path, sha256: done.file.sha256 ?? null, restored: version, replaced: replacedOf(done, versions) }
+        }),
+      this,
     )
-    helpers.output(itemOf(answer))
+    helpers.output(itemOf(answer), this)
   })
 
   addFileUpdateCommand(files, helpers)

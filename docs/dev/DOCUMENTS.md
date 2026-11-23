@@ -654,7 +654,9 @@ update and the restore keep into it and `history` reads it.
 
 Besides the update's helpers, the CLI passes `read(act)`, its signed-in read path with the same target and version
 store, and, when it has a trash, `restoreFromTrash(input)`: `restore` with no version calls it and answers what it
-returns, so the CLI drops its own `restore` command. Without it the version is required.
+returns, so the CLI drops its own `restore` command. Without it the version is required. Every helper that acts
+(`write`, `read`, `output`, `restoreFromTrash`) gets the running command as its last argument, so one set of helpers
+asks each command's own permission key and records it in the send journal under its own name.
 
 ## Copy a document collection to another database
 

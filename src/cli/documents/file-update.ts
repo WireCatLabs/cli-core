@@ -23,7 +23,8 @@ export interface FileUpdatePort {
 
 export interface FileUpdateCommands {
   words: DocumentWords
-  output(body: Body): void
+  /** `command` is the one running, in this and the helpers below: one set of helpers serves several commands. */
+  output(body: Body, command: Command): void
   /** What the user typed, as the target's path. */
   path(input: string): string
   /** The command that reads the file and its sha256 again, for a conflict's message (`ydisk personal files show …`). */
@@ -34,7 +35,7 @@ export interface FileUpdateCommands {
    * The CLI's own write path: its permission key for the command and `extra` (the delete key when a file is
    * replaced), its run and send journal. Answers what `act` answered, with whatever the CLI adds (`operation_id`).
    */
-  write(extra: readonly string[], act: (port: FileUpdatePort) => Promise<object>): Promise<object>
+  write(extra: readonly string[], act: (port: FileUpdatePort) => Promise<object>, command: Command): Promise<object>
   /** The key an overwrite also asks; `files.delete` when absent. */
   deleteKey?: string
 }
@@ -94,7 +95,7 @@ const addFileUpdateCommandDefinition = (files: Command, helpers: FileUpdateComma
       `${prefix} ${group} update /notes.md --text "# Notes"`,
       `${prefix} ${group} update /notes.md --text "# Notes" --expected-fingerprint 9f86d081…`,
     ],
-  ).action(async (input: string, args: { text?: string; expectedFingerprint?: string }) => {
+  ).action(async function (this: Command, input: string, args: { text?: string; expectedFingerprint?: string }) {
     const expected = sha256Of(args.expectedFingerprint)
     const path = helpers.path(input)
     if (EXTRACTED.test(path))
@@ -105,30 +106,34 @@ const addFileUpdateCommandDefinition = (files: Command, helpers: FileUpdateComma
         { reason: "file.not-plain-text" },
       )
     const text = await newText(helpers.stdin(), args.text)
-    const answer = await helpers.write(expected ? [deleteKey] : [], async ({ target, versions, signal }) => {
-      const folder = await mkdtemp(join(tmpdir(), "wirecat-update-"))
-      try {
-        const from = join(folder, "text")
-        await writeFile(from, text, { mode: 0o600 })
-        const done = await guardedFileWrite({
-          target,
-          versions,
-          path,
-          from,
-          reread: helpers.reread(input),
-          ...(expected ? { expected } : {}),
-          ...(signal ? { signal } : {}),
-        })
-        return {
-          path,
-          sha256: done.file.sha256 ?? null,
-          replaced: replacedOf(done, versions),
+    const answer = await helpers.write(
+      expected ? [deleteKey] : [],
+      async ({ target, versions, signal }) => {
+        const folder = await mkdtemp(join(tmpdir(), "wirecat-update-"))
+        try {
+          const from = join(folder, "text")
+          await writeFile(from, text, { mode: 0o600 })
+          const done = await guardedFileWrite({
+            target,
+            versions,
+            path,
+            from,
+            reread: helpers.reread(input),
+            ...(expected ? { expected } : {}),
+            ...(signal ? { signal } : {}),
+          })
+          return {
+            path,
+            sha256: done.file.sha256 ?? null,
+            replaced: replacedOf(done, versions),
+          }
+        } finally {
+          await rm(folder, { recursive: true, force: true })
         }
-      } finally {
-        await rm(folder, { recursive: true, force: true })
-      }
-    })
-    helpers.output(itemOf(answer))
+      },
+      this,
+    )
+    helpers.output(itemOf(answer), this)
   })
 }
 
