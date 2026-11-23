@@ -42,6 +42,11 @@ export {
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export { excludedBy, exclusionPattern } from "../services/files/exclusions.js"
 export {
+  type GuardedFileWrite,
+  type GuardedFileWriteResult,
+  guardedFileWrite,
+} from "../services/files/guarded-write.js"
+export {
   type FileMirrorOptions,
   type FileMirrorResult,
   type FileMirrorSyncOptions,

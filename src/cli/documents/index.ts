@@ -22,6 +22,7 @@ export {
   type DocumentCatalogStores,
 } from "./catalog.js"
 export { addLocalDocumentCommands, type ImportedDocument, type LocalDocumentCommands } from "./documents.js"
+export { addFileUpdateCommand, type FileUpdateCommands, type FileUpdatePort } from "./file-update.js"
 export { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
 export {
   addDocumentKnowledgeCommands,

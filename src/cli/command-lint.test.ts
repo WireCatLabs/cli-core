@@ -11,6 +11,7 @@ import { sharedProgram } from "../testing/shared-program.js"
 import { addCallStatsCommand } from "./call-stats-command.js"
 import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
+import { addFileUpdateCommand } from "./documents/file-update.js"
 import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
@@ -79,6 +80,36 @@ it("a calls host's shared commands pass the command lint with no overrides", asy
       },
     },
     // The baseline is the messenger program's: here its entries are stale, and only a new violation fails.
+    "--allow-stale",
+  )
+
+  expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
+  expect(lint.status).toBe(0)
+})
+
+// ydisk and the other file CLIs mount it under their own files group; a messenger never does.
+it("a files host's shared update passes the command lint with no overrides", async () => {
+  const refuse = async (): Promise<never> => {
+    throw new Error("not read in a lint")
+  }
+  const app = { command: "disk", appName: "disk-cli", envPrefix: "DISK", description: "synthetic", version: "1.0.0" }
+  const lint = await lintOf(
+    {
+      app,
+      commands: () => {
+        const holder = new Command("disk").addCommand(commandsCommand(app))
+        const files = holder.command("files").description("the files on the disk, live")
+        addFileUpdateCommand(files, {
+          words: { app: "disk", remote: "disk", provider: "Disk", source: "disk" },
+          output: () => undefined,
+          path: (input) => input,
+          reread: (input) => `disk personal files show ${input}`,
+          stdin: () => undefined,
+          write: refuse,
+        })
+        return [...holder.commands, runsCommand(app)]
+      },
+    },
     "--allow-stale",
   )
 
