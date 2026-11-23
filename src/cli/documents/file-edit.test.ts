@@ -232,6 +232,83 @@ describe("files documents", () => {
   })
 })
 
+describe("files sheets create and documents create", () => {
+  it("create a workbook and a document that show reads back, asking only the write's own permission", async () => {
+    const disk = harness()
+    await disk.run("sheets", "create", "/new.xlsx", "--values", '[["Item", "Cost"], ["Rent", 950]]', "--name", "Budget")
+    const sheet = disk.item<{ path: string; sha256: string; sheets: unknown }>()
+    expect(sheet).toMatchObject({ path: "/new.xlsx", sheets: [{ name: "Budget", rows: 2 }] })
+    expect(sheet.sha256).toBe(sha256(disk.files.get("/new.xlsx") as Uint8Array))
+    const [cells] = await readXlsxCells(disk.files.get("/new.xlsx") as Uint8Array)
+    expect(cells?.name).toBe("Budget")
+    expect(cells?.cells.map((cell) => cell.value)).toEqual(["Item", "Cost", "Rent", 950])
+
+    await disk.run(
+      "documents",
+      "create",
+      "/new.docx",
+      "--payload",
+      '[{"text": "Plan", "style": "Heading1"}, {"text": "Go."}]',
+    )
+    const document = disk.item<{ sha256: string; paragraphs: number }>()
+    expect(document.paragraphs).toBe(2)
+    const paragraphs = await readDocxParagraphs(disk.files.get("/new.docx") as Uint8Array)
+    expect(paragraphs.map((paragraph) => [paragraph.text, paragraph.style])).toEqual([
+      ["Plan", "heading 1"],
+      ["Go.", undefined],
+    ])
+
+    expect(disk.asked).toEqual([[], []])
+    expect(disk.ran).toEqual(["sheets create", "documents create"])
+    expect(disk.versions.list("/new.xlsx")).toEqual([])
+
+    await disk.run(
+      "sheets",
+      "update",
+      "/new.xlsx",
+      "Budget!B2",
+      "--values",
+      "[[1000]]",
+      "--expected-fingerprint",
+      sheet.sha256,
+    )
+    expect(disk.item()).toMatchObject({ changed: [{ cell: "B2", before: 950, after: 1000 }] })
+  })
+
+  it("refuse a file already there, naming update, and upload nothing", async () => {
+    const disk = harness()
+    const there = disk.run("sheets", "create", "/budget.xlsx", "--values", "[[1]]")
+    await expect(there).rejects.toMatchObject({ code: "conflict", details: { reason: "office.file-exists" } })
+    await expect(there).rejects.toThrow(
+      "Read it (disk personal files sheets show /budget.xlsx) and change it with disk personal files sheets update",
+    )
+    await expect(disk.run("documents", "create", "/letter.docx", "--payload", '[{"text": "x"}]')).rejects.toMatchObject(
+      {
+        details: { reason: "office.file-exists" },
+      },
+    )
+    expect(disk.uploads).toEqual([])
+  })
+
+  it("refuse the wrong extension, a malformed payload and an unknown style before asking to write", async () => {
+    const disk = harness()
+    await expect(disk.run("sheets", "create", "/new.csv", "--values", "[[1]]")).rejects.toMatchObject({
+      details: { reason: "office.wrong-format" },
+    })
+    await expect(disk.run("sheets", "create", "/new.xlsx")).rejects.toMatchObject({ details: { param: "--values" } })
+    await expect(disk.run("sheets", "create", "/new.xlsx", "--values", "[[1]]", "--name", "a/b")).rejects.toMatchObject(
+      {
+        details: { reason: "office.invalid-sheet-name" },
+      },
+    )
+    await expect(
+      disk.run("documents", "create", "/new.docx", "--payload", '[{"text": "x", "style": "Heading9"}]'),
+    ).rejects.toMatchObject({ details: { param: "--payload" } })
+    expect(disk.asked).toEqual([])
+    expect(disk.uploads).toEqual([])
+  })
+})
+
 describe("files history and restore", () => {
   it("lists what a write replaced and puts it back as a guarded write that keeps the current content", async () => {
     const disk = harness({ "/notes.md": "first" })
@@ -271,12 +348,18 @@ describe("files history and restore", () => {
     expect(disk.uploads).toEqual([])
   })
 
-  it("the MCP catalogue reads the shows and history, and writes the edits and the restore", () => {
+  it("the MCP catalogue reads the shows and history, and writes the edits, the creates and the restore", () => {
     const disk = harness()
     const effects = (...path: string[]) => metaOf(disk.command(...path)).effects
     for (const read of [["sheets", "show"], ["documents", "show"], ["history"]])
       expect(effects(...read)).toMatchObject({ remote: "read" })
-    for (const write of [["sheets", "update"], ["documents", "update"], ["restore"], ["update"]])
+    const writes = [
+      ["sheets", "update"],
+      ["sheets", "create"],
+      ["documents", "update"],
+      ["documents", "create"],
+    ]
+    for (const write of [...writes, ["restore"], ["update"]])
       expect(effects(...write)).toMatchObject({ remote: "write" })
   })
 })

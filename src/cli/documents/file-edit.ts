@@ -8,9 +8,12 @@ import type { Command } from "commander"
 import * as v from "valibot"
 import {
   type CellValue,
+  createDocx,
+  createXlsx,
   type DocxEdit,
   editDocxParagraphs,
   editXlsxCells,
+  NEW_PARAGRAPH_STYLES,
   readDocxParagraphs,
   readXlsxCells,
   type XlsxEdit,
@@ -168,6 +171,12 @@ const docxEditsOf = (payload: v.InferOutput<typeof PAYLOAD>): DocxEdit[] =>
     return edit
   })
 
+const NEW_PARAGRAPHS = v.pipe(
+  v.array(v.strictObject({ text: v.string(), style: v.optional(v.picklist(NEW_PARAGRAPH_STYLES)) })),
+  v.minLength(1),
+)
+const NEW_PARAGRAPHS_SHAPE = `paragraphs as JSON: [{"text": "…", "style": "Heading1"}]; a style is one of ${NEW_PARAGRAPH_STYLES.join(", ")}`
+
 const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands) => {
   const { prefix, place } = wordsOf(helpers.words)
   const group = files.name()
@@ -213,6 +222,48 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
             ...(signal ? { signal } : {}),
           })
           return { path, sha256: done.file.sha256 ?? null, replaced: replacedOf(done, versions), ...edited.answer }
+        })
+      },
+      command,
+    )
+    helpers.output(itemOf(answer), command)
+  }
+
+  /** Writes a new file that must not be there: a file already there is for `update`, which reads it first. */
+  const createNew = async (
+    command: Command,
+    kind: "sheets" | "documents",
+    input: string,
+    extension: ".xlsx" | ".docx",
+    made: { bytes: Uint8Array; answer: object },
+  ) => {
+    const path = helpers.path(input)
+    if (!path.toLowerCase().endsWith(extension))
+      throw new CliError("validation_error", `${kind} create writes a ${extension} file; ${path} is not one`, {
+        reason: "office.wrong-format",
+      })
+    const answer = await helpers.write(
+      [],
+      async ({ target, versions, signal }) => {
+        if (await target.exists(path, signal))
+          throw new CliError(
+            "conflict",
+            `${path} exists; create never replaces a file. Read it (${show(kind, input)}) and change it with ` +
+              `${prefix} ${group} ${kind} update`,
+            { reason: "office.file-exists" },
+          )
+        return inTemp(async (folder) => {
+          const from = join(folder, "new")
+          await writeFile(from, made.bytes, { mode: 0o600 })
+          const done = await guardedFileWrite({
+            target,
+            versions,
+            path,
+            from,
+            reread: show(kind, input),
+            ...(signal ? { signal } : {}),
+          })
+          return { path, sha256: done.file.sha256 ?? sha256(made.bytes), ...made.answer }
         })
       },
       command,
@@ -342,6 +393,28 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     })
   })
 
+  examples(
+    annotate(sheets.command("create"), { effects: REMOTE_WRITE, offline: false })
+      .summary("create a new workbook from rows of values")
+      .description(
+        `create a new .xlsx on ${place} with one sheet holding these rows from A1. Numbers and booleans are typed, a ` +
+          "text stays text, even one that starts with =. A file already there is refused: change it with sheets update",
+      )
+      .argument("<path>", `the new .xlsx file on ${place}`)
+      .option("--values <json>", "the rows as JSON; null leaves a cell empty")
+      .option("--name <name>", "the sheet's name; Sheet1 without it"),
+    [`${prefix} ${group} sheets create /budget.xlsx --values '[["Item", "Cost"], ["Rent", 950]]' --name Budget`],
+  ).action(async function (this: Command, input: string, args: { values?: string; name?: string }) {
+    if (args.values === undefined)
+      throw new CliError("validation_error", `give the rows with --values: ${VALUES_SHAPE}`, { param: "--values" })
+    const rows = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
+    const name = args.name ?? "Sheet1"
+    await createNew(this, "sheets", input, ".xlsx", {
+      bytes: createXlsx({ sheets: [{ name, rows }] }),
+      answer: { sheets: [{ name, rows: rows.length }] },
+    })
+  })
+
   const documents = annotate(files.command("documents"), { effects: REMOTE_READ }).description(
     `the paragraphs of a Word document (.docx) on ${place}, read and changed in place`,
   )
@@ -399,6 +472,31 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
           ),
         },
       }
+    })
+  })
+
+  examples(
+    annotate(documents.command("create"), { effects: REMOTE_WRITE, offline: false })
+      .summary("create a new Word document from paragraphs")
+      .description(
+        `create a new .docx on ${place} with these paragraphs, each in a style: ${NEW_PARAGRAPH_STYLES.join(", ")} ` +
+          "(Normal without one; ListBullet is a bullet list). A file already there is refused: change it with " +
+          "documents update",
+      )
+      .argument("<path>", `the new .docx file on ${place}`)
+      .option("--payload <json>", "the paragraphs as JSON: [{text, style?}]"),
+    [
+      `${prefix} ${group} documents create /report.docx --payload '[{"text": "Report", "style": "Title"}, {"text": "Revenue grew 12%."}]'`,
+    ],
+  ).action(async function (this: Command, input: string, args: { payload?: string }) {
+    if (args.payload === undefined)
+      throw new CliError("validation_error", `give the paragraphs with --payload: ${NEW_PARAGRAPHS_SHAPE}`, {
+        param: "--payload",
+      })
+    const paragraphs = jsonOf(args.payload, "--payload", NEW_PARAGRAPHS, NEW_PARAGRAPHS_SHAPE)
+    await createNew(this, "documents", input, ".docx", {
+      bytes: createDocx({ paragraphs }),
+      answer: { paragraphs: paragraphs.length },
     })
   })
 
@@ -499,9 +597,9 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
 }
 
 /**
- * Mounts `<files> update`, `sheets show|update`, `documents show|update`, `history` and `restore` under the CLI's own
- * files group: Office files edited in place and earlier versions put back, every write at the sha256 it was read at
- * and with the replaced content kept (`guardedFileWrite`). The CLI keeps no `restore` of its own; a trash restore
- * goes in as `restoreFromTrash`.
+ * Mounts `<files> update`, `sheets show|update|create`, `documents show|update|create`, `history` and `restore` under
+ * the CLI's own files group: Office files created, edited in place and earlier versions put back. Every write over a
+ * file is at the sha256 it was read at and keeps the replaced content (`guardedFileWrite`); a create refuses a file
+ * already there. The CLI keeps no `restore` of its own; a trash restore goes in as `restoreFromTrash`.
  */
 export const addFileEditCommands = honoursDryRun(sharedCommand(addFileEditCommandsDefinition))

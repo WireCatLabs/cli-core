@@ -137,11 +137,11 @@ const SQL: Entry[] = [
   ["db.failed", "provider_error", "the database server failed the query"],
 ]
 
-/** In-place Office edits (`./office`, `files sheets|documents update`); the names are documented in office.md. */
+/** Office files edited and created (`./office`, `files sheets|documents`); the names are documented in office.md. */
 const OFFICE: Entry[] = [
   ["office.wrong-format", "the file is not the Office format the command edits, or its parts cannot be read"],
   ["office.invalid-cell", "a cell is not an address like B7"],
-  ["office.invalid-value", "a cell value cannot be written: a number must be finite"],
+  ["office.invalid-value", "a value cannot be written: an infinite number, a cell text too long, an unknown style"],
   ["office.no-sheet", "the workbook has no such sheet, or several when none is named"],
   ["office.duplicate-edit", "the same cell or paragraph is changed twice in one call"],
   ["office.formula-cell", "the cell holds a formula; --replace writes the value over it"],
@@ -157,9 +157,11 @@ const OFFICE: Entry[] = [
   ["office.section-break", "the paragraph ends a section; deleting it would merge two sections"],
   ["office.bookmark", "the paragraph holds a bookmark a cross-reference may point at"],
   ["office.last-paragraph", "the delete would leave the document or a table cell without a paragraph"],
+  ["office.invalid-sheet-name", "a new sheet's name is empty, too long, repeated or holds a character Excel refuses"],
 ].map(([reason, message]) => validation(reason as string, message as string))
 
 const OTHERS: Entry[] = [
+  ["office.file-exists", "conflict", "a file is there already; create never replaces one, update changes it"],
   validation("doctor.report-exists", "the report's file exists; a problem report never overwrites a file"),
   validation("usage.unknown-command", "no command by this name; the CLI's help lists them"),
   validation("usage.unknown-option", "the command takes no option by this name; its help lists them"),

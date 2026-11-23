@@ -92,7 +92,7 @@ export class OfficePackage {
   }
 }
 
-const escapeAttribute = (value: string) =>
+export const escapeAttribute = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;")
 
 /** A start tag with one attribute set (added at the end when it was not there). */

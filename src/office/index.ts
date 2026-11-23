@@ -1,4 +1,14 @@
 export {
+  type CreateDocxOptions,
+  type CreateXlsxOptions,
+  createDocx,
+  createXlsx,
+  NEW_PARAGRAPH_STYLES,
+  type NewParagraph,
+  type NewParagraphStyle,
+  type NewSheet,
+} from "./create.js"
+export {
   type DocxEdit,
   type DocxParagraph,
   type EditDocxResult,
