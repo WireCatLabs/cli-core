@@ -206,6 +206,30 @@ describe("every chat, not only the newest", () => {
   })
 })
 
+describe("a messenger whose chat list has no unread counts", () => {
+  it("asks unreadChats instead of chats, so inbox and review pay for the counts and chats stays cheap", async () => {
+    const counted = [chatAt("dm", 5, 2)]
+    const scripted = messengerWith(counted, { dm: [messageAt("dm", "1", 4), messageAt("dm", "2", 5)] })
+    const listed: unknown[] = []
+    const adapter: MessengerAdapter & ServerReads = {
+      ...scripted.adapter,
+      chats: async (window) => {
+        listed.push(window)
+        return { items: [{ ...chatAt("dm", 5), unreadCount: null, lastMessageAt: null }], hasMore: false }
+      },
+      unreadChats: async () => ({ items: counted, hasMore: true }),
+    }
+
+    const unread = await unreadIn(adapter, { limit: 20 })
+    const fresh = await newIn(adapter, { since: Date.parse(at(0)), limit: 20 })
+
+    expect(unread.chats.map((chat) => [chat.id, chat.unreadCount])).toEqual([["dm", 2]])
+    expect(fresh.chats.map((chat) => chat.id)).toEqual(["dm"])
+    expect([unread.partial, fresh.partial]).toEqual([true, true])
+    expect(listed).toEqual([])
+  })
+})
+
 describe("what is new since a moment", () => {
   it("cuts at the chat list's newest message, so a message arriving during the reads waits for the next run", async () => {
     const histories = {

@@ -334,6 +334,15 @@ export interface TopicHistory {
   topicHistory(chat: string, threadId: Id, window: { limit: number; before?: string }): Promise<Page<Message>>
 }
 
+export interface UnreadChats {
+  /**
+   * The chats `inbox` and `review` look at, with `unreadCount`, `unreadMentions`, `muted` and `lastMessageAt` filled
+   * where `chats` leaves them out because each costs a request, as Slack's do. `chats` stays one cheap list for every
+   * other command. `hasMore` when it stopped short, so the answer says it may have missed one.
+   */
+  unreadChats(): Promise<Page<Chat>>
+}
+
 export interface ThreadReplies {
   /**
    * Replies `history` leaves out, such as Slack's thread replies: those sent after `since` (epoch milliseconds, left
@@ -770,6 +779,7 @@ export interface MessengerAdapter
     Partial<ThreadAddressing>,
     Partial<TopicHistory>,
     Partial<ThreadReplies>,
+    Partial<UnreadChats>,
     Partial<ForumControl>,
     Partial<TopicEditing>,
     Partial<LiveUpdates>,
