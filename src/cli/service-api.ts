@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { ManifestOperation, OperationPermission, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, OperationPermission, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"

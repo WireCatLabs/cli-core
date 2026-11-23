@@ -1,4 +1,4 @@
-import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import type { ServiceApiManifest } from "../cli/service-api-manifest.js"
 import type { TrackerKind } from "../domain/tracker.js"
 import type { TrackerManifest } from "../tracker/manifest/manifest.js"

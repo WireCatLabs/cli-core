@@ -8,7 +8,7 @@ import {
   type SignInPlace,
   signInPlace,
   signInRequirements,
-} from "@wirecat/cli-base/codegen"
+} from "@wirecat/cli-base/codegen/runtime"
 import type { ApiCommandInput } from "./bot/api.js"
 import { apiJson, parseApiJson } from "./bot/api-input.js"
 

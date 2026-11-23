@@ -1,5 +1,5 @@
 import { CliError, isMovedRun, type KeyringStore, resolvePaths, systemKeyring } from "@wirecat/cli-base"
-import type { OAuthFlow } from "@wirecat/cli-base/codegen"
+import type { OAuthFlow } from "@wirecat/cli-base/codegen/runtime"
 import { annotate } from "@wirecat/cli-base/commands"
 import { hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"

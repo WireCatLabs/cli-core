@@ -1,12 +1,5 @@
-import {
-  type FakeAnswer,
-  type FakeApi,
-  type FakeCall,
-  fakeApi,
-  type Pagination,
-  type SchemaNode,
-  sampleOf,
-} from "@wirecat/cli-base/codegen"
+import { type FakeAnswer, type FakeApi, type FakeCall, fakeApi, sampleOf } from "@wirecat/cli-base/codegen"
+import type { Pagination, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import { serviceApiCall, serviceApiSend } from "../../cli/service-api-call.js"
 import { manifestBaseUrl, type ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmKind } from "../../domain/crm.js"
