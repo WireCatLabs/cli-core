@@ -9,8 +9,9 @@
   [TRACKER.md](../docs/dev/TRACKER.md#storetracker).
 
 - **`search all` shows an issue, project or comment two sign-ins hold once.** Two tracker accounts on one workspace
-  showed every item twice side by side, so ten results held about five items. The copies (same provider, kind and id)
-  now fold into the best-placed one, whose new `accounts` field names every account that holds it; `account` and `ref`
+  showed every item twice side by side, so ten results held about five items. For a provider whose entry says
+  `globalItemIds: true` (seeded for `linear`), the copies (same provider, kind and id) now fold into the best-placed
+  one, whose new `accounts` field names every account that holds it; `account` and `ref`
   are that copy's. A page holds more distinct items, so a caller counting hits per account sees fewer. See
   [TRACKER.md](../docs/dev/TRACKER.md#search-all).
 

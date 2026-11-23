@@ -5,7 +5,7 @@ import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
-import { holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
+import { hasGlobalItemIds, holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
 import { type TrackerIssue, trackerBodyOf, trackerTitleOf } from "../domain/tracker.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
@@ -372,14 +372,17 @@ const trackerExcerpt = ({ kind, record }: TrackerItem, query: string): string =>
   excerpt([trackerTitleOf(kind, record), trackerBodyOf(kind, record)].filter(Boolean).join("\n"), query)
 
 /**
- * One hit per tracker item, best first: the copies other sign-ins to the same workspace hold (same provider, kind and
- * id) join the best-placed one, which names every account and takes the best cosine and every way any was found.
+ * One hit per tracker item, best first: the copies other sign-ins hold of one item (`items` maps a hit's ref to the
+ * item, for a provider whose ids name one item across its accounts) join the best-placed one, which names every account and takes the best cosine and every way any was found.
  */
-const oneHitPerItem = (ordered: SearchAllRecordItem[], cosines: Map<string, number>): SearchAllRecordItem[] => {
+const oneHitPerItem = (
+  ordered: SearchAllRecordItem[],
+  cosines: Map<string, number>,
+  items: Map<string, string>,
+): SearchAllRecordItem[] => {
   const kept = new Map<string, SearchAllRecordItem>()
   for (const hit of ordered) {
-    const item = hit.ref.split("/").slice(2).join("/")
-    const key = `${hit.provider}\u0000${item}`
+    const key = items.get(hit.ref) ?? hit.ref
     const held = kept.get(key)
     if (!held) {
       kept.set(key, hit)
@@ -695,23 +698,29 @@ export const searchAll = async (
             accounts: read,
           })
           hasMore ||= found.hasMore
+          const items = new Map<string, string>()
           const hitOf = (
             at: AccountKey,
             item: TrackerItem,
             text: string,
             foundBy: SearchAllRecordItem["foundBy"],
-          ): SearchAllRecordItem => ({
-            kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
-            // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
-            ref: `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`,
-            provider: at.provider,
-            account: at.account,
-            ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
-            title: trackerTitle(item),
-            timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
-            text,
-            foundBy,
-          })
+          ): SearchAllRecordItem => {
+            const ref = `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`
+            if (hasGlobalItemIds(at.provider))
+              items.set(ref, JSON.stringify([at.provider, item.kind, item.record.externalId]))
+            return {
+              kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
+              // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
+              ref,
+              provider: at.provider,
+              account: at.account,
+              ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
+              title: trackerTitle(item),
+              timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
+              text,
+              foundBy,
+            }
+          }
           const byWords = found.items.map(({ account: at, item, excerpt: text }) => hitOf(at, item, text, ["words"]))
           const plain = trackerMeaningWords(discover ? questionText(request.text) : request.text)
           let near: TrackerNearest[] | undefined
@@ -735,7 +744,7 @@ export const searchAll = async (
             by: near === undefined ? "words" : "words and meaning",
             ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
           }
-          if (near === undefined) lists.push(oneHitPerItem(byWords, cosines))
+          if (near === undefined) lists.push(oneHitPerItem(byWords, cosines, items))
           else {
             // As notes and messages fuse theirs: one list for the lane, a question's hit voting once.
             const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
@@ -755,6 +764,7 @@ export const searchAll = async (
               oneHitPerItem(
                 [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item),
                 cosines,
+                items,
               ),
             )
           }

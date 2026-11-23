@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { holdsKind, isDocumentAccountProvider } from "../domain/providers.js"
+import { addProvider, holdsKind, isDocumentAccountProvider, useProviders } from "../domain/providers.js"
 import { accountsOfList, sourceOf } from "../search/account-list.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
@@ -88,6 +88,32 @@ it("shows an item two sign-ins hold once, naming both accounts, and fills the pa
     ["tracker:linear/user-1/issue/issue-9", undefined],
   ])
   expect(found.accounts.map(({ account }) => account).sort()).toEqual(["user-1", "user-2"])
+})
+
+it("keeps the copies apart for a tracker that does not say its ids name one item across accounts", async () => {
+  const store = await withIssues()
+  addProvider({ name: "site-tracker", kind: "tracker", aliases: [] })
+  try {
+    for (const account of ["site-a", "site-b"])
+      await syncTracker(
+        fakeTrackerSource({ rows: exampleTrackerRows() }),
+        store,
+        { provider: "site-tracker", account },
+        {
+          now: Date.UTC(2026, 10, 17),
+        },
+      )
+    const found = await searchAll(store, ME, { text: "invoic", limit: 10, only: ["tracker"] })
+    expect(
+      found.items
+        .filter(({ ref }) => ref.endsWith("/issue/issue-1"))
+        .map(({ account }) => account)
+        .sort(),
+    ).toEqual(["site-a", "site-b"])
+    expect(found.items.every((item) => accountsOf(item) === undefined)).toBe(true)
+  } finally {
+    useProviders([])
+  }
 })
 
 it("is one of the lanes a plain search all reads, beside the others", async () => {

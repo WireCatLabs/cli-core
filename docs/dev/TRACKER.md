@@ -237,12 +237,13 @@ lists are fused by reciprocal rank as notes' and messages' are, a question's hit
 `foundBy` `["words", "meaning"]`, and its cosine places it among the other lanes'. `tracker: { by, meaningSkipped? }`
 says how the lane was searched and, when by words only, why. A hit is an `issue` titled with its key (`ENG-12 Fix
 login`), a `project` or an `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the
-same issue under the same id. Copies of one item (same provider, kind and id) that several accounts hold fold into one
-hit, the best placed: its `account` and `ref` are that copy's, `accounts` names every account that holds it (that one
+same issue under the same id. For a provider whose entry says `globalItemIds: true` (seeded for `linear`, whose ids
+name one item in every workspace), copies of one item (same provider, kind and id) that several accounts hold fold
+into one hit, the best placed: its `account` and `ref` are that copy's, `accounts` names every account that holds it (that one
 first), and it keeps the best cosine and every way any copy was found. The lane reads each list deep enough for the
 folded page (the page times the accounts read, at most 500), and `accounts` in the answer still lists each account
-read. An item id must therefore name one item across every account of a provider, as Linear's ids do. Its title and
-excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips
+read. A tracker whose ids are only unique within one site, as a CLI built from a config may be, keeps each account's
+copy apart unless its entry says otherwise. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips
 the lane with the reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is
 read by this lane under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. A
 group naming `linear:<account>` holds its issues and its documents; one naming only `notes:<id>` holds the documents
