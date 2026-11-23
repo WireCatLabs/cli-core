@@ -228,6 +228,21 @@ describe("a messenger whose chat list has no unread counts", () => {
     expect([unread.partial, fresh.partial]).toEqual([true, true])
     expect(listed).toEqual([])
   })
+
+  it("passes on what the messenger did not look at, so a reader of the answer knows what it lacks", async () => {
+    const scripted = messengerWith([chatAt("dm", 5, 1)], { dm: [messageAt("dm", "1", 5)] })
+    const left = ["channels are not counted: Slack gives no unread count for them"]
+    const adapter: MessengerAdapter & ServerReads = {
+      ...scripted.adapter,
+      unreadChats: async () => ({ items: [chatAt("dm", 5, 1)], hasMore: false, left }),
+    }
+
+    const unread = await unreadIn(adapter, { limit: 20 })
+    const fresh = await newIn(adapter, { since: Date.parse(at(0)), limit: 20 })
+    const review = await reviewIn(adapter, { since: Date.parse(at(0)) })
+
+    expect([unread.left, fresh.left, review.left]).toEqual([left, left, left])
+  })
 })
 
 describe("what is new since a moment", () => {

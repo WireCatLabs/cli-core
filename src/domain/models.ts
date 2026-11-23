@@ -559,6 +559,8 @@ export interface Inbox {
   skipped: Pick<Chat, "id" | "title" | "lastMessageAt">[]
   /** The messenger could not list every chat, so one it left out may have more. */
   partial: boolean
+  /** What the messenger said it did not look at and why, such as chats it cannot count. */
+  left?: string[]
   /** Muted or archived chats with something waiting, left out because nothing in them is for the owner. */
   quiet: number
   /** `new` only: each chat read, and the time its next check starts from. */
@@ -584,6 +586,8 @@ export interface Review {
   chats: ReviewChat[]
   skipped: Pick<Chat, "id" | "title" | "lastMessageAt">[]
   partial: boolean
+  /** What the messenger said it did not look at and why. */
+  left?: string[]
   /** Muted or archived chats that changed, left out because nothing in them is for the owner. */
   quiet: number
   /** `--unanswered`: only questions still open after this many hours are in `chats`. */

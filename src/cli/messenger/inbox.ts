@@ -95,7 +95,8 @@ export const inboxCommand = (messenger: Messenger): Command =>
         return { inbox, hearing, reader }
       })
 
-      if (inbox.partial && format === "pretty") renderer.warn(PARTIAL_NOTE)
+      if (format === "pretty") for (const why of inbox.left ?? []) renderer.warn(why)
+      if (inbox.partial && !inbox.left?.length && format === "pretty") renderer.warn(PARTIAL_NOTE)
       const answer = inboxAnswer(inbox, hearing, reader, transcribe === true, meta)
       renderAnswer(this, context, answer, () => {
         if (answer.items.length === 0) {

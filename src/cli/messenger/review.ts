@@ -142,7 +142,8 @@ const notes = (
       `tasks: ${found.tasks.added} opened, ${found.tasks.closed} closed by the rules` +
         (found.tasks.review > 0 ? `, ${found.tasks.review} pair(s) to review — tasks duplicates list` : ""),
     )
-  if (found.partial && pretty) renderer.warn(PARTIAL_NOTE)
+  if (pretty) for (const why of found.left ?? []) renderer.warn(why)
+  if (found.partial && !found.left?.length && pretty) renderer.warn(PARTIAL_NOTE)
   if (found.offline && pretty) renderer.warn(OFFLINE_REVIEW)
   if (found.unanswered)
     renderer.note(

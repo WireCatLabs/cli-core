@@ -40,6 +40,16 @@ describe("catchUpQuery", () => {
 })
 
 describe("inboxAnswer", () => {
+  it("names in missing what the messenger did not look at", () => {
+    const answer = inboxAnswer(
+      { mode: "unread", chats: [], skipped: [], partial: false, left: ["channels are not counted"], quiet: 0 },
+      undefined,
+      { provider: "test", account: "500" },
+      false,
+    )
+    expect(answer.missing).toContainEqual({ field: "items", why: "channels are not counted" })
+  })
+
   it("says which message the owner wrote", () => {
     const said = (id: string, outgoing: boolean): Message => ({
       id,

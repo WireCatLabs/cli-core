@@ -338,9 +338,10 @@ export interface UnreadChats {
   /**
    * The chats `inbox` and `review` look at, with `unreadCount`, `unreadMentions`, `muted` and `lastMessageAt` filled
    * where `chats` leaves them out because each costs a request, as Slack's do. `chats` stays one cheap list for every
-   * other command. `hasMore` when it stopped short, so the answer says it may have missed one.
+   * other command. `hasMore` when it stopped short, so the answer says it may have missed one. `left` says, in the
+   * owner's words, what it did not look at and why, such as chats it cannot count; the answer names each in `missing`.
    */
-  unreadChats(): Promise<Page<Chat>>
+  unreadChats(): Promise<Page<Chat> & { left?: string[] }>
 }
 
 export interface ThreadReplies {
