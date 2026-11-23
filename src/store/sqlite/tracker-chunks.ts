@@ -89,10 +89,15 @@ const BACKFILL = 200
 
 /**
  * Drops the chunks of items the tracker no longer lists, then cuts the chunks of live items that have none: those
- * saved before tracker items were searched by meaning. Short write transactions; nothing under a read-only store.
+ * saved before tracker items were searched by meaning. Short write transactions, `until` asked before each, so a
+ * deadline stops it with `left`; nothing under a read-only store.
  */
-export const refreshTrackerChunks = (database: CacheDatabase, now: number): { dropped: number; added: number } => {
-  if (isQueryOnly(database)) return { dropped: 0, added: 0 }
+export const refreshTrackerChunks = (
+  database: CacheDatabase,
+  now: number,
+  until: () => boolean = () => false,
+): { dropped: number; added: number; left: boolean } => {
+  if (isQueryOnly(database)) return { dropped: 0, added: 0, left: false }
   const dropped = write(database, () => {
     const gone = database
       .prepare(
@@ -105,10 +110,12 @@ export const refreshTrackerChunks = (database: CacheDatabase, now: number): { dr
     dropUnusedVectors(database, gone)
     return gone.length
   })
+  // An item with no text never gets a chunk: reading it again at every embed would find nothing.
   const page = database.prepare(
     `SELECT t.id, t.account_id, t.kind, t.title, t.body, coalesce(t.source_updated_at, t.synced_at) AS at, a.scope
        FROM tracker_items t JOIN accounts a ON a.id = t.account_id
       WHERE t.id > ? AND t.deleted_at IS NULL AND t.kind IN ${CHUNKED_SQL}
+        AND trim(CASE t.kind WHEN 'comment' THEN coalesce(t.body, '') ELSE t.title || coalesce(t.body, '') END) <> ''
         AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.chunkable_type = '${TRACKER_CHUNK}' AND k.chunkable_id = t.id)
       ORDER BY t.id LIMIT ?`,
   )
@@ -116,6 +123,7 @@ export const refreshTrackerChunks = (database: CacheDatabase, now: number): { dr
   let added = 0
   let after = 0
   for (;;) {
+    if (until()) return { dropped, added, left: page.all(after, 1).length > 0 }
     const rows = write(database, () => {
       const found = page.all(after, BACKFILL)
       for (const row of found) {
@@ -139,10 +147,9 @@ export const refreshTrackerChunks = (database: CacheDatabase, now: number): { dr
     if (!last || rows.length < BACKFILL) break
     after = Number(last.id)
   }
-  return { dropped, added }
+  return { dropped, added, left: false }
 }
 
-/** Chunks of live items, as SQL over `k`. */
 const LIVE =
   `k.chunkable_type = '${TRACKER_CHUNK}' AND EXISTS (SELECT 1 FROM tracker_items t WHERE t.id = k.chunkable_id ` +
   "AND t.deleted_at IS NULL)"

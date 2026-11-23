@@ -123,7 +123,7 @@ export interface TrackerStore {
    * Before embedding: drops the chunks of issues, projects and comments the tracker no longer lists, and cuts those
    * of live ones saved before they were searched by meaning. `save` and `removeUnlisted` keep the rest in step.
    */
-  refreshChunks(): Promise<{ dropped: number; added: number }>
+  refreshChunks(options?: { until?: () => boolean }): Promise<{ dropped: number; added: number; left: boolean }>
   /** Live issues', projects' and comments' chunks with no vector of `model`, by hash from `after`, with their text. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
   /** How many chunks `chunksToEmbed` would still give, at most. */
@@ -186,7 +186,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     write(database, () => {
       const accountId = accountPk(context, key)
       const stored = database.prepare(
-        "SELECT data FROM tracker_items WHERE account_id = ? AND kind = ? AND external_id = ?",
+        "SELECT data, title, body, deleted_at FROM tracker_items WHERE account_id = ? AND kind = ? AND external_id = ?",
       )
       const scope = database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountId)?.scope
       const chunked = isChunkedTrackerKind(kind)
@@ -226,7 +226,9 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           merged.archivedAt ?? null,
           now,
         )
-        if (!chunked) continue
+        // Most rows of a sync come back with the text they had; their chunks stay, and only a revived row needs new.
+        const same = before?.deleted_at == null && before?.title === title && (before?.body ?? null) === body
+        if (!chunked || same) continue
         const freed = chunk(
           {
             id: Number(saved?.id),
@@ -423,7 +425,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           name: row.name == null ? null : String(row.name),
         }))
     },
-    refreshChunks: async () => refreshTrackerChunks(database, context.now()),
+    refreshChunks: async ({ until } = {}) => refreshTrackerChunks(database, context.now(), until),
     chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options),
     chunksLeft: async (model) => trackerChunksLeft(database, model),
     embedded: async (model, accounts) =>

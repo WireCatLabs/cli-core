@@ -138,9 +138,10 @@ describe("tracker chunks", () => {
       )
       .run()
 
-    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 1, added: 1 })
+    expect(await store.tracker.refreshChunks({ until: () => true })).toEqual({ dropped: 1, added: 0, left: true })
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 1, left: false })
     expect(chunksOf(database).map(({ id }) => id)).toEqual(["i1"])
-    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 0 })
+    expect(await store.tracker.refreshChunks({ until: () => true })).toEqual({ dropped: 0, added: 0, left: false })
   })
 
   it("finds the nearest live items of the accounts asked only, archived ones too, never deleted ones", async () => {
@@ -164,5 +165,27 @@ describe("tracker chunks", () => {
     expect(await store.tracker.nearest(MODEL, all, { limit: 10, accounts: [A] })).toEqual(found)
     expect(await store.tracker.embedded(MODEL, [A])).toBe(true)
     expect(await store.tracker.embedded(MODEL, [{ provider: "fake-tracker", account: "none" }])).toBe(false)
+  })
+
+  it("ranks past the index's first candidates as the scan does, by distinct scores", async () => {
+    const { store, database } = await fixture()
+    const many = Array.from({ length: 120 }, (_, at) => issue(`m${at}`, `Item number ${at}`))
+    await store.tracker.save(A, "issue", many, NOW)
+    const waiting = await store.tracker.chunksToEmbed(MODEL, { limit: 500 })
+    const angle = (at: number) => (at / waiting.length) * (Math.PI / 2)
+    await store.vectors.saveVectors(
+      MODEL,
+      4,
+      waiting.map(({ hash }, at) => ({
+        hash,
+        vector: Float32Array.from([Math.cos(angle(at)), Math.sin(angle(at)), 0, 0]),
+      })),
+    )
+    const query = Float32Array.from([Math.cos(0.3), Math.sin(0.3), 0, 0])
+    const indexed = await store.tracker.nearest(MODEL, query, { limit: 30, accounts: [A] })
+    expect(indexed).toHaveLength(30)
+    expect(new Set(indexed.map(({ score }) => score.toFixed(6))).size).toBe(30)
+    database.exec("UPDATE vector_indexes SET ready = 0")
+    expect(await store.tracker.nearest(MODEL, query, { limit: 30, accounts: [A] })).toEqual(indexed)
   })
 })
