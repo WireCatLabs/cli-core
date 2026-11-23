@@ -1,4 +1,4 @@
-import { isDocumentAccountProvider, isFolderProvider } from "../../domain/providers.js"
+import { alsoListedByKey, isDocumentAccountProvider, isFolderProvider } from "../../domain/providers.js"
 import { parseReference, type Reference } from "../../domain/references.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
@@ -17,12 +17,14 @@ const accountKeys = (database: CacheDatabase, ids: readonly number[]): AccountKe
   return database
     .prepare(`SELECT id, provider, external_id FROM accounts WHERE id IN (${unique.map(() => "?").join(",")})`)
     .all(...unique)
-    .map(({ id, provider, external_id }) =>
-      // A notes folder or a documents account is `notes:<its store id>`, as source lists and groups name it.
-      isFolderProvider(String(provider)) || isDocumentAccountProvider(String(provider))
-        ? { provider: "notes", account: String(id) }
-        : { provider: String(provider), account: String(external_id) },
-    )
+    .flatMap(({ id, provider, external_id }): AccountKey[] => {
+      const own = { provider: String(provider), account: String(external_id) }
+      // A notes folder or a documents account is `notes:<its store id>`, as source lists and groups name it; one that
+      // holds another kind too (Linear's tracker copy) is also its own key, so a group naming either holds it.
+      if (!isFolderProvider(own.provider) && !isDocumentAccountProvider(own.provider)) return [own]
+      const notes = { provider: "notes", account: String(id) }
+      return alsoListedByKey(own.provider) ? [notes, own] : [notes]
+    })
 }
 
 // Per connection: a long-lived process (`commands --serve`) outlives a migration another CLI runs on the store.

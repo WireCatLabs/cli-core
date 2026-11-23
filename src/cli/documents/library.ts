@@ -270,8 +270,8 @@ const DOCUMENT_REF = /^document:[1-9]\d*$/u
 
 /** The documents half of a `sync` another group mounts, as the shared `sync` would have answered it. */
 export interface DocumentSyncOutcome {
-  /** The shared `sync`'s answer, its warnings included. */
-  item: DocumentSyncAnswer & { warnings: unknown[] }
+  /** The shared `sync`'s answer, its warnings included; `skipped` when the profile has nothing to sync. */
+  item: (DocumentSyncAnswer & { warnings: unknown[] }) | { skipped: string }
   meta: { complete?: false; issues?: { code: ErrorCode; reason: string; source: string }[] }
   next: NextStep[]
   diagnostics: string[]
@@ -280,7 +280,14 @@ export interface DocumentSyncOutcome {
 /** Runs the documents sync inside the command another group mounted as `sync`. */
 export type DocumentSyncStep = (
   command: Command,
-  args: { rescan?: boolean; embed?: boolean; budget: RunBudget; deadline?: Deadline },
+  args: {
+    rescan?: boolean
+    embed?: boolean
+    budget: RunBudget
+    deadline?: Deadline
+    /** The account the other group's part synced; the documents of another account of it are refused. */
+    account?: { provider: string; account: string }
+  },
 ) => Promise<DocumentSyncOutcome>
 
 /**
@@ -302,8 +309,9 @@ const libraryOf = <M extends SourceFile>(
   // anew for every call.
   let running: Command | undefined
   let warnings: DocumentWarning[] = []
-  // Set while another group's `sync` runs the documents step: a named run leaves the answer's run_id to that sync's own.
+  // Set while another group's `sync` runs the documents step: a named run leaves the answer's run_id to that sync.
   let sideRun: string | undefined
+  let expected: string | undefined
   const command = () => {
     if (!running) throw new CliError("configuration_error", "a shared documents port ran outside a command")
     return running
@@ -499,6 +507,13 @@ const libraryOf = <M extends SourceFile>(
         const chosen = roots()
         const synced = await withSource(async (source) => {
           const live = await source.identity()
+          if (expected !== undefined && live !== expected)
+            throw new CliError(
+              "configuration_error",
+              `the documents are signed in as ${options.service} account ${live}, not ${expected}, the account the ` +
+                `rest of this sync read; sign in again with one account (\`${app.command} ${name} session start\`)`,
+              { reason: "documents.other-account" },
+            )
           claimDocumentAccount(app, env(), name, live, tokens())
           return files().locked((assertHeld) =>
             withStore(true, async (store) => {
@@ -707,14 +722,24 @@ const libraryOf = <M extends SourceFile>(
   // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
   writesOwnerFiles(find(folders, "add"))
   if (options.browse) annotate(find(folders, "browse"), { partial: true })
-  const start = (action: Command, side?: string) => {
+  const start = (action: Command, side?: string, account?: string) => {
     running = action
     warnings = []
     sideRun = side
+    expected = account
   }
   for (const group of holder.commands) group.hook("preAction", (_group, action) => start(action))
-  const sync: DocumentSyncStep = async (action, { rescan, embed, budget, deadline }) => {
-    start(action, `${environmentOf(action).agent ? "mcp " : ""}sync documents`)
+  const sync: DocumentSyncStep = async (action, { rescan, embed, budget, deadline, account }) => {
+    start(
+      action,
+      `${environmentOf(action).agent ? "mcp " : ""}sync documents`,
+      account?.provider === options.provider.name ? account.account : undefined,
+    )
+    const held = files().state("").read()
+    // With no folder chosen and nothing kept, a sync would only ask who is signed in; a held copy still runs, so the
+    // documents of folders removed since leave it.
+    if (!roots().length && !Object.keys(held.documents).length && !held.pending && !files().walkUnderWay())
+      return { item: { skipped: "no folders chosen" }, meta: {}, next: [], diagnostics: [] }
     const item = await groups.sync.sync({
       limit: DOCUMENT_SYNC_LIMIT,
       budget,
@@ -729,7 +754,8 @@ const libraryOf = <M extends SourceFile>(
       resume: { ...(timeout === undefined ? {} : { timeout }), ...(embed ? { embed: true } : {}) },
       longer: {},
     })
-    const issues = [...(part.meta.issues ?? []), ...warningIssues()]
+    // The other group's answer names its parts by what they sync, as `tracker` and `documents`.
+    const issues = [...(part.meta.issues ?? []), ...warningIssues()].map((one) => ({ ...one, source: "documents" }))
     return {
       item: item as DocumentSyncOutcome["item"],
       meta: { ...part.meta, ...(issues.length ? { complete: false, issues } : {}) },

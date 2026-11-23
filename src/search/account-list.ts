@@ -2,6 +2,7 @@ import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
 import {
   ADDED_PROVIDER,
+  alsoListedByKey,
   INTERNAL_NOTES,
   isDocumentAccountProvider,
   isFolderProvider,
@@ -108,10 +109,6 @@ const kindsOfHere = (provider: Provider, running: ListContext["running"]) => {
   const kinds = listedKinds(provider)
   return { kind: kindHere(provider, running), ...(kinds.length > 1 ? { kinds } : {}) }
 }
-
-/** A documents account that holds another kind too, as Linear's holds a tracker's copy: listed under both keys. */
-export const alsoListedByKey = (provider: Provider) =>
-  isDocumentAccountProvider(provider) && listedKinds(provider).length > 0
 
 const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored

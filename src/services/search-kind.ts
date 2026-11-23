@@ -1,8 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
-import { holdsKindOf, isDocumentAccountProvider, isFolderProvider, isKind, providerNamed } from "../domain/providers.js"
-import { type AppIdentity, envName } from "../ports/app.js"
 import {
   alsoListedByKey,
+  holdsKindOf,
+  isDocumentAccountProvider,
+  isFolderProvider,
+  isKind,
+  providerNamed,
+} from "../domain/providers.js"
+import { type AppIdentity, envName } from "../ports/app.js"
+import {
   entriesOfList,
   fitting,
   isAccountList,

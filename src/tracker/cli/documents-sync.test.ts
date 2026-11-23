@@ -144,7 +144,7 @@ describe("one sync for a tracker that holds documents too", () => {
     expect(names).toEqual(expect.arrayContaining(["status", "issues", "projects", "documents", "folders"]))
   })
 
-  it("brings the issues and the documents, the tracker's report on top and the documents' under documents", async () => {
+  it("brings issues and documents, the tracker's report on top and the documents' under documents", async () => {
     const { cli, answer, store } = setup()
     await cli(["folders", "add", "root"])
     const synced = await answer(["sync"])
@@ -185,6 +185,7 @@ describe("one sync for a tracker that holds documents too", () => {
     expect(synced.exit).toBe(0)
     expect(synced.item).toMatchObject({
       complete: false,
+      synced: [],
       error: { code: "provider_unavailable", reason: "provider.down" },
       documents: { saved: 2 },
     })
@@ -218,13 +219,66 @@ describe("one sync for a tracker that holds documents too", () => {
       throw new CliError("authentication_error", "not signed in", { reason: "auth.missing" })
     }
     const { cli } = setup({ signedIn: false, documents })
+    await cli(["folders", "add", "root"])
     const done = await cli(["sync"])
     expect(done.exit).not.toBe(0)
     expect(done.stdout).toBe("")
     expect(JSON.parse(done.stderr).error).toMatchObject({
       code: "authentication_error",
-      message: "personal is not signed in",
+      message: "personal is not signed in; the documents failed too (auth.missing): not signed in",
     })
+  })
+
+  it("skips the documents, asking nothing, while no folder is chosen and nothing is kept", async () => {
+    const documents = fakeDocumentSource("alpha")
+    let asked = 0
+    const identity = documents.identity
+    documents.identity = async () => {
+      asked += 1
+      return identity()
+    }
+    const { answer, env } = setup({ documents })
+    const synced = await answer(["sync"])
+    expect(synced.item).toMatchObject({
+      state: "complete",
+      complete: true,
+      documents: { skipped: "no folders chosen" },
+    })
+    expect(synced.meta.complete).toBe(true)
+    expect(asked).toBe(0)
+    const kept = readdirSync(String(env.LIN_STATE_DIR), { recursive: true, encoding: "utf8" })
+    expect(kept.filter((path) => path.includes("state.json") || path.includes("account"))).toEqual([])
+  })
+
+  it("refuses documents signed in as another account than the tracker's, and stores nothing for it", async () => {
+    const { cli, answer, store } = setup({ documents: fakeDocumentSource("beta") })
+    await cli(["folders", "add", "root"])
+    const synced = await answer(["sync"])
+    expect(synced.item).toMatchObject({
+      state: "complete",
+      documents: { error: { code: "configuration_error", reason: "documents.other-account" } },
+    })
+    expect(synced.meta.issues).toEqual([
+      { code: "configuration_error", reason: "documents.other-account", source: "documents" },
+    ])
+    const linear = (await (await store()).accounts.storedAccounts()).filter(({ provider }) => provider === "linear")
+    expect(linear.map(({ account }) => account)).toEqual(["alpha"])
+  })
+
+  it("names a failed document as the documents part's, a partial answer that exits 0", async () => {
+    const documents = fakeDocumentSource("alpha")
+    const content = documents.content
+    documents.content = async (id, maxChars) => {
+      if (id === "a") throw new CliError("provider_error", "Linear answered 500", { reason: "provider.failed" })
+      return content(id, maxChars)
+    }
+    const { cli, answer } = setup({ documents })
+    await cli(["folders", "add", "root"])
+    const synced = await answer(["sync"])
+    expect(synced.exit).toBe(0)
+    expect(synced.meta.complete).toBe(false)
+    expect(synced.meta.issues.length).toBeGreaterThan(0)
+    expect(new Set(synced.meta.issues.map(({ source }: { source: string }) => source))).toEqual(new Set(["documents"]))
   })
 
   it("answers with the run that holds the tracker's requests, the documents' kept as a run of their own", async () => {
@@ -254,17 +308,17 @@ describe("one sync for a tracker that holds documents too", () => {
     expect(done.stderr).toContain("--max-pages bounds both parts")
   })
 
-  it("goes on with one step when --max-pages stops a part, passing it on", async () => {
+  it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {
     const { cli, answer } = setup()
     await cli(["folders", "add", "root"])
-    const synced = await answer(["sync", "--max-pages", "1"])
+    const synced = await answer(["sync", "--max-pages", "1", "--timeout", "5m"])
     expect(synced.meta.complete).toBe(false)
     expect(synced.item.complete).toBe(false)
     expect(synced.next).toEqual([
       expect.objectContaining({
         step: "tracker.sync",
         command: "sync",
-        args: { max_pages: 1 },
+        args: { max_pages: 1, timeout: "5m" },
         safe_to_auto_execute: true,
       }),
     ])

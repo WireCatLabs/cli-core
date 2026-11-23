@@ -64,7 +64,7 @@ const enrichmentOutOfTime = (embeddings: unknown): boolean => {
   return enrichment?.reason_id === "enrichment.deadline" && enrichment.enriched === 0
 }
 
-/** What a documents sync's answer tells its caller: the envelope's meta, the steps to go on and the lines for the person. */
+/** What a documents sync's answer tells its caller: its meta, the steps to go on and the lines for the person. */
 export interface DocumentSyncPart {
   meta: { complete?: false; issues?: { code: "provider_error"; reason: "sync.partial"; source: string }[] }
   next: NextStep[]

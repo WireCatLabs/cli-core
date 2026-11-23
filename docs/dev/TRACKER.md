@@ -131,15 +131,22 @@ return [...library.commands, ...holder.commands]
 - **The answer** is the tracker's report as `tracker_sync` has it, with the documents' answer under `documents`, as the
   shared documents `sync` gives it (entity `tracker_documents_sync`). `complete` and `meta.complete` are true only when
   both parts finished. Desktop reads the tracker's `synced` and `complete`, as for any tracker.
-- **A part that fails** is named in its place (`documents: { error }`, or `error` in place of the report) and in
-  `meta.issues` with `source` `tracker` or `documents`; the other part's answer still shows, as a partial
-  answer that exits 0 (`meta.complete: false`), as a failed kind does. When both fail, the tracker's error is the answer. A cancel ends both.
+- **A part that fails** is named in its place (`documents: { error }`, or `error` and `synced: []` in place of the
+  report) and in `meta.issues` with `source` `tracker` or `documents`, a failed document's included. The other part's
+  answer still shows, as a partial answer that exits 0 (`meta.complete: false`), as a failed kind does; the shared
+  documents-only `sync` exits non-zero there. When both fail, the tracker's error answers, its message naming the
+  documents' failure too (an error envelope has no `meta`). A cancel ends both.
+- **One account.** The documents part is refused (`documents.other-account`) when its sign-in is another account of
+  the provider than the one the tracker part synced, so the copy never splits into two accounts.
+- **No folder chosen.** While no folder is chosen and the profile keeps no documents, the documents part is skipped,
+  asking nothing and writing nothing: `documents: { skipped: "no folders chosen" }`, complete. A profile whose
+  folders were all removed still syncs once more, so their documents leave the copy.
 - **Flags.** `--rescan` lists both again; the documents' walk starts over at each one, so run it once and continue with
   a plain `sync`. `--max-pages` bounds each part's requests. `--embed` indexes the documents' pending text for meaning
   search (issues are found by words). `--limit`, the shared documents `sync`'s count of documents, is refused: it would
   bound one part only.
-- **Going on.** One `tracker.sync` step, with `max_pages` and `embed` as given, when either part stopped before its
-  end; the documents' `sync.longer` step as they give it.
+- **Going on.** One `tracker.sync` step, with `max_pages`, `timeout` and `embed` as given, when either part stopped
+  before its end; the documents' `sync.longer` step as they give it.
 - **Runs.** The tracker's part is the run the answer's `meta.run_id` names (`sync`); the documents' part is a run of
   its own named `sync documents`, so `runs list command:sync` finds one run per sync.
 - A CLI without `documents` keeps its `sync`, its answer and its permission key `sync` unchanged.
@@ -184,15 +191,16 @@ return [...library.commands, ...holder.commands]
 ## `search all`
 
 The `tracker` lane of `search all` (`RESOURCES_SEARCHED`) reads the copies of every account of a provider the registry
-marks `tracker`, or those
-`--source` names, through `store.tracker.find`: issues, projects and comments by the words of their title and text,
-as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 Fix login`), a `project` or an
-`issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue under the same
-id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane with the
-reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is read by this lane
-under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`, and a run locked to a group that names `linear:<account>` keeps it. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
-tracker, since linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by
-`issues.list` and projects by `projects.list`.
+marks `tracker`, or those `--source` names, through `store.tracker.find`: issues, projects and comments by the words of
+their title and text, as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 Fix login`), a
+`project` or an `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue
+under the same id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane
+with the reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is read by
+this lane under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. A group naming
+`linear:<account>` holds its issues and its documents; one naming only `notes:<id>` holds the documents alone. With no
+tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a tracker, since
+linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by `issues.list` and
+projects by `projects.list`.
 
 ## A tracker described as data
 

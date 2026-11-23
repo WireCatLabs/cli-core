@@ -1,4 +1,4 @@
-import { type ErrorCode, isCliError } from "@wirecat/cli-base"
+import { CliError, type ErrorCode, isCliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { QueryRegistry } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
@@ -159,7 +159,12 @@ const trackerDocumentsSync = v.union([
     ...trackerSync.entries,
     documents: v.union([v.looseObject({}), v.strictObject({ error: partError })]),
   }),
-  v.strictObject({ complete: v.literal(false), error: partError, documents: v.looseObject({}) }),
+  v.strictObject({
+    complete: v.literal(false),
+    synced: v.tuple([]),
+    error: partError,
+    documents: v.union([v.looseObject({}), v.strictObject({ error: partError })]),
+  }),
 ])
 
 interface SyncOptions {
@@ -228,13 +233,13 @@ const errorOf = (error: unknown): { code: ErrorCode; reason?: string; message: s
 }
 
 /**
- * Both parts in one answer: the tracker's report as `tracker_sync` has it, the documents' under `documents`. A part that
- * failed is named in its place and in `meta.issues`, so the other's answer still shows; `complete` is both parts'.
+ * Both parts in one answer: the tracker's report as `tracker_sync` has it, the documents' under `documents`. A part
+ * that fails is named in its place and in `meta.issues`, so the other's answer still shows; `complete` is both parts'.
  */
 const combinedAnswer = (
   tracker: Settled<TrackerReport>,
   documents: Settled<DocumentsOutcome>,
-  opts: SyncOptions & { embed?: boolean },
+  opts: SyncOptions & { embed?: boolean; timeout?: string },
 ): Body => {
   const failed = (part: string, error: { code: ErrorCode; reason?: string }) => ({
     code: error.code,
@@ -258,11 +263,10 @@ const combinedAnswer = (
   const next: NextStep[] = [
     ...(resume
       ? [
-          resumeStep(
-            opts,
-            trackerStep?.why ?? "the sync stopped before its end; running it again goes on from there",
-            opts.embed ? { embed: true } : {},
-          ),
+          resumeStep(opts, trackerStep?.why ?? "the sync stopped before its end; running it again goes on from there", {
+            ...(opts.timeout === undefined ? {} : { timeout: opts.timeout }),
+            ...(opts.embed ? { embed: true } : {}),
+          }),
         ]
       : []),
     ...(outcome?.next.filter(({ step }) => step !== "sync.run") ?? []),
@@ -270,7 +274,7 @@ const combinedAnswer = (
   const documentsPart = outcome ? outcome.item : { error: documentsError }
   const item = report
     ? { ...report, complete, documents: documentsPart }
-    : { complete: false as const, error: trackerError, documents: documentsPart }
+    : { complete: false as const, synced: [], error: trackerError, documents: documentsPart }
   return itemOf(item, {
     ...(complete ? {} : { meta: { complete: false, ...(issues.length ? { issues } : {}) } }),
     ...(next.length ? { next } : {}),
@@ -349,9 +353,10 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       ...(opts.rescan ? { rescan: true } : {}),
     })
   }
-  const trackerPart = (command: Command, opts: SyncOptions) =>
+  const trackerPart = (command: Command, opts: SyncOptions, opened: (account: AccountKey) => void = () => {}) =>
     inCommandRun(command, async () => {
       const run = await options.open(command, { readOnly: false })
+      opened(run.account)
       try {
         return await syncOf(command, opts)(run)
       } finally {
@@ -416,18 +421,33 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
             return { error }
           }
         }
-        const tracker = await settled(() => trackerPart(command, opts))
+        let account: AccountKey | undefined
+        const tracker = await settled(() => trackerPart(command, opts, (one) => (account = one)))
         const deadline = environmentOf(command).deadline?.()
         const docs = await settled(() =>
           documents(command, {
             budget: runBudgetOf(command, opts.maxPages),
+            ...(account ? { account } : {}),
             ...(opts.rescan ? { rescan: true } : {}),
             ...(opts.embed ? { embed: true } : {}),
             ...(deadline ? { deadline } : {}),
           }),
         )
-        if ("error" in tracker && "error" in docs) throw tracker.error
-        const answer = combinedAnswer(tracker, docs, opts)
+        if ("error" in tracker && "error" in docs) {
+          const failed = errorOf(docs.error)
+          // An error envelope has no meta and keeps only the details its reason registers, so the documents'
+          // failure is told in the message of the tracker's error, which answers as a tracker-only sync's would.
+          throw isCliError(tracker.error)
+            ? new CliError(
+                tracker.error.code,
+                `${tracker.error.message}; the documents failed too ` +
+                  `(${failed.reason ?? failed.code}): ${failed.message}`,
+                tracker.error.details,
+              )
+            : tracker.error
+        }
+        const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+        const answer = combinedAnswer(tracker, docs, { ...opts, ...(timeout === undefined ? {} : { timeout }) })
         renderAnswer(command, outputFor(command), answer)
         if ("value" in docs) for (const line of docs.value.diagnostics) outputFor(command).streams.diagnostic(line)
       })

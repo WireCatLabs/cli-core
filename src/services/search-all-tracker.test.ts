@@ -7,6 +7,7 @@ import { accountsOfList, sourceOf } from "../search/account-list.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
+import { groupGuardOf } from "./group-guard.js"
 import { searchAll } from "./search-all.js"
 import { listContextOf } from "./search-kind.js"
 
@@ -100,7 +101,7 @@ describe("a Linear account with issues and documents", () => {
   const withDocuments = async () => {
     const store = await withIssues(LINEAR)
     const folder = await store.notes.documentsAccount(LINEAR, true)
-    await store.notes.saveFileNote({
+    const { note } = await store.notes.saveFileNote({
       folderId: folder?.id ?? "",
       path: "doc-1.md",
       title: "Invoicing runbook",
@@ -109,7 +110,7 @@ describe("a Linear account with issues and documents", () => {
       contentHash: "doc-1",
     })
     await store.searchIndex.fillSearchIndex({})
-    return { store, notes: { resource: "notes", provider: "notes", account: folder?.id ?? "" } }
+    return { store, document: note.ref, notes: { resource: "notes", provider: "notes", account: folder?.id ?? "" } }
   }
   const linearIn = (found: Awaited<ReturnType<typeof searchAll>>) =>
     found.accounts.filter(({ provider, account }) =>
@@ -153,5 +154,28 @@ describe("a Linear account with issues and documents", () => {
     const context = await listContextOf(store, ME, app, undefined, { MEMO_GROUP_LOCK: "work" })
     expect(context.held.map(({ provider, account }) => `${provider}:${account}`)).toContain("linear:user-1")
     expect(accountsOfList("linear", context).map(sourceOf)).toContain("linear:user-1")
+  })
+
+  const app = { command: "memo", appName: "tracker-search", envPrefix: "MEMO", description: "", version: "0" }
+  const LOCKED = { MEMO_GROUP_LOCK: "work" }
+
+  it("lets a run locked to a group naming linear:<account> show the account's documents and issues", async () => {
+    const { store, document } = await withDocuments()
+    await store.accounts.saveAccountGroup("work", ["linear:user-1"])
+    const found = await searchAll(store, ME, { text: "invoic", limit: 20, source: "group:work" }, { app })
+    expect(found.items.map(({ kind }) => kind)).toEqual(expect.arrayContaining(["issue", "document"]))
+    const guard = await groupGuardOf(store, app, LOCKED)
+    expect(document).toMatch(/^document:/)
+    expect(await guard?.visible(document)).toBe(true)
+    expect(await guard?.visible("tracker:linear/user-1/issue/issue-1")).toBe(true)
+  })
+
+  it("leaves the tracker lane out of a group naming only the documents", async () => {
+    const { store, document, notes } = await withDocuments()
+    await store.accounts.saveAccountGroup("work", [`notes:${notes.account}`])
+    const found = await searchAll(store, ME, { text: "invoic", limit: 20, source: "group:work" }, { app })
+    expect(found.searched).not.toContain("tracker")
+    expect(found.items.map(({ kind }) => kind)).toContain("document")
+    expect(await (await groupGuardOf(store, app, LOCKED))?.visible(document)).toBe(true)
   })
 })

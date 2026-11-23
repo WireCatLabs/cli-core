@@ -294,6 +294,13 @@ export const importedOf = (entry: ProviderEntry, held: ProviderEntry | undefined
 export const isImportedProvider = (provider: Provider): boolean =>
   registry.find(({ name }) => name === provider)?.imported === true
 
+/**
+ * A documents account that holds another kind too, as Linear's holds a tracker's copy: listed and grouped under its
+ * own key for that kind, and as `notes:<id>` for its documents.
+ */
+export const alsoListedByKey = (provider: Provider): boolean =>
+  isDocumentAccountProvider(provider) && kindsIn(provider).some((kind) => kind !== "documents")
+
 /** Whether a provider's accounts hold `kind`: what a search lane picks its accounts by. */
 export const holdsKind = (provider: Provider, kind: Kind): boolean => kindsIn(provider).includes(kind)
 
