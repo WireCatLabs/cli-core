@@ -16,5 +16,11 @@
     "pr": 3258,
     "until": "2026-11-30",
     "reason": "#3258 no longer offers schedule exec over MCP; docs/mcp.md must list it among the commands kept off MCP (src/mcp-catalogue.test.ts)"
+  },
+  {
+    "repo": "ydisk-cli",
+    "pr": 3234,
+    "until": "2026-11-30",
+    "reason": "#3234 made FileConflictCommands.connect take the body and run it in the app run; src/commands/mirrors.ts:935 still returns the connection, so ydisk-cli does not compile"
   }
 ]
