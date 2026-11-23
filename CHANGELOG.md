@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.723.0 — 23.11.2026
+
+### Added
+
+- **`knowledge.eraseOrganization` deletes an organization and what memo knows of it alone.** The tags, links,
+  aliases and mentions that name it go, and so does which identities it held. A deal, lead, project, account, fact or
+  note that names it stays and loses the name. `apply: false` answers what would go and changes nothing. Owner only;
+  refused for one of the owner's own companies (`organization.own`), and while an invoice, order, subscription or a
+  row it wrote still names it (`organization.erase-blocked`). It shares `ErasePlan` with `people.erase`: both read
+  the store's own pointers and foreign keys, so the plan shown and the delete run read one list.
+
+### Fixed
+
+- **Removing an import's account now takes the organizations only its records made**, as it does for people. One
+  that another source, a deal or the owner still names stays.
+- **A deal or lead that enters a stage in the same second its `stage-tasks` rules were set now opens its task.** A
+  CRM's stage history keeps whole seconds, so such a move read as made before the rules and opened none; the rules
+  now count from the start of the second they were set. Bitrix24's live check hit it when it set the rules and moved
+  a deal within a second.
+
 ## 0.722.0 — 23.11.2026
 
 ### Added
