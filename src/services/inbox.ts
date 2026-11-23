@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Chat, ChatKind, Id, Inbox, InboxChat, Message, Review, ReviewChat } from "../domain/models.js"
+import type { Chat, ChatKind, Id, Inbox, InboxChat, Message, Page, Review, ReviewChat } from "../domain/models.js"
 import { capability, type MessengerAdapter, type ServerReads } from "../ports/messenger.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { CHAT_KINDS } from "./chats.js"
@@ -39,7 +39,10 @@ export const heard = (chats: Chat[], all: boolean) =>
  * typed title; MAX answers from the chats its login sent. `hasMore` is the messenger saying it could
  * not list them all.
  */
-const everyChat = (adapter: InboxReader) => (adapter.unreadChats ? adapter.unreadChats() : adapter.chats({ offset: 0 }))
+const everyChat = (adapter: InboxReader): Promise<Page<Chat> & { left?: string[] }> =>
+  adapter.unreadChats ? adapter.unreadChats() : adapter.chats({ offset: 0 })
+
+const leftOf = (page: { left?: string[] }) => (page.left?.length ? { left: page.left } : {})
 
 /** What `inbox` and `review` read: the messenger's own answers, or the local store's in store mode. */
 export type InboxReader = Pick<ServerReads, "chats" | "history"> &
@@ -127,7 +130,7 @@ export const unreadIn = async (
     const theirs = items.slice(-wanted).filter((message) => !message.outgoing)
     if (theirs.length > 0) chats.push({ id, title, kind, unreadCount, messages: theirs, more: count > limit })
   }
-  return { mode: "unread", chats, skipped, partial: page.hasMore, quiet }
+  return { mode: "unread", chats, skipped, partial: page.hasMore, ...leftOf(page), quiet }
 }
 
 /**
@@ -187,6 +190,7 @@ export const newIn = async (
     chats,
     skipped,
     partial: page.hasMore,
+    ...leftOf(page),
     quiet,
     checked,
   }
@@ -284,6 +288,7 @@ export const reviewIn = async (
     chats,
     skipped,
     partial,
+    ...leftOf(page),
     quiet,
     ...(points === undefined ? {} : { checked }),
   }

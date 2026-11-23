@@ -74,6 +74,7 @@ interface Shared {
   chats: { id: string; title: string | null; messages: Message[]; more: boolean }[]
   skipped: { id: string; title: string | null }[]
   partial: boolean
+  left?: string[]
   quiet: number
 }
 
@@ -115,6 +116,7 @@ const catchUpList = (
     ...(found.quiet > 0
       ? [{ field: "items", why: `${found.quiet} muted or archived chats left out`, step: `${command}.all` }]
       : []),
+    ...(found.left ?? []).map((why) => ({ field: "items", why })),
     ...hearingMissing(hearing, transcribe),
     ...left,
   ]
