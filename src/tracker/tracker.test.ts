@@ -491,3 +491,17 @@ describe("syncTracker and the owner's tasks", () => {
     expect(report.tasks).toMatchObject({ skipped: expect.stringMatching(/budget was spent/) })
   })
 })
+
+describe("store.tracker.find", () => {
+  it("reads past rows the index offers that hold no form of a word, and says no more when none is left", async () => {
+    const store = await storeOf()
+    const stable = Array.from({ length: 2_100 }, (_, at) => ({ externalId: `s${at}`, title: `Stable build ${at}` }))
+    const starting = [1, 2, 3].map((at) => ({ externalId: `f${at}`, title: `Starting fails ${at}` }))
+    await store.tracker.save(account, "issue", [...stable, ...starting], 1)
+    for (const anyWord of [false, true]) {
+      const found = await store.tracker.find({ words: ["started"], anyWord, accounts: [account], limit: 10 })
+      expect(found.items.map(({ item }) => item.record.externalId).sort()).toEqual(["f1", "f2", "f3"])
+      expect(found.hasMore).toBe(false)
+    }
+  })
+})

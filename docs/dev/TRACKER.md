@@ -72,9 +72,17 @@ A save merges: a field the read left out keeps its stored value, so a partial se
 ## `store.tracker`
 
 `save`, `removeUnlisted`, `get`, `issueByKey` (`ENG-12`, any case), `list` with issue filters (team, project,
-assignee or none, state, state types through the state rows, label, archived), `find` over the word index
-`tracker_item_words` (titles, descriptions, comment bodies), `count`, and `people`: the tracker users whose e-mail an
-identity linked to a person has, joined when read. Nothing is written to the people graph.
+assignee or none, state, state types through the state rows, label, archived), `find` over titles, descriptions and
+comment bodies, `count`, and `people`: the tracker users whose e-mail an identity linked to a person has, joined when
+read. Nothing is written to the people graph.
+
+`find` matches words as a CRM's deals are matched (`src/search/word-match.ts`): a query word finds the same word, a
+word it begins when it has four letters or more, or a word of the same stem by the default Snowball stemmers (Russian,
+English, Spanish); a word of several parts (`ENG-12`) finds its parts in a row. `exact` keeps the words as written. The
+word index `tracker_item_words` gives the candidates (each word, its beginning and the first three letters of its
+stems), and the words of each candidate decide. Rows holding all the words keep the index's order; with `anyWord`, the
+first 2,000 candidates are ranked by how many words they hold first, and candidates past them are not read. Spelling
+is not corrected.
 
 Issues, projects and comments are searched by meaning too. Their chunks (`chunks.chunkable_type = 'tracker_item'`,
 `chunkable_id` = `tracker_items.id`, `src/store/sqlite/tracker-chunks.ts`) are cut as a note's are: title and

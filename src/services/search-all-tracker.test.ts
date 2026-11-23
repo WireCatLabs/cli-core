@@ -179,3 +179,49 @@ describe("a Linear account with issues and documents", () => {
     expect(await (await groupGuardOf(store, app, LOCKED))?.visible(document)).toBe(true)
   })
 })
+
+describe("words in another form", () => {
+  const withWords = async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-forms-")), "store.db") })
+    stores.push(store)
+    const rows = exampleTrackerRows()
+    rows.issue.push(
+      { externalId: "issue-ru", key: "ENG-7", title: "Поставка цемента задерживается", team: "team-1", updatedAt: 1 },
+      { externalId: "issue-kot", key: "ENG-8", title: "Котельная не греет", team: "team-1", updatedAt: 2 },
+      { externalId: "issue-replace", key: "ENG-9", title: "Replacement parts are late", team: "team-1", updatedAt: 3 },
+    )
+    rows.comment.push({ externalId: "comment-ru", issue: "issue-ru", body: "Поставщики обещали к пятнице" })
+    await syncTracker(fakeTrackerSource({ rows }), store, LINEAR, { now: Date.UTC(2026, 10, 17) })
+    return store
+  }
+  const refs = async (store: MessageStore, text: string, exact = false) =>
+    (await searchAll(store, ME, { text, limit: 10, only: ["tracker"], ...(exact ? { exact } : {}) })).items
+      .map(({ ref }) => ref.split("/").at(-1))
+      .sort()
+
+  it("finds an issue by another form of its words, in Russian and English", async () => {
+    const store = await withWords()
+    expect(await refs(store, "поставки цемента")).toEqual(["issue-ru"])
+    expect(await refs(store, "invoice failing")).toEqual(["issue-1"])
+    expect(await refs(store, "migrations guides")).toEqual(["issue-2"])
+  })
+
+  it("finds the words a query word of four letters or more begins, never one inside a word", async () => {
+    const store = await withWords()
+    expect(await refs(store, "пост")).toEqual(["comment-ru", "issue-ru"])
+    expect(await refs(store, "кот")).toEqual([])
+    expect(await refs(store, "cement")).toEqual([])
+  })
+
+  it("keeps --exact to the words as written", async () => {
+    const store = await withWords()
+    expect(await refs(store, "поставки", true)).toEqual([])
+    expect(await refs(store, "поставка", true)).toEqual(["issue-ru"])
+  })
+
+  it("shows the matched form in the excerpt", async () => {
+    const store = await withWords()
+    const [hit] = (await searchAll(store, ME, { text: "поставщика", limit: 10, only: ["tracker"] })).items
+    expect(hit?.text).toContain("Поставщики")
+  })
+})

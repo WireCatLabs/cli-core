@@ -6,11 +6,21 @@ import {
   trackerParentOf,
   trackerTitleOf,
 } from "../../domain/tracker.js"
+import { START_LETTERS } from "../../search/stem.js"
+import {
+  clauseIn,
+  type Probe,
+  probeOf,
+  type QueryWord,
+  type StoredWord,
+  tokensOf,
+  wordMatches,
+} from "../../search/word-match.js"
 import type { CacheDatabase } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { excerptOf, matchOf } from "./crm-files.js"
+import { excerptOf } from "./crm-files.js"
 import type { StoreContext } from "./open.js"
 import {
   dropTrackerChunks,
@@ -142,6 +152,9 @@ export interface TrackerStore {
 }
 
 const MOST = 500
+/** How many rows the index may offer a search for any of its words before the best of them are kept. */
+const CANDIDATES = 2_000
+const PAGE = 200
 
 type Row = Record<string, unknown>
 
@@ -178,6 +191,31 @@ export const resetTrackerItemWords = (database: CacheDatabase): number => {
 }
 
 const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state" } as const
+
+/**
+ * The words as clauses for `clauseIn`, and the index expression that finds every row they could match: a word, a word
+ * it begins, or the first three letters of its stem, which every word of that stem starts with.
+ */
+const queryOf = (words: readonly string[], exact: boolean) => {
+  const seen = new Set<string>()
+  const clauses: QueryWord[][] = words
+    .map((word) => tokensOf(word).filter((token) => fold(token)))
+    .filter((tokens) => {
+      const key = tokens.map(fold).join(" ")
+      if (!tokens.length || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((tokens) => tokens.map((token) => [probeOf(token)]))
+  if (!clauses.length) return undefined
+  const termOf = ({ literal, stems }: Probe) => {
+    const terms = new Set([exact || literal.length < START_LETTERS ? `"${literal}"` : `"${literal}"*`])
+    if (!exact) for (const stem of stems) if (stem.length >= 3) terms.add(`"${stem.slice(0, 3)}"*`)
+    return terms.size > 1 ? `(${[...terms].join(" OR ")})` : [...terms].join("")
+  }
+  const expressions = clauses.map((clause) => `(${clause.flatMap((word) => word.map(termOf)).join(" AND ")})`)
+  return { clauses, match: (anyWord: boolean) => expressions.join(anyWord ? " OR " : " AND ") }
+}
 
 export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   const { database } = context
@@ -319,12 +357,12 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   }
 
   const find = ({ words, anyWord = false, exact = false, accounts, kinds, limit, offset = 0 }: TrackerSearch) => {
-    const match = matchOf(words, anyWord, exact)
-    if (!match) return { items: [], hasMore: false }
+    const query = queryOf(words, exact)
+    if (!query) return { items: [], hasMore: false }
     const most = Math.min(Math.max(limit ?? 100, 1), MOST)
     const scoped = accounts?.map((one) => findAccountPk(context, one)).filter((one) => one !== undefined) ?? []
     if (accounts !== undefined && !scoped.length) return { items: [], hasMore: false }
-    const params: (string | number)[] = [match]
+    const params: (string | number)[] = [query.match(anyWord)]
     let sql =
       `SELECT ${COLUMNS}, t.title, t.body, a.provider, a.external_id AS account FROM tracker_items t ` +
       "JOIN accounts a ON a.id = t.account_id " +
@@ -339,16 +377,42 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       for (const kind of kinds) params.push(kind)
     }
     sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ? OFFSET ?"
-    params.push(most + 1, offset)
-    const rows = database.prepare(sql).all(...params)
+    const page = database.prepare(sql)
+    const wanted = offset + most + 1
+    const found: { row: Row; held: StoredWord[]; hit: QueryWord[][]; score: number; at: number }[] = []
+    let read = 0
+    let more = true
+    // The index narrows by word beginnings; each candidate's own words decide. All words matched rank by the index
+    // alone, so the page is read in its order; some of them rank by how many matched first, over a bounded read.
+    while (more && (anyWord ? read < CANDIDATES : found.length < wanted)) {
+      const rows = page.all(...params, PAGE, read)
+      more = rows.length === PAGE
+      for (const row of rows) {
+        read += 1
+        const held = tokensOf([row.title, row.body].filter(Boolean).join("\n")).map((token) => ({
+          token,
+          literal: fold(token),
+        }))
+        const hit = query.clauses.filter((clause) => clauseIn(clause, held, exact))
+        if (anyWord ? hit.length > 0 : hit.length === query.clauses.length)
+          found.push({ row, held, hit, score: hit.length, at: read })
+        if (!anyWord && found.length >= wanted) break
+      }
+    }
+    const rows = found.sort((a, b) => b.score - a.score || a.at - b.at).slice(offset, wanted)
     return {
-      items: rows.slice(0, most).map(
-        (row): TrackerHit => ({
+      items: rows.slice(0, most).map(({ row, held, hit }): TrackerHit => {
+        const matched = held
+          .filter((word) =>
+            hit.some((clause) => clause.some((one) => one.some((probe) => wordMatches(probe, word, exact)))),
+          )
+          .map(({ token }) => token)
+        return {
           account: { provider: String(row.provider), account: String(row.account) },
           item: itemOf(row),
-          excerpt: excerptOf([row.title, row.body].filter(Boolean).join("\n"), words),
-        }),
-      ),
+          excerpt: excerptOf([row.title, row.body].filter(Boolean).join("\n"), [...words, ...matched]),
+        }
+      }),
       hasMore: rows.length > most,
     }
   }
