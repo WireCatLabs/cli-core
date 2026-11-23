@@ -25,6 +25,12 @@ export {
 export { addLocalDocumentCommands, type ImportedDocument, type LocalDocumentCommands } from "./documents.js"
 export { type FileConflictCommands, type FileConflictConnection, fileConflictsCommand } from "./file-conflicts.js"
 export { addFileEditCommands, type FileEditCommands } from "./file-edit.js"
+export {
+  type FileMirrorCommands,
+  type FileMirrorRemote,
+  type FileMirrorWrite,
+  fileMirrorsCommand,
+} from "./file-mirrors.js"
 export { addFileUpdateCommand, type FileUpdateCommands, type FileUpdatePort } from "./file-update.js"
 export { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
 export {

@@ -13,6 +13,7 @@ import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
 import { fileConflictsCommand } from "./documents/file-conflicts.js"
 import { addFileEditCommands } from "./documents/file-edit.js"
+import { fileMirrorsCommand } from "./documents/file-mirrors.js"
 import { addDocumentHistoryCommands } from "./documents/history.js"
 import { LOCAL_READ } from "./effects.js"
 import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
@@ -133,6 +134,55 @@ it("a file mirror's conflict commands pass the command lint with only the confli
         owner: "@WireCatLabs",
         review_after: "2026-12-22",
       },
+    ],
+  )
+
+  expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
+  expect(lint.status).toBe(0)
+})
+
+it("the shared file mirror commands pass the command lint with only their local lists' overrides", async () => {
+  const refuse = (): never => {
+    throw new Error("not read in a lint")
+  }
+  const app = { command: "ydisk", appName: "ydisk-cli", envPrefix: "YDISK", description: "synthetic", version: "1.0.0" }
+  const local = (target: string, reason: string) => ({
+    rule: "list-without-query",
+    target,
+    reason,
+    owner: "@WireCatLabs",
+    review_after: "2026-12-22",
+  })
+  const lint = await lintOf(
+    {
+      app,
+      commands: () => [
+        commandsCommand(app),
+        fileMirrorsCommand({
+          identity: app,
+          service: "Yandex Disk",
+          remote: "disk",
+          root: {
+            place: "Yandex Disk folder",
+            description: "the Disk folder, by its path, like /Notes",
+            examples: ["/Notes ./notes", "/ ~/Disk"],
+          },
+          output: refuse,
+          profile: refuse,
+          stateDir: refuse,
+          keepForDays: refuse,
+          connect: refuse,
+          writeGuard: refuse,
+          keysOf: refuse,
+        }),
+        runsCommand(app),
+      ],
+    },
+    ["--allow-stale"],
+    [
+      local("mirrors list", "the profile's few saved folder pairs, from one local file"),
+      local("mirrors versions list", "the events of one file of one mirror, already named by its arguments"),
+      local("mirrors conflicts list", "a mirror's few recorded conflicts, from its state file"),
     ],
   )
 
