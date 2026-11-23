@@ -174,28 +174,34 @@ export const resolveFileConflict = async (options: FileConflictResolveOptions): 
       const sent = await write("absent" in expect ? "create" : "update", "remote", at, () =>
         target.upload(remotePath(at), from, expect, signal),
       )
-      if (sent.sha256 !== undefined && sent.sha256 !== hash)
+      if (sent.sha256 === undefined || sent.sha256 === hash) return { sent, settled: hash }
+      if (!target.rewrites)
         throw new CliError("conflict", "the file changed during the upload", { reason: "upload.mismatch" })
-      return sent
+      // The remote keeps its own form of the text: the local side takes that form, so both hold the same bytes.
+      const form = await versions.keep((temp) => target.download(remotePath(at), temp, signal))
+      if (form !== sent.sha256) throw changed(`the ${options.remote} file`, "mirror.remote-changed")
+      return { sent, settled: form }
     }
     const expectRemote: Expect = found.remote
       ? { sha256: found.remote, ...(found.remoteFile?.md5 ? { md5: found.remoteFile.md5 } : {}) }
       : { absent: true }
 
     let sent: RemoteFile | undefined = final === found.remote ? found.remoteFile : undefined
+    /** What both sides hold once resolved: `final`, or the remote's own form of it. */
+    let settled = final
     if (final !== found.remote) {
       if (final === undefined) {
         await write("delete", "remote", path, () =>
           target.trash(remotePath(path), expectRemote as Exclude<Expect, { absent: true }>, signal),
         )
-      } else sent = await send(path, "file" in choice ? choice.file : absolute, final, expectRemote)
+      } else ({ sent, settled } = await send(path, "file" in choice ? choice.file : absolute, final, expectRemote))
     }
-    if (final !== found.local) {
+    if (settled !== found.local) {
       const placed =
-        final === undefined
+        settled === undefined
           ? await write("delete", "local", path, () => trashLocal(root, path, found.local as string, date))
           : await write(found.local ? "update" : "create", "local", path, () =>
-              versions.write(final, absolute, found.local),
+              versions.write(settled as string, absolute, found.local),
             )
       if (!placed) throw changed("the local file", "mirror.local-changed")
     }
@@ -215,14 +221,20 @@ export const resolveFileConflict = async (options: FileConflictResolveOptions): 
         syncedAt: new Date(now()).toISOString(),
       }
     }
-    if (final === undefined) delete state.entries[path]
-    else if (sent) await entry(path, sent, final)
+    if (settled === undefined) delete state.entries[path]
+    else if (sent) await entry(path, sent, settled)
     if (keep === "both" && found.local && found.remote) {
       const name = copyName(path, options.remote, date, (at) => existsSync(join(root, at)) || at in state.entries)
       await assertNoLink(root, name)
       if (!(await write("create", "local", name, () => versions.write(found.remote as string, join(root, name)))))
         throw changed("the local folder", "mirror.local-changed")
-      await entry(name, await send(name, join(root, name), found.remote, { absent: true }), found.remote)
+      const copied = await send(name, join(root, name), found.remote, { absent: true })
+      if (
+        copied.settled !== found.remote &&
+        !(await write("update", "local", name, () => versions.write(copied.settled, join(root, name), found.remote)))
+      )
+        throw changed("the local folder", "mirror.local-changed")
+      await entry(name, copied.sent, copied.settled)
       copy = name
     }
     if (state.conflicts) {
@@ -244,7 +256,9 @@ export const resolveFileConflict = async (options: FileConflictResolveOptions): 
       ...(final ? { new: final } : {}),
       resolution,
     })
-    return { path, resolution, sha256: final ?? null, ...(copy ? { copy } : {}) }
+    if (final && settled && settled !== final)
+      versions.log({ path, event: "changed", direction: "remote-to-local", old: final, from: "local", new: settled })
+    return { path, resolution, sha256: settled ?? null, ...(copy ? { copy } : {}) }
   } finally {
     await held.release()
   }

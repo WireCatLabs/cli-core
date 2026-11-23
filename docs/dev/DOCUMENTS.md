@@ -410,6 +410,7 @@ interface FileTarget {
   upload(path: string, from: string, expect: Expect, signal?: AbortSignal): Promise<RemoteFile>
   trash(path: string, expect: { sha256: string; md5?: string }, signal?: AbortSignal): Promise<void>
   ensureFolder(path: string, signal?: AbortSignal): Promise<void>
+  rewrites?: boolean
   revision?(signal?: AbortSignal): Promise<string>
 }
 type Expect = { absent: true } | { sha256: string; md5?: string }
@@ -420,10 +421,21 @@ type Expect = { absent: true } | { sha256: string; md5?: string }
 `excluded` names are listed too, so a file moved there is found by its id, but count toward no cap. An incomplete
 listing that can go on later (a run's deadline stopped it, a page failed) returns `next`, its position, such as an
 offset; given back as `from`, the listing returns only the files from there on. `exists` reads one
-path directly, false only when the provider says nothing is there. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
+path directly, false only when the provider says the file was deleted. An answer that cannot tell a deletion from lost
+access (Notion's 404, which may mean "no longer shared") throws, and the file is `unknown`, never trashed. The other calls take the remote path, `root` joined with the relative path. `download` and `upload` stream a local file, so a file of any
 size takes the same memory. Every write is conditional on what the listing saw: `upload` and `trash` refuse with a
 `conflict` error when the remote file is not as `expect` says; a provider without an atomic check reads the file
-just before the write. An editing command reuses the same call, `upload(path, file, { sha256: whatWasDownloaded })`.
+just before the write ("checked just before the write": an edit landing after that read is not caught). An editing
+command reuses the same call, `upload(path, file, { sha256: whatWasDownloaded })`.
+
+A remote that keeps its own form of the text it is sent (Notion turns Markdown into blocks and gives back its own
+Markdown) sets `rewrites: true`. Its `upload` returns the hash of the bytes `download` gives, and `list` must hash the
+same bytes. When an upload reads back with another hash than the file sent, the engine downloads that form into the
+version store, keeps the local file's version, and writes the form into the local file while it still has the hash
+that was sent (a `changed` event, `remote-to-local`, and the path in the result's `rewritten`). Both sides then hold
+the same bytes, so the state keeps one hash per path and a merge one base. A local file saved during the upload stays
+as it is, and the next sync sends it. A conflict's resolution does the same with the final content. Without
+`rewrites`, such an upload is a conflict (`upload.mismatch`).
 
 1. Each path is compared three ways: the local file now, the remote file now and the last sync (`FileEntry` in the
    state). A change on one side is copied to the other. The same content on both sides is adopted without a
@@ -453,7 +465,7 @@ just before the write. An editing command reuses the same call, `upload(path, fi
 4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local
    write goes through a hidden temporary file and lands only if the file still has the hash the run read, or is
    still absent for a new file; a download whose content does not match the listing's `sha256` never lands. An
-   upload that reads back with another hash is a conflict. A new file, a local rename and a local trash land with a
+   upload that reads back with another hash is a conflict, unless the target `rewrites` (above). A new file, a local rename and a local trash land with a
    hard link, or, where the file system has none (exFAT, FAT, many FUSE and SMB mounts) or the link would cross
    devices, with a copy into a file the sync creates exclusively, so a name that is taken fails and is never
    touched; either way nothing is overwritten.
@@ -554,7 +566,7 @@ just before the write. An editing command reuses the same call, `upload(path, fi
     state and stores as its helpers. Its `connect(command, mirror, body)` runs `body` inside the app's run (its
     `--timeout`, run record and request log) with the connected target, so `resolve` writes only inside it.
 
-`versions` (`fileVersions(dir)`, with `dir` under the profile's state folder, one per mirror, never inside the
+`versions` (`fileVersions(dir, now, keepForDays)`, with `dir` under the profile's state folder, one per mirror, never inside the
 mirrored folder) keeps every content before the sync overwrites or deletes it, on either side, in
 `<dir>/objects/<sha256>`: the local file before a pull, `keep: "remote"` or a crossed deletion, and the remote file
 before an upload replaces it. A remote content the store lacks is downloaded into the store first (`keep` takes a
@@ -567,10 +579,11 @@ fails with `mirror.version-not-kept` and nothing is replaced. Each change is app
 event (`created`, `changed`, `deleted`, `renamed`, `merged`, `conflict`, `resolved`), direction (`both` for the last
 three), old and new hash, `from` (the side `old` was kept from), size and time; a merge, a conflict and a resolution
 name their contents in `parts` (`base`, `local`, `remote`), and a resolution says how in `resolution`. Retention,
-applied after each sync under its lock: a content stays while a log event newer than 30 days names it; the last
+applied after each sync under its lock: a content stays while a log event newer than `keepForDays` (the profile's
+`keep_versions_for_days`, `keepVersionsForDays(settings)`, 365 by default) names it; the last
 content of a path whose newest event is a deletion, every content a merge, a conflict or a resolution names, and the
 last synced content of each mergeable file (`prune(pinned)`, the next merge's base) stay for good. A content no event
-names (a crash between keeping it and logging the change) stays 30 days after it was last kept; one that vanishes
+names (a crash between keeping it and logging the change) stays as long after it was last kept; one that vanishes
 while prune runs is skipped. Call `versions.prune()` only under the sync lock. `versions.read(sha256)` returns a kept
 content's bytes, for the text a merge reads whole.
 `versions.list(path)` lists a path's events with `available` (bytes still kept) and, for a merge, a conflict or a
