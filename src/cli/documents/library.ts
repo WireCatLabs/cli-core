@@ -302,6 +302,8 @@ const libraryOf = <M extends SourceFile>(
   // anew for every call.
   let running: Command | undefined
   let warnings: DocumentWarning[] = []
+  // Set while another group's `sync` runs the documents step: a named run leaves the answer's run_id to that sync's own.
+  let sideRun: string | undefined
   const command = () => {
     if (!running) throw new CliError("configuration_error", "a shared documents port ran outside a command")
     return running
@@ -375,12 +377,14 @@ const libraryOf = <M extends SourceFile>(
   }
   const withSource = <T>(body: (source: FeedlessDocumentSource<M>) => Promise<T>, deadline?: Deadline) => {
     refuseOffline(command(), options.service)
-    return context().run((events) =>
-      body(
-        known(
-          options.source(command(), events, { warn: (one) => warnings.push(one), ...(deadline ? { deadline } : {}) }),
+    return context().run(
+      (events) =>
+        body(
+          known(
+            options.source(command(), events, { warn: (one) => warnings.push(one), ...(deadline ? { deadline } : {}) }),
+          ),
         ),
-      ),
+      sideRun === undefined ? {} : { name: sideRun },
     )
   }
   const errorOf = (error: unknown) =>
@@ -703,13 +707,14 @@ const libraryOf = <M extends SourceFile>(
   // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
   writesOwnerFiles(find(folders, "add"))
   if (options.browse) annotate(find(folders, "browse"), { partial: true })
-  const start = (action: Command) => {
+  const start = (action: Command, side?: string) => {
     running = action
     warnings = []
+    sideRun = side
   }
   for (const group of holder.commands) group.hook("preAction", (_group, action) => start(action))
   const sync: DocumentSyncStep = async (action, { rescan, embed, budget, deadline }) => {
-    start(action)
+    start(action, `${environmentOf(action).agent ? "mcp " : ""}sync documents`)
     const item = await groups.sync.sync({
       limit: DOCUMENT_SYNC_LIMIT,
       budget,

@@ -3,10 +3,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { holdsKind, isDocumentAccountProvider } from "../domain/providers.js"
+import { accountsOfList, sourceOf } from "../search/account-list.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { syncTracker } from "../tracker/index.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
 import { searchAll } from "./search-all.js"
+import { listContextOf } from "./search-kind.js"
 
 const stores: MessageStore[] = []
 afterEach(async () => {
@@ -142,5 +144,14 @@ describe("a Linear account with issues and documents", () => {
       source: `notes:${notes.account}`,
     })
     expect(linearIn(found)).toEqual([notes])
+  })
+
+  it("keeps the account's tracker copy in a run locked to a group that names it", async () => {
+    const { store } = await withDocuments()
+    await store.accounts.saveAccountGroup("work", ["linear:user-1"])
+    const app = { command: "memo", appName: "tracker-search", envPrefix: "MEMO", description: "", version: "0" }
+    const context = await listContextOf(store, ME, app, undefined, { MEMO_GROUP_LOCK: "work" })
+    expect(context.held.map(({ provider, account }) => `${provider}:${account}`)).toContain("linear:user-1")
+    expect(accountsOfList("linear", context).map(sourceOf)).toContain("linear:user-1")
   })
 })

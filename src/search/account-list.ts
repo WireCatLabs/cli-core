@@ -110,7 +110,8 @@ const kindsOfHere = (provider: Provider, running: ListContext["running"]) => {
 }
 
 /** A documents account that holds another kind too, as Linear's holds a tracker's copy: listed under both keys. */
-const alsoListedByKey = (provider: Provider) => isDocumentAccountProvider(provider) && listedKinds(provider).length > 0
+export const alsoListedByKey = (provider: Provider) =>
+  isDocumentAccountProvider(provider) && listedKinds(provider).length > 0
 
 const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored

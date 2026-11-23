@@ -1,7 +1,8 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams, memoryKeyring } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { documentLibrary } from "../../cli/documents/library.js"
@@ -11,6 +12,7 @@ import { commandPermissions } from "../../cli/permission-keys.js"
 import { createProgram, type ProgramDefinition, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import { documentIngestion, type FeedlessDocumentSource, type SourceFile } from "../../documents.js"
+import { toolsFromCommands } from "../../mcp/agent.js"
 import { searchAll } from "../../services/search-all.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import type { TrackerSource } from "../source.js"
@@ -105,7 +107,8 @@ const setup = (
   }
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
-    const exit = await run(["personal", ...argv, "--json"], definition(), {
+    const words = argv[0] === "--bare" ? argv.slice(1) : ["personal", ...argv]
+    const exit = await run([...words, "--json"], definition(), {
       streams,
       tty: false,
       env,
@@ -123,7 +126,7 @@ const setup = (
     opened.push(one)
     return one
   }
-  return { program: createProgram(definition()), cli, answer, store }
+  return { program: createProgram(definition()), cli, answer, store, env }
 }
 
 describe("one sync for a tracker that holds documents too", () => {
@@ -222,6 +225,26 @@ describe("one sync for a tracker that holds documents too", () => {
       code: "authentication_error",
       message: "personal is not signed in",
     })
+  })
+
+  it("answers with the run that holds the tracker's requests, the documents' kept as a run of their own", async () => {
+    const { cli, answer, env } = setup()
+    await cli(["folders", "add", "root"])
+    const synced = await answer(["sync", "--record"])
+    const runs = join(String(env.LIN_STATE_DIR), "runs")
+    const recorded = readdirSync(runs, { recursive: true, encoding: "utf8" })
+      .filter((path) => path.endsWith("run.json"))
+      .map((path) => JSON.parse(readFileSync(join(runs, path), "utf8")) as { run_id: string; command: string })
+    expect(recorded.map(({ command }) => command).sort()).toEqual(["sync", "sync documents"])
+    expect(recorded.find(({ command }) => command === "sync")?.run_id).toBe(synced.meta.run_id)
+  })
+
+  it("gives an agent one sync tool, with the flags it takes and without the refused --limit", () => {
+    const tools = toolsFromCommands(describeProgram(setup().program)).filter((tool) => tool.path.join(" ") === "sync")
+    expect(tools).toHaveLength(1)
+    expect(Object.keys(tools[0]?.input.entries ?? {})).toEqual(expect.arrayContaining(["rescan", "max_pages", "embed"]))
+    expect(Object.keys(tools[0]?.input.entries ?? {})).not.toContain("limit")
+    expect(tools[0]?.output).toBeDefined()
   })
 
   it("refuses --limit, which would count documents only, with the reason", async () => {

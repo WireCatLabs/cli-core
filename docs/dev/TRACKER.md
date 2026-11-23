@@ -140,6 +140,8 @@ return [...library.commands, ...holder.commands]
   bound one part only.
 - **Going on.** One `tracker.sync` step, with `max_pages` and `embed` as given, when either part stopped before its
   end; the documents' `sync.longer` step as they give it.
+- **Runs.** The tracker's part is the run the answer's `meta.run_id` names (`sync`); the documents' part is a run of
+  its own named `sync documents`, so `runs list command:sync` finds one run per sync.
 - A CLI without `documents` keeps its `sync`, its answer and its permission key `sync` unchanged.
 
 ## Writes
@@ -188,7 +190,7 @@ as `issues search` finds them. A hit is an `issue` titled with its key (`ENG-12 
 `issue_comment`, with ref `tracker:<provider>/<account>/<kind>/<id>`: two sign-ins see the same issue under the same
 id. Its title and excerpt are untrusted. A query naming a field an issue lacks (`from:`) skips the lane with the
 reason. A tracker account that holds documents too (`linear`, `kinds: ["tracker", "documents"]`) is read by this lane
-under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
+under its own key and by the notes lane as `notes:<id>`, each once, with or without `--source`, and a run locked to a group that names `linear:<account>` keeps it. With no tracker account the lane is left out quietly, as events and meetings are. `linear` is seeded as a
 tracker, since linear-cli registers no entry. A CLI that gates lanes by list keys gates issues and comments by
 `issues.list` and projects by `projects.list`.
 

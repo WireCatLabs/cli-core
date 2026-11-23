@@ -253,14 +253,14 @@ const combinedAnswer = (
   ]
   const complete =
     report?.state === "complete" && outcome !== undefined && outcome.meta.complete !== false && issues.length === 0
-  const resume =
-    (report ? trackerNext(report, opts) : []).length > 0 || outcome?.next.some(({ step }) => step === "sync.run")
+  const [trackerStep] = report ? trackerNext(report, opts) : []
+  const resume = trackerStep !== undefined || outcome?.next.some(({ step }) => step === "sync.run")
   const next: NextStep[] = [
     ...(resume
       ? [
           resumeStep(
             opts,
-            "the sync stopped before its end, or a part failed; running it again goes on from there",
+            trackerStep?.why ?? "the sync stopped before its end; running it again goes on from there",
             opts.embed ? { embed: true } : {},
           ),
         ]
@@ -400,7 +400,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     sync
       .option("--embed", "also index the documents' pending text for meaning search, with a model already downloaded")
       .addOption(
-        new Option("--limit <n>").hideHelp().argParser(() => {
+        new Option("--limit <n>", "refused: it would count documents only").hideHelp().argParser(() => {
           throw new InvalidArgumentError(
             "--limit counts documents only, and this sync brings the issues too; --max-pages bounds both parts",
           )
