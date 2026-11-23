@@ -41,7 +41,8 @@ without `=` when there is one, and the format index (`style`). A formula cell's 
 
 `editXlsxCells(bytes, edits, { overwriteFormulas? })` takes `{ sheet, cell, value }` edits:
 
-- A string goes into the shared strings: an identical plain entry is reused, otherwise one is added at the end and
+- A string goes into the shared strings: an identical plain entry is reused (never a rich-text one, whose bold or
+  coloured runs would come along), otherwise one is added at the end and
   `count` and `uniqueCount` follow. An existing entry is never changed, because other cells may point at it. A
   workbook without a shared strings part gets an inline string. A string that starts with `=` stays text.
 - A number is stored as written; it must be finite. A boolean is stored as `1` or `0`. `null` empties the cell and
@@ -55,7 +56,9 @@ without `=` when there is one, and the format index (`style`). A formula cell's 
   headless LibreOffice 26.2 showed the old result (checked 2026-11-23). Until a recalculation the stored results of
   those formulas are the old ones, and `readXlsxCells` shows those. When a formula was replaced, the calculation chain (`calcChain.xml`, its
   relationship and its content type) is dropped, and Excel builds it again; `calcChainDropped` says so.
-- A cell with a picture or a linked data type (`vm`) is refused. A row or a cell that has no address in the file is
+- A header or totals cell of an Excel table is refused: the table part repeats its text, and Excel reports the file
+  as damaged when they differ. The table's other cells can be edited. A cell with a picture or a linked data type
+  (`vm`) is refused. A row or a cell that has no address in the file is
   refused as a place for a new row or cell, because every later position would shift.
 
 The result lists each change with the value before and after and whether the cell is new.
@@ -76,7 +79,8 @@ listed.
   over, and `collapsed` lists every replaced paragraph where this happened. Bookmarks of the paragraph are kept,
   starts before the text and ends after it, so cross-references still find them. Spelling marks are dropped.
 - `{ insertAfter, text, styleFrom? }` adds a paragraph after `insertAfter` (`-1` puts it before the first), in the
-  same table cell or content control. It copies the paragraph properties and first run's formatting of `styleFrom`,
+  same table cell or content control; before the first paragraph of a document that starts with a table, that is
+  the table's first cell. It copies the paragraph properties and first run's formatting of `styleFrom`,
   which defaults to the paragraph it follows. A section break is not copied, and neither are the paragraph's ids.
 - `{ delete }` removes a paragraph. Refused when it ends a section, holds a bookmark, or would leave the body or a
   table cell ending without a paragraph (after a table, say). Word expects that paragraph, and LibreOffice's text

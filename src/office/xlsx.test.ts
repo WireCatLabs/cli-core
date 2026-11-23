@@ -175,6 +175,44 @@ describe("editXlsxCells", () => {
     })
   })
 
+  it("**refuses a header cell of an Excel table**, whose name the table part repeats", async () => {
+    const tabled = withParts(budget, {
+      "xl/tables/table1.xml": `<table xmlns="${SHEET_NS}" id="1" name="Budget" displayName="Budget" ref="A1:D3" totalsRowShown="0"><tableColumns count="4"><tableColumn id="1" name="Item"/><tableColumn id="2" name="Amount"/><tableColumn id="3" name="Paid"/><tableColumn id="4" name="Share"/></tableColumns></table>`,
+      "xl/worksheets/_rels/sheet1.xml.rels":
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="t1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>',
+      "xl/worksheets/sheet1.xml": partOf(budget, "xl/worksheets/sheet1.xml").replace(
+        "</worksheet>",
+        '<tableParts count="1"><tablePart r:id="t1"/></tableParts></worksheet>',
+      ),
+    })
+    await expect(
+      editXlsxCells(tabled, [{ sheet: "Synthetic Budget", cell: "B1", value: "Sum" }]),
+    ).rejects.toMatchObject({
+      details: { reason: "office.table_header" },
+      message: expect.stringContaining('header cell of the table "Budget"'),
+    })
+    const result = await editXlsxCells(tabled, [{ sheet: "Synthetic Budget", cell: "B2", value: 1 }])
+    expect(await cell(result.bytes, "B2")).toMatchObject({ value: 1 })
+  })
+
+  it("**does not reuse a rich shared string** whose plain text matches, so no formatting leaks into the cell", async () => {
+    const rich = withParts(budget, {
+      "xl/sharedStrings.xml": partOf(budget, "xl/sharedStrings.xml").replace(
+        "</sst>",
+        "<si><r><rPr><b/></rPr><t>bold</t></r><r><t>tail</t></r></si></sst>",
+      ),
+    })
+    const before = (partOf(rich, "xl/sharedStrings.xml").match(/<si>/g) ?? []).length
+    const result = await editXlsxCells(rich, [
+      { sheet: "Synthetic Budget", cell: "A2", value: "boldtail" },
+      { sheet: "Synthetic Budget", cell: "A3", value: "Item" },
+    ])
+    const strings = partOf(result.bytes, "xl/sharedStrings.xml")
+    expect((strings.match(/<si>/g) ?? []).length).toBe(before + 1)
+    expect(partOf(result.bytes, "xl/worksheets/sheet1.xml")).toContain('<c r="A3" t="s"><v>0</v></c>')
+    expect(await cell(result.bytes, "A2")).toMatchObject({ value: "boldtail" })
+  })
+
   it("**refuses a formula other cells share**, a cell edited twice and a character XML cannot hold", async () => {
     await expect(
       editXlsxCells(prefixed(), [{ sheet: "Data", cell: "C1", value: 1 }], { overwriteFormulas: true }),

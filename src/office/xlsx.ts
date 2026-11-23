@@ -131,6 +131,8 @@ class Workbook {
   readonly workbook: Part
   readonly sheets: SheetRef[]
   readonly strings: string[]
+  /** Whether each shared string is one plain `t`, so a new cell may point at it without taking rich runs along. */
+  readonly plainStrings: boolean[]
   readonly sharedPath?: string
   readonly calcChain?: { id: string; path: string }
 
@@ -157,9 +159,9 @@ class Workbook {
     const shared = pack.related(path, "sharedStrings")
     this.sharedPath = shared && pack.has(shared[1].path) ? shared[1].path : undefined
     const sharedPart = this.sharedPath ? pack.part(this.sharedPath) : undefined
-    this.strings = sharedPart
-      ? childrenOf(sharedPart.root, this.ns, "si").map((entry) => sharedText(entry, this.ns, sharedPart.text))
-      : []
+    const entries = sharedPart ? childrenOf(sharedPart.root, this.ns, "si") : []
+    this.strings = entries.map((entry) => sharedText(entry, this.ns, sharedPart?.text ?? ""))
+    this.plainStrings = entries.map((entry) => entry.children.length === 1 && entry.children[0]?.local === "t")
     const chain = pack.related(path, "calcChain")
     if (chain) this.calcChain = { id: chain[0], path: chain[1].path }
   }
@@ -319,7 +321,7 @@ class SharedStrings {
 
   constructor(private readonly workbook: Workbook) {
     workbook.strings.forEach((value, index) => {
-      if (!this.plain.has(value)) this.plain.set(value, index)
+      if (workbook.plainStrings[index] && !this.plain.has(value)) this.plain.set(value, index)
     })
   }
 
@@ -392,6 +394,30 @@ const arrayRanges = (rows: RowNode[], ns: string, text: string) =>
     }),
   )
 
+/**
+ * Rows of an Excel table whose text the table part repeats (column names, totals labels). Excel reports a file as
+ * damaged when a header cell no longer matches its column's name.
+ */
+const tableLabels = (workbook: Workbook, sheet: SheetRef) => {
+  const { pack } = workbook
+  if (!pack.has(sheet.path.replace(/([^/]+)$/, "_rels/$1.rels"))) return []
+  return [...pack.relationships(sheet.path).values()]
+    .filter((entry) => entry.type.endsWith("/table") && pack.has(entry.path))
+    .flatMap((entry) => {
+      const table = pack.part(entry.path).root
+      const ref = attributeOf(table, "", "ref")
+      if (!ref) return []
+      const range = parseRange(ref)
+      const name = attributeOf(table, "", "displayName") ?? attributeOf(table, "", "name") ?? ""
+      const header = Number(attributeOf(table, "", "headerRowCount") ?? 1)
+      const totals = Number(attributeOf(table, "", "totalsRowCount") ?? 0)
+      return [
+        ...(header > 0 ? [{ ...range, bottom: range.top + header - 1, kind: "header cell", table: name }] : []),
+        ...(totals > 0 ? [{ ...range, top: range.bottom - totals + 1, kind: "totals cell", table: name }] : []),
+      ]
+    })
+}
+
 const editSheet = (
   workbook: Workbook,
   sheet: SheetRef,
@@ -405,6 +431,13 @@ const editSheet = (
   const sheetData = sheetDataOf(part, ns)
   const rows = rowsOf(sheetData, ns)
   const arrays = arrayRanges(rows, ns, text)
+  for (const label of tableLabels(workbook, sheet))
+    for (const item of planned)
+      if (item.row >= label.top && item.row <= label.bottom && item.column >= label.left && item.column <= label.right)
+        throw refuse(
+          `${sheet.name}!${item.address} is a ${label.kind} of the table "${label.table}", whose part repeats the text; change it in Excel`,
+          "office.table_header",
+        )
   const splices: Splice[] = []
   const changed: EditXlsxResult["changed"] = []
   let formulaRemoved = false
