@@ -1,10 +1,14 @@
 import type { ConditionalKey } from "../cli/permission-keys.js"
-import type { CrmItem, CrmKind, CrmRecords } from "../domain/crm.js"
+import type { CrmActivity, CrmItem, CrmKind, CrmRecords } from "../domain/crm.js"
 import type { DealKind, DealRole } from "../domain/deals.js"
 import type { Level, PermissionKey } from "../sends/permissions.js"
 
 export const CRM_VERBS = ["create", "update", "move", "close", "remove"] as const
 export type CrmVerb = (typeof CRM_VERBS)[number]
+
+/** The activities a CRM CLI may write: a comment (a note) on a record, and a task, which it may later mark done. */
+export const CRM_ACTIVITY_WRITES = ["comment", "task"] as const
+export type CrmActivityWrite = (typeof CRM_ACTIVITY_WRITES)[number]
 
 export interface CrmWriteCapabilities {
   /** The kinds the CRM takes writes for; a contact or a company takes only `create` and `update`. */
@@ -16,6 +20,11 @@ export interface CrmWriteCapabilities {
    * create repeated with one REST 3.0 `Idempotency-Key` a second time.
    */
   idempotent: boolean
+  /**
+   * The activities the writer makes: mounts `activities create` for these kinds, and `activities close` for a task.
+   * Left out, the CLI gets neither, and the writer needs no `createActivity` or `completeActivity`.
+   */
+  activities?: readonly CrmActivityWrite[]
 }
 
 /**
@@ -83,6 +92,21 @@ export interface CrmDrafts {
   organization: CrmOrganizationFields & { name: string }
 }
 
+/** A new comment or task on one or more of the CRM's deals, leads, contacts and companies. */
+export interface CrmActivityDraft {
+  kind: CrmActivityWrite
+  /** A task's title; a comment's title, for a CRM that keeps one. Required for a task. */
+  subject?: string
+  /** A comment's text, or a task's description. Required for a comment. */
+  body?: string
+  /** A task's deadline, epoch ms. */
+  dueAt?: number
+  /** A task's CRM user, by the CRM's id; left out, the CRM's own default (most often the sign-in's user). */
+  assignee?: string
+  /** The records it is on, by the CRM's ids: at least one. */
+  on: { kind: CrmKind; externalId: string }[]
+}
+
 export interface CrmWriteOptions {
   /** Journaled before the call; an idempotent CRM gets it as its idempotency key. */
   operationId: string
@@ -117,6 +141,10 @@ export interface CrmWriter {
     options: CrmWriteOptions & { reason?: string },
   ): Promise<CrmItem>
   remove(kind: DealKind, externalId: string, options: CrmWriteOptions): Promise<void>
+  /** Needed when `capabilities.activities` names any: the new activity as the CRM holds it. */
+  createActivity?(draft: CrmActivityDraft, options: CrmWriteOptions): Promise<CrmActivity>
+  /** Needed when `capabilities.activities` names `task`: the task, done, as the CRM holds it. */
+  completeActivity?(externalId: string, options: CrmWriteOptions): Promise<CrmActivity>
 }
 
 /** Giving a record to a CRM user other than the one the sign-in acts as. */
@@ -148,6 +176,8 @@ export const crmAlsoChecks =
   (also?: (kind: CrmKind, verb: CrmVerb) => readonly PermissionKey[]) =>
   (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
     const [noun, command] = path
+    if (noun === "activities" && command === "create" && path.length === 2)
+      return [{ key: CRM_ASSIGN_OTHERS_KEY, when: "--owner other than the sign-in's user" }]
     const kind = noun === undefined ? undefined : PLURALS[noun]
     const verb = command === undefined ? undefined : VERB_OF[command]
     if (path.length !== 2 || kind === undefined || verb === undefined) return []

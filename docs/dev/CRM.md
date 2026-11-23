@@ -58,6 +58,17 @@ it back), the owner decided about its identity link, or something else points at
 empty value clears the list. An adapter maps both lists for both kinds; `crmWriteContract` checks a company's phone
 and e-mail.
 
+Activity writes are opt-in: `capabilities.activities` names `comment`, `task` or both, and the writer then has
+`createActivity(draft, options)` and, for a task, `completeActivity(externalId, options)`, each answering the whole
+`CrmActivity` as the CRM holds it after the write. They mount `activities create <comment|task>` and
+`activities close <task>` (`createCrmActivity`, `completeCrmActivity`), even in a CLI without `activities: true`.
+`--subject` names the records it is on, repeated for more: `deal:<id>` and `lead:<id>` as the copy's references, as
+`deals update` takes them, and `person:<id>` and `organization:<id>` by the CRM's id, as `people update` takes them.
+The keys are `activities.create` and `activities.close`, allowed by default, and `crm.assign-others` for a task's
+`--owner` other than the sign-in's user; `CrmWrites.alsoChecks` is not asked, since an activity is no `CrmKind`. The
+answer is stored by `saveActivities`, as a sync would, only with the account's `activities` setting on and on a record
+the copy keeps; otherwise it says `stored: false`.
+
 ## Foreign contacts
 
 The owner's rule (NEED-2487, NEED-2660, NEED-2703 B): anyone but the CRM's administrator sees the phones and e-mails

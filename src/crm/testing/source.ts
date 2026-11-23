@@ -30,6 +30,7 @@ import type {
 import { crmWindowOf, walk } from "../walk.js"
 import {
   CRM_VERBS,
+  type CrmActivityDraft,
   type CrmDraft,
   type CrmFields,
   type CrmPersonFields,
@@ -96,6 +97,13 @@ export interface FakeCrmWrite {
   operationId: string
 }
 
+/** One activity write the fake CRM was sent, in order. */
+export interface FakeCrmActivityWrite {
+  verb: "create" | "done"
+  externalId: string | null
+  operationId: string
+}
+
 /**
  * A CRM held in memory, with a change feed and a write side: what the contracts sync and write against, and what a
  * CLI's tests may use. Custom field codes `stage`, `pipeline`, `owner` and `status` are refused, as an adapter refuses
@@ -132,6 +140,8 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   }
   /** Writes sent, refused ones included. */
   readonly writes: FakeCrmWrite[]
+  /** Activity writes sent, refused ones included; the fake makes them only when `capabilities.activities` is set. */
+  readonly activityWrites: FakeCrmActivityWrite[]
 }
 
 /** Custom codes the fake refuses: each is a neutral field under another name. */
@@ -202,6 +212,8 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     ...options.capabilities,
   }
   const writes: FakeCrmWrite[] = []
+  const activityWrites: FakeCrmActivityWrite[] = []
+  const madeActivities = new Map<string, CrmActivity>()
   const answered = new Map<string, unknown>()
   let made = 0
   let lose = false
@@ -263,6 +275,9 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   /** Each write once: a repeated idempotent id answers its first outcome; a lost answer still made the change. */
   const write = <T>(verb: CrmVerb, kind: CrmKind, externalId: string | null, operationId: string, act: () => T): T => {
     writes.push({ verb, kind, externalId, operationId })
+    return sent(`${verb} but its ${kind}`, operationId, act)
+  }
+  const sent = <T>(what: string, operationId: string, act: () => T): T => {
     if (capabilities.idempotent && answered.has(operationId)) return answered.get(operationId) as T
     const done = act()
     if (capabilities.idempotent) answered.set(operationId, done)
@@ -272,7 +287,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     }
     if (unread) {
       unread = false
-      throw new CliError("provider_error", `the CRM made the ${verb} but its ${kind} could not be read back`, {
+      throw new CliError("provider_error", `the CRM made the ${what} could not be read back`, {
         sent: true,
       })
     }
@@ -338,6 +353,46 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       reason: "query.unsupported-field",
     })
   }
+  /** Comments and tasks on records the fake holds; each a new change, read by `activities()` when it is given. */
+  const activityWriter = (): Pick<CrmWriter, "createActivity" | "completeActivity"> => ({
+    async createActivity(draft: CrmActivityDraft, { operationId }) {
+      activityWrites.push({ verb: "create", externalId: null, operationId })
+      return sent("activity but it", operationId, () => {
+        for (const { kind, externalId } of draft.on)
+          if (kind === "deal" || kind === "lead") held(kind, externalId)
+          else liveRecord(kind, externalId)
+        version += 1
+        made += 1
+        const at = STAMPED_FROM + version * 1000
+        const activity: CrmActivity = {
+          externalId: `activity-new-${made}`,
+          kind: draft.kind,
+          subject: draft.subject ?? "",
+          body: draft.body ?? null,
+          dueAt: draft.dueAt ?? null,
+          done: draft.kind === "comment",
+          assignee: draft.kind === "task" ? (draft.assignee ?? options.self ?? null) : null,
+          createdAt: at,
+          updatedAt: at,
+          on: draft.on,
+        }
+        madeActivities.set(activity.externalId, activity)
+        return activity
+      })
+    },
+    async completeActivity(externalId: string, { operationId }) {
+      activityWrites.push({ verb: "done", externalId, operationId })
+      return sent("done but the task", operationId, () => {
+        const found = madeActivities.get(externalId) ?? options.activities?.find((one) => one.externalId === externalId)
+        if (!found) throw new CliError("not_found", `the CRM has no activity ${externalId}`)
+        if (found.kind !== "task") throw new CliError("validation_error", `${externalId} is not a task`)
+        version += 1
+        const done = { ...found, done: true, updatedAt: STAMPED_FROM + version * 1000 }
+        madeActivities.set(externalId, done)
+        return done
+      })
+    },
+  })
   const fake: FakeCrmSource = {
     provider: "example-crm",
     traits,
@@ -345,6 +400,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     calls,
     capabilities,
     writes,
+    activityWrites,
     loseNextAnswer() {
       lose = true
     },
@@ -379,6 +435,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       })
       return answer as never
     },
+    ...(capabilities.activities?.length ? activityWriter() : {}),
     ...(options.admin === undefined ? {} : { isAdmin: async () => options.admin as boolean }),
     ...(options.stageHistory === undefined
       ? {}
@@ -396,7 +453,9 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       ? {}
       : {
           activities: async (since: number) => {
-            const items = (options.activities as CrmActivity[]).filter((one) => one.updatedAt > since)
+            const all = new Map((options.activities as CrmActivity[]).map((one) => [one.externalId, one]))
+            for (const [id, one] of madeActivities) all.set(id, one)
+            const items = [...all.values()].filter((one) => one.updatedAt > since)
             const newest = Math.max(since, ...items.map((one) => one.updatedAt))
             return { items, hasMore: false, cursor: String(newest) }
           },

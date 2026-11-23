@@ -86,7 +86,12 @@ const setup = async (
     command: "crm",
     opens: CRM_OPENS,
   })
-  const source = fakeCrmSource({ capabilities: { idempotent: options.idempotent ?? false } })
+  const source = fakeCrmSource({
+    capabilities: {
+      idempotent: options.idempotent ?? false,
+      ...(options.writes?.activities ? { activities: options.writes.activities } : {}),
+    },
+  })
   const home = mkdtempSync(join(tmpdir(), "crm-writes-"))
   const env = { HOME: home, XDG_DATA_HOME: home, XDG_STATE_HOME: home, CRM_STATE_DIR: home }
   const alsoChecks: { value?: (kind: string, verb: string) => readonly string[] } = {}
@@ -536,8 +541,14 @@ describe("CRM commands", () => {
         addCrmCommands(root, {
           app: APP,
           open: () => Promise.reject(new Error("not opened")),
-          writes: { ...WRITES, kinds: [...WRITES.kinds, "person", "organization"], idempotent: true },
+          writes: {
+            ...WRITES,
+            kinds: [...WRITES.kinds, "person", "organization"],
+            idempotent: true,
+            activities: ["comment", "task"],
+          },
           live: ["person", "organization", "user"],
+          activities: true,
         })
         return [commandsCommand(APP), runsCommand(APP), ...root.commands]
       },
@@ -1147,6 +1158,161 @@ describe("CRM activities", () => {
     await cli("sync")
     const found = await cli("search", "all", "warehouse", "lease", "--only", "crm")
     expect(found.items).toEqual([expect.objectContaining({ kind: "deal", title: "Example deal d1" })])
+  })
+})
+
+describe("CRM activity writes", () => {
+  const ACTIVITY_WRITES: CrmWriteCapabilities = { ...WRITES, activities: ["comment", "task"] }
+  const synced = async (options: Parameters<typeof setup>[1] = {}, on = true) => {
+    const harness = await setup({}, { writes: ACTIVITY_WRITES, activities: true, ...options })
+    if (on) {
+      const database = await openCache(harness.path)
+      saveCrmSetting(database, crmSettingKey(PORTAL, "activities"), "on", Date.now())
+      database.close()
+    }
+    await harness.cli("sync")
+    const ref = (await harness.cli("deals", "list", "status:open")).items[0]?.ref as string
+    return { ...harness, ref }
+  }
+  const mounted = (options: Partial<CrmCommandOptions>) => {
+    const root = new Command("crm")
+    addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")), ...options })
+    return root.commands.find((one) => one.name() === "activities")?.commands.map((one) => one.name())
+  }
+
+  it("exist only for the activities the writer's capabilities name", () => {
+    expect(mounted({ activities: true, writes: WRITES })).toEqual(["list"])
+    expect(mounted({ writes: WRITES })).toBeUndefined()
+    expect(mounted({ writes: { ...WRITES, activities: ["comment"] } })).toEqual(["create"])
+    expect(mounted({ activities: true, writes: ACTIVITY_WRITES })).toEqual(["list", "create", "close"])
+  })
+
+  it("a comment on a deal is written once, journaled, and listed from the copy at once", async () => {
+    const { cli, ref, source, journal } = await synced()
+    const made = await cli(
+      "activities",
+      "create",
+      "comment",
+      "--subject",
+      ref,
+      "--text",
+      "Example: asked for a discount",
+    )
+    expect(made.item).toMatchObject({
+      stored: true,
+      activity: { kind: "comment", body: "Example: asked for a discount", done: true, on: [{ kind: "deal", ref }] },
+    })
+    expect(source.activityWrites).toEqual([expect.objectContaining({ verb: "create" })])
+    expect(journal()).toEqual([
+      expect.objectContaining({ outcome: "sent", key: "activities.create", operationId: made.item.operation_id }),
+    ])
+    const listed = await cli("activities", "list", ref, "status:done", "--offline")
+    expect(listed.items).toEqual([expect.objectContaining({ kind: "comment", body: "Example: asked for a discount" })])
+  })
+
+  it("a task takes its due time and the sign-in's own user, and close marks it done in the CRM and the copy", async () => {
+    const { cli, ref, journal } = await synced()
+    const made = await cli(
+      "activities",
+      "create",
+      "task",
+      "--subject",
+      ref,
+      "--subject",
+      "person:p1",
+      "--title",
+      "Example: call back",
+      "--due",
+      "2026-12-01T10:00:00Z",
+      "--owner",
+      "7",
+    )
+    const task = made.item.activity as Record<string, unknown>
+    expect(task).toMatchObject({
+      kind: "task",
+      subject: "Example: call back",
+      due_at: "2026-12-01T10:00:00.000Z",
+      done: false,
+      assignee: "portal/user/7",
+      on: [
+        { kind: "deal", ref },
+        { kind: "person", external_id: "p1" },
+      ],
+    })
+    expect((await cli("activities", "list", "status:open")).items).toEqual([
+      expect.objectContaining({ external_id: task.external_id }),
+    ])
+    const done = await cli("activities", "close", task.external_id as string)
+    expect(done.item).toMatchObject({ stored: true, activity: { done: true, on: [{ ref }, { external_id: "p1" }] } })
+    expect((await cli("activities", "list", "status:open")).items).toEqual([])
+    expect(journal().map(({ key }) => key)).toEqual(["activities.create", "activities.close"])
+  })
+
+  it("a task for another CRM user checks crm.assign-others, denied by default, and --dry-run names the key", async () => {
+    const { cli, ref, source } = await synced()
+    const typed = ["activities", "create", "task", "--subject", ref, "--title", "Example", "--owner", "9"]
+    await expect(cli(...typed)).rejects.toMatchObject({ code: "permission_error" })
+    expect((await cli(...typed, "--dry-run")).item).toMatchObject({ preview: true })
+    expect(source.activityWrites).toEqual([])
+    expect(crmAlsoChecks()(["activities", "create"])).toEqual([
+      { key: "crm.assign-others", when: "--owner other than the sign-in's user" },
+    ])
+    expect(crmAlsoChecks()(["activities", "close"])).toEqual([])
+  })
+
+  it("refuses what the kind does not take, or a record it cannot name, before anything is sent", async () => {
+    const { cli, ref, source } = await synced()
+    const refused = [
+      ["comment", "--subject", ref],
+      ["task", "--subject", ref, "--text", "Example"],
+      ["comment", "--subject", ref, "--text", "Example", "--due", "2026-12-01"],
+      ["comment", "--subject", ref, "--text", "Example", "--owner", "7"],
+      ["comment", "--text", "Example"],
+      ["comment", "--subject", "12", "--text", "Example"],
+      ["comment", "--subject", "deal:999999", "--text", "Example"],
+    ]
+    for (const args of refused)
+      await expect(cli("activities", "create", ...args)).rejects.toMatchObject({
+        code: expect.stringMatching(/validation_error|not_found/),
+      })
+    expect(source.activityWrites).toEqual([])
+  })
+
+  it("with the activities setting off, writes and answers it without storing it", async () => {
+    const { cli, ref } = await synced({}, false)
+    const made = await cli("activities", "create", "comment", "--subject", ref, "--text", "Example")
+    expect(made.item).toMatchObject({ stored: false, activity: { kind: "comment" } })
+  })
+
+  it("a lost answer is outcome_unknown, journaled, and never sent again", async () => {
+    const { cli, ref, source, journal } = await synced()
+    source.loseNextAnswer()
+    await expect(cli("activities", "create", "comment", "--subject", ref, "--text", "Example")).rejects.toMatchObject({
+      code: "outcome_unknown",
+      message: expect.stringContaining("sync and look"),
+    })
+    expect(source.activityWrites).toHaveLength(1)
+    expect(journal()).toEqual([expect.objectContaining({ outcome: "outcome_unknown", key: "activities.create" })])
+  })
+
+  it("an activity the CRM made but could not read back is journaled as sent, and the failure answered", async () => {
+    const { cli, ref, source, journal } = await synced()
+    source.failNextReadBack()
+    await expect(cli("activities", "create", "comment", "--subject", ref, "--text", "Example")).rejects.toMatchObject({
+      code: "provider_error",
+      details: { sent: true, operation_id: expect.any(String) },
+    })
+    expect(journal()).toEqual([expect.objectContaining({ outcome: "sent", key: "activities.create" })])
+  })
+
+  it("are MCP writes, and --subject takes a list", () => {
+    const root = new Command("crm")
+    addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")), writes: ACTIVITY_WRITES })
+    const tools = toolsFromCommands(describeProgram(root))
+    const create = tools.find(({ command }) => command === "activities create")
+    expect(create?.writes).toBe(true)
+    expect(JSON.stringify(create?.input.entries.subject)).toContain("array")
+    expect(tools.find(({ command }) => command === "activities close")?.writes).toBe(true)
   })
 })
 

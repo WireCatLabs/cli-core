@@ -118,8 +118,9 @@ export interface CrmCommandOptions {
   /** The CRM has leads: mounts `leads list|show`. True when absent. */
   leads?: boolean
   /**
-   * The writer's capabilities: mounts `create`, `update`, `move`, `close` and `delete` of each deal kind it writes, and
-   * `create` and `update` of `people` and `organizations` when they are mounted too.
+   * The writer's capabilities: mounts `create`, `update`, `move`, `close` and `delete` of each deal kind it writes,
+   * `create` and `update` of `people` and `organizations` when they are mounted too, and `activities create` and
+   * `done` for the activities it names.
    */
   writes?: CrmWriteCapabilities
   /**
