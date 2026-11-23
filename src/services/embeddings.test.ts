@@ -200,6 +200,26 @@ describe("embeddings", () => {
     await store.close()
   })
 
+  it("**shows a huge conversation's chunk that best fits the question and the made-up answer**, not its nearest", async () => {
+    const one = (word: string) => `${word} `.repeat(175).trim()
+    const { store, embeddings } = await setUp({
+      messages: [
+        message("1", one("cat")),
+        ...Array.from({ length: 50 }, (_, at) => message(`${at + 2}`, one("dog"), `${at + 1}`)),
+        message("52", "cat fish ".repeat(78).trim(), "51"),
+        message("53", one("fish"), "52"),
+      ],
+    })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+
+    const asked = await embeddings.search("kitten", { model: "tiny", limit: 1 })
+    expect(asked.hits[0]?.chunk).toEqual({ firstMessageId: "1", lastMessageId: "1" })
+    const answered = await embeddings.search("kitten", { model: "tiny", limit: 1, like: "fish" })
+    expect(answered.hits[0]).toMatchObject({ chunk: { firstMessageId: "52", lastMessageId: "52" } })
+    expect(answered.hits[0]?.locator).toContain("52")
+    await store.close()
+  })
+
   it("**keeps the owner's chunk in the block when a named chat's hits push its conversation off the page**", async () => {
     const { store, embeddings, conversations } = await setUp({
       messages: [{ ...message("80", "fish"), outgoing: true }],

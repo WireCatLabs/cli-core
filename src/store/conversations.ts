@@ -52,6 +52,15 @@ export interface ConversationsStore {
     chunks: { conversationId: string; firstMessageId: Id; lastMessageId: Id }[],
     limit: number,
   ): Promise<{ id: Id; sender: string | null; text: string; outgoing: boolean }[][]>
+  /**
+   * In a conversation of more than `over` chunks, the chunk that ranks best by summed cosine to `vectors` and by the
+   * weighted rarity of `stems` among its chunks, fused; `undefined` for a smaller conversation.
+   */
+  bestChunk(
+    key: AccountKey,
+    conversationId: string,
+    search: { model: string; vectors: Float32Array[]; stems: { stem: string; weight: number }[]; over: number },
+  ): Promise<{ firstMessageId: Id; lastMessageId: Id } | undefined>
   /** Every link a message has, the messenger's first. */
   links(key: AccountKey, chatId: Id, messageId: Id, options?: { limit: number }): Promise<StoredLink[]>
   replies(key: AccountKey, chatId: Id, messageId: Id, limit: number): Promise<Page<{ messageId: Id }>>
@@ -141,6 +150,14 @@ export const conversationsStoreOver = (context: StoreContext): ConversationsStor
       return accountPk === undefined
         ? chunks.map(() => [])
         : conversationQueries.chunkRepliesOf(context, accountPk, chunks, limit)
+    },
+
+    bestChunk: async (key, conversationId, search) => {
+      const accountPk = findAccountPk(key)
+      const pk = Number(conversationId)
+      return accountPk === undefined || !Number.isSafeInteger(pk)
+        ? undefined
+        : conversationQueries.bestChunkOf(context, accountPk, pk, search)
     },
 
     links: async (key, chatId, messageId, options) => {
