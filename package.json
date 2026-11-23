@@ -264,7 +264,7 @@
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate",
     "db:bundle": "node scripts/bundle-migrations.ts",
-    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check && node scripts/standard-docs.ts --check",
+    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check && node scripts/standard-docs.ts --check && node scripts/reasons-docs.ts --check",
     "standard:docs": "node scripts/standard-docs.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -285,6 +285,7 @@
     "standards:check": "node config/wirecat/check.mjs",
     "docs:images": "node docs/images/src/render.ts",
     "docs:lint": "markdownlint-cli2",
+    "reasons:docs": "node scripts/reasons-docs.ts",
     "docs:spell": "cspell lint --config cspell.json --no-progress README.md",
     "ci:quick": "pnpm typecheck && vitest run src/cli/command-lint.test.ts",
     "help:examples": "HELP_EXAMPLES_REPORT=1 vitest run scripts/help-examples.test.ts --silent=false"

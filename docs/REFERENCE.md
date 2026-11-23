@@ -816,6 +816,8 @@ every entry point not on the list is experimental as a whole (`./meetings`, `./m
   `messages`, `people`, `tags` and `close`. `MessageStoreAreas`, every other area, is experimental, as are the family
   entry points it serves.
 - The store file format is stable too: `minCompatible` rises only in a major.
+- The error reasons are stable too. [Error reasons](reasons.md) lists every one with its code; removing, renaming
+  or recoding one is a break.
 
 The stable names are the ones that two or more WireCat CLIs import, or the CLI template, plus every type those
 names reach. tg-cli and max-cli take new versions through Dependabot pull requests.
