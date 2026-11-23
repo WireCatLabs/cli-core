@@ -10,17 +10,26 @@ export {
 export {
   type CrmAfterHook,
   type CrmChangesCall,
+  type CrmFixedValue,
   type CrmManifest,
   type CrmManifestEntity,
   type CrmManifestFields,
   type CrmManifestHooks,
   type CrmManifestPipelines,
+  type CrmManifestWrite,
   type CrmOperationCall,
   type CrmRule,
+  type CrmWriteRule,
   parseCrmManifest,
 } from "./manifest/manifest.js"
 export { crmManifestProblems } from "./manifest/paths.js"
-export { type CrmManifestSourceOptions, crmSourceFromManifest } from "./manifest/source.js"
+export { type CrmManifestSource, type CrmManifestSourceOptions, crmSourceFromManifest } from "./manifest/source.js"
+export {
+  type CrmManifestWritesOptions,
+  crmManifestWriteCapabilities,
+  crmManifestWriteKeys,
+  crmManifestWrites,
+} from "./manifest/writer.js"
 export { type ProviderCallOptions, providerCall } from "./provider-call.js"
 export {
   type CrmConditionHooks,

@@ -16,6 +16,8 @@ export {
   crmManifestContract,
   crmManifestFake,
   crmManifestFixture,
+  crmManifestWriteContract,
+  crmManifestWriteFixture,
   FAKE_MANIFEST_TOKEN,
 } from "./manifest-fake.js"
 export {
