@@ -4,7 +4,9 @@
   `issues search` and the tracker lane of `search all`, matches a query word to a word of the same stem
   («поставки цемента» finds «Поставка цемента», `invoice failing` finds "Invoices fail") and to a word it begins, as
   CRM deals are matched. A word starts others from four letters, not three as before: `bug` no longer finds `bugfix`,
-  only `bug` and `bugs`. `--exact` keeps the words as written. See [TRACKER.md](../docs/dev/TRACKER.md#storetracker).
+  only `bug` and `bugs`. `--exact` keeps the words as written. One search reads at most 2,000 rows the word index
+  offers; when it offered more, the answer has `capped: true` and `hasMore` while the page found any. See
+  [TRACKER.md](../docs/dev/TRACKER.md#storetracker).
 
 - **`search all` shows an issue, project or comment two sign-ins hold once.** Two tracker accounts on one workspace
   showed every item twice side by side, so ten results held about five items. The copies (same provider, kind and id)

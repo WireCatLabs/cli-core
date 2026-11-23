@@ -79,10 +79,13 @@ read. Nothing is written to the people graph.
 `find` matches words as a CRM's deals are matched (`src/search/word-match.ts`): a query word finds the same word, a
 word it begins when it has four letters or more, or a word of the same stem by the default Snowball stemmers (Russian,
 English, Spanish); a word of several parts (`ENG-12`) finds its parts in a row. `exact` keeps the words as written. The
-word index `tracker_item_words` gives the candidates (each word, its beginning and the first three letters of its
-stems), and the words of each candidate decide. Rows holding all the words keep the index's order; with `anyWord`, the
-first 2,000 candidates are ranked by how many words they hold first, and candidates past them are not read. Spelling
-is not corrected.
+word index `tracker_item_words` gives the candidates in one ranked read: rows holding the word, a word it begins, or a
+word that begins with its stem (an English stem's final `i` left off, since Snowball turns `company` into `compani`;
+the few English words Snowball stems irregularly, such as `skies` to `sky`, are not found by another form). The words
+of each candidate decide. At most 2,000 candidates are read: rows holding all the words keep the index's order and the
+reading stops once the page is full; with `anyWord` all of them are read and ranked by how many words they hold
+first. When the index offered more, the answer has `capped: true`, and `hasMore` is set while the page found any.
+Spelling is not corrected.
 
 Issues, projects and comments are searched by meaning too. Their chunks (`chunks.chunkable_type = 'tracker_item'`,
 `chunkable_id` = `tracker_items.id`, `src/store/sqlite/tracker-chunks.ts`) are cut as a note's are: title and

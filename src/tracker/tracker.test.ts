@@ -493,15 +493,28 @@ describe("syncTracker and the owner's tasks", () => {
 })
 
 describe("store.tracker.find", () => {
-  it("reads past rows the index offers that hold no form of a word, and says no more when none is left", async () => {
+  it("finds the forms of a word among thousands of rows that share its first letters", async () => {
     const store = await storeOf()
-    const stable = Array.from({ length: 2_100 }, (_, at) => ({ externalId: `s${at}`, title: `Stable build ${at}` }))
     const starting = [1, 2, 3].map((at) => ({ externalId: `f${at}`, title: `Starting fails ${at}` }))
-    await store.tracker.save(account, "issue", [...stable, ...starting], 1)
+    const stable = Array.from({ length: 2_100 }, (_, at) => ({ externalId: `s${at}`, title: `Stable build ${at}` }))
+    await store.tracker.save(account, "issue", [...starting, ...stable], 1)
     for (const anyWord of [false, true]) {
       const found = await store.tracker.find({ words: ["started"], anyWord, accounts: [account], limit: 10 })
       expect(found.items.map(({ item }) => item.record.externalId).sort()).toEqual(["f1", "f2", "f3"])
-      expect(found.hasMore).toBe(false)
+      expect(found).toMatchObject({ hasMore: false })
+      expect(found.capped).toBeUndefined()
+    }
+  })
+
+  it("says it read only the first rows the index offered when more held the word's beginning", async () => {
+    const store = await storeOf()
+    const bridges = [1, 2, 3].map((at) => ({ externalId: `b${at}`, title: `Construction of the bridge ${at}` }))
+    const others = Array.from({ length: 2_100 }, (_, at) => ({ externalId: `c${at}`, title: `Constructor ${at}` }))
+    await store.tracker.save(account, "issue", [...bridges, ...others], 1)
+    for (const anyWord of [false, true]) {
+      const found = await store.tracker.find({ words: ["constructions"], anyWord, accounts: [account], limit: 10 })
+      expect(found.capped).toBe(true)
+      expect(found.hasMore).toBe(found.items.length > 0)
     }
   })
 })

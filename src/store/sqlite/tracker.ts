@@ -124,7 +124,11 @@ export interface TrackerStore {
     kind: K,
     filter?: TrackerFilter,
   ): Promise<{ items: TrackerItem<K>[]; hasMore: boolean }>
-  find(search: TrackerSearch): Promise<{ items: TrackerHit[]; hasMore: boolean }>
+  /**
+   * Issues, projects and comments by their words. `capped`: the index offered more rows than are read for one search,
+   * so a later row holding the words may be left out; `hasMore` is set while the page found any.
+   */
+  find(search: TrackerSearch): Promise<{ items: TrackerHit[]; hasMore: boolean; capped?: true }>
   /** Live rows of the kind, archived ones included. */
   count(key: AccountKey, kind: TrackerKind): Promise<number>
   /** The tracker users among `users` whose e-mail, in any letter case, an identity linked to one person has. */
@@ -152,7 +156,7 @@ export interface TrackerStore {
 }
 
 const MOST = 500
-/** How many rows the index may offer a search for any of its words before the best of them are kept. */
+/** How many rows the index may offer one search; each is read and its words checked. */
 const CANDIDATES = 2_000
 const PAGE = 200
 
@@ -196,8 +200,9 @@ const keyOf = (data: unknown): string | undefined =>
 const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state" } as const
 
 /**
- * The words as clauses for `clauseIn`, and the index expression that finds every row they could match: a word, a word
- * it begins, or the first three letters of its stem, which every word of that stem starts with.
+ * The words as clauses for `clauseIn`, and the index expression that finds the rows they could match: a word, a word
+ * it begins, or a word that begins with its stem. A Snowball stem begins its word, but for the English `y` it turns to
+ * `i` (`compani`), so a stem ending in `i` is looked up without it.
  */
 const queryOf = (words: readonly string[], exact: boolean) => {
   const seen = new Set<string>()
@@ -213,7 +218,11 @@ const queryOf = (words: readonly string[], exact: boolean) => {
   if (!clauses.length) return undefined
   const termOf = ({ literal, stems }: Probe) => {
     const terms = new Set([exact || literal.length < START_LETTERS ? `"${literal}"` : `"${literal}"*`])
-    if (!exact) for (const stem of stems) if (stem.length >= 3) terms.add(`"${stem.slice(0, 3)}"*`)
+    if (!exact)
+      for (const stem of stems) {
+        const start = stem.endsWith("i") ? stem.slice(0, -1) : stem
+        if (start.length >= 3) terms.add(`"${start}"*`)
+      }
     return terms.size > 1 ? `(${[...terms].join(" OR ")})` : [...terms].join("")
   }
   const expressions = clauses.map((clause) => `(${clause.flatMap((word) => word.map(termOf)).join(" AND ")})`)
@@ -396,8 +405,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     if (accounts !== undefined && !scoped.length) return { items: [], hasMore: false }
     const params: (string | number)[] = [query.match(anyWord)]
     let sql =
-      `SELECT ${COLUMNS}, t.title, t.body, a.provider, a.external_id AS account FROM tracker_items t ` +
-      "JOIN accounts a ON a.id = t.account_id " +
+      "SELECT t.id FROM tracker_items t " +
       "JOIN (SELECT rowid, rank FROM tracker_item_words WHERE tracker_item_words MATCH ?) w ON w.rowid = t.id " +
       "WHERE t.deleted_at IS NULL"
     if (accounts !== undefined) {
@@ -408,18 +416,30 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       sql += ` AND t.kind IN (${kinds.map(() => "?").join(", ")})`
       for (const kind of kinds) params.push(kind)
     }
-    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ? OFFSET ?"
-    const page = database.prepare(sql)
+    sql += " ORDER BY w.rank, t.source_updated_at DESC, t.id DESC LIMIT ?"
+    // One read of the index for the ids, then the rows in pages: paging the ranked query by OFFSET ranks it again for
+    // every page.
+    const ids = database
+      .prepare(sql)
+      .all(...params, CANDIDATES + 1)
+      .map(({ id }) => Number(id))
+    const capped = ids.length > CANDIDATES
+    const rowsOf = database.prepare(
+      `SELECT ${COLUMNS}, t.id, t.title, t.body, a.provider, a.external_id AS account FROM tracker_items t ` +
+        "JOIN accounts a ON a.id = t.account_id WHERE t.id IN (SELECT value FROM json_each(?))",
+    )
     const wanted = offset + most + 1
     const found: { row: Row; held: StoredWord[]; hit: QueryWord[][]; score: number; at: number }[] = []
     let read = 0
-    let more = true
-    // The index narrows by word beginnings; each candidate's own words decide. All words matched rank by the index
-    // alone, so the page is read in its order; some of them rank by how many matched first, over a bounded read.
-    while (more && (anyWord ? read < CANDIDATES : found.length < wanted)) {
-      const rows = page.all(...params, PAGE, read)
-      more = rows.length === PAGE
-      for (const row of rows) {
+    // Each candidate's own words decide. All words matched rank by the index alone, so the reading stops once the page
+    // is full; some of them rank by how many matched first, over every candidate.
+    for (let at = 0; at < Math.min(ids.length, CANDIDATES); at += PAGE) {
+      if (!anyWord && found.length >= wanted) break
+      const batch = ids.slice(at, Math.min(at + PAGE, CANDIDATES))
+      const byId = new Map(rowsOf.all(JSON.stringify(batch)).map((row) => [Number(row.id), row]))
+      for (const id of batch) {
+        const row = byId.get(id)
+        if (!row) continue
         read += 1
         const held = tokensOf([row.title, row.body].filter(Boolean).join("\n")).map((token) => ({
           token,
@@ -445,7 +465,9 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           excerpt: excerptOf([row.title, row.body].filter(Boolean).join("\n"), [...words, ...matched]),
         }
       }),
-      hasMore: rows.length > most,
+      // A capped search may hold more past what was read; an empty page ends the paging.
+      hasMore: rows.length > most || (capped && rows.length > 0),
+      ...(capped ? { capped: true as const } : {}),
     }
   }
 
