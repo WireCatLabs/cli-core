@@ -2713,6 +2713,32 @@ describe("the shared read commands", () => {
     expect(searchMessages).not.toHaveBeenCalled()
   })
 
+  it("**a refused server search** names the refusal by its keys in the note, never the provider's words", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = {
+      ...process.env,
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const searchMessages = vi.fn(async () => {
+      throw new CliError("permission_error", "the app lacks search:read for user 42", { reason: "oauth.scope-missing" })
+    })
+    const both = await call(
+      ["search", "messages", "chapter", "--backend", "both", "--json"],
+      async () => ({ ...fake, searchMessages }),
+      env,
+      {},
+      { serverSearch: true },
+    )
+    expect(both.code).toBe(0)
+    const errors = both.stderr.join("\n")
+    expect(errors).toContain("server search incomplete: search_failed (permission_error: oauth.scope-missing)")
+    expect(errors).not.toContain("user 42")
+  })
+
   it("**thread context** follows stored replies by locator and keeps JSON/JSONL data pure", async () => {
     const root = mkdtempSync(join(tmpdir(), "thread-cli-"))
     const env = {

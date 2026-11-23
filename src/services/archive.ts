@@ -641,11 +641,18 @@ const savedReplies = async (
   if (!connection.threadReplies || stop.aborted) return 0
   const startedAt = Date.now()
   const point = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
-  const replies = await connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
-  if (replies.length > 0)
-    await store.messages.saveMessages(account, chatId, replies, { via: "history", seenAt: startedAt })
+  const answer = connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
+  const batches = Symbol.asyncIterator in answer ? answer : [await answer]
+  let saved = 0
+  for await (const replies of batches) {
+    if (replies.length > 0)
+      await store.messages.saveMessages(account, chatId, replies, { via: "history", seenAt: startedAt })
+    saved += replies.length
+    // The point moves only once every batch is saved, so a stopped run reads them again.
+    if (stop.aborted) return saved
+  }
   await store.sync.setSyncState(account, threadsKey(chatId), String(startedAt))
-  return replies.length
+  return saved
 }
 
 /** When the message a held stretch starts at was sent: by time the key is the time; by id, the stored message says. */

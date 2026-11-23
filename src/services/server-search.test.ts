@@ -284,8 +284,20 @@ describe("server search beside the archive", () => {
       throw new CliError("rate_limited", "Telegram asks to wait 30 s")
     })
     const found = await one.search({ text: "invoice", backend: "both" })
-    expect(found.server?.failed).toEqual([{ chat: null, reason: "rate_limited" }])
+    expect(found.server?.failed).toEqual([{ chat: null, reason: "rate_limited", error: { code: "rate_limited" } }])
+    expect(JSON.stringify(found)).not.toContain("30 s")
     expect(found.items).toHaveLength(2)
+  })
+
+  it("names a refusal by its keys, so the owner knows to grant a permission, without the provider's words", async () => {
+    const one = await setup(async () => {
+      throw new CliError("permission_error", "the app lacks search:read for user 42", { reason: "oauth.scope-missing" })
+    })
+    const found = await one.search({ text: "invoice", backend: "both" })
+    expect(found.server?.failed).toEqual([
+      { chat: null, reason: "search_failed", error: { code: "permission_error", reason: "oauth.scope-missing" } },
+    ])
+    expect(JSON.stringify(found)).not.toContain("user 42")
   })
 
   it("keeps the archive answer when the connection fails", async () => {
