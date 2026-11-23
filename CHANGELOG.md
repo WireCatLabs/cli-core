@@ -5,6 +5,42 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.725.0 — 23.11.2026
+
+### Added
+
+- **`search all` finds a tracker's issues, projects and comments.** A new lane, `tracker`, reads every tracker
+  account's copy by the words of titles and text, as `issues search` does, beside messages, mail, notes and the rest.
+  Hits are `issue` (titled with the key, `ENG-12 Fix login`), `project` and `issue_comment`, with ref
+  `tracker:<provider>/<account>/<kind>/<id>`, their title and excerpt untrusted. A provider kind `tracker` joins the
+  registry, and `linear` is seeded as one. A CLI that gates `search all` lanes by list keys gates issues and comments
+  by `issues.list` and projects by `projects.list`: memo needs that gate in the bump that brings this lane
+  ([TRACKER.md](docs/dev/TRACKER.md#search-all)).
+
+### Changed — may break callers
+
+- **`mirrors conflicts resolve` runs inside the app's run.** `FileConflictCommands.connect(command, mirror, body)` now
+  takes the body and runs it inside the app's run, so a resolve is bounded by `--timeout`, kept by `--record` under its
+  own name, and its requests land in that run. Before, `connect` answered the connection and the resolve ran outside
+  any run. A CLI that mounts `fileConflictsCommand` wraps `body(connection)` in its own run, as its `mirrors sync`
+  does; `FileConflictConnection` is the type it hands over (#3230).
+- **The Office edit refusals keep their own reason, spelled like every other reason.** `office.formula_cell` and the
+  other `office.*` reasons were not registered, so the CLI and MCP showed `input.invalid` in their place, and the
+  registry refuses an underscore. They are registered now and use hyphens: `office.formula-cell`,
+  `office.wrong-format`, `office.invalid-cell`, `office.no-sheet` and the rest
+  ([Editing Office files](docs/office.md)). Code that compared `details.reason` with the old spelling compares
+  with the new one.
+
+### Fixed
+
+- **The shared `changes` command passes the command lint.** With cli-base 0.129.0 or later, whose vocabulary has the
+  view `changes` and the flags `--since <time>` and `--event <events>`, and the `--until <time>` cli-core 0.724.0
+  takes, a documents CLI needs no lint override or audit difference for it. cli-core's own command lint now mounts
+  `documents history` and `changes`, so a new finding fails here first (#3229).
+- **`crmManifestFake` keeps a written value at a place whose schema lists the values it takes.** It dropped every
+  value there and kept its sample, the list's first: a deal written in EUR read back in ARS from Attio's real
+  `currency_code`, so `crmManifestWriteContract` failed on Attio's own API description.
+
 ## 0.724.0 — 23.11.2026
 
 ### Added
