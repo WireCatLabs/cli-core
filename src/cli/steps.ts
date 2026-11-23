@@ -267,6 +267,20 @@ export const rootOf = (command: Command): Command => {
   return root
 }
 
+/** `messages list` from `messages list 111 --limit 5`: the words that name commands, up to the first that does not. */
+export const typedCommandPath = (program: Command, rest: string[]): string => {
+  const words: string[] = []
+  let current = program
+  for (const token of rest) {
+    if (token.startsWith("-")) continue
+    const next = current.commands.find((one) => one.name() === token || one.aliases().includes(token))
+    if (!next) break
+    words.push(token)
+    current = next
+  }
+  return words.join(" ")
+}
+
 /** The command a path names in this program, or nothing when this CLI does not have it. */
 export const commandAt = (root: Command, path: string): Command | undefined => {
   let at: Command | undefined = root

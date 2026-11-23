@@ -1,4 +1,6 @@
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { commandPathOf } from "./command-contract.js"
 
 /**
  * A flag a command does not take, but an agent is likely to type, fails with what to type instead rather than
@@ -29,3 +31,31 @@ export const SENDER_FLAGS = ["--from", "--sender", "--author"]
 export const AROUND_HINT =
   "read the messages either side of one: messages context <hit ref> --before-n 5 --after-n 5 " +
   "(or messages context <chat> <message>)"
+
+/** A flag of a sibling command: the agent picked the wrong command, and a near flag of this one would mislead. */
+export const siblingOption = (leaf: Command | undefined, message: string): string => {
+  const flag = /^unknown option '([^'=]+)/.exec(message)?.[1]
+  if (!flag || !leaf?.parent || / — |\(Did you mean/.test(message)) return ""
+  const owners = leaf.parent.commands.filter(
+    (one) => one !== leaf && one.options.some((option) => option.long === flag),
+  )
+  if (owners.length === 0) return ""
+  return ` — ${flag} is an option of ${owners.map((one) => commandPathOf(one).join(" ")).join(", ")}`
+}
+
+/**
+ * Every word after `--` is an argument, so an option left there, one the command does not take, silently became
+ * query text and fails as syntax far from its cause.
+ */
+export const queryAfterDashes = (error: unknown, leaf: Command | undefined, argv: readonly string[]): unknown => {
+  if (!isCliError(error) || !String(error.details.reason ?? "").startsWith("query.") || !argv.includes("--"))
+    return error
+  const query = leaf?.processedArgs.at(-1)
+  if (!Array.isArray(query) || query.length === 0) return error
+  return new CliError(
+    error.code,
+    `${error.message} — after --, every word is an argument, so "${query.join(" ")}" was read as the query; ` +
+      "put options before --",
+    error.details,
+  )
+}
