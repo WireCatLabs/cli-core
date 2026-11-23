@@ -12,7 +12,18 @@ import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { excerptOf, matchOf } from "./crm-files.js"
 import type { StoreContext } from "./open.js"
+import {
+  dropTrackerChunks,
+  isChunkedTrackerKind,
+  nearestTrackerItems,
+  refreshTrackerChunks,
+  trackerChunksLeft,
+  trackerChunksToEmbed,
+  trackerChunkWriter,
+  trackerEmbedded,
+} from "./tracker-chunks.js"
 import { write } from "./transaction.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 /** One stored tracker record with what the store keeps beside it. */
 export interface TrackerItem<K extends TrackerKind = TrackerKind> {
@@ -55,6 +66,13 @@ export interface TrackerSearch {
   kinds?: readonly TrackerKind[]
   limit?: number
   offset?: number
+}
+
+/** An issue, a project or a comment found by meaning: the cosine of its nearest chunk. */
+export interface TrackerNearest {
+  account: AccountKey
+  item: TrackerItem
+  score: number
 }
 
 /** A tracker user joined to the one person the store knows by the same e-mail. */
@@ -101,6 +119,26 @@ export interface TrackerStore {
   count(key: AccountKey, kind: TrackerKind): Promise<number>
   /** The tracker users among `users` whose e-mail, in any letter case, an identity linked to one person has. */
   people(key: AccountKey, users: readonly string[]): Promise<TrackerPerson[]>
+  /**
+   * Before embedding: drops the chunks of issues, projects and comments the tracker no longer lists, and cuts those
+   * of live ones saved before they were searched by meaning. `save` and `removeUnlisted` keep the rest in step.
+   */
+  refreshChunks(): Promise<{ dropped: number; added: number }>
+  /** Live issues', projects' and comments' chunks with no vector of `model`, by hash from `after`, with their text. */
+  chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
+  /** How many chunks `chunksToEmbed` would still give, at most. */
+  chunksLeft(model: string): Promise<number>
+  /** Whether a live item of these accounts has a vector of `model`. */
+  embedded(model: string, accounts: readonly AccountKey[]): Promise<boolean>
+  /**
+   * Live issues, projects and comments of these accounts nearest in meaning to `query`, archived ones too, each by its
+   * best chunk, best first. Vectors are unit length.
+   */
+  nearest(
+    model: string,
+    query: Float32Array,
+    options: { limit: number; accounts: readonly AccountKey[] },
+  ): Promise<TrackerNearest[]>
 }
 
 const MOST = 500
@@ -150,6 +188,10 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const stored = database.prepare(
         "SELECT data FROM tracker_items WHERE account_id = ? AND kind = ? AND external_id = ?",
       )
+      const scope = database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountId)?.scope
+      const chunked = isChunkedTrackerKind(kind)
+      const chunk = trackerChunkWriter(database)
+      const released: string[] = []
       const upsert = database.prepare(
         "INSERT INTO tracker_items (account_id, kind, external_id, parent_id, title, title_folded, body, " +
           "normalized_text, data, source_created_at, source_updated_at, archived_at, deleted_at, synced_at) " +
@@ -158,7 +200,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           "title = excluded.title, title_folded = excluded.title_folded, body = excluded.body, " +
           "normalized_text = excluded.normalized_text, data = excluded.data, " +
           "source_created_at = excluded.source_created_at, source_updated_at = excluded.source_updated_at, " +
-          "archived_at = excluded.archived_at, deleted_at = NULL, synced_at = excluded.synced_at",
+          "archived_at = excluded.archived_at, deleted_at = NULL, synced_at = excluded.synced_at RETURNING id",
       )
       for (const record of records) {
         const before = stored.get(accountId, kind, record.externalId)
@@ -169,7 +211,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         } as unknown as TrackerRecords[K]
         const title = trackerTitleOf(kind, merged)
         const body = trackerBodyOf(kind, merged) ?? null
-        upsert.run(
+        const saved = upsert.get(
           accountId,
           kind,
           merged.externalId,
@@ -184,7 +226,22 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           merged.archivedAt ?? null,
           now,
         )
+        if (!chunked) continue
+        const freed = chunk(
+          {
+            id: Number(saved?.id),
+            accountId,
+            kind,
+            title,
+            body,
+            occurredAt: merged.updatedAt ?? now,
+            scope: scope == null ? null : String(scope),
+          },
+          now,
+        )
+        for (const hash of freed ?? []) released.push(hash)
       }
+      dropUnusedVectors(database, released)
       return records.length
     })
 
@@ -202,6 +259,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     return write(database, () => {
       const mark = database.prepare("UPDATE tracker_items SET deleted_at = ? WHERE id = ?")
       let removed = 0
+      const marked: number[] = []
       for (const row of database
         .prepare(
           "SELECT id, external_id FROM tracker_items WHERE account_id = ? AND kind = ? AND deleted_at IS NULL " +
@@ -209,9 +267,13 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         )
         .all(accountId, kind, before)) {
         if (keep.has(String(row.external_id))) continue
-        if (!dryRun) mark.run(now, Number(row.id))
+        if (!dryRun) {
+          mark.run(now, Number(row.id))
+          marked.push(Number(row.id))
+        }
         removed += 1
       }
+      if (isChunkedTrackerKind(kind)) dropTrackerChunks(database, marked)
       return removed
     })
   }
@@ -289,6 +351,25 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     }
   }
 
+  const accountIdsOf = (accounts: readonly AccountKey[]) =>
+    accounts.flatMap((one) => {
+      const id = findAccountPk(context, one)
+      return id === undefined ? [] : [{ id, key: { provider: one.provider, account: one.account } }]
+    })
+
+  const nearest = (model: string, query: Float32Array, limit: number, accounts: readonly AccountKey[]) => {
+    const item = database.prepare(`SELECT ${COLUMNS} FROM tracker_items t WHERE t.id = ?`)
+    return accountIdsOf(accounts)
+      .flatMap(({ id, key }) =>
+        nearestTrackerItems(database, model, query, { accountId: id, limit }).flatMap(({ owner, score }) => {
+          const row = item.get(owner)
+          return row ? [{ account: key, item: itemOf(row), score }] : []
+        }),
+      )
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+  }
+
   return {
     save: async (key, kind, records, now) => save(key, kind, records, now),
     removeUnlisted: async (key, kind, listed, before, now, options) =>
@@ -342,5 +423,15 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           name: row.name == null ? null : String(row.name),
         }))
     },
+    refreshChunks: async () => refreshTrackerChunks(database, context.now()),
+    chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options),
+    chunksLeft: async (model) => trackerChunksLeft(database, model),
+    embedded: async (model, accounts) =>
+      trackerEmbedded(
+        database,
+        model,
+        accountIdsOf(accounts).map(({ id }) => id),
+      ),
+    nearest: async (model, query, { limit, accounts }) => nearest(model, query, limit, accounts),
   }
 }
