@@ -8,6 +8,8 @@ import { Command } from "commander"
 import { expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
 import { sharedProgram } from "../testing/shared-program.js"
+import { addTrackerCommands } from "../tracker/cli/index.js"
+import { TRACKER_WRITES } from "../tracker/writer.js"
 import { addCallStatsCommand } from "./call-stats-command.js"
 import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
@@ -239,6 +241,34 @@ it("a documents host's history and change log pass the command lint with no over
           run: refuse,
           id: (input) => input,
         })
+        return [...holder.commands, runsCommand(app)]
+      },
+    },
+    ["--allow-stale"],
+  )
+
+  expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
+  expect(lint.status).toBe(0)
+})
+
+// A tracker CLI (linear) mounts these; the shared program above is a messenger's and never does.
+it("a tracker host's commands, its writes too, pass the command lint with no overrides", async () => {
+  const refuse = async (): Promise<never> => {
+    throw new Error("not read in a lint")
+  }
+  const app = {
+    command: "tracker",
+    appName: "tracker-cli",
+    envPrefix: "TRACKER",
+    description: "synthetic",
+    version: "1.0.0",
+  }
+  const lint = await lintOf(
+    {
+      app,
+      commands: () => {
+        const holder = new Command("tracker").addCommand(commandsCommand(app))
+        addTrackerCommands(holder, { app, open: refuse, writes: TRACKER_WRITES })
         return [...holder.commands, runsCommand(app)]
       },
     },

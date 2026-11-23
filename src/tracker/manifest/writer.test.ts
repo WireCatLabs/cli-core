@@ -230,7 +230,7 @@ describe("a CLI made from the manifest writes through the api group's path", () 
     const id = (made.json?.item.issue as Row | undefined)?.external_id as string
     const shown = await cli("issues", "show", id)
     expect(shown.json?.item).toMatchObject({ title: "Example: refunds" })
-    const comment = await cli("issues", "comment", "issue-1", "--body", "Example: seen it")
+    const comment = await cli("issues", "comments", "create", "issue-1", "--text", "Example: seen it")
     expect(comment.json?.item.comment).toMatchObject({ issue: "issue-1", body: "Example: seen it" })
     expect(fake.refusals).toEqual([])
   })
@@ -238,7 +238,8 @@ describe("a CLI made from the manifest writes through the api group's path", () 
   it("a readonly profile stops every write before it is sent", async () => {
     const { cli, mutations } = await cliOver({ issues: "readonly" })
     expect((await cli("sync")).code).toBe(0)
-    expect((await cli("issues", "comment", "issue-1", "--body", "x")).error).toMatchObject({ code: "permission_error" })
+    const refused = await cli("issues", "comments", "create", "issue-1", "--text", "x")
+    expect(refused.error).toMatchObject({ code: "permission_error" })
     expect(mutations()).toEqual([])
   })
 

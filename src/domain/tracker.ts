@@ -10,6 +10,9 @@ export type TrackerKind = (typeof TRACKER_KINDS)[number]
 export const STATE_TYPES = ["triage", "backlog", "unstarted", "started", "completed", "canceled"] as const
 export type StateType = (typeof STATE_TYPES)[number]
 
+/** A tracker's 0–4 priority as the family's label: 0 is none, the tracker's 1 urgent is critical. */
+export const TRACKER_PRIORITY_LABELS = [null, "critical", "high", "medium", "low"] as const
+
 /**
  * Every record has the tracker's id. A field left out means the tracker did not say, and the store keeps what it
  * held; `null` means the tracker said there is none. Times are epoch milliseconds.

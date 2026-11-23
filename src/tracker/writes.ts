@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { TrackerKind, TrackerRecords } from "../domain/tracker.js"
+import { TRACKER_PRIORITY_LABELS, type TrackerKind, type TrackerRecords } from "../domain/tracker.js"
 import { foldName } from "../resolve.js"
 import type { Asker } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
@@ -9,6 +9,7 @@ import { newOperationId } from "../sends/send-id.js"
 import type { TrackerItem } from "../store/sqlite/tracker.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
+import { priorityLabel, priorityOf } from "../tasks/index.js"
 import type { TrackerSource } from "./source.js"
 import { trackerSelfOf } from "./sync.js"
 import {
@@ -47,7 +48,7 @@ export interface TrackerIssueInput {
   team?: string
   state?: string
   assignee?: string
-  /** 0 to 4, or none, urgent, high, medium, low. */
+  /** The family's priority: a label, none, a 0.0–1.0 score or the old 0–4; urgent is critical. */
   priority?: string
   labels?: readonly string[]
   project?: string
@@ -65,7 +66,6 @@ export interface TrackerCommentWritten {
 }
 
 const PAGE = 500
-const PRIORITIES: Readonly<Record<string, number>> = { none: 0, urgent: 1, high: 2, medium: 3, low: 4 }
 const PLURALS = { team: "teams", user: "users", state: "states", label: "labels", project: "projects" } as const
 type Named = keyof typeof PLURALS
 
@@ -170,14 +170,14 @@ export const trackerIssueOf = async (
   return found
 }
 
-/** An empty value clears it, as for every other field: 0 is the tracker's "no priority". */
-const priorityOf = (typed: string): number => {
-  if (typed.trim() === "") return 0
-  const word = PRIORITIES[typed.trim().toLowerCase()]
-  const number = word ?? Number(typed)
-  if (!Number.isInteger(number) || number < 0 || number > 4)
-    throw invalid("--priority is 0 to 4, or none, urgent, high, medium, low", "--priority")
-  return number
+/** The family's priority (`priorityOf`, and the tracker's own `urgent`) on the tracker's 0 none, 1 urgent … 4 low. */
+const trackerPriorityOf = (typed: string): number => {
+  const word = typed.trim().toLowerCase() || "none"
+  try {
+    return TRACKER_PRIORITY_LABELS.indexOf(priorityLabel(priorityOf(word === "urgent" ? "critical" : word)))
+  } catch (error) {
+    throw isCliError(error) ? invalid(error.message, "--priority") : error
+  }
 }
 
 /** Typed fields into the port's, each reference resolved in the copy; `team` is the issue's, for its states. */
@@ -196,12 +196,12 @@ const fieldsOf = async (
   if (input.description !== undefined) fields.description = cleared(input.description) ? null : input.description
   if (team !== undefined && input.team !== undefined) fields.team = team
   if (input.state !== undefined) {
-    if (cleared(input.state)) throw invalid("every issue is in a state; name one", "--state")
-    fields.state = await referenceOf(context, "state", input.state, "--state", team)
+    if (cleared(input.state)) throw invalid("every issue is in a state; name one", "--status")
+    fields.state = await referenceOf(context, "state", input.state, "--status", team)
   }
   if (input.assignee !== undefined)
     fields.assignee = cleared(input.assignee) ? null : await referenceOf(context, "user", input.assignee, "--assignee")
-  if (input.priority !== undefined) fields.priority = priorityOf(input.priority)
+  if (input.priority !== undefined) fields.priority = trackerPriorityOf(input.priority)
   if (input.labels !== undefined)
     fields.labels =
       input.labels.length === 1 && cleared(input.labels[0] as string)

@@ -5,6 +5,7 @@ import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { provide } from "../../cli/context.js"
+import { unknownPermissionIssues } from "../../cli/permission-keys.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -78,12 +79,14 @@ describe("tracker write commands", () => {
     const create = tools.find(({ command }) => command === "issues create")
     expect(create?.writes).toBe(true)
     expect(JSON.stringify(create?.input.entries.label)).toContain("array")
-    expect(tools.find(({ command }) => command === "issues comment")?.writes).toBe(true)
+    expect(tools.find(({ command }) => command === "issues comments create")?.writes).toBe(true)
     expect(trackerAlsoChecks(() => ["api.issue-create"])(["issues", "create"])).toEqual([
       { key: "issues.assign-others", when: "--assignee other than the sign-in's user" },
       "api.issue-create",
     ])
-    expect(trackerAlsoChecks()(["issues", "comment"])).toEqual([])
+    const api = (write: string) => [`api.${write}`]
+    expect(trackerAlsoChecks(api)(["issues", "comments", "create"])).toEqual(["api.comment"])
+    expect(trackerAlsoChecks(api)(["issues", "comment"])).toEqual([])
   })
 
   it("create resolves names in the copy, writes once, journals it and stores the tracker's answer", async () => {
@@ -95,7 +98,7 @@ describe("tracker write commands", () => {
       "Example: refunds round down",
       "--team",
       "eng",
-      "--state",
+      "--status",
       "todo",
       "--assignee",
       "bob@example.com",
@@ -117,6 +120,7 @@ describe("tracker write commands", () => {
       assignee_name: "Bob Builder",
       labels: ["label-bug"],
       priority: 2,
+      priority_label: "high",
       project: "project-1",
     })
     expect(made.item.untrusted).toContain("issue.title")
@@ -133,7 +137,7 @@ describe("tracker write commands", () => {
       "issues",
       "update",
       "eng-2",
-      "--state",
+      "--status",
       "In Progress",
       "--assignee",
       "",
@@ -149,14 +153,29 @@ describe("tracker write commands", () => {
       assignee: null,
       labels: [],
       priority: 0,
+      priority_label: null,
       project: "project-1",
     })
     expect((await cli("issues", "list", "type:started")).items.map((one) => one.key)).toContain("ENG-2")
   })
 
-  it("comment adds the owner's text to the issue, and issues show lists it", async () => {
+  it("--priority takes the family's priority and writes the tracker's 0 none, 1 urgent … 4 low", async () => {
     const { cli } = await setup()
-    const done = await cli("issues", "comment", "ENG-1", "--body", "Example: fixed in the next release")
+    const typed = async (value: string) =>
+      ((await cli("issues", "update", "ENG-1", "--priority", value)).item.issue as Record<string, unknown>).priority
+    expect(await typed("critical")).toBe(1)
+    expect(await typed("urgent")).toBe(1)
+    expect(await typed("medium")).toBe(3)
+    expect(await typed("0.1")).toBe(4)
+    expect(await typed("0")).toBe(1)
+    expect(await typed("none")).toBe(0)
+    const shown = (await cli("issues", "list", "--limit", "500")).items.find((one) => one.key === "ENG-1")
+    expect(shown).toMatchObject({ priority: 0, priority_label: null })
+  })
+
+  it("comments create adds the owner's text to the issue, and issues show lists it", async () => {
+    const { cli } = await setup()
+    const done = await cli("issues", "comments", "create", "ENG-1", "--text", "Example: fixed in the next release")
     expect(done.item.comment).toMatchObject({ issue: "issue-1", body: "Example: fixed in the next release" })
     expect(done.item.untrusted).toContain("comment.body")
     const shown = (await cli("issues", "show", "ENG-1")).item.comments as Record<string, unknown>[]
@@ -165,15 +184,20 @@ describe("tracker write commands", () => {
 
   it("refuses what the copy cannot resolve before anything is sent", async () => {
     const { cli, source, store } = await setup()
-    await expect(cli("issues", "create", "--title", "X", "--state", "Shipped")).rejects.toMatchObject({
-      details: { reason: "tracker.reference", param: "--state" },
+    await expect(cli("issues", "create", "--title", "X", "--status", "Shipped")).rejects.toMatchObject({
+      details: { reason: "tracker.reference", param: "--status" },
     })
     await expect(cli("issues", "update", "ENG-404", "--title", "X")).rejects.toMatchObject({ code: "not_found" })
     await expect(cli("issues", "update", "ENG-1")).rejects.toMatchObject({ code: "validation_error" })
     await expect(cli("issues", "update", "ENG-1", "--parent", "ENG-1")).rejects.toMatchObject({
       details: { param: "--parent" },
     })
-    await expect(cli("issues", "comment", "ENG-1", "--body", " ")).rejects.toMatchObject({ code: "validation_error" })
+    await expect(cli("issues", "comments", "create", "ENG-1", "--text", " ")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    await expect(cli("issues", "update", "ENG-1", "--priority", "soon")).rejects.toMatchObject({
+      details: { param: "--priority" },
+    })
     await store.tracker.save(ACCOUNT, "team", [{ externalId: "team-2", key: "OPS", name: "Operations" }], 1)
     await expect(cli("issues", "create", "--title", "X")).rejects.toMatchObject({
       details: { reason: "tracker.team-required", allowed: expect.arrayContaining(["team-1", "team-2"]) },
@@ -228,9 +252,22 @@ describe("tracker write commands", () => {
     expect(source.sent).toEqual([])
   })
 
+  it("a saved issues.comment, the key before comments create, is refused and names the new key", async () => {
+    const { program } = await setup()
+    const settings = {
+      configPath: "/config.toml",
+      profile: "work",
+      permissions: { "issues.comment": "allow" as const },
+      permissionSources: {},
+    }
+    const [issue] = unknownPermissionIssues(program(), settings, "tracker")
+    expect(JSON.stringify(issue)).toContain("issues.comments.create")
+  })
+
   it("--dry-run previews a write and sends nothing", async () => {
     const { cli, source } = await setup()
-    expect((await cli("issues", "comment", "ENG-1", "--body", "x", "--dry-run")).item).toMatchObject({ preview: true })
+    const previewed = await cli("issues", "comments", "create", "ENG-1", "--text", "x", "--dry-run")
+    expect(previewed.item).toMatchObject({ preview: true })
     expect(source.sent).toEqual([])
   })
 
@@ -238,12 +275,12 @@ describe("tracker write commands", () => {
     const denied = await setup({ "issues.create": "deny" })
     await expect(denied.cli("issues", "create", "--title", "X")).rejects.toMatchObject({ code: "permission_error" })
     expect(denied.source.sent).toEqual([])
-    const asked = await setup({ "issues.comment": "ask" })
-    await expect(asked.cli("issues", "comment", "ENG-1", "--body", "x")).rejects.toMatchObject({
+    const asked = await setup({ "issues.comments.create": "ask" })
+    await expect(asked.cli("issues", "comments", "create", "ENG-1", "--text", "x")).rejects.toMatchObject({
       code: "confirmation_required",
     })
     expect(asked.source.sent).toEqual([])
-    await asked.cli("issues", "comment", "ENG-1", "--body", "x", "--yes")
+    await asked.cli("issues", "comments", "create", "ENG-1", "--text", "x", "--yes")
     expect(asked.source.sent).toHaveLength(1)
     const readonly = await setup({ issues: "readonly" })
     await expect(readonly.cli("issues", "update", "ENG-1", "--title", "X")).rejects.toMatchObject({
