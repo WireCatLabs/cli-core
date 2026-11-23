@@ -480,7 +480,7 @@ describe("syncFileMirror, the guard on mass changes", () => {
     preview: "ydisk work mirrors preview <id>",
     sync: "ydisk work mirrors sync <id>",
     allowDeletions: "--allow-deletions <count>",
-    allowReplacements: "--replace",
+    allowReplacements: "--allow-replacements <count>",
   }
 
   it("lets up to 10 deletions through, however large or small the mirror", async () => {
@@ -533,14 +533,33 @@ describe("syncFileMirror, the guard on mass changes", () => {
         reason: "mirror.too-many-replacements",
         message: expect.stringContaining(
           "replace 51 existing files (more than 50); check them with `ydisk work mirrors preview 1a2b3c4d`, then " +
-            "allow them with `ydisk work mirrors sync 1a2b3c4d --replace`",
+            "allow them with `ydisk work mirrors sync 1a2b3c4d --allow-replacements 51`",
         ),
       }),
     ])
     expect(context.disk.writes()).toEqual([])
     expect(await context.local()).toMatchObject({ "f40.md": "40" })
+    const short = await context.sync(undefined, { allowReplacements: 50 })
+    expect(short.errors).toEqual([expect.objectContaining({ reason: "mirror.too-many-replacements" })])
+    expect(context.disk.writes()).toEqual([])
     const allowed = await context.sync(undefined, { allowReplacements: 51 })
     expect([allowed.uploaded.length, allowed.downloaded.length]).toEqual([30, 21])
+  })
+
+  it("lets replacements through under a higher allowed count, and any number for an app's --replace switch", async () => {
+    const files = many(60)
+    const more = setup(files, files)
+    await more.sync()
+    for (let n = 0; n < 51; n++) put(more.root, `f${n}.md`, `${n}, edited`)
+    expect((await more.sync(undefined, { allowReplacements: 52 })).uploaded).toHaveLength(51)
+
+    const any = setup(files, files)
+    await any.sync()
+    for (let n = 0; n < 60; n++) put(any.root, `f${n}.md`, `${n}, edited`)
+    const stopped = await any.sync(undefined, { id: "1a2b3c4d", hints: { ...hints, allowReplacements: "--replace" } })
+    expect(stopped.errors[0]?.message).toContain("`ydisk work mirrors sync 1a2b3c4d --replace`")
+    const replaced = await any.sync(undefined, { allowReplacements: Number.POSITIVE_INFINITY })
+    expect(replaced.uploaded).toHaveLength(60)
   })
 
   it("lets 50 replacements through", async () => {
@@ -559,7 +578,9 @@ describe("syncFileMirror, the guard on mass changes", () => {
     for (let n = 11; n < 70; n++) put(context.root, `f${n}.md`, `${n}, edited`)
     const stopped = await context.sync(undefined, { id: "1a2b3c4d", hints, allowReplacements: 59 })
     expect(stopped.errors[0]).toMatchObject({ reason: "mirror.too-many-deletions" })
-    expect(stopped.errors[0]?.message).toContain("`ydisk work mirrors sync 1a2b3c4d --allow-deletions 11 --replace`")
+    expect(stopped.errors[0]?.message).toContain(
+      "`ydisk work mirrors sync 1a2b3c4d --allow-deletions 11 --allow-replacements 59`",
+    )
     const allowed = await context.sync(undefined, { allowDeletions: 11, allowReplacements: 59 })
     expect([allowed.trashed.length, allowed.uploaded.length]).toEqual([11, 59])
   })

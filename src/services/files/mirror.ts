@@ -65,7 +65,10 @@ export interface FileMirrorOptions {
   dryRun?: boolean
   /** Lets a run delete this many files although the guard would stop it. */
   allowDeletions?: number
-  /** Lets a run replace this many existing files, on either side, although the guard would stop it. */
+  /**
+   * Lets a run replace this many existing files, on either side, although the guard would stop it. An app with a
+   * `--replace` switch passes `Number.POSITIVE_INFINITY`.
+   */
   allowReplacements?: number
   /** Globs of paths the mirror leaves alone on both sides, as `excludedBy` reads them. */
   exclude?: string[]
@@ -107,7 +110,7 @@ export interface MirrorHints {
   sync: string
   /** How a sync allows deletions: `--allow-deletions <count>`. */
   allowDeletions: string
-  /** How a sync allows replacements: `--replace`, the vocabulary's overwrite switch. */
+  /** How a sync allows replacements: `--allow-replacements <count>`. */
   allowReplacements: string
   /** How to leave a folder out: `ydisk work mirrors update <id> --ignore <path>`. */
   exclude: string
@@ -118,7 +121,7 @@ const HINTS: MirrorHints = {
   repin: "--repin",
   sync: "sync",
   allowDeletions: "--allow-deletions <count>",
-  allowReplacements: "--replace",
+  allowReplacements: "--allow-replacements <count>",
   exclude: "--ignore <path>",
 }
 

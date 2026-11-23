@@ -446,7 +446,8 @@ just before the write. An editing command reuses the same call, `upload(path, fi
    store keeps every content they replace. A dry run reports the counts without stopping. `hints` (`preview`, `repin`, `sync`,
    `allowDeletions`, `allowReplacements`, `exclude`) are the app's commands in these messages, with `<id>` (the
    mirror's `id`) and `<count>` filled in. The defaults use the vocabulary's words, which `cli-dev lint` accepts:
-   `--allow-deletions <count>`, the switch `--replace`, and `--ignore <path>`.
+   `--allow-deletions <count>`, `--allow-replacements <count>` and `--ignore <path>`. An app that keeps a `--replace`
+   switch passes `allowReplacements: Number.POSITIVE_INFINITY` for it and its own `allowReplacements` hint.
 3. A remote file found at a new path with the same `id` is renamed locally. A local rename is a deletion and a new
    file.
 4. A local file whose size and mtime match the state is not hashed again (`scanLocal`'s `known` lookup). A local

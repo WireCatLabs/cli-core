@@ -328,6 +328,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `roles` | collection | the parts a person plays in a relationship, built in or the owner's own |  |
 | `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
+| `mirrors` | collection | saved pairings of a local folder and a folder in the source, which sync keeps the same both ways |  |
+| `conflicts` | collection | files a mirror's sync found changed on both sides and could not merge, each waiting for a side or a final file |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
 | `calls` | collection | phone calls a phone system recorded, stored as meetings with their transcripts |  |
@@ -870,6 +872,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--tags` | `<ids>` | list | its tags and categories, by comma-separated ids; replaces the ones it has |  |
 | `--replace-body` |  | switch | write the new text over a body the tool cannot fully read back, losing what it could not show |  |
 | `--like` | `<text>` | string | a made-up example of the text sought, such as a reply that would answer the question, searched by meaning beside the query |  |
+| `--keep` | `<side>` | choice | settle a conflict with one side: local, the remote by its own name (disk, drive), or both, the other kept as a conflict copy |  |
+| `--allow-deletions` | `<count>` | count | let this run delete up to this many files when the mirror's guard stops it; owner only |  |
+| `--allow-replacements` | `<count>` | count | let this run overwrite up to this many existing files when the mirror's guard stops it; owner only |  |
+| `--repin` |  | switch | accept that a replaced local or remote folder is the mirror's folder now, and sync it; owner only |  |
 
 <!-- flags: end -->
 
