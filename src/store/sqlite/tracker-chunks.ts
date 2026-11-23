@@ -14,13 +14,51 @@ const CHUNKED_SQL = "('issue', 'project', 'comment')"
 
 export const isChunkedTrackerKind = (kind: string): boolean => CHUNKED.has(kind)
 
-/** What an item is embedded as, from its stored columns: chunk offsets point into it. */
-const textOf = (kind: string, title: string, body: string | null): string =>
-  kind === "comment" ? (body ?? "") : noteIndexText(title, body ?? "")
+/**
+ * A comment with fewer characters than this, spaces and line breaks around it aside, is not embedded: `LGTM`, `+1`,
+ * «Спасибо» say nothing alone, and with their issue in front each became a near copy of the issue that filled the
+ * first results (cli-testing performance/search/tracker-meaning). Its words still find it.
+ */
+export const SHORTEST_EMBEDDED_COMMENT = 16
+/** What the chunks hold; raised with each change to `textOf`, so a store cut before is cut again once. */
+const CUT = "comments after their issue's key and title"
+const CUT_SETTING = "tracker_chunks_cut"
+const RECUT_AFTER = "tracker_chunks_recut_after"
 
-const piecesOf = (kind: string, title: string, body: string | null) => {
-  if (!CHUNKED.has(kind)) return []
-  const text = textOf(kind, title, body)
+// SQLite's `trim` and `length` take spaces and code points; JavaScript's `trim` takes more, and `length` counts halves.
+const EDGE = /^[ \t\n\r]+|[ \t\n\r]+$/gu
+const embeddedComment = (body: string | null): boolean =>
+  [...(body ?? "").replace(EDGE, "")].length >= SHORTEST_EMBEDDED_COMMENT
+const EDGE_SQL = "' ' || char(9, 10, 13)"
+const EMBEDDED_COMMENT_SQL = `length(trim(coalesce(t.body, ''), ${EDGE_SQL})) >= ${SHORTEST_EMBEDDED_COMMENT}`
+
+type Issue = { key: string | null; title: string }
+
+/**
+ * What an item is embedded as, from its stored columns: chunk offsets point into it. A comment's issue goes in front:
+ * "it works now" means something only beside the issue it answers.
+ */
+const textOf = (kind: string, title: string, body: string | null, issue: Issue | undefined): string => {
+  if (kind !== "comment") return noteIndexText(title, body ?? "")
+  if (!embeddedComment(body)) return ""
+  const heading = issue ? [issue.key, issue.title].filter(Boolean).join(" ") : ""
+  return heading ? `${heading}\n\n${body}` : (body ?? "")
+}
+
+/** The issue a comment is on, as its account holds it; a deleted one still names what the comment answered. */
+const issueOf = (database: CacheDatabase) => {
+  const read = database.prepare(
+    "SELECT title, json_extract(data, '$.key') AS key FROM tracker_items " +
+      "WHERE account_id = ? AND kind = 'issue' AND external_id = ?",
+  )
+  return (kind: string, accountId: number, parent: string | null): Issue | undefined => {
+    if (kind !== "comment" || parent === null) return undefined
+    const row = read.get(accountId, parent)
+    return row ? { key: row.key == null ? null : String(row.key), title: String(row.title) } : undefined
+  }
+}
+
+const piecesOf = (text: string) => {
   if (!text.trim()) return []
   return splitText(text, CHUNK_CHARS).map(({ start, end }) => ({ start, end, hash: chunkHash(text.slice(start, end)) }))
 }
@@ -31,6 +69,8 @@ export interface ChunkedItem {
   kind: string
   title: string
   body: string | null
+  /** A comment's issue, by the tracker's id. */
+  parent: string | null
   occurredAt: number
   scope: string | null
 }
@@ -50,8 +90,10 @@ export const trackerChunkWriter = (database: CacheDatabase) => {
     "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, " +
       `account_id, occurred_at, created_at, updated_at) VALUES ('${TRACKER_CHUNK}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
+  const issue = issueOf(database)
   return (item: ChunkedItem, at: number): string[] | undefined => {
-    const wanted = piecesOf(item.kind, item.title, item.body)
+    if (!CHUNKED.has(item.kind)) return undefined
+    const wanted = piecesOf(textOf(item.kind, item.title, item.body, issue(item.kind, item.accountId, item.parent)))
     const before = held.all(item.id).map((row) => ({
       start: Number(row.start),
       end: Number(row.end),
@@ -87,10 +129,28 @@ export const dropTrackerChunks = (database: CacheDatabase, ids: readonly number[
 
 const BACKFILL = 200
 
+const chunkedOf = (row: Record<string, unknown>): ChunkedItem => ({
+  id: Number(row.id),
+  accountId: Number(row.account_id),
+  kind: String(row.kind),
+  title: String(row.title),
+  body: row.body == null ? null : String(row.body),
+  parent: row.parent_id == null ? null : String(row.parent_id),
+  occurredAt: Number(row.at),
+  scope: row.scope == null ? null : String(row.scope),
+})
+
+const ITEM_COLUMNS =
+  "t.id, t.account_id, t.kind, t.title, t.body, t.parent_id, coalesce(t.source_updated_at, t.synced_at) AS at, a.scope"
+
+const setting = (database: CacheDatabase, key: string) =>
+  database.prepare("SELECT value FROM store_settings WHERE key = ?").get(key)?.value
+
 /**
- * Drops the chunks of items the tracker no longer lists, then cuts the chunks of live items that have none: those
- * saved before tracker items were searched by meaning. Short write transactions, `until` asked before each, so a
- * deadline stops it with `left`; nothing under a read-only store.
+ * Drops the chunks of items the tracker no longer lists, cuts the comments of a store cut before the current `CUT`
+ * again, then cuts the chunks of live items that have none: those saved before tracker items were searched by meaning.
+ * Short write transactions, `until` asked before each, so a deadline stops it with `left` and the next run goes on
+ * from there; nothing under a read-only store.
  */
 export const refreshTrackerChunks = (
   database: CacheDatabase,
@@ -110,37 +170,53 @@ export const refreshTrackerChunks = (
     dropUnusedVectors(database, gone)
     return gone.length
   })
+  const chunk = trackerChunkWriter(database)
+  let added = 0
+  if (setting(database, CUT_SETTING) !== CUT) {
+    const comments = database.prepare(
+      `SELECT ${ITEM_COLUMNS} FROM tracker_items t JOIN accounts a ON a.id = t.account_id
+        WHERE t.id > ? AND t.kind = 'comment' AND t.deleted_at IS NULL ORDER BY t.id LIMIT ?`,
+    )
+    const mark = database.prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+    let after = Number(setting(database, RECUT_AFTER) ?? 0)
+    for (;;) {
+      if (until()) return { dropped, added, left: true }
+      const rows = write(database, () => {
+        const found = comments.all(after, BACKFILL)
+        const released: string[] = []
+        for (const row of found) {
+          const freed = chunk(chunkedOf(row), now)
+          if (freed) added += 1
+          for (const hash of freed ?? []) released.push(hash)
+        }
+        dropUnusedVectors(database, released)
+        const last = found.at(-1)
+        if (found.length < BACKFILL) {
+          database.prepare("DELETE FROM store_settings WHERE key = ?").run(RECUT_AFTER)
+          mark.run(CUT_SETTING, CUT, now)
+        } else if (last) mark.run(RECUT_AFTER, String(last.id), now)
+        return found
+      })
+      const last = rows.at(-1)
+      if (!last || rows.length < BACKFILL) break
+      after = Number(last.id)
+    }
+  }
   // An item with no text never gets a chunk: reading it again at every embed would find nothing.
   const page = database.prepare(
-    `SELECT t.id, t.account_id, t.kind, t.title, t.body, coalesce(t.source_updated_at, t.synced_at) AS at, a.scope
-       FROM tracker_items t JOIN accounts a ON a.id = t.account_id
+    `SELECT ${ITEM_COLUMNS} FROM tracker_items t JOIN accounts a ON a.id = t.account_id
       WHERE t.id > ? AND t.deleted_at IS NULL AND t.kind IN ${CHUNKED_SQL}
-        AND trim(CASE t.kind WHEN 'comment' THEN coalesce(t.body, '') ELSE t.title || coalesce(t.body, '') END) <> ''
+        AND CASE t.kind WHEN 'comment' THEN ${EMBEDDED_COMMENT_SQL}
+          ELSE trim(t.title || coalesce(t.body, '')) <> '' END
         AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.chunkable_type = '${TRACKER_CHUNK}' AND k.chunkable_id = t.id)
       ORDER BY t.id LIMIT ?`,
   )
-  const chunk = trackerChunkWriter(database)
-  let added = 0
   let after = 0
   for (;;) {
     if (until()) return { dropped, added, left: page.all(after, 1).length > 0 }
     const rows = write(database, () => {
       const found = page.all(after, BACKFILL)
-      for (const row of found) {
-        const written = chunk(
-          {
-            id: Number(row.id),
-            accountId: Number(row.account_id),
-            kind: String(row.kind),
-            title: String(row.title),
-            body: row.body == null ? null : String(row.body),
-            occurredAt: Number(row.at),
-            scope: row.scope == null ? null : String(row.scope),
-          },
-          now,
-        )
-        if (written) added += 1
-      }
+      for (const row of found) if (chunk(chunkedOf(row), now)) added += 1
       return found
     })
     const last = rows.at(-1)
@@ -167,7 +243,8 @@ export const trackerChunksToEmbed = (
   model: string,
   { after, limit }: { after?: string; limit: number },
 ): { hash: string; text: string }[] => {
-  const item = database.prepare("SELECT kind, title, body FROM tracker_items WHERE id = ?")
+  const item = database.prepare("SELECT kind, title, body, account_id, parent_id FROM tracker_items WHERE id = ?")
+  const issue = issueOf(database)
   return database
     .prepare(
       `SELECT k.content_hash AS hash, min(k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end
@@ -178,7 +255,14 @@ export const trackerChunksToEmbed = (
     .flatMap((row) => {
       const found = item.get(Number(row.owner))
       if (!found) return []
-      const text = textOf(String(found.kind), String(found.title), found.body == null ? null : String(found.body))
+      const kind = String(found.kind)
+      const parent = found.parent_id == null ? null : String(found.parent_id)
+      const text = textOf(
+        kind,
+        String(found.title),
+        found.body == null ? null : String(found.body),
+        issue(kind, Number(found.account_id), parent),
+      )
       return [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
     })
 }

@@ -190,6 +190,9 @@ export const resetTrackerItemWords = (database: CacheDatabase): number => {
   })
 }
 
+const keyOf = (data: unknown): string | undefined =>
+  data == null ? undefined : (JSON.parse(String(data)) as { key?: string }).key
+
 const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state" } as const
 
 /**
@@ -230,6 +233,10 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const chunked = isChunkedTrackerKind(kind)
       const chunk = trackerChunkWriter(database)
       const released: string[] = []
+      const comments = database.prepare(
+        "SELECT id, title, body, coalesce(source_updated_at, synced_at) AS at FROM tracker_items " +
+          "WHERE account_id = ? AND kind = 'comment' AND parent_id = ? AND deleted_at IS NULL",
+      )
       const upsert = database.prepare(
         "INSERT INTO tracker_items (account_id, kind, external_id, parent_id, title, title_folded, body, " +
           "normalized_text, data, source_created_at, source_updated_at, archived_at, deleted_at, synced_at) " +
@@ -266,6 +273,30 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         )
         // Most rows of a sync come back with the text they had; their chunks stay, and only a revived row needs new.
         const same = before?.deleted_at == null && before?.title === title && (before?.body ?? null) === body
+        // A comment is embedded after its issue's key and title, so a new, revived, renamed or moved issue cuts its
+        // comments again.
+        if (
+          kind === "issue" &&
+          (before?.deleted_at !== null ||
+            before.title !== title ||
+            keyOf(before.data) !== (merged as TrackerRecords["issue"]).key)
+        )
+          for (const row of comments.all(accountId, merged.externalId)) {
+            const freed = chunk(
+              {
+                id: Number(row.id),
+                accountId,
+                kind: "comment",
+                title: String(row.title),
+                body: row.body == null ? null : String(row.body),
+                parent: merged.externalId,
+                occurredAt: Number(row.at),
+                scope: scope == null ? null : String(scope),
+              },
+              now,
+            )
+            for (const hash of freed ?? []) released.push(hash)
+          }
         if (!chunked || same) continue
         const freed = chunk(
           {
@@ -274,6 +305,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
             kind,
             title,
             body,
+            parent: trackerParentOf(kind, merged) ?? null,
             occurredAt: merged.updatedAt ?? now,
             scope: scope == null ? null : String(scope),
           },

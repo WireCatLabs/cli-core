@@ -81,8 +81,14 @@ const issue = (externalId: string, title: string, description?: string): Tracker
 const trackerStore = async (path = join(mkdtempSync(join(tmpdir(), "tracker-meaning-")), "store.db")) => {
   const store = await openStore({ path })
   opened.push(store)
-  await store.tracker.save(LINEAR, "issue", [issue("i1", "cat"), issue("i2", "zebra")], NOW)
-  await store.tracker.save(LINEAR, "comment", [{ externalId: "c1", issue: "i2", body: "fish", updatedAt: NOW }], NOW)
+  // The fixture model reads six words only, and a comment is embedded after its issue's key: this issue has none.
+  await store.tracker.save(LINEAR, "issue", [issue("i1", "cat"), { ...issue("i2", "zebra"), key: null }], NOW)
+  await store.tracker.save(
+    LINEAR,
+    "comment",
+    [{ externalId: "c1", issue: "i2", body: "fish fish fish fish", updatedAt: NOW }],
+    NOW,
+  )
   await store.tracker.save(OTHER, "issue", [issue("o1", "kitten cat")], NOW)
   return store
 }
@@ -109,6 +115,16 @@ describe("issues, projects and comments by meaning", () => {
     ])
     expect(both.tracker?.by).toBe("words and meaning")
     expect(new Set(both.items.map(({ account }) => account))).toEqual(new Set(["user-1", "user-2"]))
+  })
+
+  it("finds a comment too short to embed by its words, beside the hits by meaning", async () => {
+    download()
+    const store = await trackerStore()
+    await store.tracker.save(LINEAR, "comment", [{ externalId: "c2", issue: "i1", body: "cat?", updatedAt: NOW }], NOW)
+    expect(await embedTracker(store, { threads: 1 })).toEqual({ model: "e5-small", embedded: 4, left: false })
+    const found = await tracker(store, "cat", { scope: { tracker: [LINEAR] } })
+    expect(found.tracker).toEqual({ by: "words and meaning" })
+    expect(found.items.find(({ ref }) => ref.endsWith("/comment/c2"))?.foundBy).toEqual(["words"])
   })
 
   it("searches an OR query by meaning too", async () => {

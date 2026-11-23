@@ -86,12 +86,20 @@ is not corrected.
 
 Issues, projects and comments are searched by meaning too. Their chunks (`chunks.chunkable_type = 'tracker_item'`,
 `chunkable_id` = `tracker_items.id`, `src/store/sqlite/tracker-chunks.ts`) are cut as a note's are: title and
-description, or a comment's body, in pieces of `CHUNK_CHARS`, under the account's scope and id, dated by the tracker's
-`updatedAt`. Teams, users, states and labels have none. `save` rewrites an item's chunks only when its title or text
-changed or it comes back, in the same write, and drops the vectors no other chunk holds after the new chunks are in, so
-a text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
-run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone
-and cuts those of items saved before this existed, in short batches that stop at the deadline (`left`). `chunksToEmbed`,
+description, or a comment's body after its issue's key and title (`ENG-12 Fix login`, a blank line, the body: a
+comment's meaning is often only beside its issue), in pieces of `CHUNK_CHARS`, under the account's scope and id, dated
+by the tracker's `updatedAt`. Only the embedded text has the issue; the word index and the hit keep the comment's own.
+A comment of fewer than `SHORTEST_EMBEDDED_COMMENT` (16) characters, spaces and line breaks around it aside (`LGTM`,
+`+1`, «Спасибо»), has no chunk: with its issue in front it was a near copy of the issue that filled the first results
+in the [tracker-meaning study](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/tracker-meaning),
+and its words still find it. Teams, users, states and labels have none. `save` rewrites an item's chunks only when its
+title or text changed or it comes back, and an issue that is new, comes back, or changes its title or key cuts its
+live comments again, in the same write; it drops the vectors no other chunk holds after the new chunks are in, so a
+text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
+run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone,
+cuts every comment again once in a store whose `store_settings` key `tracker_chunks_cut` is not the current cut (a
+store cut by 0.730–0.732, from the body alone), and cuts the chunks of items saved before this existed, in short
+batches that stop at the deadline (`left`) and go on from there the next time. `chunksToEmbed`,
 `chunksLeft`, `embedded` and `nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
 one at a time through the model's vector index (scan while it has none), keeps archived items and never deleted ones,
 one hit per item by its best chunk.
