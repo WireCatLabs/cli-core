@@ -160,9 +160,11 @@ export const save = async (
   { unique = false }: { unique?: boolean } = {},
 ): Promise<Saved> => {
   const own = safeName(file.name)
+  // The fallback is made from the provider's message id, which is no safer than the sender's own name.
+  const fallback = safeName(fallbackName) ?? "file"
   const fileName = () => {
     const extension = EXTENSIONS[file.mime ?? ""] ?? BY_KIND[file.kind]
-    return own ?? (extension ? `${fallbackName}.${extension}` : fallbackName)
+    return own ?? (extension ? `${fallback}.${extension}` : fallback)
   }
   const partial = join(directory, `.${fileName()}.${process.pid}.part`)
   let bytes = 0
@@ -176,7 +178,7 @@ export const save = async (
     await pipeline(Readable.from(file.bytes()), counting, createWriteStream(partial, { flags: "wx", mode: 0o600 }))
     // Lazy HTTP downloads learn MIME while reading bytes.
     const name = fileName()
-    const names = unique && own ? [name, `${fallbackName}-${own}`] : [name]
+    const names = unique && own ? [name, `${fallback}-${own}`] : [name]
     for (const candidate of names) {
       const path = resolve(join(directory, candidate))
       const taken = await link(partial, path).then(

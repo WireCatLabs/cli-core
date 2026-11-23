@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
@@ -59,4 +59,21 @@ it("keeps a late-MIME failure atomic and closes the byte iterator", async () => 
   await expect(save(file, directory, "synthetic-1")).rejects.toThrow("interrupted")
   expect(closed).toBe(true)
   expect(readdirSync(directory)).toEqual([])
+})
+
+it("keeps a file named after its message inside the folder, whatever the message id holds", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "download-name-"))
+  const directory = join(parent, "into")
+  mkdirSync(directory)
+  const file = {
+    kind: "file",
+    bytes: async function* () {
+      yield new Uint8Array([1])
+    },
+  }
+
+  const saved = await save(file, directory, "../escaped")
+
+  expect(saved.path).toBe(join(directory, "escaped"))
+  expect(readdirSync(parent)).toEqual(["into"])
 })

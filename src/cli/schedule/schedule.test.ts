@@ -6,10 +6,11 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { delimiter, join } from "node:path"
+import { delimiter, join, relative } from "node:path"
 import { captureStreams, errorObjectOf, NOT_ALLOWED, renderError } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
@@ -845,6 +846,30 @@ describe("a run", () => {
     )
     expect(code, streams.stderr.join("")).toBe(0)
     expect(readFileSync(lastRunOutput(file), "utf8")).toContain("work")
+  })
+
+  it("runs only a schedule file in the tool's own schedules folder, however the path reaches it", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux", [process.execPath, "-e", "console.log('ran')"])
+    const elsewhere = mkdtempSync(join(tmpdir(), "schedule-elsewhere-"))
+    const outside = scheduled(elsewhere, { name: "sync", kind: "command", argv: [], when: { every: 5 } })
+    const inside = scheduled(env.CHAT_STATE_DIR, { name: "kept", kind: "command", argv: [], when: { every: 5 } })
+    const linked = join(env.CHAT_STATE_DIR, "schedules", "linked")
+    symlinkSync(join(outside, ".."), linked)
+    const climbing = join(inside, "..", "..", "..", "..", relative(join(inside, "..", "..", "..", ".."), outside))
+
+    for (const file of [outside, join(linked, "schedule.json"), climbing]) {
+      const streams = captureStreams()
+      const code = await run(
+        ["schedule", "exec", file],
+        { app, commands: () => [scheduleCommand(messenger)] },
+        { streams, env, system },
+      )
+      expect(code, file).not.toBe(0)
+      expect(streams.stderr.join(""), file).toContain("runs only a schedule saved in")
+    }
+    expect(ran).toEqual([])
+    expect(readdirSync(join(outside, ".."))).toEqual(["schedule.json"])
   })
 
   it("stops its child when its own --timeout ends the wait, so the child does not outlive the run", async () => {

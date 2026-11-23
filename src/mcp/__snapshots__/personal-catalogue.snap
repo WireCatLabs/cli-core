@@ -244,7 +244,6 @@ write replies pause
 write replies resume
 write schedule agent
 write schedule command
-write schedule exec
 write schedule pause
 write schedule remove
 write schedule resume

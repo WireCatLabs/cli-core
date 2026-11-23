@@ -133,9 +133,15 @@ export const documentIngestion = <M extends SourceFile>(
     history: {
       /** `id` is the source's id, or a `document:<n>` ref; a removed document is found too. */
       reference: async (principal: string, id: string) => {
-        if (/^document:\d+$/.test(id)) return id
         const selected = await folder(principal, false)
         if (!selected) return undefined
+        if (/^document:\d+$/.test(id)) {
+          const path = await store.notes.documentHistory(id).then(
+            (found) => found.path,
+            () => undefined,
+          )
+          return path !== undefined && (await store.notes.documentAt(selected.id, path)) === id ? id : undefined
+        }
         for (const path of both(id)) {
           const found = await store.notes.documentAt(selected.id, path)
           if (found) return found

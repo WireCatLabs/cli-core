@@ -18,6 +18,7 @@ export { downloadMessage, type Saved, save } from "../../services/file-download.
 
 import { parseDuration } from "../../domain/duration.js"
 import type { Fetching } from "../../ports/traits.js"
+import { refusedPlace } from "../../sends/upload.js"
 import { OFFLINE } from "../../services/deps.js"
 import type { MessagesService } from "../../services/messages.js"
 import { patiently } from "../../services/patience.js"
@@ -63,6 +64,11 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
         extract,
         attachment,
       } = this.opts<{ outputDir: string; all?: boolean; pause: string; extract?: boolean; attachment?: number }>()
+      if (refusedPlace(output, messenger.app, context.env))
+        throw new CliError(
+          "validation_error",
+          "--output-dir cannot write credential folders, the CLI's own folders or the message store",
+        )
       if (context.settings.offline) {
         if (all || extract)
           throw new CliError(

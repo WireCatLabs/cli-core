@@ -248,6 +248,11 @@ const OTHERS: Entry[] = [
   ],
   ["read-only.output-outside", "permission_error", "a read-only process writes files only inside its working folder"],
   [
+    "schedule.outside-folder",
+    "permission_error",
+    "schedule exec runs only a schedule file in the tool's own schedules folder",
+  ],
+  [
     "agent.refused",
     "permission_error",
     "the schedule changed since it was saved, or starts no agent a schedule may run",

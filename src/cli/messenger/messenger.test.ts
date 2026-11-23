@@ -5076,6 +5076,36 @@ describe("messages download", () => {
     expect(stderr.join("")).toContain("poll")
   })
 
+  it("**refuses an output folder among credentials or the CLI's own files**, before it downloads anything", async () => {
+    const { root, env } = setup()
+    let asked = 0
+    const counting: MessengerAdapter = {
+      ...withFiles,
+      download: async (...args) => {
+        asked += 1
+        return withFiles.download?.(...args) ?? { files: [], skipped: [] }
+      },
+    }
+    const own = join(env.CHAT_STATE_DIR, "schedules", "x")
+    const keys = join(root, "home", ".ssh")
+    for (const into of [own, keys])
+      for (const way of [
+        ["Book", "1"],
+        ["Book", "--all"],
+        ["msg:chat/500/1/1", "--offline"],
+      ]) {
+        const { code, stderr } = await call(
+          ["messages", "download", ...way, "--output-dir", into],
+          async () => counting,
+          env,
+        )
+        expect(code, `${into} ${way.join(" ")}`).not.toBe(0)
+        expect(stderr.join("")).toContain("--output-dir cannot write")
+      }
+    expect(asked).toBe(0)
+    expect(existsSync(own) || existsSync(keys)).toBe(false)
+  })
+
   it("**records in the local store where each file of a held message went**", async () => {
     const { root, env } = setup()
     const into = join(root, "out")

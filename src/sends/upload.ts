@@ -141,7 +141,7 @@ const systemPlace = (path: string, platform: NodeJS.Platform): boolean =>
   platform !== "win32" && SYSTEM_ROOTS.some((root) => inside(path, root))
 
 /** Where `path` really is: its nearest existing ancestor's real path, as a write may create the rest under a symlink. */
-const realPathOf = (path: string): string => {
+export const realPathOf = (path: string): string => {
   let ancestor = resolve(path)
   for (;;) {
     try {
@@ -220,7 +220,7 @@ export const refusedPlace = (
   )
 }
 
-const inside = (path: string, dir: string): boolean => {
+export const inside = (path: string, dir: string): boolean => {
   const way = relative(resolve(dir), path)
   return way === "" || (!way.startsWith("..") && !isAbsolute(way))
 }

@@ -28,7 +28,8 @@ import { template } from "../entities/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { type MessageStore, openStore, type TemplateAddress } from "../store/store.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
+import { environmentOf } from "./context.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { type QueryWords, queryTerms, withQuery } from "./list-query.js"
 import { ownerLanguageOf, scheduleState } from "./schedule/schedule-command.js"
@@ -132,9 +133,9 @@ const appliedBody = (store: MessageStore, address: TemplateAddress, kind: Messag
     .map((key) => store.templates.get({ ...address, key })?.body)
     .find((body) => body !== undefined)
 
-const refuseAgent = (env: NodeJS.ProcessEnv) => {
+const refuseAgent = (command: Command, env: NodeJS.ProcessEnv) => {
   // A template decides what every later digest says to the owner; an agent could make it hide or invent things.
-  if (agentOf(env))
+  if (environmentOf(command).agent || agentOf(env))
     throw new CliError("permission_error", "only the owner changes a message template, not an agent", {
       reason: "template.owner-only",
     })
@@ -262,7 +263,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       given: { channel: ReportChannel; locale?: string; file?: string; undo?: boolean },
     ) {
       const env = options.env()
-      refuseAgent(env)
+      refuseAgent(this, env)
       const { address, kind, channel, schedule } = await addressOf(key, given, env, stateOf(app, env))
       const { current, previous } = await withStore(env, (store) => ({
         current: appliedBody(store, address, kind, schedule),
@@ -347,7 +348,9 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
     .addOption(localeOption())
-    .option("--file <file>", "preview this draft instead of the template that applies; - reads stdin")
+    .addOption(
+      ownerOnlyOption("--file <file>", "preview this draft instead of the template that applies; - reads stdin"),
+    )
     .action(async function (
       this: Command,
       key: string,
@@ -389,7 +392,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .addOption(localeOption())
     .action(async function (this: Command, key: string, given: { channel: ReportChannel; locale?: string }) {
       const env = options.env()
-      refuseAgent(env)
+      refuseAgent(this, env)
       const { address } = await addressOf(key, given, env, stateOf(app, env))
       const changed = await withStore(env, (store) => store.templates.reset(address))
       options.diagnostic(

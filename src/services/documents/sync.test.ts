@@ -544,6 +544,19 @@ describe("why a document left the copy", () => {
     const ref = must(await f.ingest.history.reference("alpha", id))
     return f.ingest.history.versions(ref)
   }
+  it("answers a document: ref only for the account it belongs to", async () => {
+    const f = await setup()
+    await syncDocuments(f.options)
+    const ref = must(await f.ingest.history.reference("alpha", "a"))
+    const other = { metadata: file("other"), text: "another account's text", markdown: "", tabs: [] }
+    await f.ingest.save("beta", other, "hash")
+
+    expect(await f.ingest.history.reference("alpha", ref)).toBe(ref)
+    expect(await f.ingest.history.reference("beta", ref)).toBeUndefined()
+    expect(await f.ingest.history.reference("gamma", ref)).toBeUndefined()
+    expect(await f.ingest.history.reference("alpha", "document:999999")).toBeUndefined()
+  })
+
   it("deletes only on the source's own signal; a bare removal and a 404 keep the text as no longer visible", async () => {
     const f = await setup()
     f.files.set("c", file("c"))

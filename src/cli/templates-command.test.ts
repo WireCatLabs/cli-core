@@ -1,12 +1,15 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { defaultTemplate, prepareReport } from "../background/report/render.js"
 import { reportKeysOf } from "../background/report/stored-templates.js"
+import { toolsFromCommands } from "../mcp/agent.js"
 import { openCache } from "../store/open.js"
 import { openStore, storedTemplateBodies } from "../store/store.js"
+import { provide } from "./context.js"
 import type { Body } from "./envelope.js"
 import { templatesCommand } from "./templates-command.js"
 
@@ -27,7 +30,7 @@ const SAMPLE = readFileSync(
   "utf8",
 )
 
-const fixture = (extra: NodeJS.ProcessEnv = {}) => {
+const fixture = (extra: NodeJS.ProcessEnv = {}, { mcp = false } = {}) => {
   const root = mkdtempSync(join(tmpdir(), "templates-command-"))
   const env: NodeJS.ProcessEnv = {
     WIRECAT_STATE_DIR: root,
@@ -38,18 +41,18 @@ const fixture = (extra: NodeJS.ProcessEnv = {}) => {
   const answers: Body[] = []
   const lines: string[] = []
   let edited = (_path: string) => {}
-  const run = (...words: string[]) =>
-    new Command("fixture")
-      .exitOverride()
-      .addCommand(
-        templatesCommand(app, {
-          env: () => env,
-          output: (body) => answers.push(body),
-          diagnostic: (line) => lines.push(line),
-          editor: (path) => edited(path),
-        }),
-      )
-      .parseAsync(["templates", ...words], { from: "user" })
+  const run = (...words: string[]) => {
+    const program = new Command("fixture").exitOverride().addCommand(
+      templatesCommand(app, {
+        env: () => env,
+        output: (body) => answers.push(body),
+        diagnostic: (line) => lines.push(line),
+        editor: (path) => edited(path),
+      }),
+    )
+    if (mcp) provide(program, { agent: { result: () => {}, failure: () => {}, authority: true } })
+    return program.parseAsync(["templates", ...words], { from: "user" })
+  }
   const item = () => {
     const last = answers.at(-1)
     return last && "item" in last ? (last.item as Record<string, unknown>) : {}
@@ -66,6 +69,16 @@ const shipped = (channel: "telegram" | "email" | "text", language = "ru") =>
   defaultTemplate("morning-digest", channel, language)
 
 describe("templates", () => {
+  it("keeps the draft file of preview to the owner, off MCP", () => {
+    const program = new Command("fixture").addCommand(
+      templatesCommand(app, { env: () => ({}), output: () => {}, diagnostic: () => {} }),
+    )
+    const preview = toolsFromCommands(describeProgram(program)).find((tool) => tool.command === "templates preview")
+
+    expect(preview).toBeDefined()
+    expect(Object.keys(preview?.input.entries ?? {})).not.toContain("file")
+  })
+
   it("reads the template from stdin when --file is -", async () => {
     const { run, item } = fixture()
     stdin.text = `<b>From stdin</b>\n${shipped("telegram")}`
@@ -198,6 +211,12 @@ describe("templates", () => {
     ).rejects.toThrow(/only the owner changes a message template/)
     await expect(agent.run("reset", KEY, "--channel", "text")).rejects.toThrow(/only the owner/)
     await agent.run("show", KEY, "--channel", "text")
+
+    const mcp = fixture({}, { mcp: true })
+    await expect(mcp.run("edit", KEY, "--channel", "text", "--file", mcp.file("a", "{{ summary }}"))).rejects.toThrow(
+      /only the owner changes a message template/,
+    )
+    await expect(mcp.run("reset", KEY, "--channel", "text")).rejects.toThrow(/only the owner/)
 
     const { run } = fixture()
     await expect(run("show", "report/nope", "--channel", "text")).rejects.toThrow(/no template report\/nope/)
