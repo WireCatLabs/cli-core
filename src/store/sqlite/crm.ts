@@ -32,7 +32,9 @@ import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import {
   type CrmSkipped,
   crmAccountPrefix,
+  crmExternalIdsOf,
   crmIdentityId,
+  crmRefOf,
   crmRowsOver,
   PERSON_RECORD,
   SOURCE,
@@ -241,6 +243,8 @@ export interface CrmCopies extends CrmReads {
   count(key: AccountKey, kind: CrmKind): Promise<number>
   /** The stored copy's `deal:<id>` or `lead:<id>`, deleted or not; `null` when the store holds none. */
   refOf(key: AccountKey, kind: DealKind, externalId: string): Promise<string | null>
+  /** The CRM's ids behind a deal's `organization:<id>` or `person:<id>`: two for a merged person, none for the owner. */
+  externalIdsOf(key: AccountKey, ref: string): Promise<string[]>
 }
 
 type Row = Record<string, unknown>
@@ -1037,15 +1041,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
               .get(key.provider, crmAccountPrefix(key).length, crmAccountPrefix(key))?.n,
           )
         : stored(key, kind).length,
-    refOf: async (key, kind, externalId) => {
-      const accountId = findAccountPk(context, key)
-      const row =
-        accountId === undefined
-          ? undefined
-          : database
-              .prepare(`SELECT id FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ?`)
-              .get(accountId, externalId)
-      return row ? `${kind}:${row.id}` : null
-    },
+    externalIdsOf: async (key, ref) => crmExternalIdsOf(context, key, ref),
+    refOf: async (key, kind, externalId) => crmRefOf(context, key, kind, externalId),
   }
 }

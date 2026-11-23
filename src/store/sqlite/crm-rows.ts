@@ -6,6 +6,7 @@ import { dayIn } from "../../domain/moment.js"
 import { currencyOf, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
+import { findAccountPk } from "./accounts.js"
 import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 
@@ -75,6 +76,41 @@ const idPart = (value: string) => value.replaceAll("%", "%25").replaceAll("/", "
 
 /** What every contact identity of the account starts with. */
 export const crmAccountPrefix = (key: AccountKey) => `${idPart(key.account)}/`
+
+/** The stored copy's `deal:<id>` or `lead:<id>`, deleted or not. */
+export const crmRefOf = (context: StoreContext, key: AccountKey, kind: DealKind, externalId: string): string | null => {
+  const accountId = findAccountPk(context, key)
+  const row =
+    accountId === undefined
+      ? undefined
+      : context.database
+          .prepare(`SELECT id FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ?`)
+          .get(accountId, externalId)
+  return row ? `${kind}:${row.id}` : null
+}
+
+/** The CRM's ids behind the copy's `organization:<id>` (its record) or `person:<id>` (its contacts, unescaped). */
+export const crmExternalIdsOf = (context: StoreContext, key: AccountKey, ref: string): string[] => {
+  const [, kind, id] = /^(person|organization):(\d+)$/.exec(ref) ?? []
+  const accountId = findAccountPk(context, key)
+  if (!kind || accountId === undefined) return []
+  if (kind === "organization")
+    return context.database
+      .prepare(
+        "SELECT external_id FROM records WHERE account_id = ? AND type = 'organization' " +
+          "AND entity_type = 'organization' AND entity_id = ? AND deleted_at IS NULL ORDER BY external_id",
+      )
+      .all(accountId, Number(id))
+      .map((row) => String(row.external_id))
+  const prefix = `${crmAccountPrefix(key)}contact/`
+  return context.database
+    .prepare(
+      "SELECT i.external_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+        "WHERE i.provider = ? AND l.person_id = ? AND substr(i.external_id, 1, ?) = ? ORDER BY i.external_id",
+    )
+    .all(key.provider, Number(id), prefix.length, prefix)
+    .map((row) => decodeURIComponent(String(row.external_id).slice(prefix.length)))
+}
 
 export const day = (value: unknown, what: string): string | null => {
   if (value === undefined || value === null || value === "") return null
