@@ -290,6 +290,11 @@ const checkWrite = (
     if (!sent) continue
     checkCall(`${where}.${verb}`, sent, entity.map, true)
     if (!holds(sent.variables, "{values}")) throw invalid(`${where}.${verb}`, 'no "{values}" in its variables')
+    // A write fills only its own slots: a "{since}" or a create's "{id}" would go out as the literal text.
+    if (holds(sent.variables, "{since}"))
+      throw invalid(`${where}.${verb}`, '"{since}" is for a change read, not a write')
+    if (verb === "create" && holds(sent.variables, "{id}"))
+      throw invalid(`${where}.${verb}`, 'a create has no "{id}" yet; only an update names one')
     if (verb === "update" && !holds(sent.variables, "{id}"))
       throw invalid(`${where}.${verb}`, 'no "{id}" in its variables')
   }

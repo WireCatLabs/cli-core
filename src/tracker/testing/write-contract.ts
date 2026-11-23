@@ -97,15 +97,16 @@ export const trackerWriteContract = (
       },
     },
     {
-      name: "comment answers the comment on the issue, its body as written",
+      name: "comment answers the comment on the issue, and text that looks like a slot goes out as written",
       async run() {
         const { writer, issue } = await created()
-        // Text that looks like a slot of the manifest's variables goes out as the owner wrote it.
-        const body = "Example: fixed {since} the release\nsecond line"
-        const comment = await writer.comment(issue.externalId, body, operation())
+        // A manifest's variables hold "{id}" and "{values}": the owner's text must never be filled as one.
+        const renamed = await writer.updateIssue(issue.externalId, { title: "{id}" }, operation())
+        assert.equal(renamed.title, "{id}")
+        const comment = await writer.comment(issue.externalId, "{values}", operation())
         assert.ok(comment.externalId, "an id")
         assert.equal(comment.issue, issue.externalId)
-        assert.equal(comment.body, body)
+        assert.equal(comment.body, "{values}")
       },
     },
     {

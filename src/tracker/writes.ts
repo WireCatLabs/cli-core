@@ -3,12 +3,17 @@ import type { TrackerKind, TrackerRecords } from "../domain/tracker.js"
 import { foldName } from "../resolve.js"
 import type { Asker } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
+import type { PermissionKey } from "../sends/permissions.js"
 import { askedKeys, type ProfileWrites, profileWriteGuard } from "../sends/profile-writes.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { TrackerItem } from "../store/sqlite/tracker.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
+import type { TrackerSource } from "./source.js"
+import { trackerSelfOf } from "./sync.js"
 import {
+  TRACKER_ASSIGN_OTHERS_KEY,
+  TRACKER_WRITE_DEFAULTS,
   TRACKER_WRITE_KEYS,
   type TrackerIssueFields,
   type TrackerWrite,
@@ -27,6 +32,8 @@ export interface TrackerWriteContext {
   writes: TrackerWrites
   /** A terminal's question, or an agent's go-ahead. */
   ask: Asker
+  /** Names the sign-in's own user when no sync has kept it yet; left out, every assignee is somebody else. */
+  source?: () => TrackerSource
   now?: () => number
 }
 
@@ -57,7 +64,7 @@ export interface TrackerCommentWritten {
   comment: TrackerItem<"comment">
 }
 
-const MOST = 500
+const PAGE = 500
 const PRIORITIES: Readonly<Record<string, number>> = { none: 0, urgent: 1, high: 2, medium: 3, low: 4 }
 const PLURALS = { team: "teams", user: "users", state: "states", label: "labels", project: "projects" } as const
 type Named = keyof typeof PLURALS
@@ -80,10 +87,31 @@ const namesOf = (kind: Named, record: TrackerRecords[Named]): string[] => {
   return [name]
 }
 
+/** Every live row of the kind, page by page: a uniqueness check over a capped page could miss the second match. */
+const allOf = async <K extends Named>(context: TrackerWriteContext, kind: K, parent?: string) => {
+  const all: TrackerItem<K>[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await context.store.tracker.list(context.account, kind, {
+      limit: PAGE,
+      offset,
+      ...(parent === undefined ? {} : { parent }),
+    })
+    for (const item of page.items) all.push(item)
+    if (!page.hasMore) return all
+  }
+}
+
+/** A team's states are its own; its labels are its own and the workspace's, which belong to no team. */
+const withinTeam = (kind: Named, item: TrackerItem, team: string | undefined) => {
+  if (team === undefined || (kind !== "state" && kind !== "label")) return true
+  const owner = (item.record as TrackerRecords["state"] | TrackerRecords["label"]).team ?? null
+  return owner === team || (kind === "label" && owner === null)
+}
+
 /**
  * A record of this account's copy by the tracker's id, or by a name only one of them has, in any letter case. A state
- * is looked for among its team's. Anything else is refused before a write is sent: a reference the copy does not hold
- * would reach the tracker as typed.
+ * or a label is looked for among the issue's team's. Anything else is refused before a write is sent: a reference the
+ * copy does not hold would reach the tracker as typed.
  */
 const referenceOf = async (
   context: TrackerWriteContext,
@@ -92,36 +120,34 @@ const referenceOf = async (
   param: string,
   team?: string,
 ): Promise<string> => {
-  const inTeam = (item: TrackerItem) =>
-    kind !== "state" || team === undefined || (item.record as TrackerRecords["state"]).team === team
   const byId = await context.store.tracker.get(context.account, kind, given)
-  if (byId && byId.deletedAt === null && inTeam(byId)) return given
-  const all = (
-    await context.store.tracker.list(context.account, kind, {
-      limit: MOST,
-      ...(kind === "state" && team !== undefined ? { parent: team } : {}),
-    })
-  ).items
+  if (byId && byId.deletedAt === null && withinTeam(kind, byId, team)) return given
   const want = foldName(given.trim())
-  const found = all.filter((one) => namesOf(kind, one.record).some((name) => name && foldName(name) === want))
+  const found = (await allOf(context, kind, kind === "state" ? team : undefined)).filter(
+    (one) => withinTeam(kind, one, team) && namesOf(kind, one.record).some((name) => name && foldName(name) === want),
+  )
   if (found.length === 1) return (found[0] as TrackerItem).record.externalId
   const candidates = found.map((one) => ({ id: one.record.externalId, name: (one.record as { name: string }).name }))
+  const scoped = (kind === "state" || kind === "label") && team ? " for the issue's team" : ""
   throw invalid(
     found.length
-      ? `${found.length} ${PLURALS[kind]} are named ${given}; name one by its id`
-      : `no ${kind} ${given} in the copy${kind === "state" && team ? " for the issue's team" : ""}; ` +
-          `see ${PLURALS[kind]} list, or run sync`,
+      ? `${found.length} ${PLURALS[kind]} are named ${given}${scoped}; name one by its id`
+      : `no ${kind} ${given} in the copy${scoped}; see ${PLURALS[kind]} list, or run sync`,
     param,
     { reason: "tracker.reference", ...(candidates.length ? { candidates } : {}) },
   )
 }
 
 /** The team a new issue goes to: the one named, or the copy's only team; several and none named is refused. */
-const teamOf = async (context: TrackerWriteContext, given: string | undefined): Promise<string | undefined> => {
+const teamOf = async (context: TrackerWriteContext, given: string | undefined): Promise<string> => {
   if (given !== undefined) return referenceOf(context, "team", given, "--team")
-  const all = (await context.store.tracker.list(context.account, "team", { limit: MOST })).items
-  if (all.length === 0) return undefined
+  const all = await allOf(context, "team")
   if (all.length === 1) return (all[0] as TrackerItem<"team">).record.externalId
+  // Sent without a team, the issue would be refused by the tracker or land where the owner did not choose.
+  if (all.length === 0)
+    throw invalid("the copy holds no team for a new issue; run sync, then try again", "--team", {
+      reason: "tracker.team-required",
+    })
   throw invalid(
     `this tracker has ${all.length} teams; name one with --team: ` +
       all.map(({ record }) => `${record.name} (${record.key ?? record.externalId})`).join(", "),
@@ -144,7 +170,9 @@ export const trackerIssueOf = async (
   return found
 }
 
+/** An empty value clears it, as for every other field: 0 is the tracker's "no priority". */
 const priorityOf = (typed: string): number => {
+  if (typed.trim() === "") return 0
   const word = PRIORITIES[typed.trim().toLowerCase()]
   const number = word ?? Number(typed)
   if (!Number.isInteger(number) || number < 0 || number > 4)
@@ -178,7 +206,7 @@ const fieldsOf = async (
     fields.labels =
       input.labels.length === 1 && cleared(input.labels[0] as string)
         ? []
-        : await Promise.all(input.labels.map((one) => referenceOf(context, "label", one, "--label")))
+        : await Promise.all(input.labels.map((one) => referenceOf(context, "label", one, "--label", team)))
   if (input.project !== undefined)
     fields.project = cleared(input.project) ? null : await referenceOf(context, "project", input.project, "--project")
   if (input.parent !== undefined) {
@@ -199,12 +227,13 @@ const written = async <T>(
   write: TrackerWrite,
   operationId: string,
   act: (options: TrackerWriteOptions) => Promise<T>,
+  extra: PermissionKey[] = [],
 ): Promise<T> => {
   const key = TRACKER_WRITE_KEYS[write]
   try {
-    const confirmed = askedKeys(context.writes, {}, [key])
+    const confirmed = askedKeys(context.writes, TRACKER_WRITE_DEFAULTS, [key, ...extra])
     const done = await guardedWrite(
-      profileWriteGuard(context.writes, context.ask, {}, []),
+      profileWriteGuard(context.writes, context.ask, TRACKER_WRITE_DEFAULTS, extra),
       { chatId: null, kind: "edit", key, operationId },
       async () => {
         try {
@@ -253,6 +282,13 @@ const kept = async <K extends "issue" | "comment">(
   }
 }
 
+/** An assignee other than the sign-in's own user checks `issues.assign-others` too (WC-PERM-22). */
+const assignKeys = async (context: TrackerWriteContext, fields: TrackerIssueFields): Promise<PermissionKey[]> => {
+  if (fields.assignee == null) return []
+  const self = await trackerSelfOf(context.store, context.account, context.source?.())
+  return fields.assignee === self ? [] : [TRACKER_ASSIGN_OTHERS_KEY]
+}
+
 /** A new issue in the tracker, through the guarded path; the tracker's answer is stored as a sync stores it. */
 export const createTrackerIssue = async (
   context: TrackerWriteContext,
@@ -262,10 +298,14 @@ export const createTrackerIssue = async (
   supported(writer, "create")
   if (input.title === undefined) throw invalid("a new issue needs --title", "--title")
   const team = await teamOf(context, input.team)
-  const fields = await fieldsOf(context, { ...input, ...(team === undefined ? {} : { team }) }, team)
+  const fields = await fieldsOf(context, { ...input, team }, team)
   const operationId = newOperationId()
-  const issue = await written(context, "create", operationId, (options) =>
-    writer.createIssue({ ...fields, title: fields.title as string }, options),
+  const issue = await written(
+    context,
+    "create",
+    operationId,
+    (options) => writer.createIssue({ ...fields, title: fields.title as string }, options),
+    await assignKeys(context, fields),
   )
   return { operationId, issue: await kept(context, "issue", issue, operationId) }
 }
@@ -283,8 +323,12 @@ export const updateTrackerIssue = async (
   const fields = await fieldsOf(context, input, team, copy.record.externalId)
   if (Object.keys(fields).length === 0) throw invalid("nothing to change: name a field")
   const operationId = newOperationId()
-  const issue = await written(context, "update", operationId, (options) =>
-    writer.updateIssue(copy.record.externalId, fields, options),
+  const issue = await written(
+    context,
+    "update",
+    operationId,
+    (options) => writer.updateIssue(copy.record.externalId, fields, options),
+    await assignKeys(context, fields),
   )
   return { operationId, issue: await kept(context, "issue", issue, operationId) }
 }

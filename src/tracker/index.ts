@@ -48,6 +48,7 @@ export {
   type TrackerSyncResult,
   trackerCursorName,
   trackerGapsOf,
+  trackerSelfOf,
 } from "./sync.js"
 export {
   syncTrackerTasks,
@@ -58,6 +59,9 @@ export {
   trackerIssueTitle,
 } from "./tasks.js"
 export {
+  TRACKER_ASSIGN_OTHERS_KEY,
+  TRACKER_WRITE_DEFAULTS,
+  TRACKER_WRITE_EXTRA_KEYS,
   TRACKER_WRITE_KEYS,
   TRACKER_WRITES,
   type TrackerIssueDraft,
@@ -65,6 +69,7 @@ export {
   type TrackerWrite,
   type TrackerWriteOptions,
   type TrackerWriter,
+  trackerAlsoChecks,
 } from "./writer.js"
 export {
   commentTrackerIssue,

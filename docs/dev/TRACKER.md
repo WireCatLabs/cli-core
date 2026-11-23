@@ -33,8 +33,9 @@ A tracker that takes writes has a `TrackerWriter` beside its source (`src/tracke
 | `comment(issue, body, options)` | a comment on the issue, by its tracker id; answers the comment |
 
 Every field is the tracker's own id. `options` carries the write's `operationId` and the keys the owner was already
-asked about (`confirmed`). None of them retries: a lost answer throws `outcome_unknown`, and an answer with no record
-throws with `sent: true`.
+asked about (`confirmed`). None of them retries: a lost answer throws `outcome_unknown`. An answer with no record (Linear's
+`success: false` without an error) is `invalid_response`, and the copy is not told the write was made; an adapter
+whose write was made but could not be read back throws with `sent: true`.
 
 Archived rows are listed, with `archivedAt`, and the copy keeps them marked. A row deleted outright is found only by
 `ids()`. A source that pages inside one call asks `context.spend()` before each further request, and names what the
@@ -120,21 +121,31 @@ tracker is named in the row's `untrusted`. Each list narrows by its query, as `d
 `TrackerWrites` the open profile's `TrackerRun.writes(command)` builds: the writer, the app and the profile's levels.
 
 - **References from the copy.** `--team` takes a team's id, key or name; `--state` a state of the issue's team, by id
-  or name; `--label` (repeated, replacing the list), `--project` a label or project by id or name; `--assignee` a user
-  by id, name or e-mail; `--parent` and `<issue>` an issue's key or id. A name matches in any letter case and only when
-  one row of the account's copy has it; two are refused with both as `candidates`, none with `tracker.reference`. A new
-  issue without `--team` goes to the copy's only team, and several teams are refused with the choices
+  or name; `--label` (repeated, replacing the list) a label of the issue's team or of no team, by id or name;
+  `--project` a project by id or name; `--assignee` a user by id, name or e-mail; `--parent` and `<issue>` an issue's
+  key or id. The issue's team is the one named, else the copy's: an update that moves the issue looks in the new team.
+  A name matches in any letter case and only when one row of the account's copy has it, every row read, not one
+  page; two are refused with both as `candidates`, none with `tracker.reference`. A new issue without `--team` goes
+  to the copy's only team; several teams are refused with the choices, and none says to sync
   (`tracker.team-required`). `--priority` is 0 to 4 or none, urgent, high, medium, low.
-- **Clearing.** An empty value clears `--description`, `--assignee`, `--project` and `--parent`; one empty `--label`
-  clears the labels. A title and a state are never empty; an update with no field is refused.
+- **Clearing.** An empty value clears `--description`, `--assignee`, `--project` and `--parent`, and sets `--priority`
+  to 0, none; one empty `--label` clears the labels. A title and a state are never empty; an update with no field is
+  refused.
 - **Guard and journal.** Each write checks its command path, `issues.create`, `issues.update` or `issues.comment`
   (`TRACKER_WRITE_KEYS`), through the profile's guard (`profileWriteGuard`, shared with the CRM and content writes): a
   `deny` or `readonly` refuses, `ask` asks once at a terminal and needs `--yes` otherwise, and the setup ceiling caps
-  every level. No built-in level tightens them: as `deals.create`, they go ahead unless the profile says otherwise.
+  every level. No built-in level tightens these three: as `deals.create`, they go ahead unless the profile says
+  otherwise.
   The write's journal line carries the answer's `operation_id` (a manifest writer's `serviceApiWriter` adds its own
   line under `api.*`, as content's does); a lost answer is `outcome_unknown` with that id, and the owner
   syncs and looks before writing again, since a tracker does not recognise a repeat. `--dry-run` previews and sends
   nothing.
+- **Someone else's issue.** An `--assignee` other than the sign-in's own user also checks `issues.assign-others`
+  (`TRACKER_ASSIGN_OTHERS_KEY`), `deny` by default (`TRACKER_WRITE_DEFAULTS`) as `crm.assign-others` is; a profile
+  lifts it with `issues.assign-others: allow` or `ask`. The own user is the `tracker:self` a sync keeps, asked of the
+  source once when none is kept (`trackerSelfOf`); a tracker that cannot say treats every assignee as somebody else.
+  A CLI adds `TRACKER_WRITE_EXTRA_KEYS` to `commandPermissions({ extra })` and `trackerAlsoChecks()` to its
+  `alsoChecks`, so `--dry-run` names the key.
 - **The answer is stored.** The tracker's answer is saved with `store.tracker.save`, as a sync saves a page, so
   `issues show` and the lists have it at once. A save that fails is `invalid_response` with `sent: true`: sync to store
   it, never write it again. The answer is the issue or comment as the read commands show it, its fields from the
@@ -160,7 +171,8 @@ the selection rides on the request as `selection`, which the `api` group's Graph
 `fields`, our field to where it goes inside the values (`{ to: "stateId" }`). The tracker answers the written row at
 the call's `items`, read by the kind's `map`. `parseTrackerManifest` refuses a write whose operation is a read or is
 missing, a call without its slots, a field the kind does not write (`TRACKER_WRITE_FIELDS`), a create of an issue
-without `title` or of a comment without `issue` and `body`, a comment update, and a selection that leaves out a path
+without `title` or of a comment without `issue` and `body`, a comment update, a `"{since}"` in a write or an `"{id}"` in
+a create, and a selection that leaves out a path
 the map reads. Where `to` points inside the input type is checked by the fake, against the schema. Linear's:
 
 ```ts

@@ -371,6 +371,22 @@ const ownTasks = async (
   }
 }
 
+/**
+ * The sign-in's own user id, as a sync keeps it; asked of the tracker once when none is kept yet. `undefined` when the
+ * tracker cannot say: then every user is somebody else.
+ */
+export const trackerSelfOf = async (
+  store: MessageStore,
+  account: AccountKey,
+  source?: TrackerSource,
+): Promise<string | undefined> => {
+  const kept = (await store.sync.syncState(account, SELF))?.value
+  if (kept || !source?.self) return kept || undefined
+  const id = await source.self()
+  await store.sync.setSyncState(account, SELF, id)
+  return id
+}
+
 /** The gaps the account's last sync recorded; none before its first. */
 export const trackerGapsOf = async (store: MessageStore, account: AccountKey): Promise<TrackerGap[]> => {
   try {

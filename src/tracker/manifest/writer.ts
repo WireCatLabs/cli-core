@@ -76,10 +76,14 @@ export const trackerWriterFromManifest = (input: unknown, options: TrackerManife
     const raw = call.items === undefined ? result : at(result, call.items)
     const entity = manifest.entities[kind]
     const record = entity && crmValues.isRaw(raw) ? mapTrackerRecord(kind, entity.map, raw) : null
+    // An answer with no row (Linear's `success: false` and no error) does not say the write was made, so the copy
+    // is not told it was.
     if (!record)
-      throw new CliError("invalid_response", `${manifest.provider} answered the ${kind} ${verb} with no ${kind}`, {
-        sent: true,
-      })
+      throw new CliError(
+        "invalid_response",
+        `${manifest.provider} answered the ${kind} ${verb} with no ${kind}; sync and look before writing again`,
+        { reason: "tracker.no-record" },
+      )
     return record
   }
 

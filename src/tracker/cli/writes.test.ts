@@ -11,7 +11,7 @@ import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../testing/index.js"
-import { TRACKER_WRITES } from "../writer.js"
+import { TRACKER_WRITES, trackerAlsoChecks } from "../writer.js"
 import { addTrackerCommands } from "./index.js"
 
 const APP: AppIdentity = {
@@ -30,10 +30,10 @@ afterEach(async () => {
 
 type Answer = Record<string, unknown> & { items: Record<string, unknown>[]; item: Record<string, unknown> }
 
-const setup = async (permissions: Record<string, Level> = {}) => {
+const setup = async (permissions: Record<string, Level> = {}, rows = exampleTrackerRows()) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-writes-")), "store.db") })
   opened.push(store)
-  const source = fakeTrackerSource({ rows: exampleTrackerRows(), self: "user-1" })
+  const source = fakeTrackerSource({ rows, self: "user-1" })
   const home = mkdtempSync(join(tmpdir(), "tracker-journal-"))
   const env = { HOME: home, XDG_DATA_HOME: home, XDG_STATE_HOME: home, TRACKER_STATE_DIR: home }
   const writes = () => ({
@@ -79,10 +79,15 @@ describe("tracker write commands", () => {
     expect(create?.writes).toBe(true)
     expect(JSON.stringify(create?.input.entries.label)).toContain("array")
     expect(tools.find(({ command }) => command === "issues comment")?.writes).toBe(true)
+    expect(trackerAlsoChecks(() => ["api.issue-create"])(["issues", "create"])).toEqual([
+      { key: "issues.assign-others", when: "--assignee other than the sign-in's user" },
+      "api.issue-create",
+    ])
+    expect(trackerAlsoChecks()(["issues", "comment"])).toEqual([])
   })
 
   it("create resolves names in the copy, writes once, journals it and stores the tracker's answer", async () => {
-    const { cli, source, journal } = await setup()
+    const { cli, source, journal } = await setup({ "issues.assign-others": "allow" })
     const made = await cli(
       "issues",
       "create",
@@ -124,13 +129,26 @@ describe("tracker write commands", () => {
 
   it("update changes only what it names; an empty value clears; the copy has the change at once", async () => {
     const { cli } = await setup()
-    const done = await cli("issues", "update", "eng-2", "--state", "In Progress", "--assignee", "", "--label", "")
+    const done = await cli(
+      "issues",
+      "update",
+      "eng-2",
+      "--state",
+      "In Progress",
+      "--assignee",
+      "",
+      "--label",
+      "",
+      "--priority",
+      "",
+    )
     expect(done.item.issue).toMatchObject({
       key: "ENG-2",
       title: "Write the migration guide",
       state: "state-doing",
       assignee: null,
       labels: [],
+      priority: 0,
       project: "project-1",
     })
     expect((await cli("issues", "list", "type:started")).items.map((one) => one.key)).toContain("ENG-2")
@@ -159,6 +177,53 @@ describe("tracker write commands", () => {
     await store.tracker.save(ACCOUNT, "team", [{ externalId: "team-2", key: "OPS", name: "Operations" }], 1)
     await expect(cli("issues", "create", "--title", "X")).rejects.toMatchObject({
       details: { reason: "tracker.team-required", allowed: expect.arrayContaining(["team-1", "team-2"]) },
+    })
+    expect(source.sent).toEqual([])
+  })
+
+  it("an issue goes to someone else only when the profile allows issues.assign-others", async () => {
+    const { cli, source } = await setup()
+    await expect(cli("issues", "update", "ENG-1", "--assignee", "Bob Builder")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    await expect(cli("issues", "create", "--title", "X", "--assignee", "user-2")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    expect(source.sent).toEqual([])
+    await cli("issues", "update", "ENG-2", "--assignee", "ada@example.com")
+    await cli("issues", "update", "ENG-2", "--assignee", "")
+    expect(source.sent).toHaveLength(2)
+    const lifted = await setup({ "issues.assign-others": "allow" })
+    expect((await lifted.cli("issues", "update", "ENG-1", "--assignee", "user-2")).item.issue).toMatchObject({
+      assignee: "user-2",
+    })
+  })
+
+  it("a label is looked for among the issue's team's and the workspace's, every row of them", async () => {
+    const rows = exampleTrackerRows()
+    rows.team.push({ externalId: "team-2", key: "OPS", name: "Operations" })
+    rows.label.push(
+      { externalId: "label-ops-bug", name: "Bug", team: "team-2" },
+      { externalId: "label-urgent", name: "Urgent", team: null },
+    )
+    const { cli, store } = await setup({}, rows)
+    const done = await cli("issues", "update", "ENG-1", "--label", "bug", "--label", "Urgent")
+    expect(done.item.issue).toMatchObject({ labels: ["label-bug", "label-urgent"] })
+    const moved = await cli("issues", "update", "ENG-2", "--team", "OPS", "--label", "Bug")
+    expect(moved.item.issue).toMatchObject({ team: "team-2", labels: ["label-ops-bug"] })
+    // Past one page of the store's list: a uniqueness check over a capped page would miss the second match.
+    const many = Array.from({ length: 520 }, (_, n) => ({ externalId: `l-${n}`, name: `Chore ${n}`, team: null }))
+    const twins = [1, 2].map((n) => ({ externalId: `twin-${n}`, name: "Twin", team: null, updatedAt: n }))
+    await store.tracker.save(ACCOUNT, "label", [...twins, ...many.map((one) => ({ ...one, updatedAt: 10_000 }))], 1)
+    await expect(cli("issues", "update", "ENG-1", "--label", "Twin")).rejects.toMatchObject({
+      details: { reason: "tracker.reference", candidates: [expect.anything(), expect.anything()] },
+    })
+  })
+
+  it("a new issue is refused when the copy holds no team", async () => {
+    const { cli, source } = await setup({}, { ...exampleTrackerRows(), team: [] })
+    await expect(cli("issues", "create", "--title", "X")).rejects.toMatchObject({
+      details: { reason: "tracker.team-required", param: "--team" },
     })
     expect(source.sent).toEqual([])
   })

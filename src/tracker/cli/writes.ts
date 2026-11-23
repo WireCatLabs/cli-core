@@ -22,6 +22,7 @@ interface WriteRun {
   account: TrackerWriteContext["account"]
   store: TrackerWriteContext["store"]
   writes?: (command: Command) => TrackerWrites
+  source?: TrackerWriteContext["source"]
 }
 
 export interface TrackerWriteCommandOptions<R extends WriteRun> {
@@ -56,6 +57,7 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
       account: run.account,
       writes: run.writes(command),
       ask: terminalAsker(command),
+      ...(run.source ? { source: run.source } : {}),
       now: options.now,
     }
   }
@@ -78,8 +80,11 @@ export const addTrackerWriteCommands = <R extends WriteRun>(
       .option("--description <text>", "the issue's text; an empty value clears it")
       .option("--team <team>", "the team, by its id, key or name; left out, the copy's only team")
       .option("--state <state>", "the workflow state, by its id or a name only one of the team's states has")
-      .option("--assignee <user>", "the user, by id, name or e-mail as users list shows them; empty for none")
-      .option("--priority <priority>", "0 to 4, or none, urgent, high, medium, low")
+      .option(
+        "--assignee <user>",
+        "the user, by id, name or e-mail; empty for none; anyone but you checks issues.assign-others",
+      )
+      .option("--priority <priority>", "0 to 4, or none, urgent, high, medium, low; empty for none")
       .option(
         "--label <label>",
         "a label by its id or name; repeat it for each; replaces the issue's labels, and one empty value clears them",

@@ -1,5 +1,6 @@
+import type { ConditionalKey } from "../cli/permission-keys.js"
 import type { TrackerComment, TrackerIssue } from "../domain/tracker.js"
-import type { PermissionKey } from "../sends/permissions.js"
+import type { Level, PermissionKey } from "../sends/permissions.js"
 
 export const TRACKER_WRITES = ["create", "update", "comment"] as const
 export type TrackerWrite = (typeof TRACKER_WRITES)[number]
@@ -51,3 +52,26 @@ export const TRACKER_WRITE_KEYS: Readonly<Record<TrackerWrite, PermissionKey>> =
   update: "issues.update",
   comment: "issues.comment",
 }
+
+/** Giving an issue to a tracker user other than the one the sign-in acts as, as `crm.assign-others` for a CRM. */
+export const TRACKER_ASSIGN_OTHERS_KEY: PermissionKey = "issues.assign-others"
+
+/** The keys the tracker writes check beyond their command paths, for a CLI's `commandPermissions({ extra })`. */
+export const TRACKER_WRITE_EXTRA_KEYS: readonly PermissionKey[] = [TRACKER_ASSIGN_OTHERS_KEY]
+
+/** Built in, and only ever tightening (WC-PERM-7): an issue is not given to somebody else until the owner allows it. */
+export const TRACKER_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = { [TRACKER_ASSIGN_OTHERS_KEY]: "deny" }
+
+/**
+ * Every key a tracker write command may check beyond its own path, for `commandPermissions({ alsoChecks })`, so its
+ * `--dry-run` names each: `also` adds the CLI's own, such as the `api.*` key of the mutation it sends.
+ */
+export const trackerAlsoChecks =
+  (also?: (write: TrackerWrite) => readonly PermissionKey[]) =>
+  (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
+    const [noun, command] = path
+    const write = TRACKER_WRITES.find((one) => one === command)
+    if (path.length !== 2 || noun !== "issues" || write === undefined) return []
+    const assign = { key: TRACKER_ASSIGN_OTHERS_KEY, when: "--assignee other than the sign-in's user" }
+    return [...(write === "comment" ? [] : [assign]), ...(also?.(write) ?? [])]
+  }

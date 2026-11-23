@@ -44,6 +44,14 @@ describe("parseTrackerManifest's writes", () => {
     refused(withIssueWrites({ create: { ...create, operation: "issueCreat" } }), /did you mean issueCreate/)
     refused(withIssueWrites({ create: { ...create, variables: { input: {} } } }), /no "\{values\}"/)
     refused(
+      withIssueWrites({ create: { ...create, variables: { input: "{values}", id: "{id}" } } }),
+      /a create has no "\{id\}" yet/,
+    )
+    refused(
+      withIssueWrites({ create: { ...create, variables: { input: "{values}", at: "{since}" } } }),
+      /"\{since\}" is for a change read/,
+    )
+    refused(
       withIssueWrites({ update: { ...issueWrites.update, variables: { input: "{values}" } } }),
       /writes\.issue\.update: no "\{id\}"/,
     )
@@ -122,13 +130,21 @@ const cliOver = async (permissions: Record<string, string>) => {
   const store = await openStore({ path: join(root, "store.db") })
   opened.push(store)
   const fake = trackerManifestFake(MANIFEST, { api, definitions })
+  let drop = false
+  // The tracker gets the write and the connection drops before its answer arrives.
+  const fetch: typeof fake.fetch = async (input, init) => {
+    const answer = await fake.fetch(input, init)
+    if (!drop) return answer
+    drop = false
+    throw new TypeError("fetch failed: the connection dropped")
+  }
   const service = { manifest: api, service: "Tracker" }
   const configuration = settingsFor(APP, { permissions: commandPermissions(serviceApiPermissions(service)) })
   const apiOptions = {
     ...service,
     app: APP,
     configuration,
-    fetch: () => fake.fetch,
+    fetch: () => fetch,
     token: () => FAKE_MANIFEST_TOKEN,
     schemas: async () => ({}),
     definitions: async () => definitions,
@@ -174,7 +190,7 @@ const cliOver = async (permissions: Record<string, string>) => {
   const mutations = () =>
     fake.calls.filter((one) => ["issueCreate", "issueUpdate", "commentCreate"].includes(one.operation ?? ""))
   const journal = () => new SendJournal(sendsPathFor(APP, "work", env)).entries()
-  return { cli, fake, mutations, journal }
+  return { cli, fake, mutations, journal, dropNextAnswer: () => (drop = true) }
 }
 
 describe("a CLI made from the manifest writes through the api group's path", () => {
@@ -217,6 +233,26 @@ describe("a CLI made from the manifest writes through the api group's path", () 
     const comment = await cli("issues", "comment", "issue-1", "--body", "Example: seen it")
     expect(comment.json?.item.comment).toMatchObject({ issue: "issue-1", body: "Example: seen it" })
     expect(fake.refusals).toEqual([])
+  })
+
+  it("a readonly profile stops every write before it is sent", async () => {
+    const { cli, mutations } = await cliOver({ issues: "readonly" })
+    expect((await cli("sync")).code).toBe(0)
+    expect((await cli("issues", "comment", "issue-1", "--body", "x")).error).toMatchObject({ code: "permission_error" })
+    expect(mutations()).toEqual([])
+  })
+
+  it("a lost answer is outcome_unknown with the tracker's operation_id, and the mutation went once", async () => {
+    const { cli, mutations, journal, dropNextAnswer } = await cliOver({})
+    expect((await cli("sync")).code).toBe(0)
+    dropNextAnswer()
+    const lost = await cli("issues", "update", "issue-1", "--title", "Example lost")
+    expect(lost.error).toMatchObject({ code: "outcome_unknown" })
+    expect(String(lost.error?.message)).toContain("sync and look")
+    expect(mutations()).toHaveLength(1)
+    const line = journal().find(({ key }) => key === "issues.update")
+    expect(line).toMatchObject({ outcome: "outcome_unknown" })
+    expect(JSON.stringify(lost.error)).toContain(line?.operationId as string)
   })
 
   it("is stopped by the operation's own api key as well", async () => {
