@@ -13,10 +13,15 @@ export type { FindingEvidence, FindingOutcome } from "./findings-rules.js"
 export { findingHash } from "./findings-rules.js"
 
 export const MEETING_FINDINGS_KIND = "meeting_findings"
+/** @experimental */
 export type MeetingFactFinding = FactFinding
+/** @experimental */
 export type MeetingTaskFinding = Extract<Finding, { kind: "task" }>
+/** @experimental */
 export type MeetingFinding = Finding
+/** @experimental */
 export type MeetingFindingsInput = FindingsInput
+/** @experimental */
 export type MeetingFindingsReceipt = FindingsReceipt
 
 const cue = (raw: string) => {

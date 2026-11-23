@@ -1,4 +1,7 @@
-/** The languages search can stem and spell-check. Adding one here needs its Snowball stemmer in `stem.ts`. */
+/**
+ * The languages search can stem and spell-check. Adding one here needs its Snowball stemmer in `stem.ts`.
+ * @experimental
+ */
 export const LANGUAGES = [
   { name: "russian", code: "ru", label: "Russian", script: "cyrillic", dictionary: "dictionary-ru" },
   { name: "english", code: "en", label: "English", script: "latin", dictionary: "dictionary-en" },

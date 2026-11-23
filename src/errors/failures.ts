@@ -6,13 +6,14 @@ import { CliError, errorCodes } from "@wirecat/cli-base"
  * measured 2026-09-27: an ambiguous chat name from `pickChat` reached tg-cli's `run` as an unknown
  * failure, exit 1, and lost its list of candidates. A name and a code from the closed list
  * identify one in every install layout.
+ * @experimental
  */
 export const isCliFailure = (value: unknown): value is CliError =>
   value instanceof Error &&
   value.name === "CliError" &&
   (errorCodes as readonly string[]).includes((value as { code?: unknown }).code as string)
 
-/** Commander's own errors, by the same rule: its `code` always starts with `commander.`. */
+/** Commander's own errors, by the same rule: its `code` always starts with `commander.`. @experimental */
 export const isCommanderFailure = (value: unknown): value is Error & { code: string; exitCode: number } => {
   const { code, exitCode } = (value ?? {}) as { code?: unknown; exitCode?: unknown }
   return (
@@ -72,6 +73,7 @@ const wrapping = (error: CliError, original: unknown): CliError => {
  * `next` is the command line that says what to do, such as `tg store recover`, only where that command exists.
  * Only for the CLI's own store: a file the owner named goes through `damagedFile`. Any other failure is returned as
  * it came.
+ * @experimental
  */
 export const storeDamaged = (error: unknown, next?: string): unknown =>
   damageIn(error)

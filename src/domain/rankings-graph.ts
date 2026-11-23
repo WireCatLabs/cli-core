@@ -1,10 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { rankingQuestion } from "./rankings-options.js"
 
+/** @experimental */
 export interface RankingGraphLink {
   chatId: string
   messageId: string
 }
+/** @experimental */
 export interface RankingGraphEvidence {
   version: 1
   reply?: RankingGraphLink | null

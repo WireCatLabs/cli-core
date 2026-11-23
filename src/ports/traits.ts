@@ -25,7 +25,10 @@ export interface Fetching {
 /** `messages send --spoiler` and `--caption-above`. */
 export type MediaOption = "spoiler" | "captionAbove" | "fileName"
 
-/** What a messenger is and can do, as the services read it; the CLI's `Messenger` adds how its commands run. */
+/**
+ * What a messenger is and can do, as the services read it; the CLI's `Messenger` adds how its commands run.
+ * @experimental
+ */
 export interface MessengerTraits {
   /** Opt in to `messages send --draft` only when the adapter implements `saveDraft`. */
   drafts?: boolean

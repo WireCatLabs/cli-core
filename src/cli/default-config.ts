@@ -1,6 +1,7 @@
 import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 
+/** @experimental */
 export const DEFAULT_CONFIG = {
   defaults: { limit: 20, keep_runs_for_days: 30, sends_per_hour: 30, update_check: true, skill_hint: true },
   profiles: {},
@@ -10,6 +11,7 @@ export const DEFAULT_CONFIG = {
  * Publish a complete starter file without replacing a concurrent first run or the owner's settings. `config` is
  * `DEFAULT_CONFIG` spelled as the reading schema declares it: an app with a schema of its own may not yet say
  * `keep_runs_for_days`.
+ * @experimental
  */
 export function ensureDefaultConfig(path: string, config: unknown = DEFAULT_CONFIG): void {
   if (existsSync(path)) return

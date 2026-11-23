@@ -3,9 +3,13 @@ import { dirname, join } from "node:path"
 import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
 import { openSqlite } from "../../store/store.js"
 
+/** @experimental */
 export const OUTDATED_CHECK_MS = 60_000
 
-/** The folder of the package this process was started from, when its `package.json` still names `running`. */
+/**
+ * The folder of the package this process was started from, when its `package.json` still names `running`.
+ * @experimental
+ */
 export const ownPackageRoot = (running: string, script = process.argv[1]): string | undefined => {
   let dir: string
   try {
@@ -42,6 +46,7 @@ const newer = (one: string, other: string): boolean => {
 /**
  * Why this serve should stop so its unit starts the installed build: the store moved past what this build
  * may write, or a newer version was installed over it. A store that cannot be read now is not a reason.
+ * @experimental
  */
 export const outdatedReason = async ({
   command,
@@ -79,7 +84,7 @@ export const outdatedReason = async ({
   )
 }
 
-/** Runs `check` every `everyMs` and calls `onOutdated` once with its first reason. */
+/** Runs `check` every `everyMs` and calls `onOutdated` once with its first reason. @experimental */
 export const watchOutdated = ({
   check,
   onOutdated,

@@ -51,13 +51,21 @@ const parseFindingsJson = <T>(text: string, label: string, validate: (input: T) 
   }
   return validate(decode(raw) as T)
 }
+/** @experimental */
 export const parseMeetingFindingsJson = (text: string): MeetingFindingsInput =>
   parseFindingsJson(text, "meeting findings", validateMeetingFindings)
+/** @experimental */
 export const parseEvidenceFindingsJson = (text: string): FindingsInput =>
   parseFindingsJson(text, "evidence findings", validateEvidenceFindings)
-/** A mail findings batch as `mail findings add --dry-run` reads it: snake_case JSON, for `mailFindings.check`. */
+/**
+ * A mail findings batch as `mail findings add --dry-run` reads it: snake_case JSON, for `mailFindings.check`.
+ * @experimental
+ */
 export const readMailFindingsJson = (text: string): MailFindingsInput =>
   parseFindingsJson(text, "mail findings", (input: MailFindingsInput) => input)
-/** A mail findings batch as `mail findings add` reads it: snake_case JSON, checked for shape before the store. */
+/**
+ * A mail findings batch as `mail findings add` reads it: snake_case JSON, checked for shape before the store.
+ * @experimental
+ */
 export const parseMailFindingsJson = (text: string): MailFindingsInput =>
   parseFindingsJson(text, "mail findings", validateMailFindings)

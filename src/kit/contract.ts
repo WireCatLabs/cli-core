@@ -36,7 +36,7 @@ const serverReads = (adapter: MessengerAdapter): Reading | undefined =>
 
 const NO_SERVER_READS = { skipped: "the adapter has no server reads (chats, history, around, contact)" }
 
-/** Every method of the optional groups, which `capability` hands over or refuses. */
+/** Every method of the optional groups, which `capability` hands over or refuses. @experimental */
 export const OPTIONAL_METHODS = [
   "fetchCounters",
   ...SERVER_READS,

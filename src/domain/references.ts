@@ -48,6 +48,7 @@ export type SimpleReference = (typeof SIMPLE_REFERENCES)[number]
 
 export type RefKindName = Exclude<Reference["type"], "entity">
 
+/** @experimental */
 export interface RefKindSpec<R extends Reference = Reference> {
   /** The word before the first colon: `chat`, `msg`, `document`. */
   prefix: string
@@ -107,7 +108,7 @@ const simple = (prefix: SimpleReference) =>
     format: (reference) => `${reference.type}:${reference.id}`,
   })
 
-/** Every kind of reference. A new kind is one row here; nothing else switches on the prefix. */
+/** Every kind of reference. A new kind is one row here; nothing else switches on the prefix. @experimental */
 export const REF_KINDS: readonly RefKindSpec[] = [
   kind<Extract<Reference, { type: "message" }>>({
     prefix: "msg",
@@ -222,12 +223,13 @@ export const parseReference = (text: string): Reference => {
   return spec.parse(rest, reference)
 }
 
-/** The stored spelling of a reference, so two spellings of one thing compare equal. */
+/** The stored spelling of a reference, so two spellings of one thing compare equal. @experimental */
 export const canonicalReference = (text: string): string => formatReference(parseReference(text))
 
 /**
  * Strict: the whole text is one reference of a known kind, with no space. A title such as "Note: plan" is not, so an
  * argument that takes either a reference or a title can tell them apart. The shape is checked only by parsing it.
+ * @experimental
  */
 export const looksLikeReference = (text: string): boolean => {
   const match = /^([a-z]+):\S+$/.exec(text.trim())

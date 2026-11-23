@@ -2,6 +2,7 @@ import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { organization, project, reminder } from "../entities/knowledge-lists.js"
 
 export { organization, project, reminder }
+/** @experimental */
 export const ORGANIZATIONS_QUERY: QueryRegistry = {
   entity: "organization",
   backend: "sql",
@@ -16,6 +17,7 @@ export const ORGANIZATIONS_QUERY: QueryRegistry = {
     },
   }),
 }
+/** @experimental */
 export const PROJECTS_QUERY: QueryRegistry = {
   entity: "project",
   backend: "sql",
@@ -33,6 +35,7 @@ export const PROJECTS_QUERY: QueryRegistry = {
     },
   }),
 }
+/** @experimental */
 export const REMINDERS_QUERY: QueryRegistry = {
   entity: "reminder",
   backend: "sql",

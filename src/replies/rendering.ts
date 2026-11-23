@@ -9,8 +9,10 @@ import type { ReplyRule } from "./rules.js"
 import { renderReplyTemplate, type TemplateResult, templateWarning } from "./template.js"
 
 export type ReplyChat = Pick<Chat, "id" | "kind"> & { title?: string | null }
+/** @experimental */
 export type ReplyRender = (rule: ReplyRule, message: Message, chat: ReplyChat, now: number) => Promise<TemplateResult>
 
+/** @experimental */
 export const replyRenderer =
   (
     app: AppIdentity,

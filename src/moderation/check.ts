@@ -46,6 +46,7 @@ const STRENGTH: Record<GroupRules["links"], number> = { report: 0, delete: 1, re
 /**
  * What the rules say about what is new. Pure: nothing here talks to a messenger. One finding per
  * message — the rule with the strongest action — and one removal per person, whatever else they did.
+ * @experimental
  */
 export const judge = ({ rules, messages, joined, answerers, service, now, invites }: CheckInput): Finding[] => {
   const invite = invites ? new RegExp(`${INVITE.source}|${invites.source}`, "i") : INVITE
@@ -116,7 +117,7 @@ const floodOf = (messages: Message[], flood: GroupRules["flood"]): Set<Id> => {
   return over
 }
 
-/** The two things a check may do, whoever does them: the personal account, or a bot. */
+/** The two things a check may do, whoever does them: the personal account, or a bot. @experimental */
 export interface Moderator {
   deleteMessage(chatId: Id, messageId: Id): Promise<void>
   removePerson(chatId: Id, personId: Id): Promise<void>
@@ -141,6 +142,7 @@ export interface ActOptions {
  * Does what the findings ask, as far as the group's levels, the per-run limit and the guard let it.
  * `deny` never acts, `readonly` only reports, `ask` asks — or `--allow-dangerous` says yes — and
  * `allow` acts. Stops acting at the first hourly-limit refusal: the rest is `skipped`, never tried.
+ * @experimental
  */
 export const act = async (moderator: Moderator, findings: Finding[], options: ActOptions): Promise<CheckRow[]> => {
   const { chatId, rules, allowDangerous, dryRun, maxActions, confirm, command } = options

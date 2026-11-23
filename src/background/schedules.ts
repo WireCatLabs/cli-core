@@ -101,7 +101,10 @@ export type Notify = (typeof NOTIFY_WHEN)[number]
 export const notifyOf = (schedule: Pick<Schedule, "kind" | "when" | "notify">): Notify =>
   schedule.notify ?? (schedule.kind === "agent" && "every" in schedule.when ? "failures" : "always")
 
-/** What a gated agent waits for, and what a day of its runs may cost, when neither its flags nor the config say. */
+/**
+ * What a gated agent waits for, and what a day of its runs may cost, when neither its flags nor the config say.
+ * @experimental
+ */
 export const SCHEDULE_DEFAULTS = { mailWaitMinutes: 30, mailBatch: 10, maxCostPerDay: 5 } as const
 
 /** One local day's cost of a schedule's runs, as the harness reported it (`spend.json` beside the schedule). */
@@ -116,7 +119,7 @@ export const localDay = (at: Date): string =>
 
 const spendFile = (file: string) => join(file, "..", "spend.json")
 
-/** What the schedule's runs cost today; nothing before its first priced run of the day. */
+/** What the schedule's runs cost today; nothing before its first priced run of the day. @experimental */
 export const spentToday = (file: string, now = new Date()): number => {
   try {
     const spend = JSON.parse(readFileSync(spendFile(file), "utf8")) as DaySpend
@@ -171,7 +174,10 @@ const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number; failed?: tr
  */
 export type AgentInput = (schedule: Schedule, run: (argv: string[]) => Promise<string>) => Promise<string | undefined>
 
-/** The most an agent's input may hold; a longer one is cut, so a mailbox in flood cannot grow every turn's context. */
+/**
+ * The most an agent's input may hold; a longer one is cut, so a mailbox in flood cannot grow every turn's context.
+ * @experimental
+ */
 export const AGENT_INPUT_MAX_CHARS = 60_000
 
 const capped = (input: string): string =>
@@ -341,6 +347,7 @@ export const failingNotice = (
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
 
+/** @experimental */
 export const scheduleName = (name: string): string => {
   if (!NAME.test(name)) {
     throw new CliError("validation_error", `a schedule name is lowercase letters, digits and dashes — not "${name}"`)
@@ -349,13 +356,16 @@ export const scheduleName = (name: string): string => {
 }
 
 export const schedulesDir = (state: string) => join(state, "schedules")
+/** @experimental */
 export const scheduleFile = (state: string, name: string) => join(schedulesDir(state), name, "schedule.json")
 
+/** @experimental */
 export const readSchedule = (file: string): Schedule => {
   if (!existsSync(file)) throw new CliError("not_found", `no schedule at ${file}`)
   return JSON.parse(readFileSync(file, "utf8")) as Schedule
 }
 
+/** @experimental */
 export const lastRun = (file: string): LastRun | undefined => readRun(join(file, "..", "last.json"))
 
 /** The CLI's own schedules with their last runs, for `failingNotice`; a broken file is skipped, not thrown. */

@@ -14,9 +14,10 @@ import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { AccountKey } from "../../store/store.js"
 import type { Messenger, MessengerContext } from "./context.js"
 
+/** @experimental */
 export type MessageItem = v.InferOutput<typeof messageSchema>
 
-/** What a read hands over: a message, sometimes found by a search, heard, or the anchor of a window. */
+/** What a read hands over: a message, sometimes found by a search, heard, or the anchor of a window. @experimental */
 export type ReadMessage = Message &
   Partial<Pick<MessageHit, "chatTitle" | "email" | "excerpt">> & {
     locator?: string
@@ -69,6 +70,7 @@ const mailPerson = ({ name, address, ref }: MailPerson) => ({ name, address, ref
 /**
  * A message as every command answers it. The ref is the message's locator: the one a store hit carries, else
  * built from the account that read it. What only the adapter needs (`providerRef`) stays behind.
+ * @experimental
  */
 export const messageItem = (message: ReadMessage, reader: AccountKey): MessageItem => {
   const { provider, account } = message.locator === undefined ? reader : parseLocator(message.locator)

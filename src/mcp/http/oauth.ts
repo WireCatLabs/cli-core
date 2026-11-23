@@ -47,6 +47,7 @@ const tokenFile = (path: string) => ({
   },
 })
 
+/** @experimental */
 export const revokeAll = (path: string) => rmSync(path, { force: true })
 
 const json = (body: unknown, status = 200) =>

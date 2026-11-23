@@ -191,7 +191,10 @@ export interface ServerReads {
   around(chat: string, messageId: Id, window: { before: number; after: number }): Promise<WindowedMessage[]>
 }
 
-/** Reading beyond the core: forward from a point, back from a moment, a forum's topics, where a link leads. */
+/**
+ * Reading beyond the core: forward from a point, back from a moment, a forum's topics, where a link leads.
+ * @experimental
+ */
 export interface ChatReading {
   /** The oldest `limit` newer than a message or a moment, oldest first; `hasMore` when newer ones remain. */
   historyAfter(chat: string, window: { limit: number; after: After }): Promise<Page<Message>>
@@ -205,7 +208,7 @@ export interface ChatReading {
   inspect(link: string): Promise<LinkTarget>
 }
 
-/** A messenger that can search a chat by who wrote. */
+/** A messenger that can search a chat by who wrote. @experimental */
 export interface SenderSearch {
   /** One person's newest `limit` messages in a chat, oldest first — a search by sender, not a walk of the history. */
   historyFrom(chat: string, person: Id, window: { limit: number }): Promise<Page<Message>>
@@ -223,7 +226,10 @@ export interface ServerQuery {
   maxDate?: number
 }
 
-/** A messenger whose server searches message text. Its matching is its own: the results are candidates. */
+/**
+ * A messenger whose server searches message text. Its matching is its own: the results are candidates.
+ * @experimental
+ */
 export interface MessageSearch {
   /** The newest `limit` matches, newest first; `chats` are the chats they came from. */
   searchMessages(
@@ -268,6 +274,7 @@ export interface MessagePins {
   unpin(chatId: Id, messageId: Id): Promise<void>
 }
 
+/** @experimental */
 export interface MessageStars {
   /** Stars one message, or takes the star off; only the owner sees it. */
   star(chatId: Id, messageId: Id, starred: boolean): Promise<void>
@@ -292,7 +299,10 @@ export interface ReadState {
   markRead(chatId: Id, until?: Id): Promise<void>
 }
 
-/** Only for a messenger with forum topics (`Messenger.topics`); one without them implements `ReadState` alone. */
+/**
+ * Only for a messenger with forum topics (`Messenger.topics`); one without them implements `ReadState` alone.
+ * @experimental
+ */
 export interface TopicReadState {
   /** One forum topic only, up to `until` or its newest message; the rest of the chat stays as it is. */
   markTopicRead(chatId: Id, topicId: Id, until?: Id): Promise<void>
@@ -307,6 +317,7 @@ export interface ForumState {
   canCreate: boolean
 }
 
+/** @experimental */
 export interface ForumControl {
   forumState(chatId: Id): Promise<ForumState>
   upgradeForum(chatId: Id): Promise<ForumState>
@@ -314,6 +325,7 @@ export interface ForumControl {
   createTopic(chatId: Id, title: string, options: { sendId: string; icon?: string }): Promise<Topic>
 }
 
+/** @experimental */
 export interface TopicEditing {
   /** Renames, closes or reopens one topic; the answer is the topic as it now stands. A repeat changes nothing. */
   editTopic(chatId: Id, topicId: Id, change: TopicChange): Promise<Topic>
@@ -325,10 +337,12 @@ export interface TopicEditing {
   topicIcons?(): Promise<string[]>
 }
 
+/** @experimental */
 export interface ThreadAddressing {
   validateThread(chatId: Id, threadId: Id, options: { replyTo?: Id }): Promise<void>
 }
 
+/** @experimental */
 export interface TopicHistory {
   /** One forum topic's messages, oldest to newest; `before` a message id. */
   topicHistory(chat: string, threadId: Id, window: { limit: number; before?: string }): Promise<Page<Message>>
@@ -357,6 +371,7 @@ export interface ThreadReplies {
   ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
 }
 
+/** @experimental */
 export interface MessageButtons {
   /** The keyboard one message carries, row by row; a message without one answers `[]`. */
   buttons(chatId: Id, messageId: Id): Promise<Button[][]>
@@ -384,6 +399,7 @@ export interface MessagePolls {
   ): Promise<Sent>
 }
 
+/** @experimental */
 export interface LiveUpdates {
   /**
    * New messages and changes to messages as they arrive, until `signal` aborts. `onReady` once it is
@@ -393,6 +409,7 @@ export interface LiveUpdates {
   watch(onEvent: (event: MessageEvent) => void, signal: AbortSignal, onReady?: () => void): Promise<void>
 }
 
+/** @experimental */
 export interface PassiveUpdates {
   /**
    * What the open connection receives, as `watch` hands it, until `signal` aborts — on a connection opened without
@@ -412,27 +429,27 @@ export interface PassiveUpdates {
   listenHistory?(onBatch: HistoryBatchHandler, signal: AbortSignal): Promise<void>
 }
 
-/** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. */
+/** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. @experimental */
 export interface HistoryVote {
   chatId: Id
   messageId: Id
   vote: PollVote
 }
 
-/** One person's reaction to message `messageId` of `chatId`, as `PersonReactionEvent` has it. */
+/** One person's reaction to message `messageId` of `chatId`, as `PersonReactionEvent` has it. @experimental */
 export interface HistoryReaction {
   chatId: Id
   messageId: Id
   reaction: PersonReaction
 }
 
-/** One change to who is in chat `chatId`, or to its title, as `ChatEventNotice` has it. */
+/** One change to who is in chat `chatId`, or to its title, as `ChatEventNotice` has it. @experimental */
 export interface HistoryChatEvent {
   chatId: Id
   change: ChatEvent
 }
 
-/** The owner's star on message `messageId` of `chatId`, or its removal, as `MessageStarEvent` has it. */
+/** The owner's star on message `messageId` of `chatId`, or its removal, as `MessageStarEvent` has it. @experimental */
 export interface HistoryStar {
   chatId: Id
   messageId: Id
@@ -467,7 +484,10 @@ export interface HistoryBatch {
  */
 export type HistoryBatchHandler = (batch: HistoryBatch, saved?: Promise<boolean>) => void | Promise<boolean>
 
-/** For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`). */
+/**
+ * For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`).
+ * @experimental
+ */
 export interface PushedHistory {
   /** Chats, people and past messages as the messenger pushes them, until `signal` aborts. */
   feed(onBatch: HistoryBatchHandler, signal: AbortSignal): Promise<void>
@@ -480,7 +500,7 @@ export interface PushedHistory {
   storedChats?(ids: readonly Id[], recipients?: readonly Id[]): void | Promise<void>
 }
 
-/** A message's files and its speech, fetched from the messenger. */
+/** A message's files and its speech, fetched from the messenger. @experimental */
 export interface MessageMedia {
   /** The files attached to one message, fetched fresh from the messenger: a stored reference may have expired. */
   download(chat: string, messageId: Id): Promise<Download>
@@ -488,11 +508,13 @@ export interface MessageMedia {
   transcribe(chat: string, messageId: Id): Promise<Transcript>
 }
 
+/** @experimental */
 export interface MessagePermalinks {
   /** Validates the exact target before returning its permalink or unsupported-chat result. */
   permalink(chatId: Id, messageId: Id): Promise<MessagePermalink>
 }
 
+/** @experimental */
 export interface SenderIdentities {
   /** Who the account may post as in this chat, itself included. Reading changes no saved choice. */
   sendAsIdentities(chatId: Id): Promise<SenderIdentity[]>
@@ -500,7 +522,7 @@ export interface SenderIdentities {
   savedSender(chatId: Id): Promise<Id | null>
 }
 
-/** Invite links beyond the group's own one; making one tells nobody until it is shared. */
+/** Invite links beyond the group's own one; making one tells nobody until it is shared. @experimental */
 export interface InviteLinks {
   createInviteLink(
     chatId: Id,
@@ -514,7 +536,7 @@ export interface InviteLinks {
   updateInviteLink?(chatId: Id, link: string, change: InviteLinkChange): Promise<InviteLink>
 }
 
-/** Requests to join a group or channel that needs approval; only its admins see them. */
+/** Requests to join a group or channel that needs approval; only its admins see them. @experimental */
 export interface JoinRequests {
   /** Newest first. Reading them tells nobody. `search` matches their names; `link` keeps those who came by it. */
   joinRequests(
@@ -530,7 +552,7 @@ export interface JoinRequests {
   answerAllJoinRequests?(chatId: Id, accept: boolean, link?: string): Promise<void>
 }
 
-/** Comments under a channel post, which live in the channel's linked discussion group. */
+/** Comments under a channel post, which live in the channel's linked discussion group. @experimental */
 export interface ChannelComments {
   /** The post's copy in the discussion group; a post that takes no comments is `not_found`. */
   discussionOf(channelId: Id, postId: Id): Promise<Discussion>
@@ -538,6 +560,7 @@ export interface ChannelComments {
   comments(channelId: Id, postId: Id, window: { limit: number; before?: string }): Promise<Page<Message>>
 }
 
+/** @experimental */
 export interface ScheduledMessages {
   /** Messages waiting to be sent later in a chat, soonest first, each with `scheduledFor`. */
   scheduled(chat: string): Promise<Message[]>
@@ -546,6 +569,7 @@ export interface ScheduledMessages {
 /**
  * Changes to what `scheduled` lists. An id here is one `scheduled` gave: a scheduled message has ids of its own, and
  * the same number in the chat's history is another, already sent message.
+ * @experimental
  */
 export interface ScheduledChanges {
   /** Takes them off the list unsent; nobody can get them back. */
@@ -559,7 +583,7 @@ export interface ScheduledChanges {
   sendScheduled(chatId: Id, ids: Id[]): Promise<Message[]>
 }
 
-/** Who is in a group, who runs it, and who came and went. */
+/** Who is in a group, who runs it, and who came and went. @experimental */
 export interface GroupModeration {
   /**
    * Everyone in a group, a page at a time; `limit` unset is every one the messenger will give.
@@ -575,7 +599,7 @@ export interface GroupModeration {
   chatEvents(chat: string, window: { since: number }): Promise<ChatEvents>
 }
 
-/** The account itself: its sessions, and finding people outside the chats. */
+/** The account itself: its sessions, and finding people outside the chats. @experimental */
 export interface AccountTools {
   /** Every device and app logged in to this account. Reading them ends nothing. */
   sessions(): Promise<AccountSession[]>
@@ -585,19 +609,19 @@ export interface AccountTools {
   addressBook(): Promise<AddressBookEntry[]>
 }
 
-/** Everything the messenger says about one person — what `contacts show` shows. */
+/** Everything the messenger says about one person — what `contacts show` shows. @experimental */
 export interface PersonProfiles {
   /** Reading it tells them nothing. A chat that is not a person is refused. */
   profile(person: string): Promise<ProfileFacts>
 }
 
-/** Their profile photos, for telling an account made last week from one with years of them. */
+/** Their profile photos, for telling an account made last week from one with years of them. @experimental */
 export interface ProfilePhotos {
   /** How many they show and the oldest one's upload time; reading them tells them nothing. */
   photos(person: Id): Promise<{ count: number; oldestAt: string | null }>
 }
 
-/** Making, joining and leaving groups. Everything here is seen by other people. */
+/** Making, joining and leaving groups. Everything here is seen by other people. @experimental */
 export interface GroupAdmin {
   /** The person ids these references name — an id, a handle, a name — in the order given; one that is not a person is refused. */
   people(references: string[]): Promise<Id[]>
@@ -635,14 +659,17 @@ export interface ProfileChange {
   photo?: Upload
 }
 
-/** The owner's own profile and logins — what everyone sees, and every device signed in. */
+/** The owner's own profile and logins — what everyone sees, and every device signed in. @experimental */
 export interface AccountEditing {
   updateProfile(change: ProfileChange): Promise<Account>
   /** Every login but this one, the phone's included; answers the sessions that remain. */
   endOtherSessions(): Promise<AccountSession[]>
 }
 
-/** Reads of the account and its chats that only the messenger's server answers; reading changes nothing. */
+/**
+ * Reads of the account and its chats that only the messenger's server answers; reading changes nothing.
+ * @experimental
+ */
 export interface AccountRecords {
   /** Newest first. */
   calls(window: { limit: number }): Promise<Page<CallRecord>>
@@ -654,13 +681,13 @@ export interface AccountRecords {
   stickers(setId: Id): Promise<Sticker[]>
 }
 
-/** Removing a chat or its messages from this account only; the others in it keep theirs. */
+/** Removing a chat or its messages from this account only; the others in it keep theirs. @experimental */
 export interface ChatDeletion {
   deleteChat(chatId: Id): Promise<void>
   clearHistory(chatId: Id): Promise<void>
 }
 
-/** A bot in a one-to-one chat with the personal account. */
+/** A bot in a one-to-one chat with the personal account. @experimental */
 export interface BotChats {
   /** Starts the bot, as its Start button does; the payload is what the bot reads as its start parameter. */
   startBot(chatId: Id, options: { sendId: string; payload?: string }): Promise<void>
@@ -673,7 +700,7 @@ export interface BotChats {
   botApp(chatId: Id, options: { startParam?: string }): Promise<{ url: string }>
 }
 
-/** The owner's own settings; nobody else is told. */
+/** The owner's own settings; nobody else is told. @experimental */
 export interface AccountSettings {
   /** `forever`, an ISO 8601 time, or null to hear the chat again. */
   mute(chatId: Id, until: string | null): Promise<void>
@@ -687,7 +714,7 @@ export interface AccountSettings {
   updatePrivacy(change: PrivacySettings): Promise<PrivacySettings>
 }
 
-/** The owner's address book. A person by id: `GroupAdmin.people` finds them. */
+/** The owner's address book. A person by id: `GroupAdmin.people` finds them. @experimental */
 export interface ContactBook {
   /** Under the name they show, until the owner gives one. */
   addContact(personId: Id): Promise<Member>
@@ -702,7 +729,7 @@ export interface ContactBook {
   importContacts(entries: PhoneBookEntry[]): Promise<Member[]>
 }
 
-/** The owner's chat folders, which only the owner sees. */
+/** The owner's chat folders, which only the owner sees. @experimental */
 export interface ChatFolders {
   /** In the order the messenger's app shows them. */
   folders(): Promise<Folder[]>
@@ -717,7 +744,7 @@ export interface ChatFolders {
   joinFolder(link: string): Promise<Folder>
 }
 
-/** What the messenger computes for a group or channel and shows only its admins. Reads only. */
+/** What the messenger computes for a group or channel and shows only its admins. Reads only. @experimental */
 export interface OfficialStats {
   officialChatStats(chat: string): Promise<OfficialChatStats>
 }
@@ -726,6 +753,7 @@ export interface OfficialStats {
  * A state the messenger put the account in, where it is not simply logged in. An adapter reports
  * `frozen` from `health`; the others come as `details.standing` on the error its requests throw.
  * `limited` is a write refused as spam, with no end the messenger reports. Dates are ISO 8601.
+ * @experimental
  */
 export interface AccountStanding {
   state: "frozen" | "limited" | "banned" | "deactivated" | "revoked"
@@ -735,7 +763,7 @@ export interface AccountStanding {
   hint?: string
 }
 
-/** What `doctor --online` asks beyond the login. Reads only. */
+/** What `doctor --online` asks beyond the login. Reads only. @experimental */
 export interface AccountHealth {
   health(): Promise<{
     /** Milliseconds since the epoch, as the messenger reported it during this call. */

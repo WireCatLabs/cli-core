@@ -2,10 +2,12 @@ import { failureKey } from "../../errors/failures.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import type { ServeNotice } from "./serve-notice.js"
 
-/** After connecting, `serve` waits this long before its first member fetch: catch-up comes first. */
+/** After connecting, `serve` waits this long before its first member fetch: catch-up comes first. @experimental */
 export const FIRST_FETCH_MS = 60_000
+/** @experimental */
 export const DAY_MS = 86_400_000
 
+/** @experimental */
 export interface MemberFetches {
   /** Starts the daily round; a second call is ignored. */
   start(): void
@@ -17,6 +19,7 @@ export interface MemberFetches {
 /**
  * `serve`'s daily fetch of every tracked chat's member list, one chat after another, each under the fetch's
  * own page budget and pause. A chat already fetched today is skipped, so a restart does not fetch it again.
+ * @experimental
  */
 export const memberFetches = ({
   withStore,

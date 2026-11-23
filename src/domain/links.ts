@@ -3,6 +3,7 @@ import { parseReference } from "./references.js"
 /**
  * What a WireCat link opens. A link only opens a screen in WireCat Desktop: no kind performs an action, a proposal
  * link shows the proposal and the owner presses Confirm or Reject there.
+ * @experimental
  */
 export type DeepLinkTarget =
   | { type: "message"; provider: string; account: string; chat: string; message: string }
@@ -24,15 +25,19 @@ export type DeepLinkTarget =
    */
   | { type: "meeting"; provider: string; account: string; meeting: string }
 
+/** @experimental */
 export type LinkForm = "web" | "app"
 
+/** @experimental */
 export interface LinkConfig {
   /** The bounce page: the path goes after its `#`, so the host never sees it. */
   base: string
   enabled: boolean
 }
 
+/** @experimental */
 export const LINK_VERSION = "v1"
+/** @experimental */
 export const DEFAULT_LINK_CONFIG: LinkConfig = { base: "https://wirecat.dev/o", enabled: true }
 const APP_PREFIX = "wirecat://open"
 const MAX_PATH = 512
@@ -113,12 +118,13 @@ const targetOfPath = (path: string): DeepLinkTarget | null => {
   }
 }
 
-/** `/v1/msg/max/1001/-2002/3003`, the part both forms share. */
+/** `/v1/msg/max/1001/-2002/3003`, the part both forms share. @experimental */
 export const formatLink = (target: DeepLinkTarget): string => `/${LINK_VERSION}/${pathOf(target)}`
 
 /**
  * The target of a link in either form (`https://…#/v1/…`, `wirecat://open/v1/…`) or of its bare path (`/v1/…`), or
  * `null` for anything else: another version, an unknown kind, a part too many or empty, a path over 512 characters.
+ * @experimental
  */
 export const parseLink = (text: string): DeepLinkTarget | null => {
   const link = text.trim()
@@ -141,6 +147,7 @@ const ENTITY_KINDS = new Set(["person", "project"])
 /**
  * The refs in the order an item's one link is chosen from: a person or a project names who or what an item is about,
  * not where it happened, so it opens only when nothing else does.
+ * @experimental
  */
 export const refsForLink = (refs: readonly string[]): string[] => [
   ...refs.filter((ref) => !ENTITY_KINDS.has(ref.slice(0, ref.indexOf(":")))),
@@ -152,6 +159,7 @@ export const refsForLink = (refs: readonly string[]): string[] => [
  * `person:`, `project:`) is read by its own grammar; the kinds that are no reference are written as their path with a
  * colon after the kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`,
  * `digest:2026-11-08`, `sync:telegram/1001`.
+ * @experimental
  */
 export const linkTargetOf = (ref: string): DeepLinkTarget | null => {
   const text = ref.trim()
@@ -167,7 +175,10 @@ export const linkTargetOf = (ref: string): DeepLinkTarget | null => {
   }
 }
 
-/** The `links` section of the shared config, with the default for what is missing or not a usable value. */
+/**
+ * The `links` section of the shared config, with the default for what is missing or not a usable value.
+ * @experimental
+ */
 export const linkConfigOf = (section: unknown): LinkConfig => {
   const value = section && typeof section === "object" ? (section as Record<string, unknown>) : {}
   const base =
@@ -181,6 +192,7 @@ export const linkConfigOf = (section: unknown): LinkConfig => {
  * The one way to build a WireCat link: the web form for messages and mail (an https page that hands it to the app),
  * the app form for a desktop terminal. `null` when links are off (`links.enabled: false`, or `WIRECAT_LINKS=off` for
  * one run) or the ref names nothing a link opens; the caller then leaves the link out.
+ * @experimental
  */
 export const linkFor = (
   ref: DeepLinkTarget | string,

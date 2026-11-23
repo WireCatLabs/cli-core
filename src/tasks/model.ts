@@ -1,17 +1,23 @@
 import { CliError } from "@wirecat/cli-base"
 export const TASK_KINDS = ["question", "request", "mention", "promise"] as const
-/** `todo` and `in_progress` are steps of a project task's work; a task from a message is only ever open or closed. */
+/**
+ * `todo` and `in_progress` are steps of a project task's work; a task from a message is only ever open or closed.
+ * @experimental
+ */
 export const TASK_STATES = ["open", "todo", "in_progress", "done", "dismissed"] as const
+/** @experimental */
 export const CLOSED_STATES = ["done", "dismissed"] as const
 export const TASK_ORIGINS = ["rule", "agent", "owner"] as const
 export const TASK_VERDICTS = ["useful", "not_useful"] as const
 
 export type TaskKind = (typeof TASK_KINDS)[number]
+/** @experimental */
 export type TaskState = (typeof TASK_STATES)[number]
 export type TaskOrigin = (typeof TASK_ORIGINS)[number]
 export type TaskVerdict = (typeof TASK_VERDICTS)[number]
 export type ClosedState = (typeof CLOSED_STATES)[number]
 
+/** @experimental */
 export const isClosedState = (state: string): state is ClosedState =>
   (CLOSED_STATES as readonly string[]).includes(state)
 

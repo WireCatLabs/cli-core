@@ -331,6 +331,7 @@ export interface Messenger extends ServiceMessenger {
 /**
  * The messenger's connection — or, in a command serve runs for a client, serve's own, borrowed. Every connect
  * goes through here, so a relayed command never opens a second connection.
+ * @experimental
  */
 export const connectFor = (
   command: Command,

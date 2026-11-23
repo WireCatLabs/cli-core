@@ -18,6 +18,7 @@ import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../..
 
 const REKEY_PACING = { lockMs: 50, pauseMs: 25 }
 
+/** @experimental */
 export interface Saving {
   account: AccountKey
   /** Opened on the first save, not before: a command that reads nothing has no reason to touch the file. */
@@ -63,6 +64,7 @@ export interface Saving {
  * `resolve` is not saved: a chat found by name has no unread count or last message, and writing it
  * would erase what `chats list` stored. Nor are `chat` and `contact`: a card's member list is not
  * known to be whole, and `saveMembers` replaces the list.
+ * @experimental
  */
 export const stored = (
   messenger: MessengerAdapter,

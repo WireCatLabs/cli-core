@@ -9,6 +9,7 @@ export const ON_CHAT_ROW: ReadonlySet<string> = new Set(["reply-next", "coverage
 /**
  * The compact row of each listed status signal's items, by `status.<signal id>`; a signal's file and its row are the
  * two places a new signal touches. They live here because a service may not import the CLI's row type.
+ * @experimental
  */
 export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
   "status.questions": {
@@ -61,7 +62,7 @@ export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
   },
 }
 
-/** The rest of a `project_status` answer: its chats, open money, chats left out, and failed signals. */
+/** The rest of a `project_status` answer: its chats, open money, chats left out, and failed signals. @experimental */
 export const STATUS_ROWS: Readonly<Record<string, RowShape>> = {
   ...STATUS_SIGNAL_ROWS,
   "status.chat": {

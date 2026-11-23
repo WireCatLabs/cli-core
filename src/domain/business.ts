@@ -2,35 +2,51 @@ import { CliError } from "@wirecat/cli-base"
 import { dayMonth, type FinanceReview, type MoneyDirection, notes } from "./finance.js"
 import { moneyLabel } from "./money.js"
 
+/** @experimental */
 export const CATALOG_KINDS = ["product", "service"] as const
-/** What the `business` lane of `search all` reads; transactions are too many to fold per query. */
+/** What the `business` lane of `search all` reads; transactions are too many to fold per query. @experimental */
 export const BUSINESS_KINDS = ["invoice", "payment", "order", "contract", "subscription", "product", "wallet"] as const
+/** @experimental */
 export type BusinessKind = (typeof BUSINESS_KINDS)[number]
+/** @experimental */
 export const CONTRACT_KINDS = ["sale", "purchase", "service", "lease", "employment", "nda", "license", "other"] as const
+/** @experimental */
 export const CONTRACT_STATUSES = ["draft", "active", "ended", "terminated"] as const
+/** @experimental */
 export const PERIOD_UNITS = ["day", "week", "month", "year"] as const
+/** @experimental */
 export const SUBSCRIPTION_STATUSES = ["trial", "active", "paused", "cancelled", "ended"] as const
+/** @experimental */
 export const WALLET_KINDS = ["bank", "card", "cash", "wallet", "other"] as const
-/** Only a booked transaction counts in a balance; a pending one is shown beside it. */
+/** Only a booked transaction counts in a balance; a pending one is shown beside it. @experimental */
 export const TRANSACTION_STATUSES = ["pending", "booked"] as const
-/** `purchase`: the owner buys, as every order before store version 57; `sale`: the owner sells. */
+/** `purchase`: the owner buys, as every order before store version 57; `sale`: the owner sells. @experimental */
 export const ORDER_DIRECTIONS = ["purchase", "sale"] as const
 
+/** @experimental */
 export type CatalogKind = (typeof CATALOG_KINDS)[number]
+/** @experimental */
 export type ContractKind = (typeof CONTRACT_KINDS)[number]
+/** @experimental */
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number]
+/** @experimental */
 export type PeriodUnit = (typeof PERIOD_UNITS)[number]
+/** @experimental */
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number]
+/** @experimental */
 export type WalletKind = (typeof WALLET_KINDS)[number]
+/** @experimental */
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number]
+/** @experimental */
 export type OrderDirection = (typeof ORDER_DIRECTIONS)[number]
 
+/** @experimental */
 export interface Interval {
   count: number
   unit: PeriodUnit
 }
 
-/** `1-month`, `2-week` or a bare `year`, as `--every` takes it. */
+/** `1-month`, `2-week` or a bare `year`, as `--every` takes it. @experimental */
 export const intervalOf = (text: unknown, reason = "subscription.interval"): Interval => {
   const match = typeof text === "string" ? /^(?:([1-9]\d{0,2})-)?(day|week|month|year)$/.exec(text.trim()) : null
   if (!match)
@@ -38,6 +54,7 @@ export const intervalOf = (text: unknown, reason = "subscription.interval"): Int
   return { count: match[1] === undefined ? 1 : Number(match[1]), unit: match[2] as PeriodUnit }
 }
 
+/** @experimental */
 export const intervalText = ({ count, unit }: Interval): string => `${count}-${unit}`
 
 const priced = (units: number | null, currency: string | null) =>

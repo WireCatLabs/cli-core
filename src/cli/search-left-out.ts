@@ -21,8 +21,10 @@ const LIST_KEYS = {
   tracker: "issues.list",
 } as const satisfies Record<string, PermissionKey>
 
+/** @experimental */
 export type SearchedKind = keyof typeof LIST_KEYS
 
+/** @experimental */
 export interface LeftOut<K extends SearchedKind> {
   kind: K
   key: PermissionKey
@@ -33,6 +35,7 @@ export interface LeftOut<K extends SearchedKind> {
 /**
  * The kinds whose list `permissions` deny, for a CLI with levels of its own, such as memo's: `by` names who denies in
  * `why` (`memo's permissions`).
+ * @experimental
  */
 export const deniedKindsOf = <K extends SearchedKind>(
   permissions: Readonly<Record<PermissionKey, Level>>,
@@ -49,6 +52,7 @@ export const deniedKindsOf = <K extends SearchedKind>(
  * The kinds whose list the profile denies, so `search all` leaves them out rather than show their titles and excerpts
  * under another key. Levels as the run judged the command: the profile's, `--permission`, and an MCP
  * server's own stricter ones.
+ * @experimental
  */
 export const deniedKinds = <K extends SearchedKind>(
   command: Command,

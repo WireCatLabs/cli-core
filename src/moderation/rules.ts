@@ -51,6 +51,7 @@ const groupRules = v.pipe(
   })),
 )
 
+/** @experimental */
 export type GroupRules = v.InferOutput<typeof groupRules>
 
 const file = v.strictObject({
@@ -59,7 +60,7 @@ const file = v.strictObject({
   checkedUntil: v.optional(v.record(v.string(), v.string())),
 })
 
-/** Every key written out, so the file shows all there is to set. Nothing here acts. */
+/** Every key written out, so the file shows all there is to set. Nothing here acts. @experimental */
 export const defaultRules = (title: string | null): GroupRules => ({
   title,
   trusted: [],
@@ -106,6 +107,7 @@ const stateFolder = (app: AppIdentity, env: NodeJS.ProcessEnv, folder: string) =
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, folder)
 const profilesFolder = (app: AppIdentity, env: NodeJS.ProcessEnv) => stateFolder(app, env, "profiles")
 
+/** @experimental */
 export const moderationPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(profilesFolder(app, env), `${profile}.moderation.json`)
 
@@ -129,6 +131,7 @@ export const moderationProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = pr
  * The rules of each group this profile moderates, one file per profile beside the recipient list —
  * the path max-cli used, so its rules carry over. May be edited by hand; a file that does not check
  * out refuses rather than being guessed at.
+ * @experimental
  */
 export class ModerationRules {
   constructor(readonly path: string) {}

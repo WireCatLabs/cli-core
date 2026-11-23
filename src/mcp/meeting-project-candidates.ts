@@ -12,6 +12,7 @@ const outputSchema: Record<string, unknown> = {
   ...jsonSchemaOf(v.union([itemEnvelopeSchema(meetingProjectCandidates), errorObjectSchema])),
 }
 
+/** @experimental */
 export const meetingProjectCandidatesTool = {
   name: "meeting_project_candidates",
   description: `Suggest existing global projects from one selected local meeting's title and one bounded page of current transcript cues. Matches literal names, keys and aliases; returns citations, ambiguity, fingerprints and incomplete evidence coverage. Does not create projects, infer membership or save links. Resume with evidence.coverage.next_cursor and the same ref. ${UNTRUSTED_NEUTRAL}`,
@@ -19,6 +20,7 @@ export const meetingProjectCandidatesTool = {
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },
 }
+/** @experimental */
 export const callMeetingProjectCandidatesTool = async (
   read: StoredMeetingProjectCandidateReader,
   input: unknown,

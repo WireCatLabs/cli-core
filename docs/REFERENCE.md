@@ -804,20 +804,17 @@ fragments in `changes/` until then; there is no gap to keep between releases and
 jobs build tg-cli, max-cli and whatsapp-cli from their `main` against every pull request; a change that fails
 there, or passes only against a CLI branch made for it, needs those CLI branches ready before it is released.
 
-**Before 1.0, any release may break a caller.** A change that does is listed in the changelog under
-"Changed — may break callers", with what to change in a consumer.
+**From 1.0.0, only the stable API follows semver.** `wirecat.stable` in `package.json` lists the stable entry
+points: `.`, `./cli`, `./cli/start`, `./mcp`, `./sends`, `./skill-validation`, `./sqlite-runtime`, `./store`,
+`./testing` and `./update`. Inside them, a name whose doc comment carries `@experimental` is outside the promise, and
+every entry point not on the list is experimental as a whole (`./meetings`, `./mail`, `./crm`, `./store/areas`, …).
 
-The exports below are the ones consumers lean on most. A change to them is made with the most care and
-always says what to change.
+- A break of a stable name raises the major, and comes first as a deprecation in a minor. It is listed under
+  "Changed — may break callers" or "Removed".
+- A change to an experimental name raises the minor. Pin an exact version if you use one.
+- `MessageStore` is stable in `accounts`, `chats`, `messages`, `people`, `tags` and `close`. Its other areas are
+  experimental, as are the family entry points they serve.
+- The store file format is stable too: `minCompatible` rises only in a major.
 
-| Export | Stable |
-|---|---|
-| `.` | the domain types (`Chat`, `Message`, `Contact`, `Page`, …), the message locator |
-| `./cli` | `Messenger`, `MessengerAdapter` and its method groups (`MessengerCore` required; `ServerReads` and the rest optional), `createProgram`, `run`, `messengerContext`, the command factories' names and arguments |
-| `./store` | `openStore`, `MessageStore`, `storePath`, and the file format: `minCompatible` rises only in a release that lists it under "Changed — may break callers" |
-| `./sends` | `sendGuard`, `SendJournal`, the journal's line format |
-| `./speech` | The pinned speech-model catalogue, shared directories, verified installer and installed-only bounded PCM recognizer. Importing it does not load a recognizer or download a model |
-| `./services` | `servicesFor`, `Override` and the service names |
-| `./background` | `lockPath`, `readLock`, `holdLock`, `releaseLock`, `servingProfiles`, `alive`, `carries`, `holdersOf`, `ServerSystem`, `thisMachine`, `platformFor` and the systemd and launchd units · the serve relay: `listenRelay(path, run)`, `relayCommand(path, request, options)`, `relayPath(lockPath)`, `RELAY_PROTOCOL` |
-
-`./testing` and `./parity` are not on this list. tg-cli and max-cli take new versions through Dependabot pull requests.
+The stable names are the ones that two or more WireCat CLIs import, or the CLI template, plus every type those
+names reach. tg-cli and max-cli take new versions through Dependabot pull requests.

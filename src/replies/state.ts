@@ -28,6 +28,7 @@ export const answeredKey = (message: Pick<Message, "chatId" | "id">): string => 
 /**
  * What the rules did, apart from the rules: editing the rules file never forgets what was already
  * answered. Read on every message, so `pause` stops a running `serve` without a restart.
+ * @experimental
  */
 export const repliesStatePathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, `${profile}.replies-state.json`)

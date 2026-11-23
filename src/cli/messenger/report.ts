@@ -9,6 +9,7 @@ import type { SendEntry } from "../../sends/journal.js"
 
 const RECENT_SENDS = 20
 
+/** @experimental */
 export interface Report<Doctor extends object = Record<string, unknown>> {
   createdAt: string
   /** What `doctor --json` answers — versions, paths, counts and the messenger's own checks. */
@@ -19,7 +20,7 @@ export interface Report<Doctor extends object = Record<string, unknown>> {
   sends: SendEntry[]
 }
 
-/** Optional technical context supplied by a consumer; it is redacted with the rest of the report. */
+/** Optional technical context supplied by a consumer; it is redacted with the rest of the report. @experimental */
 export interface ReportContext {
   createdAt?: never
   doctor?: never
@@ -57,6 +58,7 @@ const EVENT_FIELDS = [
  * **Everything a report holds is already free of content** — the doctor, the run log and the send
  * journal are built that way. Two things are added: every id becomes a label, and the home
  * directory is hidden, since paths name the person's account on this machine.
+ * @experimental
  */
 export const buildReport = <Doctor extends object, Context extends ReportContext = Record<never, never>>({
   doctor,
@@ -172,6 +174,7 @@ const labelled = (entry: SendEntry, label: (id: string) => string): SendEntry =>
   return copy as unknown as SendEntry
 }
 
+/** @experimental */
 export const reportFileName = (app: string, now: Date): string =>
   `${app}-report-${now
     .toISOString()

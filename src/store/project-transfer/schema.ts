@@ -79,4 +79,5 @@ export const projectAnnotationsSchema = v.strictObject({
   ),
 })
 
+/** @experimental */
 export type ProjectAnnotations = v.InferOutput<typeof projectAnnotationsSchema>

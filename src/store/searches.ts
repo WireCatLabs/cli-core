@@ -4,6 +4,7 @@ import type { SearchCommand, SearchRecord, StoredSearch } from "./sqlite/searche
 import * as searchRecords from "./sqlite/searches.js"
 import { write } from "./sqlite/transaction.js"
 
+/** @experimental */
 export interface SearchesStore {
   /** One run of a search or stats; the same unnamed run again counts on its row. `saved` is the saved search it ran. */
   recordSearch(run: SearchRecord, options?: { saved?: string }): Promise<void>

@@ -17,6 +17,7 @@ export const meetingProjectCandidatesInput = v.strictObject({
   cursor: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
 })
 
+/** @experimental */
 export const readMeetingProjectCandidates = async (
   read: StoredMeetingProjectCandidateReader,
   input: unknown,

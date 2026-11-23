@@ -1,7 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { DEAL_ROLES } from "./deals.js"
 
-/** What a person is to an organization; who reports to whom is `reports-to`, and a job title is never a role. */
+/**
+ * What a person is to an organization; who reports to whom is `reports-to`, and a job title is never a role.
+ * @experimental
+ */
 export const ORGANIZATION_ROLES = [
   "employee",
   "contractor",
@@ -11,18 +14,24 @@ export const ORGANIZATION_ROLES = [
   "adviser",
   "contact",
 ] as const
+/** @experimental */
 export const PROJECT_ROLES = ["owner", "manager", "contributor", "client-contact", "approver"] as const
-/** A contract party's part; a party the list cannot name has none, never a catch-all `other`. */
+/** A contract party's part; a party the list cannot name has none, never a catch-all `other`. @experimental */
 export const CONTRACT_ROLES = ["customer", "supplier", "signatory", "guarantor"] as const
 /**
  * What a person or an organization is to another on `related-to`, offered so the same tie reads the same way. Unlike
  * the other lists it is not enforced: roles written before it, and words a source reports, stay. Buying and partnering
  * are the kinds `customer-of` and `partner-of`, so they are not roles here.
+ * @experimental
  */
 export const RELATED_ROLES = ["colleague", "adviser", "investor", "mentor", "family", "friend"] as const
 
-/** How much the owner deals with a person on a project himself, not how active the person is; absent is unknown. */
+/**
+ * How much the owner deals with a person on a project himself, not how active the person is; absent is unknown.
+ * @experimental
+ */
 export const ENGAGEMENT_LEVELS = ["none", "low", "medium", "high"] as const
+/** @experimental */
 export type Engagement = (typeof ENGAGEMENT_LEVELS)[number]
 
 export const isEngagement = (value: unknown): value is Engagement =>
@@ -44,9 +53,10 @@ export const checkEngagement = (kind: string, from: string, to: string, level: s
 /** Who the owner deals with most comes first: high, medium, unknown, low, none. */
 const ENGAGEMENT_ORDER: Record<Engagement | "unknown", number> = { high: 0, medium: 1, unknown: 2, low: 3, none: 4 }
 
+/** @experimental */
 export const engagementRank = (level: Engagement | null | undefined): number => ENGAGEMENT_ORDER[level ?? "unknown"]
 
-/** A stable sort by `engagementRank`; links without a level keep their order among themselves. */
+/** A stable sort by `engagementRank`; links without a level keep their order among themselves. @experimental */
 export const byEngagement = <T extends { engagement?: Engagement | null }>(items: readonly T[]): T[] =>
   items
     .map((item, index) => ({ item, index }))
@@ -69,6 +79,7 @@ interface RelationSpec {
 /**
  * Every relationship `knowledge.relate` makes, its ends, its roles and how it reads backwards. An organization may
  * still be a member: owner data from before this list holds such links.
+ * @experimental
  */
 export const RELATIONS = {
   "member-of": {
@@ -86,7 +97,9 @@ export const RELATIONS = {
   },
 } as const satisfies Record<string, RelationSpec>
 
+/** @experimental */
 export type RelationKind = keyof typeof RELATIONS
+/** @experimental */
 export const RELATION_KINDS = Object.keys(RELATIONS) as RelationKind[]
 
 const specOf = (kind: string): RelationSpec | undefined =>
@@ -123,6 +136,7 @@ const isParty = (type: string) => type === "person" || type === "organization"
 /**
  * The roles a relationship takes, or `undefined` for free text. A member's list is the organization's or the
  * project's only when the member is a person: a chat's or a sub-project's role was never one of them.
+ * @experimental
  */
 export const rolesOf = (kind: string, from: string, to: string): readonly string[] | undefined => {
   const spec = specOf(kind)
@@ -130,7 +144,7 @@ export const rolesOf = (kind: string, from: string, to: string): readonly string
   return spec?.roles?.from?.[from as End] ?? spec?.roles?.to?.[to as End]
 }
 
-/** The role lists the owner may add to; each is a list the registry gives some relationship's ends. */
+/** The role lists the owner may add to; each is a list the registry gives some relationship's ends. @experimental */
 export const ROLE_LISTS = {
   organization: ORGANIZATION_ROLES,
   project: PROJECT_ROLES,
@@ -138,6 +152,7 @@ export const ROLE_LISTS = {
   contract: CONTRACT_ROLES,
   related: RELATED_ROLES,
 } as const
+/** @experimental */
 export type RoleList = keyof typeof ROLE_LISTS
 
 /** Which list a relationship's role comes from, or `undefined` where a role is free text. */
@@ -168,15 +183,20 @@ export const checkRole = (
 
 export const isSymmetric = (kind: string): boolean => specOf(kind)?.symmetric === true
 
-/** The label of a relationship read from its `to` end: `manages` for `reports-to`; the kind itself when symmetric. */
+/**
+ * The label of a relationship read from its `to` end: `manages` for `reports-to`; the kind itself when symmetric.
+ * @experimental
+ */
 export const inverseOf = (kind: string): string | null =>
   specOf(kind)?.symmetric ? kind : ((specOf(kind)?.inverse as string | undefined) ?? null)
 
 /**
  * What an answer says about a relationship, derived, never stored: the owner's, a source's that nobody confirmed, an
  * agent's suggestion waiting for review, or one that no longer holds.
+ * @experimental
  */
 export const STANDINGS = ["confirmed", "reported", "proposed", "ended"] as const
+/** @experimental */
 export type Standing = (typeof STANDINGS)[number]
 
 /** A link's columns `standing` reads; a column an older store lacks is `null`. */
@@ -213,7 +233,10 @@ export interface RelationshipColumns {
   derived?: string
 }
 
-/** The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it. */
+/**
+ * The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it.
+ * @experimental
+ */
 export const standingOf = (link: StandingFields, now: number): Standing => {
   if (link.endsAt != null && link.endsAt <= now) return "ended"
   if (link.confirmed) return "confirmed"
@@ -221,9 +244,10 @@ export const standingOf = (link: StandingFields, now: number): Standing => {
   return link.accountId != null ? "reported" : "proposed"
 }
 
-/** A relationship a context or a traversal counts: the owner's, or a source's that still holds. */
+/** A relationship a context or a traversal counts: the owner's, or a source's that still holds. @experimental */
 export const isUsable = (standing: Standing): boolean => standing === "confirmed" || standing === "reported"
 
+/** @experimental */
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
 
 // links_relationship_key's WHERE, word for word: without it SQLite cannot use that partial index, picks

@@ -21,10 +21,14 @@ import {
 
 export { RECORD_ENTITY_TYPES, type RecordEntityType } from "./record-types.js"
 
+/** @experimental */
 export const RECORDS_SCHEMA_VERSION = 1
+/** @experimental */
 export const RECORD_OPERATIONS = ["upsert", "delete"] as const
+/** @experimental */
 export type RecordOperation = (typeof RECORD_OPERATIONS)[number]
 
+/** @experimental */
 export interface RecordRelation {
   /** What the target is to this record: `counterparty`, `payer`, `settles`, or a source's own word. */
   role: string
@@ -41,6 +45,7 @@ export interface RecordRelation {
 
 /** How an envelope's lines read `product`: `text` keeps an invoice line's product as data, as v1 did. */
 export const LINE_OPTIONS = ["text", "products"] as const
+/** @experimental */
 export interface EnvelopeOptions {
   lines?: (typeof LINE_OPTIONS)[number]
   /**
@@ -50,6 +55,7 @@ export interface EnvelopeOptions {
   phone_region?: string
 }
 
+/** @experimental */
 export interface EnvelopeRecord {
   /** The caller's name for this line, unique in the envelope; the receipt cites it. */
   key: string
@@ -62,12 +68,14 @@ export interface EnvelopeRecord {
   relations?: RecordRelation[]
 }
 
+/** @experimental */
 export interface EnvelopeSource {
   provider: string
   account: string
   batch_id: string
 }
 
+/** @experimental */
 export interface RecordsEnvelope {
   schema_version: 1
   source: EnvelopeSource
@@ -75,7 +83,10 @@ export interface RecordsEnvelope {
   records: EnvelopeRecord[]
 }
 
-/** A refusal: `pointer` is an RFC 6901 JSON pointer into the envelope, `code` a stable word callers may branch on. */
+/**
+ * A refusal: `pointer` is an RFC 6901 JSON pointer into the envelope, `code` a stable word callers may branch on.
+ * @experimental
+ */
 export interface IngestError {
   pointer: string
   code: string
@@ -94,7 +105,10 @@ const REF = "^[a-z]+:[^\\s]{1,500}$"
 
 const fieldsDef = (type: RecordType) => `fields-${type}`
 
-/** The v1 envelope as JSON Schema (Draft 2020-12); `schemas/records-envelope.v1.schema.json` is this, written out. */
+/**
+ * The v1 envelope as JSON Schema (Draft 2020-12); `schemas/records-envelope.v1.schema.json` is this, written out.
+ * @experimental
+ */
 export const RECORDS_ENVELOPE_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   title: "WireCat records envelope, version 1",
@@ -449,6 +463,7 @@ export const jsonLine = (line: string): unknown => {
 /**
  * A JSONL import as the envelope it stands for: the first line holds `schema_version`, `source` and `options`, each
  * further non-empty line one record.
+ * @experimental
  */
 export const envelopeOfJsonl = (text: string): unknown => {
   const lines = withoutBom(text).split(/\r?\n/)
@@ -466,6 +481,7 @@ export const envelopeOfJsonl = (text: string): unknown => {
 /**
  * A file's text as the envelope it stands for: one JSON envelope, or JSONL, told apart by the first non-empty line;
  * a JSON object holding `records` is a whole envelope.
+ * @experimental
  */
 export const envelopeOfText = (text: string): unknown => {
   const clean = withoutBom(text)

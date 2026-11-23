@@ -1,20 +1,23 @@
 import { moneyLabel } from "./money.js"
 
-/** A pipeline holds deals or leads, never both; a deal and a lead are rows of their own tables. */
+/** A pipeline holds deals or leads, never both; a deal and a lead are rows of their own tables. @experimental */
 export const DEAL_KINDS = ["deal", "lead"] as const
-/** Whether a deal or a lead ended, kept apart from the stage it stands in. */
+/** Whether a deal or a lead ended, kept apart from the stage it stands in. @experimental */
 export const DEAL_STATUSES = ["open", "won", "lost"] as const
-/** What reaching a stage means, as a CRM marks it: still open, or won or lost. */
+/** What reaching a stage means, as a CRM marks it: still open, or won or lost. @experimental */
 export const STAGE_OUTCOMES = DEAL_STATUSES
 /**
  * The part a person plays on a deal: the owner's side runs it (`owner`, the CRM's "responsible"), the client's side
  * talks, decides or sways the decision.
+ * @experimental
  */
 export const DEAL_ROLES = ["owner", "contact", "decision-maker", "influencer"] as const
 
 export type DealKind = (typeof DEAL_KINDS)[number]
+/** @experimental */
 export type DealStatus = (typeof DEAL_STATUSES)[number]
 export type StageOutcome = DealStatus
+/** @experimental */
 export type DealRole = (typeof DEAL_ROLES)[number]
 
 export interface DealTitleFields {

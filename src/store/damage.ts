@@ -17,6 +17,7 @@ export interface RecoveryStep {
 /**
  * What a damaged store means, in the owner's words: one structure the CLIs render and the desktop app can show as it
  * is. Built from what was already found, so it never reads the damaged file again.
+ * @experimental
  */
 export interface StoreDamageReport {
   whatHappened: string
@@ -29,6 +30,7 @@ export interface StoreDamageReport {
   steps: RecoveryStep[]
 }
 
+/** @experimental */
 export interface DamageFindings {
   health: StoreHealth
   /** The CLI's command, which the steps name: `mail`. */
@@ -89,6 +91,7 @@ const stopWriters = (timers: string[] | null | undefined): RecoveryStep => ({
  * The report for whatever was found, or null when the store is healthy and nothing was seen. `mark`: a run saw the
  * damage; the quick check reads too little to see it, so it alone can make a store damaged. `journal`: the store's
  * journal file went away under a run, which can lose writes even when every page still reads.
+ * @experimental
  */
 export const storeDamageReport = ({
   health,

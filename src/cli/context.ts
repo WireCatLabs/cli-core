@@ -157,7 +157,10 @@ export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(comma
 
 const PAGING = ["page", "limit", "all"]
 
-/** A generated API command's own `--page`, `--limit` or `--all` is the service's parameter, not the CLI's paging. */
+/**
+ * A generated API command's own `--page`, `--limit` or `--all` is the service's parameter, not the CLI's paging.
+ * @experimental
+ */
 export const withoutOwnPaging = <F extends object>(command: Command, flags: F): F => {
   if (metaOf(command).origin !== "generated") return flags
   const own = PAGING.filter((name) => command.options.some((option) => option.attributeName() === name))
@@ -169,6 +172,7 @@ export const withoutOwnPaging = <F extends object>(command: Command, flags: F): 
 /**
  * The command's flags as settings read them, an MCP server's `--permission` levels first: they reach a run on its
  * agent, never in argv.
+ * @experimental
  */
 export const withAgentLevels = <F extends { permission?: string[] }>(command: Command, flags: F): F => {
   const overrides = environmentOf(command).agent?.overrides ?? []

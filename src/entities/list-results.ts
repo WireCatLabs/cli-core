@@ -115,6 +115,7 @@ export const scheduleHarness = v.strictObject({
   path: v.nullable(text),
 })
 
+/** @experimental */
 export const botTemplate = v.strictObject({
   name: v.nullable(text),
   status: v.nullable(text),

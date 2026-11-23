@@ -8,6 +8,7 @@ const CREDENTIALS = ["authorization", "cookie", "proxy-authorization"]
  * another host (Yandex Disk's `downloader.disk.yandex.ru`, Notion's file store) and carries its own grant, so it goes
  * only to the hosts listed, over https, and never with the sign-in: a request carrying one is refused before it leaves.
  * `signIn` names a service's own sign-in headers (an API key's `X-Api-Key`) to refuse beside the standard ones.
+ * @experimental
  */
 export const linkFetch = (options: HostFetchOptions & { signIn?: readonly string[] }): FetchLike => {
   const { signIn = [], ...rest } = options

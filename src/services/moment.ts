@@ -18,6 +18,7 @@ const read = (reference: string, flag: string, now: number, at: MomentZone): Rea
 /**
  * `--since` as a moment, in the shared time grammar (`readMoment`). Unlike max-cli, never a message id — a MAX id
  * carries its time, and a Telegram id is only a counter within one chat.
+ * @experimental
  */
 export const momentOf = (reference: string, flag = "--since", now = Date.now(), at: MomentZone = {}): number =>
   read(reference, flag, now, at).time

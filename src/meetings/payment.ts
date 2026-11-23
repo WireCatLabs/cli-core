@@ -1,14 +1,20 @@
 import { CliError } from "@wirecat/cli-base"
 
-/** Every fact type the store takes; findings and meeting changes check against the same list. Money is not a fact. */
+/**
+ * Every fact type the store takes; findings and meeting changes check against the same list. Money is not a fact.
+ * @experimental
+ */
 export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
 
+/** @experimental */
 export const PAYMENT_DIRECTIONS = ["to_us", "from_us"] as const
+/** @experimental */
 export const PAYMENT_STATES = ["expected", "paid", "cancelled"] as const
 
 /**
  * A payment finding's fields, as an agent reads them from evidence. Confirmed by the owner, a paid one becomes a
  * `payments` row, an expected one an invoice, a cancelled one voids the invoice it supersedes.
+ * @experimental
  */
 export interface Payment {
   /** A decimal as text with two places, "50000.00": money is never a float. */
@@ -76,7 +82,10 @@ const FIELDS = [
   "paid_at",
 ]
 
-/** A payment as stored: the amount with two decimals, the currency upper case; refuses what is not one. */
+/**
+ * A payment as stored: the amount with two decimals, the currency upper case; refuses what is not one.
+ * @experimental
+ */
 export const validatePayment = (input: unknown): Payment => {
   if (!input || typeof input !== "object" || Array.isArray(input)) return invalid("a payment is an object")
   const raw = input as Record<string, unknown>
@@ -111,7 +120,10 @@ const grouped = (amount: string): string => {
   return cents === "00" ? digits : `${digits}.${cents}`
 }
 
-/** One line for a payment finding, as a list or an inbox shows it: "1 200 EUR to us from Ana, due 31.10 (expected)". */
+/**
+ * One line for a payment finding, as a list or an inbox shows it: "1 200 EUR to us from Ana, due 31.10 (expected)".
+ * @experimental
+ */
 export const paymentTitle = (fact: { payment: Payment | null }): string => {
   const payment = fact.payment
   if (!payment) return ""

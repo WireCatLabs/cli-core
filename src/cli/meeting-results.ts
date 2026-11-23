@@ -21,7 +21,10 @@ const publicValue = (value: unknown, key = ""): unknown => {
   return value
 }
 
-/** Store IDs stay numeric below the CLI; public receipts use the shared string IDs and validated wire fields. */
+/**
+ * Store IDs stay numeric below the CLI; public receipts use the shared string IDs and validated wire fields.
+ * @experimental
+ */
 export const meetingResultItem = (entity: keyof typeof MEETING_RESULT_ENTITIES, value: unknown): unknown => {
   const parsed = v.safeParse(MEETING_RESULT_ENTITIES[entity] as v.GenericSchema, publicValue(snakeKeys(value)))
   if (!parsed.success) {

@@ -13,7 +13,10 @@ export interface PaceRate {
   burst: number
 }
 
-/** One call a second after a burst of 20: what a single `messages sync` already did with its 1 s page pause. */
+/**
+ * One call a second after a burst of 20: what a single `messages sync` already did with its 1 s page pause.
+ * @experimental
+ */
 export const DEFAULT_PACE: PaceRate = { perMinute: 60, burst: 20 }
 
 /** `<state dir>/pace/<profile>.json`, beside `flood/`. */
@@ -89,6 +92,7 @@ const ANNOUNCE_WAIT_MS = 5_000
 /** Longer than this the pace refuses instead of waiting, as a run already ends at a wait this long. */
 const LONGEST_PACE_WAIT_MS = 5 * 60_000
 
+/** @experimental */
 export interface TurnOptions {
   /** The provider, as a person calls it: `Telegram`, `Bitrix24`. */
   name: string
@@ -107,6 +111,7 @@ export interface TurnOptions {
  * Waits for this call's turn in the profile's pace, the same wait for every provider: a short one silently, a long
  * one with a warning, and one longer than a run would wait is refused as `rate_limited`, nothing sent. A pace file
  * that cannot be read lets the call go: pacing is a courtesy to the provider, not a lock.
+ * @experimental
  */
 export const waitForTurn = async (pacer: Pacer, options: TurnOptions): Promise<void> => {
   const { name, operation, warn } = options

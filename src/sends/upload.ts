@@ -7,9 +7,13 @@ import { type AppIdentity, ancestorValue, envName, readOnlyLockOf } from "../por
 import { WIRECAT_TOOLS } from "../ports/wirecat-tools.js"
 import { storePath, wirecatDirectory } from "../store/path.js"
 
-/** The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap. */
+/**
+ * The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap.
+ * @experimental
+ */
 export const MAX_BUFFERED_UPLOAD_BYTES = 256 * 1024 * 1024
 
+/** @experimental */
 export const uploadSize = (source: UploadSource): number =>
   source.kind === "file" ? source.size : source.bytes.byteLength
 
@@ -23,7 +27,7 @@ export const uploadBlob = async (source: UploadSource, type?: string): Promise<B
   return blob
 }
 
-/** The upload's bytes in memory, for a messenger library that takes nothing else. */
+/** The upload's bytes in memory, for a messenger library that takes nothing else. @experimental */
 export const uploadBytes = async (source: UploadSource): Promise<Uint8Array> => {
   if (source.kind === "bytes") return source.bytes
   if (source.size > MAX_BUFFERED_UPLOAD_BYTES)

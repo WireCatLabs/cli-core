@@ -100,6 +100,7 @@ const configFiles = (path: string) => {
  * Run when everything else is broken, so a problem in the config file or the OAuth setting is a field, never a throw.
  * It reads no keyring, opens no store and calls no service: each can hang or prompt. `fixes` are the `chmod` commands
  * that make the config private; they go to stderr, not into the answer.
+ * @experimental
  */
 export const appDoctorReport = (
   app: AppIdentity,

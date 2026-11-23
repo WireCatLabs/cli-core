@@ -339,6 +339,7 @@ const repairCommand = (app: AppIdentity, config: Configuration): Command =>
 /**
  * A key no command or write is checked against would be saved and do nothing — whether it
  * comes as `permissions.<key>` or inside a whole `permissions` object.
+ * @experimental
  */
 export const refuseUnknownKey = (
   command: Command,

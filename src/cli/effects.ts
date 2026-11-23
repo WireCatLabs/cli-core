@@ -47,6 +47,7 @@ export const changesAuthorityAt =
     return at !== undefined && changesAuthority(at)
   }
 
+/** @experimental */
 export const changesAuthorityNow = (command: Command): boolean => {
   if (!AUTHORITY.has(command)) return false
   const unless = AUTHORITY.get(command)
@@ -65,6 +66,7 @@ export const logsInOrOut = <T extends Command>(command: T): T => {
   return command
 }
 
+/** @experimental */
 export const isLogin = (command: Command): boolean => LOGIN.has(command)
 
 const KEPT_UNDER_LOCK = new WeakSet<Command>()
@@ -74,6 +76,7 @@ const KEPT_UNDER_LOCK = new WeakSet<Command>()
  * back: what the store rebuilds from its messages (vectors, a backfill job, the mention index), a new file (a backup,
  * a chart, a report), or the task bookkeeping a scheduled agent does, which only adds, is undone by its pair
  * (merge/unmerge, claim/release) or keeps the old value in the task's history; under the lock a close only suggests.
+ * @experimental
  */
 export const destroysNothing = <T extends Command>(command: T): T => {
   KEPT_UNDER_LOCK.add(command)
@@ -85,6 +88,7 @@ export const destroysNothing = <T extends Command>(command: T): T => {
  * appends a proposal the owner decides or moves its caller's own processing mark, and nothing else. A command must
  * be marked `proposesOnly` **and** end with one of these paths; adding a path widens what a read-only agent can
  * write, so it needs its own review.
+ * @experimental
  */
 export const PROPOSE_COMMANDS = [
   "messages acknowledge",
@@ -95,12 +99,16 @@ export const PROPOSE_COMMANDS = [
 
 const PROPOSES = new WeakSet<Command>()
 
-/** Marks a command of the `propose` tier; the lock lets it through only when its path is in `PROPOSE_COMMANDS`. */
+/**
+ * Marks a command of the `propose` tier; the lock lets it through only when its path is in `PROPOSE_COMMANDS`.
+ * @experimental
+ */
 export const proposesOnly = <T extends Command>(command: T): T => {
   PROPOSES.add(command)
   return command
 }
 
+/** @experimental */
 export const isProposal = (command: Command): boolean => {
   if (!PROPOSES.has(command)) return false
   const path = pathOf(command).join(" ")
@@ -112,17 +120,22 @@ export const isProposal = (command: Command): boolean => {
  * scheduled mail triage run. Such a command is marked `narrowsUnderLock` **and** has one of these paths, and under the
  * lock it narrows itself: it only adds what the owner can list and remove, and replaces nothing. Adding a path widens
  * what a read-only agent decides for later runs, so it needs its own review.
+ * @experimental
  */
 export const LOCKED_AUTHORITY_COMMANDS = ["rules add"] as const
 
 const NARROWS = new WeakSet<Command>()
 
-/** Marks an authority change that checks the lock itself; the lock lets it through only when its path is listed. */
+/**
+ * Marks an authority change that checks the lock itself; the lock lets it through only when its path is listed.
+ * @experimental
+ */
 export const narrowsUnderLock = <T extends Command>(command: T): T => {
   NARROWS.add(command)
   return command
 }
 
+/** @experimental */
 export const admittedUnderLock = (command: Command): boolean => {
   if (!NARROWS.has(command)) return false
   const path = pathOf(command).join(" ")
@@ -176,7 +189,10 @@ export const fetchesOnly = (command: Command): boolean => {
   )
 }
 
-/** `fetchesOnly` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
+/**
+ * `fetchesOnly` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one.
+ * @experimental
+ */
 export const fetchesOnlyAt =
   (root: Command) =>
   (path: readonly string[]): boolean => {
@@ -192,6 +208,7 @@ const FILE_OPTION = new WeakMap<Command, string>()
  * effects stay a write, as WC-CMD-17 asks, but a run without the option only reads. An MCP tool never offers the
  * option, so it runs through `read`; `<PREFIX>_READ_ONLY` refuses only a run that gives it. `option` is the option's
  * attribute name, `output`.
+ * @experimental
  */
 export const writesFileOnlyWith = <T extends Command>(command: T, option: string): T => {
   const flag = command.options.find((one) => one.attributeName() === option)
@@ -252,11 +269,17 @@ export const isStoreChange = (command: Command): boolean => {
 
 export const STORE_CHANGE_REFUSAL = "change the message store"
 
-/** ` --dry-run` where the program has it, so an example of a command that calls a provider calls nothing. */
+/**
+ * ` --dry-run` where the program has it, so an example of a command that calls a provider calls nothing.
+ * @experimental
+ */
 export const previewFlag = (program: Command): string =>
   program.options.some((option) => option.long === "--dry-run") ? " --dry-run" : ""
 
-/** What a read-only refusal says the command would do: the store holds more than messages outside a messenger. */
+/**
+ * What a read-only refusal says the command would do: the store holds more than messages outside a messenger.
+ * @experimental
+ */
 export const storeChangeRefusal = (app: Pick<AppIdentity, "messenger">): string =>
   app.messenger === false ? "change the local store" : STORE_CHANGE_REFUSAL
 
@@ -296,12 +319,14 @@ const OTHER_SERVICE = new WeakSet<Command>()
  * model host. Its effects still say what leaves the machine, but serve's relay has no connection to lend it, so it
  * always runs here. Its description says `reaches: "other_service"`, so the commands page does not call it a change
  * in the messenger.
+ * @experimental
  */
 export const reachesOtherService = <T extends Command>(command: T): T => {
   OTHER_SERVICE.add(command)
   return annotate(command, { reaches: "other_service" })
 }
 
+/** @experimental */
 export const isOtherServiceCall = (command: Command): boolean => OTHER_SERVICE.has(command)
 
 /** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
@@ -324,7 +349,7 @@ export const judgedEffects = (effects: Effects | undefined): Effects | undefined
 const judgedStepEffects = (effects: Effects | undefined): Effects | undefined =>
   effects?.remote === "none" ? effects : judgedEffects(effects)
 
-/** `stepTargets`, with each command's effects judged for running unasked. */
+/** `stepTargets`, with each command's effects judged for running unasked. @experimental */
 export const judgedTargets = (root: Command): NonNullable<StepInput["targets"]> => {
   const targets = stepTargets(root)
   return (command) => {

@@ -33,8 +33,10 @@ const MOST_DEADLINES = 50
  * How long a hold lasts when the messenger gave no end. A spam limit (`limited`) never says when it
  * ends, so an hour: at most one refused write an hour, and each new refusal sets the hour again. A
  * frozen account's refusal carries no date either; a day, until `doctor --online` reads the real one.
+ * @experimental
  */
 export const LIMITED_HOLD_MS = 60 * 60 * 1000
+/** @experimental */
 export const FROZEN_HOLD_MS = 24 * 60 * 60 * 1000
 /**
  * How a hold with no end is kept on disk: a cli-core before `until: null` reads a date it has not reached and keeps
@@ -46,7 +48,7 @@ const NO_END = "9999-12-31T23:59:59.999Z"
 export const holdEnd = (block: Pick<SendBlock, "until">, show: (iso: string) => string = (iso) => iso): string =>
   block.until === null ? "until lifted" : `until ${show(block.until)}`
 
-/** `<state dir>/flood/<profile>.json`, beside `sends/`. */
+/** `<state dir>/flood/<profile>.json`, beside `sends/`. @experimental */
 export const floodPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "flood", `${profile}.json`)
 

@@ -1,6 +1,9 @@
 import type { DealKind, DealRole, DealStatus, StageOutcome } from "./deals.js"
 
-/** What a CRM holds that the store copies: its deals and leads, and the contacts and companies on them. */
+/**
+ * What a CRM holds that the store copies: its deals and leads, and the contacts and companies on them.
+ * @experimental
+ */
 export const CRM_KINDS = ["organization", "person", "deal", "lead"] as const
 export type CrmKind = (typeof CRM_KINDS)[number]
 
@@ -154,7 +157,7 @@ export interface CrmUser {
   active?: boolean
 }
 
-/** A department of the own company: a user reports to its head, a head to the head of the parent. */
+/** A department of the own company: a user reports to its head, a head to the head of the parent. @experimental */
 export interface CrmDepartment {
   externalId: string
   name: string
@@ -189,7 +192,10 @@ export interface CrmRecords {
   organization: CrmOrganization
 }
 
-/** What a CRM activity is: a call, an e-mail, a meeting, a to-do, a task of the CRM's task tracker, or a comment. */
+/**
+ * What a CRM activity is: a call, an e-mail, a meeting, a to-do, a task of the CRM's task tracker, or a comment.
+ * @experimental
+ */
 export const CRM_ACTIVITY_KINDS = ["call", "email", "meeting", "todo", "task", "comment", "other"] as const
 export type CrmActivityKind = (typeof CRM_ACTIVITY_KINDS)[number]
 
@@ -215,7 +221,10 @@ export interface CrmActivity {
   on: { kind: CrmKind; externalId: string }[]
 }
 
-/** The account's scope settings: `also` are the users whose deals `mine` copies, in place of the sign-in's own. */
+/**
+ * The account's scope settings: `also` are the users whose deals `mine` copies, in place of the sign-in's own.
+ * @experimental
+ */
 export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
 
 /**
@@ -224,18 +233,20 @@ export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly s
  * contacts are what the source lists; under `mine`, a contact no kept deal, lead or company names, and not assigned
  * to a user in scope, is removed after a sync that narrowed the copy or listed it again. Ids are normalised
  * (`normalCrmUserId`).
+ * @experimental
  */
 export type CrmScope = { mode: "all" } | { mode: "mine"; self: string; also: readonly string[] }
 
-/** A CRM's user id as `unassigned` takes it: digits, as every CRM core syncs numbers its users. */
+/** A CRM's user id as `unassigned` takes it: digits, as every CRM core syncs numbers its users. @experimental */
 export const isCrmUserId = (id: string): boolean => /^\d{1,20}$/.test(id)
 
-/** One spelling per user id, so `015`, ` 15` and `15` are one user wherever they come from. */
+/** One spelling per user id, so `015`, ` 15` and `15` are one user wherever they come from. @experimental */
 export const normalCrmUserId = (id: string): string => {
   const text = id.trim()
   return /^\d+$/.test(text) ? text.replace(/^0+(?=\d)/, "") : text
 }
 
+/** @experimental */
 export const isItemKind = (kind: CrmKind): kind is DealKind => kind === "deal" || kind === "lead"
 
 /**

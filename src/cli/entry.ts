@@ -160,7 +160,10 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
   else if (code !== undefined) io.setExitCode(code)
 }
 
-/** The first-run questions, before the command acts. A dry run writes nothing, and these write the shared config. */
+/**
+ * The first-run questions, before the command acts. A dry run writes nothing, and these write the shared config.
+ * @experimental
+ */
 export const firstRunAt =
   (entry: CliEntry, io: EntryIo, headless: (command: Command) => boolean) =>
   async (command: Command): Promise<void> => {

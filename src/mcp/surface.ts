@@ -56,7 +56,7 @@ const listedAs = (prefix: string, writes: boolean) => {
 
 type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
 
-/** One command an agent can find and run: its arguments are checked against `input` before `run`. */
+/** One command an agent can find and run: its arguments are checked against `input` before `run`. @experimental */
 export interface McpCommand {
   availability?: () => CommandAvailability
   title: string
@@ -205,6 +205,7 @@ const sampleOf = (commands: Record<string, McpCommand>): string => {
  * **Three tools in place of one per command**: search the commands, then run one
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
  * did. The catalogue stays discoverable; current permissions annotate availability and are checked before execution.
+ * @experimental
  */
 export const registerCommands = (
   server: McpServer,

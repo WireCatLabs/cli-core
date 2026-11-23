@@ -23,6 +23,7 @@ const modules = (link: string) => {
 /**
  * A QR code as text, two modules per character cell with half blocks, so it fits a terminal
  * without being twice as tall as it is wide. `width` is in columns, for deciding whether it fits.
+ * @experimental
  */
 export const terminalQr = (link: string): { text: string; width: number } => {
   const { size, dark } = modules(link)

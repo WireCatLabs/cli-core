@@ -18,10 +18,10 @@ export const mapEvidence = (evidence: MeetingEvidencePacket) => ({
   items: evidence.items.map(mapCue),
 })
 
-/** `meetings evidence`: the `meeting_evidence` entity. */
+/** `meetings evidence`: the `meeting_evidence` entity. @experimental */
 export const meetingEvidenceItem = (evidence: MeetingEvidencePacket) => snakeKeys(mapEvidence(evidence))
 
-/** `meetings context`: the `meeting_person_context` entity. */
+/** `meetings context`: the `meeting_person_context` entity. @experimental */
 export const meetingPersonContextItem = (context: PersonMeetingContext) =>
   snakeKeys({
     ...context,

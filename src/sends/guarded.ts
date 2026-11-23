@@ -56,7 +56,10 @@ const refuseStopped = (scopes: readonly Set<WriteInFlight>[]) => {
   for (const scope of scopes) if (stopped.has(scope)) throw stopped.get(scope)
 }
 
-/** The write in progress, so the run events of the calls it makes name it without the port passing it along. */
+/**
+ * The write in progress, so the run events of the calls it makes name it without the port passing it along.
+ * @experimental
+ */
 export const currentOperation = (): string | undefined => current.getStore()
 
 /**

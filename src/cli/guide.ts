@@ -271,7 +271,7 @@ const scan = (line: string): { words: string[]; live: string[]; open: boolean } 
 
 const words = (line: string): string[] => scan(line).words
 
-/** Characters in a step that a shell would act on: the person who copies it would run something else. */
+/** Characters in a step that a shell would act on: the person who copies it would run something else. @experimental */
 export const shellProblems = (run: string): string[] => {
   const { live, open } = scan(run)
   return [
@@ -304,7 +304,10 @@ const isProfileWord = (word: string | undefined): boolean => {
   }
 }
 
-/** What is wrong with one step on this program: the path, each option and its value, the arguments. Never runs it. */
+/**
+ * What is wrong with one step on this program: the path, each option and its value, the arguments. Never runs it.
+ * @experimental
+ */
 export const checkStep = (program: Command, run: string): string[] => {
   const [tool, ...rest] = words(run)
   if (tool !== program.name()) return [`starts with "${tool ?? ""}", not ${program.name()}`]

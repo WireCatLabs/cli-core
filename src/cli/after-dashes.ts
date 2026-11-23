@@ -22,6 +22,7 @@ const optionsOf = (command: Command): Map<string, Option> => {
  * `messages sync -- -100 --json` as `messages sync --json -- -100`: agents copy `-- <id> --json` from old skill
  * text, and a negative id needs no `--` anyway. Only a word that is exactly one of the command's options moves, with
  * the value it takes; a command marked `literal_after_dashes` keeps every word after `--` as it is.
+ * @experimental
  */
 export const liftOptionsAfterDashes = (
   argv: readonly string[],

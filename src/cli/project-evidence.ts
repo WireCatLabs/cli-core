@@ -7,7 +7,10 @@ import type { LeftOutChat, StoredProjectGathering } from "../services/stored-pro
 import { coverageGaps, heldPhrase } from "./messenger/search-answers.js"
 import { heldInWindow } from "./project-status.js"
 
-/** Days back (`90d`) or a start date (`2026-09-01`); either way the run freezes its end, so a resume keeps it. */
+/**
+ * Days back (`90d`) or a start date (`2026-09-01`); either way the run freezes its end, so a resume keeps it.
+ * @experimental
+ */
 export const projectWindowOf = (value: string): { days: number } | { after: number } => {
   const days = /^([1-9]\d{0,2})d$/.exec(value)?.[1]
   if (days !== undefined && Number(days) <= 730) return { days: Number(days) }
@@ -20,6 +23,7 @@ export const projectWindowOf = (value: string): { days: number } | { after: numb
   )
 }
 
+/** @experimental */
 export const projectCutoffTime = (value: string): number => {
   const parsed = v.safeParse(v.pipe(v.string(), v.isoTimestamp()), value)
   const at = parsed.success ? Date.parse(parsed.output) : Number.NaN
@@ -48,6 +52,7 @@ const coverageRows = ({ linkedChats }: StoredProjectGathering): ChatCoverage[] =
 /**
  * The zone a typed start date was read in, and the window the run used, in UTC. `complete` is "the answer is whole":
  * reads finished and every linked chat held in full; the answer's own `complete` stays "reads finished".
+ * @experimental
  */
 export const projectAnswerParts = (
   sinceTime: string,
@@ -85,6 +90,7 @@ export const projectAnswerParts = (
 /**
  * The gathering with each linked chat's `syncCommand`: the line that syncs a chat held in part back to the window
  * start, or null when it needs none or no command here can. JSON readers get what the text says per chat.
+ * @experimental
  */
 export const withSyncCommands = (
   found: StoredProjectGathering,
@@ -100,6 +106,7 @@ export const withSyncCommands = (
   leftOut: found.leftOut.map((one) => ({ ...one, readCommand: read?.(one, day(found.window.after)) ?? null })),
 })
 
+/** @experimental */
 export interface ProjectTextHints {
   /** The command that syncs one linked chat back to `since` (`YYYY-MM-DD`), or null when no command here can. */
   sync: (chat: StoredProjectGathering["linkedChats"][number], since: string) => string | null
@@ -135,6 +142,7 @@ const FETCH_STATES: Record<string, string> = {
   skipped: "not synced, the fetch time ran out first",
 }
 
+/** @experimental */
 export const projectEvidenceText = (found: StoredProjectGathering, hints: ProjectTextHints) => {
   const lanes = new Map(
     found.lanes.map((lane) => [

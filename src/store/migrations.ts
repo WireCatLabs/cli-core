@@ -11,6 +11,7 @@ import {
 } from "./sqlite/rollback-copy.js"
 import { beginImmediate, rollBack } from "./sqlite/transaction.js"
 
+/** @experimental */
 export interface Migration {
   version: number
   /** The oldest schema version whose statements still work on a file at this version. */
@@ -35,6 +36,7 @@ export interface Migration {
  * may be dropped and rebuilt. Every version after the first gets a `version-N.test.ts` that opens a file at N-1.
  *
  * Times are epoch milliseconds: an integer sorts and ranges without a format to agree on.
+ * @experimental
  */
 export const MIGRATIONS: Migration[] = generatedMigrations()
 
@@ -126,6 +128,7 @@ const copyBeforeBreaking = (
  * A file that needs work is migrated inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
  * that fails names `store reset` when the app has one: without it the owner is stuck until a build that can migrate
  * the file. An app without that command (drive) passes no `command`, and the advice names none.
+ * @experimental
  */
 export const migrate = (
   database: CacheDatabase,

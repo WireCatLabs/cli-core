@@ -28,6 +28,7 @@ export interface MarkdownFormatting {
   formatMarkdown(text: string): Promise<FormattedText>
 }
 
+/** @experimental */
 export interface HtmlFormatting {
   formatHtml(text: string): Promise<FormattedText>
 }

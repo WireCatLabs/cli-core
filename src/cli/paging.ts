@@ -43,6 +43,7 @@ export const withPaging = (command: Command): Command =>
  * ⚠ **A page number over a live list can repeat or skip a row.** The order is most-recent-first,
  * so a message arriving between page one and page two pushes somebody across the boundary. Every
  * CLI that pages this way has this; it is in `--help` rather than engineered away.
+ * @experimental
  */
 export const window = ({ limit, page, all }: Settings): { limit?: number; offset: number } =>
   all ? { offset: 0 } : { limit, offset: (page - 1) * limit }

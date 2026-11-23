@@ -204,6 +204,7 @@ export const execution = (
   }
 }
 
+/** @experimental */
 export const withAbort = async <T>(signal: AbortSignal | undefined, body: () => Promise<T>): Promise<T> => {
   if (!signal) return body()
   if (signal.aborted) throw signal.reason

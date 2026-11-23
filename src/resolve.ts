@@ -13,13 +13,17 @@ export interface PeopleLookup {
   all(): Contact[]
 }
 
-/** Shaped like a Telegram or MAX id. Another messenger's ids may be any string, so a miss here is not "not an id". */
+/**
+ * Shaped like a Telegram or MAX id. Another messenger's ids may be any string, so a miss here is not "not an id".
+ * @experimental
+ */
 export const isId = (reference: string): boolean => /^-?\d+$/.test(reference.trim())
 
 /**
  * A name as matching compares it. A copied emoji often carries a presentation mark (U+FE0F, U+FE0E) or a joiner
  * (U+200D) the typed one lacks, a letter may come composed or as letter plus accent, and Russian is mostly typed with
  * е for ё; none of that is a different name. Only ё is folded: stripping every mark would also merge й into и.
+ * @experimental
  */
 export const foldName = (name: string): string =>
   name

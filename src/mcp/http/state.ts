@@ -43,7 +43,7 @@ export const mcpHttpMarker = (envPrefix: string) => `${envPrefix}_MCP_HTTP`
 
 export const httpLogFile = (tokenFile: string) => `${tokenFile.replace(/\.json$/, "")}.log`
 
-/** Beside the token file, so each CLI's own layout decides both: `mcp-http/<profile>.json` → `.lock`. */
+/** Beside the token file, so each CLI's own layout decides both: `mcp-http/<profile>.json` → `.lock`. @experimental */
 export const httpLockFile = (tokenFile: string) => `${tokenFile.replace(/\.json$/, "")}.lock`
 
 /**

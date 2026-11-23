@@ -23,7 +23,7 @@ import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 
-/** Where the running CLI really lives; a test hands in its own. */
+/** Where the running CLI really lives; a test hands in its own. @experimental */
 export interface McpEnvironment extends BaseEnvironment {
   mcp?: { scriptPath?: string; execPath?: string }
   system?: ServerSystem
@@ -132,7 +132,10 @@ const withProfiles = (command: Command): Command =>
     "serve several profiles from one server instead of one: names, comma-separated, or all for every profile",
   )
 
-/** Where `mcp serve --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
+/**
+ * Where `mcp serve --http` keeps the hashes of the tokens it issued — per profile, in the state folder.
+ * @experimental
+ */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "mcp-http", `${profile}.json`)
 
@@ -147,6 +150,7 @@ const withFlags = (command: Command, example: string): Command =>
  * What the `mcp` group needs of the CLI it serves. A messenger serves through its one connection (`messengerHost`);
  * a CLI that is not a messenger through its own program (`appMcpCommand`). The commands, flags and answers are the
  * same in both, so every WireCat CLI has one `mcp`.
+ * @experimental
  */
 export interface McpHost {
   app: AppIdentity
@@ -688,6 +692,7 @@ const VERSION_MANAGER = /[\\/](\.nvm|nvm|\.fnm|fnm|fnm_multishells|\.volta|volta
  * keyring entry and the store, so a server without them would answer "no session" or search another
  * store. So is `XDG_RUNTIME_DIR`: the keyring is reached through it, and an MCP client that starts
  * servers with a trimmed environment leaves it out (measured 2026-09-28). Credentials are never copied.
+ * @experimental
  */
 export const serverEntry = (
   app: AppIdentity,

@@ -39,7 +39,7 @@ export interface ConditionalKey {
   when: string
 }
 
-/** Either way of naming a program's keys: a messenger's per-command mapping, or a declared CLI's own. */
+/** Either way of naming a program's keys: a messenger's per-command mapping, or a declared CLI's own. @experimental */
 export type PermissionKeySource = PermissionKeyOf | CommandPermissions
 
 const HOUSEKEEPING = new Set([
@@ -91,6 +91,7 @@ const everyCommand = (command: Command): Command[] => [command, ...command.comma
 /**
  * The keys `permissions` may name: every command of the program, every write key, and each of their
  * parents. A key outside it is a typo that would otherwise do nothing.
+ * @experimental
  */
 export const knownPermissionKeys = (
   command: Command,
@@ -131,7 +132,7 @@ export const markRenamedPermissionKeys = (command: Command, renamed: ReadonlyMap
 export const renamedPermissionKeys = (command: Command): Map<PermissionKey, PermissionKey> =>
   new Map(everyCommand(rootOf(command)).flatMap((one) => [...(RENAMED.get(one) ?? [])]))
 
-/** The known keys one level under the unknown key's parent, to name in the refusal. */
+/** The known keys one level under the unknown key's parent, to name in the refusal. @experimental */
 export const knownBeside = (key: PermissionKey, known: ReadonlySet<PermissionKey>): PermissionKey[] => {
   const parent = key.split(".").slice(0, -1).join(".")
   const depth = parent === "" ? 1 : parent.split(".").length + 1
@@ -140,12 +141,16 @@ export const knownBeside = (key: PermissionKey, known: ReadonlySet<PermissionKey
     .sort()
 }
 
+/** @experimental */
 export const unknownPermissionKeys = (
   levels: Readonly<Record<PermissionKey, unknown>>,
   known: ReadonlySet<PermissionKey>,
 ): PermissionKey[] => Object.keys(levels).filter((key) => key !== CEILING_KEY && !known.has(key))
 
-/** Every unknown permission key saved in the file, in every section and profile, with the unset that removes it. */
+/**
+ * Every unknown permission key saved in the file, in every section and profile, with the unset that removes it.
+ * @experimental
+ */
 export const unknownPermissionIssues = (
   command: Command,
   settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources" | "profile">,
@@ -168,6 +173,7 @@ export const unknownPermissionIssues = (
 /**
  * A saved key no command checks would do nothing, so the command refuses to run and names the unset that removes
  * it. A `--permission` key is checked too: it is no file's, so the flag is the fix.
+ * @experimental
  */
 export const refuseUnknownPermissionKeys = (
   command: Command,

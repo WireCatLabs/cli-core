@@ -25,6 +25,7 @@ import { queryWordsAfterOptions } from "../meetings/cli/index.js"
 import { type ListBody, type ListInput, listOf } from "./envelope.js"
 import type { Settings } from "./settings.js"
 
+/** @experimental */
 export const LIST_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md"
 
 /** `[query...]`'s help, which points at the Fields section; an MCP tool has none and says the fields instead. */
@@ -156,11 +157,14 @@ export const pagedList = <T>(
 const askable = (registry: QueryRegistry) =>
   registry.backend === "native" ? registry.fields.filter((field) => field.native) : registry.fields
 
-/** An MCP list's `query` argument: the language the CLI list takes after its arguments. */
+/** An MCP list's `query` argument: the language the CLI list takes after its arguments. @experimental */
 export const queryArgument = (registry: QueryRegistry) =>
   v.optional(v.pipe(v.string(), v.maxLength(QUERY_LIMITS.bytes), v.description(queryDescription(registry))))
 
-/** The fields a native list can also leave out, `-field:value`: what `nativeTermLists` keeps under `-field`. */
+/**
+ * The fields a native list can also leave out, `-field:value`: what `nativeTermLists` keeps under `-field`.
+ * @experimental
+ */
 export const negatableOf = (registry: QueryRegistry): string[] =>
   askable(registry)
     .filter((field) => field.negatable)
@@ -177,6 +181,7 @@ export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<str
  * As `nativeTerms`, but each `repeatable` field may be named again, every term kept in order: `person:a person:b`
  * asks for both, as AND reads. A `negatable` field may also be excluded, `-field:value` or `NOT field:value`, as
  * often as wanted; those terms are kept under `-field`.
+ * @experimental
  */
 export const nativeTermLists = (
   ast: QueryAst | undefined,
@@ -251,6 +256,7 @@ export const queryTerms = (
  * `until` is inclusive: an exclusive end (a bare date's next midnight, `… TO …}`) comes back 1 ms inside. `since` stays
  * as written, because the inbox reads strictly after a `date>` start; `from` is the first moment taken, for a reader
  * that takes its start.
+ * @experimental
  */
 export const timeBounds = (
   term: Predicate | undefined,
@@ -289,11 +295,11 @@ export const timeBounds = (
   }
 }
 
-/** A text term as the plain words a provider searches by: `name:ana`, `name:"Ana K"`, `name:*ana*`. */
+/** A text term as the plain words a provider searches by: `name:ana`, `name:"Ana K"`, `name:*ana*`. @experimental */
 export const searchText = (term: Predicate | undefined): string | undefined =>
   term === undefined ? undefined : term.value.replace(/^\*+|\*+$/g, "")
 
-/** A field the provider filters itself; names follow the search language, as in `search messages`. */
+/** A field the provider filters itself; names follow the search language, as in `search messages`. @experimental */
 export const nativeField = (field: Omit<FieldSpec, "native">): FieldSpec => ({ ...field, native: true })
 
 /** A field the store filters by whole values only, as `queryTerms` reads them. */
@@ -311,5 +317,5 @@ export const termField = (
     ...more,
   })
 
-/** The Fields section of a list's help, for a list that places its own `[query...]`. */
+/** The Fields section of a list's help, for a list that places its own `[query...]`. @experimental */
 export const queryHelp = (registry: QueryRegistry): string => `\n${fieldsHelp(registry, LIST_QUERY_GUIDE)}`

@@ -1,6 +1,7 @@
 import { type ProjectAnnotationsPlan, type ProjectAnnotationsTarget, planBoundProjectAnnotations } from "./plan.js"
 import { decodeProjectAnnotationSnapshot, projectAnnotationSnapshotFingerprint } from "./snapshot-model.js"
 
+/** @experimental */
 export interface ProjectAnnotationPreview {
   plan: ProjectAnnotationsPlan
   descriptor_conflicts: ("key" | "name")[]
@@ -11,7 +12,7 @@ export interface ProjectAnnotationPreview {
   records: number
 }
 
-/** Metadata and project-owner bindings participate in the version-2 preview fingerprint. */
+/** Metadata and project-owner bindings participate in the version-2 preview fingerprint. @experimental */
 export const planProjectAnnotationSnapshot = (
   json: string,
   target: ProjectAnnotationsTarget,

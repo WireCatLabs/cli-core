@@ -27,6 +27,7 @@ export interface SavedRunSettings {
   recordInput?: RecordInput | undefined
 }
 
+/** @experimental */
 export interface RunSettings {
   record: boolean
   keepFailedRuns: boolean
@@ -39,6 +40,7 @@ export interface RunSettings {
 /**
  * `--record`/`--no-record` first, then the config: every run is kept unless it says `record: false`, which keeps
  * failures only; `--no-record` keeps nothing (WC-LIFE-15).
+ * @experimental
  */
 export const runSettings = (flag: boolean | undefined, saved: SavedRunSettings = {}): RunSettings => {
   const record = flag ?? saved.record ?? true
@@ -198,7 +200,7 @@ interface Parse {
 
 const parses = new AsyncLocalStorage<Parse>()
 
-/** The id `runs show` takes for the command under way, so a write can name the run that made it. */
+/** The id `runs show` takes for the command under way, so a write can name the run that made it. @experimental */
 export const commandRunId = (): string | undefined => parses.getStore()?.runs.runId()
 
 /**

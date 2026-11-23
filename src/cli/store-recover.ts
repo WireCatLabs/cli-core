@@ -36,6 +36,7 @@ const COUNTED = [
   "mentions",
 ]
 
+/** @experimental */
 export interface RecoveryCheck {
   path: string
   exists: boolean
@@ -63,6 +64,7 @@ const stopTimers = (timers: string[]) => `systemctl --user stop ${timers.join(" 
 /**
  * `store recover`: what is wrong with the store and what to run, reading every page. Changes nothing in the store; it
  * records the check beside it, and one that passes lifts the damage mark.
+ * @experimental
  */
 export const storeRecoveryCheck = async (
   env: NodeJS.ProcessEnv,
@@ -123,6 +125,7 @@ export const storeRecoveryCheck = async (
   }
 }
 
+/** @experimental */
 export type RecoveryRun = Omit<Recovery, "health" | "copyErrors"> & {
   /** `sqlite3` reported these while copying; most are rows that broke a constraint and were skipped. */
   copyErrors: number
@@ -131,7 +134,10 @@ export type RecoveryRun = Omit<Recovery, "health" | "copyErrors"> & {
   next: string[]
 }
 
-/** `store recover run`: refuses while a WireCat timer is scheduled, so none writes to the file being replaced. */
+/**
+ * `store recover run`: refuses while a WireCat timer is scheduled, so none writes to the file being replaced.
+ * @experimental
+ */
 export const storeRecoveryRun = async (
   env: NodeJS.ProcessEnv,
   {
@@ -196,7 +202,7 @@ const refetchNotes = ({ since, chats, mail }: RecoveryRun["refetch"]): string[] 
   ]
 }
 
-/** The lines a person reads under the answer; the JSON carries the same in its fields. */
+/** The lines a person reads under the answer; the JSON carries the same in its fields. @experimental */
 export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => {
   if ("keptAt" in answer) {
     const lost = answer.lost.map(
@@ -240,7 +246,7 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
   ]
 }
 
-/** `store recover` and `store recover run`, for a CLI whose commands run on cli-core's context. */
+/** `store recover` and `store recover run`, for a CLI whose commands run on cli-core's context. @experimental */
 export const storeRecoverCommand = ({ command, version }: { command: string; version?: string }): Command => {
   const recover = annotate(new Command("recover"), { effects: LOCAL_READ, examples: [`${command} store recover`] })
     .summary("what is damaged in the store and how to recover it")

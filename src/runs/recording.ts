@@ -17,6 +17,7 @@ import { logAttributes } from "./log-keys.js"
 import { newRunId, type Run, type RunContext, runsDirFor, startRun } from "./run.js"
 import { enclosingTraceId, inRun, type RunScope, traceOf, useAsProcessRun } from "./scope.js"
 
+/** @experimental */
 export interface RecordingOptions {
   app: AppIdentity
   /** As typed, without the arguments: `chats list`. It names the run directory. */
@@ -54,6 +55,7 @@ export interface RecordingOptions {
  * `--trace` shows each event as it happens; the run is kept as the config says — every run unless
  * `record: false`, which keeps failures only. It is a wrapper rather than three lines in each command because the failure it prevents
  * is the quiet one: a run directory left saying `running` because the command threw on the way out.
+ * @experimental
  */
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
   const recording = startRecording(options)
@@ -76,6 +78,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
   }
 }
 
+/** @experimental */
 export interface Recording {
   /** Given now, before the run is kept or not, so whatever the command writes can name it. */
   runId: string
@@ -86,7 +89,10 @@ export interface Recording {
   fail: (error: unknown) => Promise<void>
 }
 
-/** `recorded` in two halves, for a caller that starts a run before its command and ends it after (max-cli's `max bot`). */
+/**
+ * `recorded` in two halves, for a caller that starts a run before its command and ends it after (max-cli's `max bot`).
+ * @experimental
+ */
 export const startRecording = (options: RecordingOptions): Recording => {
   const streams = options.streams ?? processStreams
   const now = options.now ?? (() => new Date())
@@ -189,6 +195,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
 /** Failures a run already dealt with — kept, or not kept by the owner's choice. `run()`'s last catch skips them. */
 const settled = new WeakSet<object>()
 
+/** @experimental */
 export const wasSettled = (error: unknown): boolean => typeof error === "object" && error !== null && settled.has(error)
 
 const HELD_AT_MOST = 500
@@ -263,6 +270,7 @@ const outcomeOf = (error: unknown): { errorCode: string; providerError?: string 
  * Where a crash happened, not what it said: the class and up to ten frames as `function file:line`,
  * paths cut to the package's own (`framesOf`). **Never `message`** in an event — it can hold whatever the
  * failing line was handling; run.json's `error` keeps it, masked.
+ * @experimental
  */
 export const crashOf = (error: unknown): { event: "command.crashed"; errorClass: string; frames: string[] } => ({
   event: "command.crashed",

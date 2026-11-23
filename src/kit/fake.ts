@@ -46,7 +46,7 @@ import { isId, pickChat, pickPerson } from "../resolve.js"
 import { uploadSize } from "../sends/upload.js"
 import { contractSeed, type Seed } from "./seed.js"
 
-/** Every group of the port, over memory. */
+/** Every group of the port, over memory. @experimental */
 export type FakeAdapter = MessengerCore &
   ServerReads &
   ChatReading &
@@ -114,6 +114,7 @@ const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: Folde
   if (pin?.length) folder.pinnedChatIds = [...new Set([...(folder.pinnedChatIds ?? []), ...pin])]
 }
 
+/** @experimental */
 export const fakeAdapter = (
   seed: Seed = contractSeed(),
   options: { feed?: boolean; listen?: boolean; listenHistory?: boolean; storedChats?: boolean } = {},

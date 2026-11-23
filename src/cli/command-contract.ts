@@ -6,7 +6,9 @@ import { keyForCommand } from "../sends/permissions.js"
 import { answerEntitySchema, answerProjectionSchema } from "./answer-entity.js"
 import { answerSchema } from "./envelope.js"
 
+/** @experimental */
 export type JsonSchema = Record<string, unknown>
+/** @experimental */
 export const SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 /**
@@ -40,6 +42,7 @@ export const findCommand = (root: Command, path: readonly string[]): Command => 
   return at
 }
 
+/** @experimental */
 export const commandContract = (command: Command) => {
   const path = commandPathOf(command)
   const ancestors: Command[] = []

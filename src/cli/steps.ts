@@ -296,6 +296,7 @@ type Targets = NonNullable<StepInput["targets"]>
  * The steps this CLI can run, at most two: a step naming a command it lacks is dropped, never printed. Whether a
  * step may run unasked is judged here, where the command tree is known: only when its command writes nothing
  * remotely.
+ * @experimental
  */
 export const runnable = (root: Command, steps: readonly NextStep[] | undefined): NextStep[] =>
   withSafety(
@@ -327,7 +328,10 @@ export const failureSteps = (
   return runnable(root, [...(error.next ?? []), ...own])
 }
 
-/** Each command step judged by its command's effects: safe to run unasked only when it writes nothing remotely. */
+/**
+ * Each command step judged by its command's effects: safe to run unasked only when it writes nothing remotely.
+ * @experimental
+ */
 export const withSafety = (steps: readonly NextStep[], targets: Targets): NextStep[] =>
   steps.map((step) => {
     if (step.kind === "user_action") return step

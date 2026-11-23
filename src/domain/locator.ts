@@ -5,6 +5,7 @@ import type { Id, Provider } from "./models.js"
  * Where one message lives, whichever messenger it came from. A message id alone means nothing:
  * Telegram numbers messages per chat in channels and per account in private chats, so only all four
  * parts name exactly one message across every provider and account in a shared store.
+ * @experimental
  */
 export interface MessageLocator {
   provider: Provider
@@ -15,12 +16,14 @@ export interface MessageLocator {
 
 const SCHEME = "msg:"
 
-/** `msg:telegram/12345/-1001234567890/42` — each part percent-encoded, so no id can add a part. */
+/** `msg:telegram/12345/-1001234567890/42` — each part percent-encoded, so no id can add a part. @experimental */
 export const formatLocator = ({ provider, account, chat, message }: MessageLocator): string =>
   SCHEME + [provider, account, chat, message].map(encodeURIComponent).join("/")
 
+/** @experimental */
 export const isLocator = (reference: string): boolean => reference.trim().startsWith(SCHEME)
 
+/** @experimental */
 export const parseLocator = (reference: string): MessageLocator => {
   const trimmed = reference.trim()
   const parts = trimmed.startsWith(SCHEME) ? trimmed.slice(SCHEME.length).split("/") : []

@@ -17,7 +17,7 @@ const SOURCE = termField("source", "kw", 'source:"google-drive:ana@example.com"'
   relation: "one account, provider:account, or every account of a provider; repeat for several",
 })
 
-/** `documents list`: what the store filters, and `text`, which the notes search answers first. */
+/** `documents list`: what the store filters, and `text`, which the notes search answers first. @experimental */
 export const DOCUMENTS_LIST_QUERY = {
   entity: "document_entry",
   backend: "native",
@@ -46,7 +46,7 @@ export const DOCUMENTS_LIST_QUERY = {
   ],
 } as const satisfies QueryRegistry
 
-/** `meetings list`: the time window, and filters every row answers. */
+/** `meetings list`: the time window, and filters every row answers. @experimental */
 export const MEETINGS_LIST_QUERY = {
   entity: "meeting_entry",
   backend: "native",
@@ -76,8 +76,12 @@ export const MEETINGS_LIST_QUERY = {
   ],
 } as const satisfies QueryRegistry
 
-/** Without `started_at`, the meetings list reads the last 30 days and the next 7: calls are all in the past. */
+/**
+ * Without `started_at`, the meetings list reads the last 30 days and the next 7: calls are all in the past.
+ * @experimental
+ */
 export const MEETINGS_RECENT_DAYS = 30
+/** @experimental */
 export const MEETINGS_AHEAD_DAYS = 7
 
 const REPEATABLE = ["text", "source", "kind", "tag", "person"]
@@ -110,7 +114,7 @@ const storeQueryOf = (terms: Map<string, Predicate[]>, fields: readonly string[]
   return { version: 1, language: "lucene-v1", root: { kind: "boolean", clauses, span } }
 }
 
-/** `documents list`'s query and page, as `listDocuments` takes them. */
+/** `documents list`'s query and page, as `listDocuments` takes them. @experimental */
 export const documentListRequest = (
   words: QueryWords,
   { limit, page, zone = timezoneOf(), now = Date.now() }: { limit: number; page: number; zone?: string; now?: number },
@@ -150,12 +154,16 @@ const windowOf = (node: Predicate, zone: string, now: number) => {
   }
 }
 
+/** @experimental */
 export interface MeetingWindowMeta {
   timezone: string
   window: { since?: string; until?: string }
 }
 
-/** `meetings list`'s query and page, as `listMeetingEntries` takes them, and the window it read for `meta`. */
+/**
+ * `meetings list`'s query and page, as `listMeetingEntries` takes them, and the window it read for `meta`.
+ * @experimental
+ */
 export const meetingListRequest = (
   words: QueryWords,
   {

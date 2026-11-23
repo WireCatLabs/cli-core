@@ -1,17 +1,19 @@
+/** @experimental */
 export const SOURCE_REVIEW_KIND = "memory_source_review"
 
-/** Least severe first: a review moves forward in the queue only when its cause moves right. */
+/** Least severe first: a review moves forward in the queue only when its cause moves right. @experimental */
 export const SOURCE_REVIEW_CAUSES = ["changed", "outdated", "deleted", "contradicted"] as const
 
+/** @experimental */
 export type SourceReviewCause = (typeof SOURCE_REVIEW_CAUSES)[number]
 
-/** The open review of a memory or fact, as its reads show it. */
+/** The open review of a memory or fact, as its reads show it. @experimental */
 export interface SourceReviewMarker {
   id: string
   cause: SourceReviewCause
 }
 
-/** One cited source that needs a look; it names the cited version and never copies its text. */
+/** One cited source that needs a look; it names the cited version and never copies its text. @experimental */
 export interface SourceReviewSource {
   /** The `evidence` link's id. */
   link: number
@@ -26,6 +28,7 @@ export interface SourceReviewSource {
   replacement?: string
 }
 
+/** @experimental */
 export interface SourceReviewChallenge {
   evidence: string[]
   reason: string
@@ -44,7 +47,7 @@ export interface SourceReviewSuggestion {
   at: string
 }
 
-/** A `memory_source_review` proposal's payload. */
+/** A `memory_source_review` proposal's payload. @experimental */
 export interface SourceReviewPayload {
   target: string
   cause: SourceReviewCause
@@ -54,6 +57,7 @@ export interface SourceReviewPayload {
   suggestions?: SourceReviewSuggestion[]
 }
 
+/** @experimental */
 export interface SourceCheck {
   /** Evidence links read. */
   checked: number
@@ -72,13 +76,16 @@ export interface SourceCheck {
   changedRefs: string[]
 }
 
-/** A cited source found changed since it was cited, by a check at `checkedAt`. */
+/** A cited source found changed since it was cited, by a check at `checkedAt`. @experimental */
 export interface ChangedSource {
   ref: string
   checkedAt: string
 }
 
-/** One source of a review as it was cited and as it is now, for the owner to compare; both are the source's text. */
+/**
+ * One source of a review as it was cited and as it is now, for the owner to compare; both are the source's text.
+ * @experimental
+ */
 export interface SourceReviewText {
   link: number
   ref: string | null

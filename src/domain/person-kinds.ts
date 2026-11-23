@@ -1,11 +1,13 @@
 /**
  * What a person in the store is, for a list that shows the useful ones and keeps the noise apart. `test` is what a
  * test run left, which `all` leaves out too.
+ * @experimental
  */
 export const PERSON_KINDS = ["person", "organization", "automated", "stranger", "unsorted", "test"] as const
+/** @experimental */
 export type PersonKind = (typeof PERSON_KINDS)[number]
 
-/** What decided a kind, besides the ties that make someone a `person`. */
+/** What decided a kind, besides the ties that make someone a `person`. @experimental */
 export type KindSignal =
   | "test-data"
   | "bot"

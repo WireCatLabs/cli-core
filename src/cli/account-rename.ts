@@ -30,8 +30,10 @@ import { usableProfileName } from "./profile.js"
 import { profileFiles } from "./profile-files.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
+/** @experimental */
 export type AccountRenaming = AccountRemoval & Required<Pick<AccountRemoval, "signIn">>
 
+/** @experimental */
 export interface AccountRenameOptions {
   /** Unset: the one `run()` set. */
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
@@ -71,6 +73,7 @@ const withValue = (raw: unknown, path: readonly string[], value: unknown): unkno
  * `<tool> <profile> account rename <new>`: gives the profile another name and moves everything it owns on this
  * computer — the sign-in, its other keyring entries, its settings, its files and what the store records of it. The
  * account's data in the store is keyed by the account, not the name, and stays where it is. Asks first, or `--yes`.
+ * @experimental
  */
 export const accountRenameCommand = (
   app: AppIdentity,

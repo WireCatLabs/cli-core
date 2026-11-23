@@ -8,6 +8,7 @@ const FORMULA = /^[=+\-@\t\r]/
 /**
  * One cell as RFC 4180 writes it, safe to open in a spreadsheet: text that would start a formula gets a leading `'`,
  * since every cell may be what someone else typed into the CRM.
+ * @experimental
  */
 export const csvCell = (value: unknown): string => {
   if (value === null || value === undefined) return ""
@@ -16,11 +17,11 @@ export const csvCell = (value: unknown): string => {
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
 }
 
-/** A header and its rows as RFC 4180 records, without line ends; the header is guarded like any cell. */
+/** A header and its rows as RFC 4180 records, without line ends; the header is guarded like any cell. @experimental */
 export const csvRecords = (header: readonly string[], rows: readonly (readonly unknown[])[]): string[] =>
   [header, ...rows].map((row) => row.map(csvCell).join(","))
 
-/** The table on stdout and nothing else, every record ending in CRLF. */
+/** The table on stdout and nothing else, every record ending in CRLF. @experimental */
 export const writeCsv = (
   streams: Pick<Streams, "data">,
   header: readonly string[],

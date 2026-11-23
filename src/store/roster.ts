@@ -19,6 +19,7 @@ import * as roster from "./sqlite/roster.js"
 import { read, write } from "./sqlite/transaction.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export interface RosterStore {
   /** Replaces who is in a chat with this list, whole: a person left out has left. */
   saveMembers(key: AccountKey, chatId: Id, memberIds: Id[]): Promise<void>

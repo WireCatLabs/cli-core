@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 
+/** @experimental */
 export const MAX_BUFFERED_INPUT = 16 * 1024 * 1024
+/** @experimental */
 export const MAX_SECRET_INPUT = 64 * 1024
 
 export interface InputPolicy {
@@ -13,6 +15,7 @@ const policies = new WeakMap<NodeJS.ReadableStream, InputPolicy>()
 
 export const inputPolicy = (input: NodeJS.ReadableStream): InputPolicy => policies.get(input) ?? {}
 
+/** @experimental */
 export const provideInputPolicy = (input: NodeJS.ReadableStream, policy: InputPolicy): (() => void) => {
   const previous = policies.get(input)
   policies.set(input, policy)

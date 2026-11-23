@@ -100,6 +100,7 @@ const withMeaningOptions = (command: Command): Command =>
       .option("--max-text-bytes <bytes>", "by meaning: most transcript text to read (default 4 MiB)", count)
   })
 
+/** @experimental */
 export interface MeetingCombinedSearchDeps {
   words: () => Promise<MeetingHitSearch>
   meaning: () => Promise<MeetingMeaning>
@@ -111,11 +112,13 @@ export interface MeetingCombinedSearchDeps {
   examples: string[]
 }
 
+/** @experimental */
 export type MeetingSearchRun = (query: string, options: SearchFlags, command: Command) => Promise<Body>
 
 /**
  * `search meetings` by words, and by words and meaning ranked together with `--model`, for any host of stored
  * meetings. Returns the run, so a host's saved searches replay it.
+ * @experimental
  */
 export const addMeetingCombinedSearchCommand = (
   program: Command,
@@ -166,6 +169,7 @@ export const addMeetingCombinedSearchCommand = (
   return execute
 }
 
+/** @experimental */
 export interface MeetingEmbeddingCommandDeps {
   meaning: () => Promise<MeetingMeaning>
   /** The local model used without `--model`: the `models` command's default text model. */
@@ -180,6 +184,7 @@ export interface MeetingEmbeddingCommandDeps {
 /**
  * `meetings embed`: previews the vectors a search by meaning needs, and `--yes` splits every transcript and embeds one
  * batch of the passages without a vector; run it again for the next batch.
+ * @experimental
  */
 export const addMeetingEmbeddingCommand = (program: Command, deps: MeetingEmbeddingCommandDeps): void => {
   const meetings = program.commands.find((command) => command.name() === "meetings")

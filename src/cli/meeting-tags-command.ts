@@ -9,6 +9,7 @@ import { LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "./envelope.js"
 import { queryTerms, termField, withQuery } from "./list-query.js"
 
+/** @experimental */
 export interface MeetingTagsCommandDeps {
   /** The tags of the profile's own meetings account; opened when the command runs. */
   read: () => Promise<MeetingTags>
@@ -53,6 +54,7 @@ const groupOf = (program: Command): Command =>
  * `tags add|remove|list` for a host whose things to label are its meetings, such as pbx's phone calls. A host of
  * chats mounts the messenger's `tags` instead. `--matching` takes `search meetings`'s query, so "search, then tag" is
  * one command, and a rerun after new calls are transcribed marks only those.
+ * @experimental
  */
 export const addMeetingTagsCommand = (program: Command, deps: MeetingTagsCommandDeps): void => {
   const tags = groupOf(program)

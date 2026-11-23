@@ -19,6 +19,7 @@ const integer = (value: number, minimum = 1): number => {
   return value
 }
 
+/** @experimental */
 export const formatMeetingReference = (reference: MeetingReference): string => {
   const parts = [integer(reference.accountId), integer(reference.meetingId)]
   if (reference.transcriptId !== undefined) parts.push(integer(reference.transcriptId))
@@ -29,6 +30,7 @@ export const formatMeetingReference = (reference: MeetingReference): string => {
   return `meeting:${parts.join("/")}`
 }
 
+/** @experimental */
 export const parseMeetingReference = (text: string): MeetingReference => {
   const value = text.trim()
   if (!value.startsWith("meeting:")) throw invalid()
@@ -45,4 +47,5 @@ export const parseMeetingReference = (text: string): MeetingReference => {
   return reference
 }
 
+/** @experimental */
 export const canonicalMeetingReference = (text: string): string => formatMeetingReference(parseMeetingReference(text))

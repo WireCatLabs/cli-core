@@ -14,6 +14,7 @@ import { buildReport, reportFileName } from "./messenger/report.js"
 import { ownPackageRoot } from "./messenger/serve-outdated.js"
 import { lineOf, nextStep, rootOf } from "./steps.js"
 
+/** @experimental */
 export interface DoctorReportsSource {
   app: AppIdentity
   /** What the file holds and never holds, as `doctor reports show` lists it. */
@@ -92,7 +93,10 @@ export const issueUrlFor = (
   return `${app.issues}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`
 }
 
-/** `doctor reports show|create`: one file for the author, the same for every CLI; `collect` says what it holds. */
+/**
+ * `doctor reports show|create`: one file for the author, the same for every CLI; `collect` says what it holds.
+ * @experimental
+ */
 export const doctorReportsCommand = (source: DoctorReportsSource): Command => {
   const { app, includes, excludes } = source
   const reports = annotate(new Command("reports"), { effects: NO_EFFECTS }).description("problem reports")

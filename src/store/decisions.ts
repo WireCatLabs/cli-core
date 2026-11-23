@@ -35,8 +35,10 @@ export interface DecisionPolicy {
   ruleProposalsOwnerOnly: boolean
 }
 
+/** @experimental */
 export const DEFAULT_DECISION_POLICY: DecisionPolicy = { agentDecisions: false, ruleProposalsOwnerOnly: true }
 
+/** @experimental */
 export interface Refusal {
   id: string
   code: "permission_error" | "validation_error" | "not_found"
@@ -47,6 +49,7 @@ export interface Refusal {
 /**
  * Proposal kinds only the owner decides, whatever `agent_decisions` says. Read from the row's kind, so a path that
  * sees the row as something else — a generic action, a host's own kind — still refuses an agent.
+ * @experimental
  */
 export const isOwnerOnlyKind = (kind: string | undefined): boolean =>
   kind === MAIL_FINDINGS_KIND ||
@@ -59,6 +62,7 @@ export const isOwnerOnlyKind = (kind: string | undefined): boolean =>
 /**
  * The one check every decide path runs before it confirms or rejects a proposal. `null` means allowed. Every Claude
  * Code session is the bot `claude-code`, so comparing bot names keeps one session from deciding another's proposal.
+ * @experimental
  */
 export const mayDecide = (
   /** `ownerOnly`: what only the owner may say, such as that a payment was made; `kind`: the stored kind. */
@@ -129,7 +133,7 @@ export const assertMayWithdraw = (
   })
 }
 
-/** `mayDecide` for a store method: throws the refusal instead of returning it. */
+/** `mayDecide` for a store method: throws the refusal instead of returning it. @experimental */
 export const assertMayDecide = (
   row: DecidedRow,
   by: Decider,

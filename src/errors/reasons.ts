@@ -900,6 +900,7 @@ export const REASONS: ErrorReason[] = defineReasons([
 /**
  * Detail keys an error from this package may carry, until each is registered on its own reason. Not `cause`:
  * that can hold a provider's or SQLite's raw text.
+ * @experimental
  */
 export const DETAILS = [
   "account",
