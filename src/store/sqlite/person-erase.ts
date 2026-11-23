@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Decider } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
 import { OWN, referencesTo } from "./accounts.js"
-import { pointerPairs } from "./entity-types.js"
+import { count, ErasePlan } from "./erase-plan.js"
 import { forgetDanglingEvidence } from "./evidence-signature.js"
 import { forgetErasedLinks } from "./identity-link-rows.js"
 import { forgetErasedSplits } from "./identity-split-proposals.js"
@@ -29,28 +29,6 @@ export interface PersonErasure {
   detached: Record<string, number>
 }
 
-/** Who wrote or approved a row: the row is the writer's history, never silently rewritten. */
-const AUTHORS = new Set(["author", "confirmed_by", "decided_by", "proposed_by", "actor", "closed_by"])
-
-/** Business rows that cannot be without the person: the owner moves them first. */
-const blocking = (table: string, pointer: string, database: CacheDatabase) =>
-  AUTHORS.has(pointer) || hasChildren(database, table)
-
-const hasChildren = (database: CacheDatabase, table: string) =>
-  database
-    .prepare(
-      `SELECT 1 FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f WHERE m.type = 'table' AND f."table" = ?
-        LIMIT 1`,
-    )
-    .get(table) !== undefined
-
-const nullable = (database: CacheDatabase, table: string, column: string) =>
-  Number(database.prepare(`SELECT "notnull" AS n FROM pragma_table_info('${table}') WHERE name = ?`).get(column)?.n) ===
-  0
-
-/** A link is about both ends: one that loses an end means nothing, so it goes. */
-const LINK_ROWS = new Set(["links", "mentions", "task_assignments"])
-
 const personOf = (context: StoreContext, uid: string): number => {
   const asked = /^(?:person:)?([1-9]\d*)$/u.exec(uid.trim())?.[1]
   const known =
@@ -59,9 +37,6 @@ const personOf = (context: StoreContext, uid: string): number => {
     throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.unknown" })
   return currentPerson(context.database, Number(known.id))
 }
-
-const count = (database: CacheDatabase, sql: string, ...params: (string | number)[]) =>
-  Number(database.prepare(`SELECT count(*) AS n FROM ${sql}`).get(...params)?.n)
 
 /**
  * Deletes a person and what memo knows of them alone: their identities, the tags, links, aliases and mentions that
@@ -101,35 +76,8 @@ export const erasePerson = (context: StoreContext, uid: string, by: Decider, app
   const kept = linked.filter(({ id }) => named.has(id))
   const goingIds = JSON.stringify(going.map(({ id }) => id))
 
-  const deleted: Record<string, number> = {}
-  const detached: Record<string, number> = {}
-  const blocked: string[] = []
-  const plan: (() => void)[] = []
-  const pointing = (type: "person" | "identity", among: string, params: (string | number)[]) => {
-    for (const { table, pointer } of pointerPairs(database)) {
-      const where = `${pointer}_type = '${type}' AND ${pointer}_id IN (${among})`
-      const n = count(database, `"${table}" WHERE ${where}`, ...params)
-      if (n === 0) continue
-      const key = `${table}.${pointer}`
-      if (LINK_ROWS.has(table) || !nullable(database, table, `${pointer}_id`)) {
-        if (!LINK_ROWS.has(table) && blocking(table, pointer, database)) {
-          blocked.push(`${n} ${table} (${pointer})`)
-          continue
-        }
-        deleted[key] = (deleted[key] ?? 0) + n
-        plan.push(() => database.prepare(`DELETE FROM "${table}" WHERE ${where}`).run(...params))
-      } else {
-        detached[key] = (detached[key] ?? 0) + n
-        plan.push(() =>
-          database
-            .prepare(`UPDATE "${table}" SET ${pointer}_type = NULL, ${pointer}_id = NULL WHERE ${where}`)
-            .run(...params),
-        )
-      }
-    }
-  }
-  pointing("person", "?", [person])
-  pointing("identity", theirs, [goingIds])
+  const plan = new ErasePlan(database).pointers("person", "?", [person]).pointers("identity", theirs, [goingIds])
+  const { deleted, detached, blocked } = plan
   const involvements = count(
     database,
     `involvements WHERE person_id = ? OR identity_id IN (${theirs})`,
@@ -157,7 +105,7 @@ export const erasePerson = (context: StoreContext, uid: string, by: Decider, app
   })
   if (!apply) return answer(false)
 
-  for (const step of plan) step()
+  plan.run()
   database.prepare(`DELETE FROM involvements WHERE person_id = ? OR identity_id IN (${theirs})`).run(person, goingIds)
   database.prepare("UPDATE bots SET owner_person_id = NULL WHERE owner_person_id = ?").run(person)
   for (const table of ["account_identities", "organization_identities", "identity_revisions"])

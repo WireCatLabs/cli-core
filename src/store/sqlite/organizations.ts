@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { evaluate, type QueryAst, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
+import type { Decider } from "../decisions.js"
 import { ORGANIZATIONS_QUERY } from "../knowledge-query.js"
 import type { Organization } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
 import { categorySql, type OrganizationFilter } from "./organization-categories.js"
+import { eraseOrganization, type OrganizationErasure } from "./organization-erase.js"
 import { queryFilter } from "./query-filter.js"
 import { thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -31,9 +33,20 @@ export interface OrganizationsStore {
   setOwnOrganization(organization: string, own: boolean | null): Promise<{ ref: string; own: boolean }>
   /** The owner's own companies: the owner's mark, else a CRM's own-company flag (`metadata.own`). */
   ownOrganizations(): Promise<Organization[]>
+  /**
+   * Deletes an organization and what memo knows of it alone; see `eraseOrganization`. `apply: false` answers what
+   * would go and changes nothing. The owner's alone; refused for the owner's own companies.
+   */
+  eraseOrganization(organization: string, by: Decider, options: { apply: boolean }): Promise<OrganizationErasure>
 }
 
-export const organizationsStoreOver = ({ database, now }: StoreContext): OrganizationsStore => ({
+export const organizationsStoreOver = (context: StoreContext): OrganizationsStore => ({
+  eraseOrganization: async (organization, by, { apply }) =>
+    write(context.database, () => eraseOrganization(context, organization, by, apply)),
+  ...organizationsReadsOver(context),
+})
+
+const organizationsReadsOver = ({ database, now }: StoreContext): Omit<OrganizationsStore, "eraseOrganization"> => ({
   organizations: async (query, filter = {}) => {
     const category = categorySql(filter, now())
     const inCategory = category ? ` AND ${category.sql}` : ""

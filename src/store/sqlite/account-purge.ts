@@ -5,6 +5,7 @@ import { forgetCalendarRows } from "./calendar-forget.js"
 import { eq, inArray, sql } from "./drizzle/core.js"
 import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
 import type { StoreContext } from "./open.js"
+import { eraseImportedOrganizations, importedOrganizations } from "./organization-erase.js"
 import { eraseImportedPeople, importedPeople } from "./person-erase.js"
 import {
   accountIdentities,
@@ -39,6 +40,7 @@ export const purgeAccount = (context: StoreContext, accountKey: number): void =>
   const { orm, database, now } = context
   const unseenBefore = unreferenced(database, "identities")
   const imported = importedPeople(database, accountKey)
+  const importedCompanies = importedOrganizations(database, accountKey)
   const at = now()
   const meetingIds = "SELECT id FROM meetings WHERE account_id = ?"
   const transcriptIds = `SELECT id FROM meeting_transcripts WHERE meeting_id IN (${meetingIds})`
@@ -159,6 +161,7 @@ export const purgeAccount = (context: StoreContext, accountKey: number): void =>
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
   dropOrphanPeople(database, unseenBefore)
   eraseImportedPeople(context, imported)
+  eraseImportedOrganizations(context, importedCompanies)
   forgetDanglingEvidence(database, at)
   dropUnusedVectors(database, hashes)
   // The links' delete trigger writes a revision naming the account it is purging; the history goes with the links.

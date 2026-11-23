@@ -429,6 +429,7 @@ export type {
 } from "./sqlite/notes.js"
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export type { OrganizationFilter } from "./sqlite/organization-categories.js"
+export type { OrganizationErasure } from "./sqlite/organization-erase.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
 export {
   type ListedPerson,
