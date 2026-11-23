@@ -12,7 +12,11 @@ const ref = (name: string, nullable = true): SchemaNode => ({
   ref: name,
   ...(nullable ? { nullable } : {}),
 })
-const object = (properties: Record<string, SchemaNode>): SchemaNode => ({ type: "object", properties, required: [] })
+const object = (properties: Record<string, SchemaNode>, required: string[] = []): SchemaNode => ({
+  type: "object",
+  properties,
+  required,
+})
 const times = { createdAt: text, updatedAt: text, archivedAt: text }
 const node = (properties: Record<string, SchemaNode>) => object({ id: { type: "string" }, ...times, ...properties })
 const connection = (of: string) =>
@@ -73,6 +77,45 @@ export const definitions: Record<string, SchemaNode> = {
 }
 for (const name of ["Team", "User", "WorkflowState", "IssueLabel", "Project", "Issue", "Comment"])
   definitions[`${name}Connection`] = connection(name)
+
+const ids: SchemaNode = { type: "array", items: { type: "string" }, nullable: true }
+const issueInput = {
+  title: text,
+  description: text,
+  teamId: text,
+  stateId: text,
+  assigneeId: text,
+  priority: { type: "integer", nullable: true },
+  labelIds: ids,
+  projectId: text,
+  parentId: text,
+} satisfies Record<string, SchemaNode>
+Object.assign(definitions, {
+  IssueCreateInput: object(issueInput, ["teamId"]),
+  IssueUpdateInput: object(issueInput),
+  CommentCreateInput: object({ issueId: text, body: text }),
+  IssueCreateRequest: object({ input: ref("IssueCreateInput", false) }, ["input"]),
+  IssueUpdateRequest: object({ id: { type: "string" }, input: ref("IssueUpdateInput", false) }, ["id", "input"]),
+  CommentCreateRequest: object({ input: ref("CommentCreateInput", false) }, ["input"]),
+  IssuePayload: object({ success: { type: "boolean" }, issue: ref("Issue") }),
+  CommentPayload: object({ success: { type: "boolean" }, comment: ref("Comment") }),
+} satisfies Record<string, SchemaNode>)
+
+const mutation = (field: string, variables: Record<string, string>, payload: string): ManifestOperation => ({
+  id: field,
+  command: field.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+  binding: { kind: "graphql", operation: "mutation", field, variables, selection: "success" },
+  effect: "write",
+  tags: ["mutation"],
+  parameters: Object.keys(variables).map((name) => ({
+    name,
+    in: "body" as const,
+    required: true,
+    schema: { type: "unknown" },
+  })),
+  request: { required: true, confidence: "contract", schema: `${field[0]?.toUpperCase()}${field.slice(1)}Request` },
+  response: { confidence: "contract", schema: payload },
+})
 
 export const FIELDS: Record<TrackerKind, [field: string, type: string]> = {
   team: ["teams", "Team"],
@@ -135,21 +178,26 @@ export const api: ServiceApiManifest = {
       parameters: [],
       response: { confidence: "contract", schema: "User" },
     },
+    mutation("issueCreate", { input: "IssueCreateInput!" }, "IssuePayload"),
+    mutation("issueUpdate", { input: "IssueUpdateInput!", id: "String!" }, "IssuePayload"),
+    mutation("commentCreate", { input: "CommentCreateInput!" }, "CommentPayload"),
   ],
 }
 
 export const PAGE_INFO = "pageInfo { hasNextPage endCursor }"
 const TIMES = "id createdAt updatedAt archivedAt"
+const ISSUE_ROW =
+  `${TIMES} identifier title description state { id } team { id } project { id } assignee { id } ` +
+  "creator { id } labels { nodes { id } } parent { id } priority dueDate completedAt canceledAt url"
+const COMMENT_ROW = `${TIMES} body issue { id } user { id } url`
 const SELECTIONS: Record<TrackerKind, string> = {
   team: `nodes { ${TIMES} name key } ${PAGE_INFO}`,
   user: `nodes { ${TIMES} name email active } ${PAGE_INFO}`,
   state: `nodes { ${TIMES} name type position team { id } } ${PAGE_INFO}`,
   label: `nodes { ${TIMES} name team { id } } ${PAGE_INFO}`,
   project: `nodes { ${TIMES} name description state lead { id } teams { nodes { id } } targetDate url } ${PAGE_INFO}`,
-  issue:
-    `nodes { ${TIMES} identifier title description state { id } team { id } project { id } assignee { id } ` +
-    `creator { id } labels { nodes { id } } parent { id } priority dueDate completedAt canceledAt url } ${PAGE_INFO}`,
-  comment: `nodes { ${TIMES} body issue { id } user { id } url } ${PAGE_INFO}`,
+  issue: `nodes { ${ISSUE_ROW} } ${PAGE_INFO}`,
+  comment: `nodes { ${COMMENT_ROW} } ${PAGE_INFO}`,
 }
 const TIME_MAP = { externalId: "id", createdAt: "createdAt", updatedAt: "updatedAt", archivedAt: "archivedAt" }
 // A literal after `key:` reads as a permission key to src/cli/permission-keys.test.ts.
@@ -215,4 +263,40 @@ export const MANIFEST = {
     }),
   ),
   self: { call: { operation: "viewer" }, path: "id" },
+  writes: {
+    issue: {
+      create: {
+        operation: "issueCreate",
+        variables: { input: "{values}" },
+        selection: `success issue { ${ISSUE_ROW} }`,
+        items: "issue",
+      },
+      update: {
+        operation: "issueUpdate",
+        variables: { id: "{id}", input: "{values}" },
+        selection: `success issue { ${ISSUE_ROW} }`,
+        items: "issue",
+      },
+      fields: {
+        title: { to: "title" },
+        description: { to: "description" },
+        team: { to: "teamId" },
+        state: { to: "stateId" },
+        assignee: { to: "assigneeId" },
+        priority: { to: "priority" },
+        labels: { to: "labelIds" },
+        project: { to: "projectId" },
+        parent: { to: "parentId" },
+      },
+    },
+    comment: {
+      create: {
+        operation: "commentCreate",
+        variables: { input: "{values}" },
+        selection: `success comment { ${COMMENT_ROW} }`,
+        items: "comment",
+      },
+      fields: { issue: { to: "issueId" }, body: { to: "body" } },
+    },
+  },
 } as unknown as TrackerManifest

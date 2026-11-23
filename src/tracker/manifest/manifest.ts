@@ -41,6 +41,32 @@ export interface TrackerManifestEntity<K extends TrackerKind = TrackerKind> {
   optional?: { message: string; scope?: string }
 }
 
+/** Where one of our fields goes inside the write's `"{values}"`: Linear takes our `state` as `stateId`. */
+export interface TrackerWriteRule {
+  to: string
+}
+
+/**
+ * The writes of one kind. Each call's variables hold `"{values}"`, the object of the fields given, and an update's
+ * also `"{id}"`. The tracker answers the written row, at the call's `items`, read by the kind's `map`: its selection
+ * names every path the map reads, as a list's does, so the copy is stored whole.
+ */
+export interface TrackerManifestWrite {
+  create?: TrackerOperationCall
+  /** An issue only. */
+  update?: TrackerOperationCall
+  /** Our fields by their names in `TRACKER_WRITE_FIELDS`; a field with no rule is refused before anything is sent. */
+  fields: Readonly<Record<string, TrackerWriteRule>>
+}
+
+/** The fields a write of each kind may name. */
+export const TRACKER_WRITE_FIELDS = {
+  issue: ["title", "description", "team", "state", "assignee", "priority", "labels", "project", "parent"],
+  comment: ["issue", "body"],
+} as const
+
+export type TrackerWriteKind = keyof typeof TRACKER_WRITE_FIELDS
+
 /** A tracker account described as data: what to call for each kind and where each of our fields is in the answer. */
 export interface TrackerManifest {
   /** The registry name: `linear`. */
@@ -52,6 +78,7 @@ export interface TrackerManifest {
   entities: { readonly [K in TrackerKind]?: TrackerManifestEntity<K> }
   /** The sign-in's own user id: `viewer { id }`. */
   self?: { call: TrackerOperationCall; path: string }
+  writes?: { readonly [K in TrackerWriteKind]?: TrackerManifestWrite }
 }
 
 /** Corrects one record after the map; `call` reads more from the service, spent from the run's budget. */
@@ -79,6 +106,12 @@ const call = v.strictObject({
 
 const kind = v.picklist(TRACKER_KINDS)
 
+const write = v.strictObject({
+  create: v.optional(call),
+  update: v.optional(call),
+  fields: v.record(v.string(), v.strictObject({ to: path })),
+})
+
 const schema = v.strictObject({
   provider: v.pipe(v.string(), v.regex(/^[a-z][a-z0-9-]*$/, "a registry name such as linear")),
   kinds: v.pipe(v.array(kind), v.minLength(1)),
@@ -98,6 +131,7 @@ const schema = v.strictObject({
     ),
   ),
   self: v.optional(v.strictObject({ call, path })),
+  writes: v.optional(v.strictObject({ issue: v.optional(write), comment: v.optional(write) })),
 })
 
 const invalid = (where: string, message: string) =>
@@ -109,10 +143,10 @@ const nearest = (wanted: string, known: readonly string[]) =>
     .filter(({ edits }) => edits <= 2)
     .sort((a, b) => a.edits - b.edits)[0]?.one
 
-const hasSince = (value: unknown): boolean =>
-  value === "{since}" ||
-  (Array.isArray(value) && value.some(hasSince)) ||
-  (typeof value === "object" && value !== null && Object.values(value).some(hasSince))
+const holds = (value: unknown, placeholder: string): boolean =>
+  value === placeholder ||
+  (Array.isArray(value) && value.some((one) => holds(one, placeholder))) ||
+  (typeof value === "object" && value !== null && Object.values(value).some((one) => holds(one, placeholder)))
 
 /** The selection a call sends, as a tree: its own, else the operation's default; none for an operation over HTTP. */
 export const selectionOf = (one: TrackerOperationCall, api: ServiceApiManifest): Selection | undefined => {
@@ -155,7 +189,12 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
     throw invalid("kinds", `list them once each, in this order: ${TRACKER_KINDS.join(", ")}`)
   const operations = new Map(api.operations.map((one) => [one.id, one]))
   const known = [...operations.keys()]
-  const checkCall = (where: string, one: TrackerOperationCall, map?: Readonly<Record<string, CrmRule | undefined>>) => {
+  const checkCall = (
+    where: string,
+    one: TrackerOperationCall,
+    map?: Readonly<Record<string, CrmRule | undefined>>,
+    writes = false,
+  ) => {
     const operation = operations.get(one.operation)
     if (!operation) {
       const near = nearest(one.operation, known)
@@ -164,9 +203,11 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
         `no operation ${one.operation} in the API${near ? `; did you mean ${near}?` : ""}`,
       )
     }
-    if (operation.effect !== "read")
+    if (writes && operation.effect === "read")
+      throw invalid(`${where}.operation`, `${one.operation} is a read, and a write names a mutation`)
+    if (!writes && operation.effect !== "read")
       throw invalid(`${where}.operation`, `${one.operation} is a ${operation.effect}, and a source only reads`)
-    if (operation.pagination && operation.pagination.style === "link")
+    if (!writes && operation.pagination && operation.pagination.style === "link")
       throw invalid(`${where}.operation`, `${one.operation} pages by a link, which a source does not read yet`)
     let tree: Selection | undefined
     try {
@@ -177,7 +218,7 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
     if (one.selection !== undefined && tree === undefined)
       throw invalid(`${where}.selection`, `${one.operation} is not a GraphQL operation, so it takes no selection`)
     if (!tree || !map) return
-    const row = rowSelection(tree, one.items ?? operation.pagination?.items)
+    const row = rowSelection(tree, one.items ?? (writes ? undefined : operation.pagination?.items))
     if (!row) throw invalid(`${where}.selection`, "selects no rows where the operation's items are")
     for (const [field, rule] of Object.entries(map))
       for (const { path: read, inside } of rulePaths(rule)) {
@@ -202,7 +243,8 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
     checkCall(`entities.${kind}.list`, one.list, one.map)
     if (one.changes) {
       checkCall(`entities.${kind}.changes`, one.changes, one.map)
-      if (!hasSince(one.changes.variables)) throw invalid(`entities.${kind}.changes`, 'no "{since}" in its variables')
+      if (!holds(one.changes.variables, "{since}"))
+        throw invalid(`entities.${kind}.changes`, 'no "{since}" in its variables')
     }
     if (one.ids) checkCall(`entities.${kind}.ids`, one.ids, { externalId: one.map.externalId })
   }
@@ -210,5 +252,45 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
     if (one && !manifest.kinds.includes(kind as TrackerKind))
       throw invalid(`entities.${kind}`, `${kind} has an entity but is not in kinds`)
   if (manifest.self) checkCall("self.call", manifest.self.call, { self: manifest.self.path })
+  for (const [kind, one] of Object.entries(manifest.writes ?? {}) as [TrackerWriteKind, TrackerManifestWrite][])
+    if (one) checkWrite(kind, one, manifest, checkCall)
   return manifest
+}
+
+const checkWrite = (
+  kind: TrackerWriteKind,
+  one: TrackerManifestWrite,
+  manifest: TrackerManifest,
+  checkCall: (
+    where: string,
+    one: TrackerOperationCall,
+    map: Readonly<Record<string, CrmRule | undefined>>,
+    writes: true,
+  ) => void,
+) => {
+  const where = `writes.${kind}`
+  const entity = manifest.entities[kind]
+  if (!entity) throw invalid(where, `${kind} is not in kinds, so its written row has no map`)
+  if (!one.create && !one.update) throw invalid(where, "names no create or update")
+  if (kind === "comment" && one.update) throw invalid(`${where}.update`, "a comment is only added")
+  const fields: readonly string[] = TRACKER_WRITE_FIELDS[kind]
+  for (const field of Object.keys(one.fields))
+    if (!fields.includes(field)) {
+      const near = nearest(field, fields)
+      throw invalid(
+        `${where}.fields.${field}`,
+        `a ${kind} writes no such field${near ? `; did you mean ${near}?` : ""}`,
+      )
+    }
+  const needed = kind === "comment" ? ["issue", "body"] : ["title"]
+  const missing = one.create ? needed.find((field) => one.fields[field] === undefined) : undefined
+  if (missing) throw invalid(`${where}.fields.${missing}`, `a new ${kind} needs its ${missing}`)
+  for (const verb of ["create", "update"] as const) {
+    const sent = one[verb]
+    if (!sent) continue
+    checkCall(`${where}.${verb}`, sent, entity.map, true)
+    if (!holds(sent.variables, "{values}")) throw invalid(`${where}.${verb}`, 'no "{values}" in its variables')
+    if (verb === "update" && !holds(sent.variables, "{id}"))
+      throw invalid(`${where}.${verb}`, 'no "{id}" in its variables')
+  }
 }

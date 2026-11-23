@@ -1,4 +1,5 @@
 export {
+  failingOnRefusals,
   type TrackerManifestFake,
   type TrackerManifestFakeOptions,
   type TrackerManifestFixtureOptions,
@@ -6,6 +7,7 @@ export {
   trackerManifestFake,
   trackerManifestFixture,
 } from "./manifest-fake.js"
+export { trackerManifestWriteContract, trackerManifestWriteFixture } from "./manifest-writes.js"
 export {
   exampleTrackerRows,
   type FakeTrackerRows,
@@ -18,3 +20,4 @@ export {
   type TrackerSourceFixture,
   trackerSourceContract,
 } from "./source-contract.js"
+export { type TrackerWriteFixture, trackerWriteContract } from "./write-contract.js"
