@@ -83,6 +83,8 @@ const ROOT_READS: Record<string, string> = {
   "calendar/cli/index.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
   "crm/cli/index.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
   "cli/documents/sync.ts timeout": "the run's deadline, carried into the step that continues the sync",
+  "cli/documents/library.ts timeout": "the same, for the documents half of a tracker's sync",
+  "tracker/cli/index.ts timeout": "the run's deadline, carried into the step that continues a tracker's sync",
   "meetings/cli/management.ts dryRun": "the root --dry-run preview, which the meeting writes honour themselves",
 }
 

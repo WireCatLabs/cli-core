@@ -1,5 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
-import { holdsKindOf, isDocumentAccountProvider, isFolderProvider, isKind, providerNamed } from "../domain/providers.js"
+import {
+  alsoListedByKey,
+  holdsKindOf,
+  isDocumentAccountProvider,
+  isFolderProvider,
+  isKind,
+  providerNamed,
+} from "../domain/providers.js"
 import { type AppIdentity, envName } from "../ports/app.js"
 import {
   entriesOfList,
@@ -57,14 +64,15 @@ export const listContextOf = async (
       `this process is locked to group ${lock} (${envName(app as AppIdentity, "GROUP_LOCK")}), which does not exist`,
     )
   const only = new Set([...members, OWNER_NOTES].map(keyOf))
-  // A notes folder or a documents account is held under its own key but listed as `notes:<store id>`.
-  const listedAs = (one: StoredAccount) =>
+  // A notes folder or a documents account is held under its own key but listed as `notes:<store id>`; one that holds
+  // another kind too (Linear's tracker copy) is also listed under its own key.
+  const listedAs = (one: StoredAccount): AccountKey[] =>
     isFolderProvider(one.provider) || isDocumentAccountProvider(one.provider)
-      ? { provider: "notes", account: String(one.id) }
-      : one
+      ? [{ provider: "notes", account: String(one.id) }, ...(alsoListedByKey(one.provider) ? [one] : [])]
+      : [one]
   return {
     ...context,
-    held: held.filter((one) => only.has(keyOf(listedAs(one)))),
+    held: held.filter((one) => listedAs(one).some((key) => only.has(keyOf(key)))),
     groups: { [lock]: groups[lock] ?? [] },
     membership: {
       groups: { [lock]: members },

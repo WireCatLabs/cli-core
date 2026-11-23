@@ -261,6 +261,11 @@ const OTHERS: Entry[] = [
   ["profile.busy", "provider_unavailable", "another sync or write holds this profile's local copy"],
   ["profile.account-taken", "conflict", "another profile here already uses this provider account"],
   ["profile.other-account", "conflict", "this profile's copy was synced from another provider account"],
+  [
+    "documents.other-account",
+    "configuration_error",
+    "the documents are signed in as another account than the tracker copy of the same provider",
+  ],
   ["profile.not-synced", "not_found", "the profile has no local copy yet; sync it first"],
   ["provider.failed", "provider_error", "a read from the provider failed"],
   ["identity.none", "not_found", "the provider shows no accounts on a document"],

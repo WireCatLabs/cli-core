@@ -5,7 +5,7 @@ import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
-import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
+import { holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
 import { type TrackerIssue, trackerTitleOf } from "../domain/tracker.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
@@ -276,7 +276,8 @@ const sourceScope = async (
   asked: readonly SearchedResource[],
   messenger: SearchAllMessenger,
 ) => {
-  const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
+  const context = await listContextOf(store, account, messenger.app)
+  const entries = entriesOfList(source, context)
   // Any provider's import may write business data, so its accounts are the ones that hold some, whatever their kind.
   const imported = asked.includes("business")
     ? new Set((await store.business.accounts()).map(accountKeyOf))
@@ -295,11 +296,19 @@ const sourceScope = async (
     resource === "business"
       ? holdsBusiness(one)
       : listedHolds(one, resource) || (resource === "notes" && holdsDocuments(one))
+  // A documents account named by its own key (`linear:user-1`, whose tracker copy is listed so) is read by the notes
+  // lane as the `notes:<id>` it is also listed as, so naming it both ways reads it once.
+  const asNotes = (one: AccountKey): AccountKey => {
+    if (!isDocumentAccountProvider(one.provider)) return one
+    const stored = context.held.find(({ provider, account }) => provider === one.provider && account === one.account)
+    return stored ? { provider: "notes", account: String(stored.id) } : one
+  }
   const named = (resource: SearchedResource): AccountKey[] => [
     ...new Map(
       entries
         .flatMap(({ accounts }) => accounts)
         .filter((one) => holds(resource, one))
+        .map((one) => (resource === "notes" ? asNotes(one) : one))
         .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
     ).values(),
   ]
