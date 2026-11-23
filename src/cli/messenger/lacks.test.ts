@@ -35,10 +35,20 @@ const argvOf = (root: string): Record<string, string[]> => {
     "chats folders create": ["Work"],
     "chats folders update": ["1", "--title", "Home"],
     "chats folders delete": ["1"],
+    "chats links show": [chat],
+    "chats links reset": [chat],
+    "chats requests list": [chat],
+    "chats requests confirm": [chat, person],
+    "chats requests reject": [chat, person],
+    "chats admins add": [chat, person, "--can", "pin"],
+    "chats admins remove": [chat, person],
     "contacts add": [person],
     "contacts remove": [person],
     "contacts rename": [person, "Ana"],
     "contacts import": [book],
+    "contacts block": [person],
+    "contacts unblock": [person],
+    "messages forward": [chat, message, "--to", chat],
     "messages comments": [chat, message],
     "messages pin": [chat, message],
     "messages unpin": [chat, message],
@@ -130,5 +140,14 @@ describe("a command whose one method the messenger lacks", () => {
     expect(contacts.stdout).toContain("rename")
     expect(contacts.stdout).not.toMatch(/^\s+remove\b/m)
     expect(typed).toMatchObject({ code: 2, connects: [], message: "this messenger cannot remove a contact" })
+  })
+
+  it("hides a group whose every command it can never do, and still refuses one typed", async () => {
+    const never: Partial<Messenger> = { never: ["sessions", "endOtherSessions"] }
+    const account = await cli("account --help", never, () => fakeAdapter(seed))
+    const typed = await cli("account sessions list", never, () => fakeAdapter(seed))
+
+    expect(account.stdout).not.toMatch(/^\s+sessions\b/m)
+    expect(typed).toMatchObject({ code: 2, connects: [], message: "this messenger cannot list the account's sessions" })
   })
 })

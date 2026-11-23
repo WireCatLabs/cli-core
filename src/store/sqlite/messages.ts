@@ -222,7 +222,8 @@ export const upsertMessage = (
         if (previous && incoming && !Array.isArray(previous) && !Array.isArray(incoming)) {
           for (const field of ["views", "comments"])
             if (!validCounter(incoming[field]) && validCounter(previous[field])) incoming[field] = previous[field]
-          fields.metadata = JSON.stringify(edit ? { ...previous, ...incoming } : incoming)
+          // A server search hit is a partial copy: what it leaves out (a thread's reply count) is not gone.
+          fields.metadata = JSON.stringify(edit || via === "search" ? { ...previous, ...incoming } : incoming)
         }
       } catch {
         /* Malformed old metadata remains untrusted. */
