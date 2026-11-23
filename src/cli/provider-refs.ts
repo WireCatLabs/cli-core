@@ -2,7 +2,7 @@ const HIDDEN = new Set(["providerRef", "provider_ref"])
 
 /**
  * The value with every `providerRef` taken out, at any depth. An adapter keeps there what it needs to fetch a file
- * again — WhatsApp's media path and decryption keys, a MAX bot's token — so it never leaves the process (SEC-54).
+ * again — WhatsApp's media path and decryption keys, a MAX bot's token — so it never leaves the process.
  */
 export const withoutProviderRefs = <T>(value: T): T => strip(value) as T
 

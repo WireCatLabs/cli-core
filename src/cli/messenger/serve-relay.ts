@@ -49,7 +49,7 @@ export const lentConnection = (
   } as unknown as MessengerAdapter)
 
 /**
- * serve's side of the relay (NEED-1389): it keeps the raw connection its messenger opened and lends it to the
+ * serve's side of the relay: it keeps the raw connection its messenger opened and lends it to the
  * commands clients send it. A borrowed connection never closes serve's, never feeds the store a second time, and
  * listens through serve's own events instead of a second `watch`.
  */

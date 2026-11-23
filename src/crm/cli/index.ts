@@ -99,7 +99,7 @@ export interface CrmRun {
   /**
    * The sign-in's own user id in the CRM, as the sign-in entry keeps it, read without the network. The copy's deals
    * and leads read offline are only this user's unless a sync found it the CRM's administrator; `null`, a CRM that
-   * limits its users shows none of them (SEC-197). A CRM that limits nobody passes `null`.
+   * limits its users shows none of them. A CRM that limits nobody passes `null`.
    */
   user: string | null
   /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */

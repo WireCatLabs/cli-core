@@ -1,7 +1,7 @@
 import type { AccountKey } from "../types.js"
 
 /**
- * A profile that may read only part of one CRM account's copy (SEC-197): the deals and leads assigned to `assignee`,
+ * A profile that may read only part of one CRM account's copy: the deals and leads assigned to `assignee`,
  * the identity `<account>/user/<id>`, or none when it is `null`.
  */
 export interface CopyViewer {

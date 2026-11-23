@@ -188,7 +188,7 @@ export interface SearchAllRequest {
   meetingsAsked?: boolean
   /** The CRM kinds `crm` reads; absent, deals and leads. */
   crmKinds?: readonly DealKind[]
-  /** The CRM accounts' copies a CRM CLI's profile may read only part of, each by its own rule (SEC-197). */
+  /** The CRM accounts' copies a CRM CLI's profile may read only part of, each by its own rule. */
   crmViewers?: CopyViewer[]
   /** `crm` also reads the text of downloaded CRM files under the same viewers; false when the profile denies it. */
   crmFiles?: boolean
@@ -327,7 +327,7 @@ const sourceScope = async (
   return { only, scope, skipped: [...skipped, ...unnamed] }
 }
 
-/** Each CRM copy's viewer for the user its own sync signed in as (SEC-197): what a run outside its CLI may read. */
+/** Each CRM copy's viewer for the user its own sync signed in as: what a run outside its CLI may read. */
 const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
   const viewers: CopyViewer[] = []
   for (const account of await crmAccounts(store)) {
@@ -900,7 +900,7 @@ const hitKey = (item: SearchAllItem): string =>
 /**
  * Every source's hits as one list: each source's best hit first, then every other hit by cosine, then by its rank in
  * its source. Taking turns by rank (MEMO-37) gave each of two sources half of a ten-hit page however weak its hits;
- * one model scores every source, so cosine compares across them (IDEA-249). A hit only words found takes the cosine of
+ * one model scores every source, so cosine compares across them. A hit only words found takes the cosine of
  * the hit above it in its source: its source ranked it there, and with none it would follow every hit meaning found.
  */
 const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): SearchAllItem[] => {

@@ -1,5 +1,5 @@
 /**
- * Repairs a settings file whose JSON is broken only in its syntax, without AI and without guessing (NEED-2178): a
+ * Repairs a settings file whose JSON is broken only in its syntax, without AI and without guessing: a
  * file can hold keys and tokens, so it never leaves the machine. A damage with one reading is fixed; anything else
  * is refused, and the caller changes nothing.
  */

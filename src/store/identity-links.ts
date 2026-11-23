@@ -48,7 +48,7 @@ export interface IdentityLinkPayload {
 /**
  * Why a shared phone or address is not strong enough for an agent to merge on: an office's number, more people have
  * it, a company's line or mailbox, a role or no-reply address, only one source gives it, or for a phone no source that
- * keeps its user's own number (a CRM's or a card's is someone's word, NEED-2445).
+ * keeps its user's own number (a CRM's or a card's is someone's word).
  */
 export const LINK_WEAKNESSES = [
   "landline",

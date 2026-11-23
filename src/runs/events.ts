@@ -4,7 +4,7 @@
  *
  * ⚠ **Nothing here may carry content.** An operation name, an id, a file or folder path, a count, a duration and an
  * error code are safe: a run record stays on the owner's machine, and keeping the ids that tell runs apart was the
- * owner's choice (NEED-110, 2026-10-27). A chat title, a name, a message body, a phone number, a token, a URL as sent
+ * owner's choice (2026-10-27). A chat title, a name, a message body, a phone number, a token, a URL as sent
  * or a query string are not — not truncated and not hashed. The adapter builds `ids` and `counts` from fields it names,
  * never by copying a request, and never from what the person typed: a typed chat is often a title. Anything that
  * leaves the machine (a bug report) strips the ids too.

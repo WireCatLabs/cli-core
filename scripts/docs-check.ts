@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { fragmentProblems, readFragments } from "./changelog-fragments.ts"
-import { changelogProblems, taggedVersions } from "./changelog-shape.ts"
+import { changelogProblems, ID, taggedVersions } from "./changelog-shape.ts"
 
 const SKIPPED = new Set(["node_modules", "dist", "coverage", ".git", ".worktrees", "docs_ai"])
 
@@ -101,7 +101,22 @@ const linkProblems = (base: string): string[] => {
   return problems
 }
 
+/** Doc comments ship in the `.d.ts` files of this public package, where a private journal's ids mean nothing. */
+const declarationIdProblems = (dist: string): string[] =>
+  existsSync(dist)
+    ? readdirSync(dist, { recursive: true, encoding: "utf8" })
+        .filter((name) => name.endsWith(".d.ts"))
+        .flatMap((name) =>
+          readFileSync(join(dist, name), "utf8")
+            .split("\n")
+            .flatMap((line, index) =>
+              (line.match(ID) ?? []).map((id) => `dist/${name}:${index + 1}: internal id ${id} — say why instead`),
+            ),
+        )
+    : []
+
 const problems = [
+  ...declarationIdProblems(join(root, "dist")),
   ...changelogProblems(readFileSync(join(root, "CHANGELOG.md"), "utf8"), taggedVersions(root)),
   ...readFragments(root).flatMap(fragmentProblems),
   ...linkProblems(root),

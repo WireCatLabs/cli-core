@@ -202,7 +202,7 @@ const sampleOf = (commands: Record<string, McpCommand>): string => {
 }
 
 /**
- * **Three tools in place of one per command** (CLI-74, NEED-766): search the commands, then run one
+ * **Three tools in place of one per command**: search the commands, then run one
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
  * did. The catalogue stays discoverable; current permissions annotate availability and are checked before execution.
  */

@@ -41,7 +41,7 @@ const FINAL = new Set(["permission_error", "confirmation_required", "rate_limite
 
 /**
  * One arriving message through the rules, in file order, the first that matches acting: a task opens
- * for anyone (NEED-582), a reply goes only to a sender the file's audience allows and only with
+ * for anyone, a reply goes only to a sender the file's audience allows and only with
  * `replies.send` at `allow`. A send that fails is
  * tried once more with the same send id, so the messenger delivers at most one; a message whose
  * reply may have gone is kept as answered.

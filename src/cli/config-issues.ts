@@ -275,7 +275,7 @@ export const savedPermissionKeys = (raw: unknown): { key: string; at: string[] }
       : [],
   )
 
-/** A saved key no command checks would do nothing (BUG-137): one issue per key, wherever it is saved. */
+/** A saved key no command checks would do nothing: one issue per key, wherever it is saved. */
 export const permissionIssues = (
   saved: readonly { key: string; at: readonly string[] }[],
   known: ReadonlySet<string>,

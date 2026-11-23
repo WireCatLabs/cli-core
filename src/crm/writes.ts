@@ -585,9 +585,9 @@ export interface CrmRecordInput {
 
 export interface CrmRecordWritten<K extends CrmRecordKind> {
   operationId: string
-  /** The CRM's answer; one that is not the sign-in's client comes without its phones and e-mails (NEED-2487). */
+  /** The CRM's answer; one that is not the sign-in's client comes without its phones and e-mails. */
   record: K extends "person" ? CrmPerson : CrmOrganization
-  /** Whether the copy keeps it: only the sign-in's own clients are stored (NEED-2661). */
+  /** Whether the copy keeps it: only the sign-in's own clients are stored. */
   stored: boolean
   /**
    * After an update that gave it to someone else, whether the copy let it go: `false` when it stays, because the
@@ -667,7 +667,7 @@ const keptRecord = async (context: CrmWriteContext, kind: CrmRecordKind, record:
 }
 
 /**
- * A contact or company the update gave to someone else leaves the copy (NEED-2661), as `removeCrmItem` removes a deal:
+ * A contact or company the update gave to someone else leaves the copy, as `removeCrmItem` removes a deal:
  * a contact with its identity, which held the phones and e-mails it was saved with.
  */
 const forgotten = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) =>

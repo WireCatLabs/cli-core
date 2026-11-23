@@ -19,11 +19,11 @@ const DANGEROUS = new Set([
   "chats.clear",
 ])
 
-/** Deleting has its own word for "yes": the flag a person has to mean, not a habit (max-cli `NEED-238`). */
+/** Deleting has its own word for "yes": the flag a person has to mean, not a habit. */
 export const skipFlagFor = (key: string): "--allow-dangerous" | "--yes" =>
   DANGEROUS.has(key) ? "--allow-dangerous" : "--yes"
 
-/** Only what cannot be undone asks; the tool is meant to work without questions (owner, NEED-460). */
+/** Only what cannot be undone asks; the tool is meant to work without questions (the owner's decision). */
 export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   // Owner, 2026-11-14: deleting a message does not ask; a profile that wants the question sets `ask`.
   "messages.delete": "allow",
@@ -80,7 +80,7 @@ export const authorityAllowed = (levels: Readonly<Record<PermissionKey, Level>>)
   return level === "allow" || level === "ask"
 }
 
-/** Lets an MCP server offer `bot api`, whose calls skip the send guard and the bot's recipient list (NEED-1679). */
+/** Lets an MCP server offer `bot api`, whose calls skip the send guard and the bot's recipient list. */
 export const BOT_API_KEY: PermissionKey = "bot.api"
 
 export const isBotApi = (path: readonly string[]): boolean => path[0] === "bot" && path[1] === "api"
@@ -128,7 +128,7 @@ export const RESOURCES = [
 /**
  * Layers come nearest first. A key a nearer layer sets hides that key and every key under it in the
  * farther layers, so a profile's `messages: readonly` is not undone by `messages.delete: allow` in
- * `defaults` — the nearest section wins, as it does for every other setting (NEED-573).
+ * `defaults` — the nearest section wins, as it does for every other setting.
  */
 export const layerPermissions = (layers: readonly [string, Readonly<Record<PermissionKey, Level>> | undefined][]) => {
   const levels: Record<PermissionKey, Level> = {}

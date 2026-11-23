@@ -58,7 +58,7 @@ export interface DealContextOptions {
   /** The kinds the profile denies: a deal or lead of one is not answered. */
   deniedKinds?: readonly DealKind[]
   /**
-   * Each CRM copy's rule for the profile (`crmViewerOf`, SEC-197): a deal or lead it may not read is not found.
+   * Each CRM copy's rule for the profile (`crmViewerOf`): a deal or lead it may not read is not found.
    */
   viewing?: readonly CrmViewing[]
 }

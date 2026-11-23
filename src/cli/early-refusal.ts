@@ -40,10 +40,10 @@ export const refuseOfflineCommand = (action: Command, app: AppIdentity, offline:
 type Resolve = (flags: object, options: { env: NodeJS.ProcessEnv; needsProfile: false; readOnly: true }) => object
 
 /**
- * Refuses a change on the messenger the read-only lock or the profile's level stops, before anything connects
- * (SEC-62). The send guard would refuse it too, but only after the command connected and found its chat. The journal
+ * Refuses a change on the messenger the read-only lock or the profile's level stops, before anything connects.
+ * The send guard would refuse it too, but only after the command connected and found its chat. The journal
  * gets the shorter line this knows: the command's key and kind, and the chat only when the command was given its id.
- * A preview journals nothing, and the lock refuses it as well: it answers as the write would (SEC-65).
+ * A preview journals nothing, and the lock refuses it as well: it answers as the write would.
  */
 export const refuseWriteBeforeConnecting = (
   action: Command,
@@ -107,7 +107,7 @@ export const refuseWriteBeforeConnecting = (
  * the read-only lock stops a write to the service; a command that declares no effects counts as both. `ask` is left to the write
  * guard, which can put the question. A saved or `--permission` key that names no command stops every keyed command;
  * housekeeping still runs, so `config unset` can remove it. Under the lock a non-messenger CLI still previews a
- * `--dry-run`, which sends nothing (WC-PERM-12); a messenger's preview stays refused (SEC-65).
+ * `--dry-run`, which sends nothing (WC-PERM-12); a messenger's preview stays refused.
  */
 export const refuseByCommandPermissions = (
   action: Command,

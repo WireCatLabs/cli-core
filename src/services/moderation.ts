@@ -32,7 +32,7 @@ export interface ModerateOptions {
   confirm?: (finding: Finding) => Promise<boolean | undefined>
 }
 
-/** A group's rules, and the one command that acts on them (max-cli `NEED-306`). */
+/** A group's rules, and the one command that acts on them. */
 export interface ModerationService {
   rules(chat: string): Promise<ShownRules>
   set(chat: string, key: string, value: string): Promise<ShownRules>

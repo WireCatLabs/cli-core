@@ -29,8 +29,8 @@ interface Held {
 }
 
 /**
- * **One connection for the whole agent session, and never for long** — max-cli's `MaxSession`
- * (its `NEED-152`), over any messenger.
+ * **One connection for the whole agent session, and never for long** — max-cli's `MaxSession`,
+ * over any messenger.
  *
  * A command connects once and exits. Here the process outlives the call, so the connection is kept
  * between calls — and dropped after `idleMs` of quiet, after `maxAgeMs` whatever the traffic, and

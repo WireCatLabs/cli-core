@@ -90,7 +90,7 @@ const everyCommand = (command: Command): Command[] => [command, ...command.comma
 
 /**
  * The keys `permissions` may name: every command of the program, every write key, and each of their
- * parents. A key outside it is a typo that would otherwise do nothing (BUG-137).
+ * parents. A key outside it is a typo that would otherwise do nothing.
  */
 export const knownPermissionKeys = (
   command: Command,

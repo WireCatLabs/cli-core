@@ -11,7 +11,7 @@ import { quietSqliteWarning } from "./sqlite-warning.js"
  * import only inside the branch that can satisfy it is what makes one build serve both runtimes.
  *
  * Measured 2026-09-19: `node:sqlite` exists on Node 22.23.2 and 24 and not in Bun; `bun:sqlite`
- * is the reverse (`NEED-11`).
+ * is the reverse.
  */
 export const openCache = async (path: string): Promise<CacheDatabase> => {
   const database = await openFile(path)

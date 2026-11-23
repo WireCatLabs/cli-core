@@ -174,7 +174,7 @@ export interface ConversationBuild {
 
 /**
  * A conversation found by meaning: the chunk that matched best, and how near it is (−1 to 1). `stale` when
- * the chunk's messages no longer read as they did when it was embedded (NEED-550 B).
+ * the chunk's messages no longer read as they did when it was embedded.
  */
 export interface ConversationHit {
   summary: ConversationSummary

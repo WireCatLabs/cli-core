@@ -19,7 +19,7 @@ export const CRM_SCOPES = ["mine", "all"] as const
 export const CRM_ACTIVITIES = ["on", "off"] as const
 
 /**
- * What `files sync` and `files download` may take (NEED-2708 B): a run's files, a prefetched file's and a run's
+ * What `files sync` and `files download` may take: a run's files, a prefetched file's and a run's
  * megabytes, a run's minutes, how many days back a run looks, and the account's folder's megabytes. A value outside
  * its range is refused, never clamped.
  */

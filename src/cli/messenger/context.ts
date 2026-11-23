@@ -356,7 +356,7 @@ export type ReadConnection = <T>(work: (adapter: MessengerAdapter) => Promise<T>
 
 export interface MessengerContext extends BaseContext {
   profile: string
-  /** Run for an agent over MCP, where a write at level `ask` goes ahead: nobody is at a terminal (NEED-773). */
+  /** Run for an agent over MCP, where a write at level `ask` goes ahead: nobody is at a terminal. */
   agent: boolean
   stdin: NodeJS.ReadableStream & { isTTY?: boolean }
   /** The local speech recognizer, where a test hands one in. */

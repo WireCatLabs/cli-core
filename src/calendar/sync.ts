@@ -136,7 +136,7 @@ export const parseCalendarCursor = (value: string | null): CalendarCursor | null
 }
 
 /**
- * One year back and three months ahead (NEED-1706), from the start of today in UTC. Whole days, so the window moves
+ * One year back and three months ahead, from the start of today in UTC. Whole days, so the window moves
  * once a day: a source whose cursor holds the window lists everything again once a day, not on every run.
  */
 export const calendarSyncWindow = (now: number): SyncWindow => {

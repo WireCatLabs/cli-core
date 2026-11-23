@@ -155,8 +155,7 @@ const file = v.pipe(
 )
 
 /**
- * Every key written out, so the file shows all there is to set, as moderation's does (max-cli
- * `NEED-314`). Off until the owner turns it on, and the limits are the tightest worth having.
+ * Every key written out, so the file shows all there is to set, as moderation's does. Off until the owner turns it on, and the limits are the tightest worth having.
  */
 export const defaultRule = (id: string): ReplyRuleFile => ({
   id,

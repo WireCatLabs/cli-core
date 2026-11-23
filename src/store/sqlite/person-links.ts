@@ -254,7 +254,7 @@ export const mergePerson = (context: StoreContext, one: number, other: number, o
 }
 
 /**
- * A company's mailbox joins no one at import: two or more other people hold it (NEED-2446), an organization holds it,
+ * A company's mailbox joins no one at import: two or more other people hold it, an organization holds it,
  * or another person of the identity's own list has it, such as a second CRM contact (`sharedLine` in the scan).
  */
 const sharedAddress = ({ database }: StoreContext, key: string, found: { pk: number; personPk: number }): boolean => {
@@ -299,7 +299,7 @@ export const noteAddress = (context: StoreContext, ref: IdentityRef, address: st
  * as `info@` and a company's mailbox join no one, here or in the scan. A pair the owner rejected is not joined either: it is
  * given back, so the caller proposes it when the evidence is new to the owner. Nothing joins the owner, or is
  * proposed to them, from an address: a mailbox the owner reads may be someone else's, and only the owner joins anyone
- * to themselves (SEC-177). A bot or service account joins no one.
+ * to themselves. A bot or service account joins no one.
  */
 export const joinByAddress = (
   context: StoreContext,
@@ -333,7 +333,7 @@ export const joinByAddress = (
 
 /**
  * A person named after an identity that left them takes the name of the oldest identity they still have, or none: the
- * owner merged with a partner's CRM contact kept the partner's name after the split (BUG-677).
+ * owner merged with a partner's CRM contact kept the partner's name after the split.
  */
 export const renameAfterLeaving = (context: StoreContext, person: number, left: readonly number[]): void => {
   const { database } = context

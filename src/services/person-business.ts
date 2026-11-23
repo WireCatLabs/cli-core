@@ -54,7 +54,7 @@ export interface CanonicalContextOptions extends ContextOptions {
   /** The kinds the profile denies: no deal or lead of theirs is named. */
   deniedKinds?: readonly DealKind[]
   /**
-   * Each CRM copy's rule for the profile (`crmViewerOf`, SEC-197): a deal or lead it may not read is not named, and
+   * Each CRM copy's rule for the profile (`crmViewerOf`): a deal or lead it may not read is not named, and
    * `coverage.notRead` carries the rule's note.
    */
   viewing?: readonly CrmViewing[]

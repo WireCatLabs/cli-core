@@ -453,7 +453,7 @@ export interface CrmFileCommandOptions {
   now: () => number
 }
 
-/** `files list`, `files download` and `files sync` (NEED-2701 C, NEED-2708 B). */
+/** `files list`, `files download` and `files sync`. */
 export const addCrmFileCommands = (program: Command, options: CrmFileCommandOptions): void => {
   const { within, example, app, now } = options
   const kinds = OWNER_FLAGS.filter(([kind]) => kind !== "lead" || options.leads !== false)

@@ -5,7 +5,7 @@ const GIVEN = new Set(["cli", "env", "config"])
 
 /**
  * commander gives a flag that the root and the command both declare (`--yes`, `--timeout`, `--dry-run`) to the root,
- * so the command's own option stays empty (BUG-760). The value goes to the command's option too, through its own
+ * so the command's own option stays empty. The value goes to the command's option too, through its own
  * parser, so `--timeout 2m` on an option that takes seconds still arrives as seconds.
  */
 export const shareShadowedOptions = (action: Command): void => {

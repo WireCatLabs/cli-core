@@ -190,8 +190,8 @@ const expectedShapes = (fresh: CacheDatabase): Map<string, Shape> => {
 }
 
 /**
- * **Brings each table of the file to the shape this build's migrations give it, deleting nothing**
- * (NEED-626). A table only missing columns it can take gets them added; any other difference keeps
+ * **Brings each table of the file to the shape this build's migrations give it, deleting nothing**.
+ * A table only missing columns it can take gets them added; any other difference keeps
  * the table as a copy named `<table>__repair_<hash>` beside a new one holding every row that fits.
  * `messages` is never renamed — its search index and triggers hang off it — so a difference there
  * is reported, not rebuilt. With `dryRun` the same work runs and is rolled back, so the report is

@@ -47,7 +47,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
 }
 
 /**
- * **The one command that acts on a group's rules** (max-cli `NEED-306`): typing it is the consent
+ * **The one command that acts on a group's rules**: typing it is the consent
  * for what the rules name, within each action's level in the group's rules. Nothing watches groups
  * in the background.
  */

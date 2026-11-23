@@ -226,7 +226,7 @@ const refusal = (code: ErrorCode, text: string, details?: Record<string, unknown
   ) as CallToolResult
 
 /**
- * **One server for every profile of a tool** (TASK-26): `<tool> mcp` shows the tools `<tool> <profile> mcp` shows,
+ * **One server for every profile of a tool**: `<tool> mcp` shows the tools `<tool> <profile> mcp` shows,
  * each with a required `profile`, and runs a call in that profile's own server, started as a child the first time
  * it is needed. The child applies the profile's permissions, keyring, store and audit log, so nothing here decides
  * what a profile may do; this only routes.

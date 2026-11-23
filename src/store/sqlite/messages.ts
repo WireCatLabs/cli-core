@@ -324,7 +324,7 @@ export const countUnread = ({ database }: StoreContext, chatKey: number, message
 }
 
 /**
- * The owner's ruling (NEED-393 A): a deleted message keeps its row, so a later sync cannot bring it
+ * The owner's ruling: a deleted message keeps its row, so a later sync cannot bring it
  * back, and leaves no text — not in the row, the search copy, the edit history, a transcript or a vector.
  */
 export const tombstone = (context: StoreContext, pk: number): number => {

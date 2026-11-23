@@ -169,7 +169,7 @@ export interface CrmSource {
   /** Every user of the account, active or not; a CRM that cannot list them leaves it out, and its users stay. */
   users?(context?: CrmCallContext): Promise<CrmUser[]>
   /**
-   * Contacts or companies read live from the CRM, newest first: the copy holds only the owner's own (NEED-2661), so
+   * Contacts or companies read live from the CRM, newest first: the copy holds only the owner's own, so
    * `people list` finds another client here. Each record carries its custom values in `metadata` (`crmValuesOf`).
    */
   list?<K extends CrmLiveKind>(kind: K, query: CrmLiveQuery, context?: CrmCallContext): Promise<CrmPage<CrmRecords[K]>>
@@ -177,7 +177,7 @@ export interface CrmSource {
   get?<K extends CrmLiveKind>(kind: K, id: string, context?: CrmCallContext): Promise<CrmRecords[K] | null>
   /**
    * Whether the sign-in is the CRM's administrator. With it, anyone else sees the phones and e-mails only of their own
-   * clients and at most `DAILY_FOREIGN_CONTACTS` other contacts or companies a day (NEED-2487, `foreignContacts`);
+   * clients and at most `DAILY_FOREIGN_CONTACTS` other contacts or companies a day (`foreignContacts`);
    * left out, the rule does not apply.
    */
   isAdmin?(): Promise<boolean>
