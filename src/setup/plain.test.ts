@@ -8,5 +8,6 @@ it("drops the marks a terminal would show and keeps each link's address", () => 
   expect(plainSetupText("Sign in at [example.com/signin](https://example.com/signin).")).toBe(
     "Sign in at https://example.com/signin.",
   )
+  expect(plainSetupText("[apps](https://api.example/apps)")).toBe("apps (https://api.example/apps)")
   expect(plainSetupText("2 * 3 and a_b stay")).toBe("2 * 3 and a_b stay")
 })

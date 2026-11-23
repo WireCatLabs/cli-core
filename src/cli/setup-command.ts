@@ -430,7 +430,7 @@ export const setupCommand = (setup: Setup): Command => {
             say(`\n${text(block.text, block.params)}`)
             break
           case "code":
-            say(`  ${block.code}`)
+            renderer.note(`  ${block.code}`)
             break
           case "image":
             if (block.caption) say(text(block.caption))
