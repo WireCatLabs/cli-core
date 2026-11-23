@@ -570,6 +570,11 @@ const OTHERS: Entry[] = [
     "tracker.unlisted-held",
     "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan",
   ),
+  validation("tracker.write-unsupported", "the tracker does not take this write, or does not recognise a repeated one"),
+  validation("tracker.field", "a field of an issue or a comment the tracker's write does not take as given"),
+  validation("tracker.reference", "a team, state, label, project or user no single row of the copy has by that name"),
+  validation("tracker.team-required", "a new issue needs its team: name one, or sync a copy that holds one"),
+  ["tracker.no-record", "invalid_response", "the tracker answered a write with no record and no error; sync and look"],
   validation(
     "content.unlisted-held",
     "a content id list would mark too much deleted, the sign-in read only part, or the site moved; nothing was",
