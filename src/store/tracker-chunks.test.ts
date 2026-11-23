@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { chunkHash } from "../conversations/chunks.js"
 import type { TrackerRecords } from "../domain/tracker.js"
 import { syncTracker } from "../tracker/sync.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../tracker/testing/index.js"
@@ -226,6 +227,9 @@ describe("tracker chunks", () => {
     expect(byTitle.items.map(({ item }) => item.record.externalId)).toEqual(["i1"])
 
     database.exec("DELETE FROM chunks WHERE chunkable_type = 'tracker_item'")
+    database.exec("DELETE FROM store_settings WHERE key = 'tracker_chunks_cut'")
+    expect(await store.tracker.refreshChunks({ until: () => true })).toMatchObject({ added: 0, left: true })
+    expect(database.prepare("SELECT value FROM store_settings WHERE key = 'tracker_chunks_cut'").get()).toBeDefined()
     expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 3, left: false })
     expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 0, left: false })
   })
@@ -281,9 +285,28 @@ describe("tracker chunks", () => {
       { hash: "old-short", vector: unit(1) },
     ])
 
-    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 2, left: false })
+    expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 1, left: false })
     expect(chunksOf(database).map(({ id }) => id)).toEqual(["c1", "i1"])
     expect(new Set(vectors(database))).toEqual(kept)
     expect(await store.tracker.refreshChunks()).toEqual({ dropped: 0, added: 0, left: false })
+  })
+
+  it("never gives text to embed that its chunk's hash does not name, and cuts that item again", async () => {
+    const { store, database } = await fixture()
+    await store.tracker.save(A, "issue", [issue("i1", "Login loops")], NOW)
+    await store.tracker.save(A, "comment", [comment("c1", "Fixed by clearing the token cache")], NOW)
+    // As an older build cuts a comment: its body alone, at the body's offsets, under that text's hash.
+    const body = "Fixed by clearing the token cache"
+    database
+      .prepare(
+        "UPDATE chunks SET start_offset = 0, end_offset = ?, content_hash = ? WHERE chunkable_id = " +
+          "(SELECT id FROM tracker_items WHERE external_id = 'c1')",
+      )
+      .run(body.length, chunkHash(body))
+
+    expect((await textsOf(store)).filter((text) => text.includes("cache"))).toEqual([])
+    expect((await textsOf(store)).filter((text) => text.includes("cache"))).toEqual([
+      "I1 Login loops\n\nFixed by clearing the token cache",
+    ])
   })
 })

@@ -101,9 +101,12 @@ live comments again, in the same write; it drops the vectors no other chunk hold
 text another account shares keeps its vector. `removeUnlisted` drops the chunks of what it marks deleted (not on a dry
 run); an account's purge drops them all. `refreshChunks`, run first by `embedTracker`, drops the chunks of items gone,
 cuts every comment again once in a store whose `store_settings` key `tracker_chunks_cut` is not the current cut (a
-store cut by 0.730–0.732, from the body alone), and cuts the chunks of items saved before this existed, in short
-batches that stop at the deadline (`left`) and go on from there the next time. `chunksToEmbed`,
-`chunksLeft`, `embedded` and `nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
+store cut by 0.730–0.732, from the body alone; a store with no tracker chunks is marked cut at once), and cuts the
+chunks of items saved before this existed, in short batches that stop at the deadline (`left`) and go on from there
+the next time; `added` counts the items it wrote chunks for. `chunksToEmbed` cuts each chunk's text again and gives it
+only when it hashes to the chunk's hash: a chunk an older build sharing the store cut another way is left out and its
+item cut again, so no vector is made of other text than its hash names. `chunksToEmbed`, `chunksLeft`, `embedded` and
+`nearest` serve `embedTracker` and `search all`: `nearest` reads only the accounts asked,
 one at a time through the model's vector index (scan while it has none), keeps archived items and never deleted ones,
 one hit per item by its best chunk.
 

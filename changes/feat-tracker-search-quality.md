@@ -21,5 +21,6 @@
   (`ENG-12 Fix login`), so "it works after clearing the cache" is found by what the issue is about. A comment of fewer
   than 16 characters (`LGTM`, `+1`) is no longer embedded, and its words still find it. A retitled or moved issue's
   comments are cut again on save, and `embedTracker` cuts the comments of a store embedded by 0.730–0.732 once, so
-  their vectors are made again. Measured in cli-testing
+  their vectors are made again. A chunk whose text no longer hashes to its hash, as one an older build cut, is never
+  embedded: its item is cut again first. Measured in cli-testing
   [performance/search/tracker-meaning](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/tracker-meaning).

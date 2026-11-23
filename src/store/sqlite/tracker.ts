@@ -304,7 +304,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
               },
               now,
             )
-            for (const hash of freed ?? []) released.push(hash)
+            for (const hash of freed?.released ?? []) released.push(hash)
           }
         if (!chunked || same) continue
         const freed = chunk(
@@ -320,7 +320,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           },
           now,
         )
-        for (const hash of freed ?? []) released.push(hash)
+        for (const hash of freed?.released ?? []) released.push(hash)
       }
       dropUnusedVectors(database, released)
       return records.length
@@ -544,7 +544,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         }))
     },
     refreshChunks: async ({ until } = {}) => refreshTrackerChunks(database, context.now(), until),
-    chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options),
+    chunksToEmbed: async (model, options) => trackerChunksToEmbed(database, model, options, context.now()),
     chunksLeft: async (model) => trackerChunksLeft(database, model),
     embedded: async (model, accounts) =>
       trackerEmbedded(

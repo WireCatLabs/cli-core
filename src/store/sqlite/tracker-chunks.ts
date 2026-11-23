@@ -76,8 +76,8 @@ export interface ChunkedItem {
 }
 
 /**
- * Inside the caller's write: makes each item's chunks its text's, and answers the hashes it released, or `undefined`
- * when they already were. The caller drops the vectors of those once every new chunk is in, so a text another item or
+ * Inside the caller's write: makes each item's chunks its text's, and answers the hashes it released and how many
+ * chunks it wrote, or `undefined` when they already were. The caller drops the vectors of those once every new chunk is in, so a text another item or
  * account still holds keeps its vector.
  */
 export const trackerChunkWriter = (database: CacheDatabase) => {
@@ -91,7 +91,7 @@ export const trackerChunkWriter = (database: CacheDatabase) => {
       `account_id, occurred_at, created_at, updated_at) VALUES ('${TRACKER_CHUNK}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
   const issue = issueOf(database)
-  return (item: ChunkedItem, at: number): string[] | undefined => {
+  return (item: ChunkedItem, at: number): { released: string[]; written: number } | undefined => {
     if (!CHUNKED.has(item.kind)) return undefined
     const wanted = piecesOf(textOf(item.kind, item.title, item.body, issue(item.kind, item.accountId, item.parent)))
     const before = held.all(item.id).map((row) => ({
@@ -110,7 +110,7 @@ export const trackerChunkWriter = (database: CacheDatabase) => {
     wanted.forEach(({ start, end, hash }, position) => {
       insert.run(item.id, position, start, end, hash, item.scope, item.accountId, item.occurredAt, at, at)
     })
-    return before.map(({ hash }) => hash)
+    return { released: before.map(({ hash }) => hash), written: wanted.length }
   }
 }
 
@@ -172,6 +172,16 @@ export const refreshTrackerChunks = (
   })
   const chunk = trackerChunkWriter(database)
   let added = 0
+  // A store with no tracker chunks has nothing cut the old way: every chunk it gets is cut the current way.
+  if (
+    setting(database, CUT_SETTING) !== CUT &&
+    !database.prepare(`SELECT 1 FROM chunks WHERE chunkable_type = '${TRACKER_CHUNK}' LIMIT 1`).get()
+  )
+    write(database, () =>
+      database
+        .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+        .run(CUT_SETTING, CUT, now),
+    )
   if (setting(database, CUT_SETTING) !== CUT) {
     const comments = database.prepare(
       `SELECT ${ITEM_COLUMNS} FROM tracker_items t JOIN accounts a ON a.id = t.account_id
@@ -186,8 +196,8 @@ export const refreshTrackerChunks = (
         const released: string[] = []
         for (const row of found) {
           const freed = chunk(chunkedOf(row), now)
-          if (freed) added += 1
-          for (const hash of freed ?? []) released.push(hash)
+          if (freed?.written) added += 1
+          for (const hash of freed?.released ?? []) released.push(hash)
         }
         dropUnusedVectors(database, released)
         const last = found.at(-1)
@@ -216,7 +226,7 @@ export const refreshTrackerChunks = (
     if (until()) return { dropped, added, left: page.all(after, 1).length > 0 }
     const rows = write(database, () => {
       const found = page.all(after, BACKFILL)
-      for (const row of found) if (chunk(chunkedOf(row), now)) added += 1
+      for (const row of found) if (chunk(chunkedOf(row), now)?.written) added += 1
       return found
     })
     const last = rows.at(-1)
@@ -237,15 +247,23 @@ export const trackerChunksLeft = (database: CacheDatabase, model: string): numbe
     database.prepare(`SELECT count(DISTINCT k.content_hash) AS n FROM chunks k WHERE ${UNEMBEDDED}`).get(model)?.n ?? 0,
   )
 
-/** Live items' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
+/**
+ * Live items' chunks with no vector of `model`, by hash from `after`, each with its text cut again. A chunk whose text
+ * no longer hashes to its hash was cut another way, by an older build sharing the store: its item is cut again (never
+ * under a read-only store) and the chunk left out, so no vector is made of other text than its hash names.
+ */
 export const trackerChunksToEmbed = (
   database: CacheDatabase,
   model: string,
   { after, limit }: { after?: string; limit: number },
+  now: number = Date.now(),
 ): { hash: string; text: string }[] => {
-  const item = database.prepare("SELECT kind, title, body, account_id, parent_id FROM tracker_items WHERE id = ?")
+  const item = database.prepare(
+    `SELECT ${ITEM_COLUMNS} FROM tracker_items t JOIN accounts a ON a.id = t.account_id WHERE t.id = ?`,
+  )
   const issue = issueOf(database)
-  return database
+  const stale: Record<string, unknown>[] = []
+  const found = database
     .prepare(
       `SELECT k.content_hash AS hash, min(k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end
          FROM chunks k WHERE k.content_hash > ? AND ${UNEMBEDDED}
@@ -253,18 +271,22 @@ export const trackerChunksToEmbed = (
     )
     .all(after ?? "", model, limit)
     .flatMap((row) => {
-      const found = item.get(Number(row.owner))
-      if (!found) return []
-      const kind = String(found.kind)
-      const parent = found.parent_id == null ? null : String(found.parent_id)
-      const text = textOf(
-        kind,
-        String(found.title),
-        found.body == null ? null : String(found.body),
-        issue(kind, Number(found.account_id), parent),
-      )
-      return [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
+      const owner = item.get(Number(row.owner))
+      if (!owner) return []
+      const { kind, title, body, accountId, parent } = chunkedOf(owner)
+      const text = textOf(kind, title, body, issue(kind, accountId, parent)).slice(Number(row.start), Number(row.end))
+      if (chunkHash(text) === String(row.hash)) return [{ hash: String(row.hash), text }]
+      stale.push(owner)
+      return []
     })
+  if (stale.length && !isQueryOnly(database))
+    write(database, () => {
+      const chunk = trackerChunkWriter(database)
+      const released: string[] = []
+      for (const owner of stale) for (const hash of chunk(chunkedOf(owner), now)?.released ?? []) released.push(hash)
+      dropUnusedVectors(database, released)
+    })
+  return found
 }
 
 export const trackerEmbedded = (database: CacheDatabase, model: string, accountIds: readonly number[]): boolean =>
