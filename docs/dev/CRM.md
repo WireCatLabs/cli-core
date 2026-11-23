@@ -299,6 +299,20 @@ for (const { name, run } of crmManifestContract(SOURCE, { api, definitions, hook
   live `list` come from hooks, so their cases pass without running unless the hooks add them. The dead cursor is
   answered by the source itself (`reset` for a cursor that is not a time) and never reaches the fake.
 
+## One account, one profile
+
+The store keeps one copy per CRM account, whichever profile synced it. `addCrmCommands({ account })` mounts
+`account remove` (cli-core's `accountRemoveCommand`), which refuses `--delete-data` while another profile here holds the
+same account, even one whose session ended (`conflict`, `account-remove.account-shared`); under `--dry-run` it warns
+instead. `refuseTakenCrmAccount` refuses a sign-in to an account and user another profile is signed in to
+(`conflict`, `session.duplicate`); `crmAccountClaim` is that refusal as `tokenSessionCommand`'s `claim`.
+
+- `held(profile, { env, keyring })` says which account a profile holds: `account` as the store names it, `user` where
+  one account has several users, `signedIn` while a sign-in is saved here. Unset, it is the account `session start`
+  remembered (`recalledAccount`), signed in while the profile's entry keeps a token; `<PREFIX>_TOKEN` is no profile's.
+- `removal` replaces parts of the removal: the sign-out's words, an OAuth entry among `secrets`. By default the
+  sign-out only forgets `token:<profile>`, and `<state>/crm/<profile>` is removed.
+
 ## Adapter helpers
 
 - `providerCall({ write, send, pace, refresh })`: one call, paced by the profile's `Pacer`. Reads are tried again on

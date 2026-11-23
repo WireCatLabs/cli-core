@@ -52,6 +52,7 @@ import {
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
+import { type CrmAccountOptions, crmAccountCommand } from "./account.js"
 import { addCrmChangeCommands } from "./changes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { addCrmFileCommands } from "./files.js"
@@ -59,6 +60,7 @@ import { pipelineView } from "./pipeline-view.js"
 import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
 import { addCrmSearchAll } from "./search-all.js"
 
+export * from "./account.js"
 export {
   type CsvField,
   type CsvPage,
@@ -130,6 +132,7 @@ export interface CrmCommandOptions {
   activities?: boolean
   files?: boolean
   now?: () => number
+  account?: CrmAccountOptions
 }
 
 const MOST = 500
@@ -1007,6 +1010,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     program.commands.find((one) => one.name() === "search") ??
     annotate(program.command("search"), { effects: NO_EFFECTS }).description("search what the local store holds")
   addCrmSearchAll(search, { within, app: options.app, example, viewerOf, leads: hasLeads })
+  if (options.account) program.addCommand(crmAccountCommand(options.app, options.account))
 }
 
 // honoursDryRun: a host program other than `run` would otherwise let a write through under --dry-run.
