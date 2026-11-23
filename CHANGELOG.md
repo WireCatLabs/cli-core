@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.729.0 — 23.11.2026
+
+### Added
+
+- **One shared `mirrors` command group for a file mirror.** `fileMirrorsCommand` gives a file CLI `mirrors add`,
+  `list`, `status`, `preview`, `sync`, `watch`, `update`, `remove`, `versions list|restore` and
+  `conflicts list|show|resolve` over `syncFileMirrors`. It is yandex-disk-cli's group, with the service, its remote
+  word, how `add` finds a folder, the write guard and the keys each write checks given by the app, so notion-cli
+  mounts the same commands and ydisk can move onto them with no change in what it does or keeps on disk. See
+  [the file mirror](docs/dev/DOCUMENTS.md#plain-files-both-ways).
+
 ## 0.728.0 — 23.11.2026
 
 ### Added
