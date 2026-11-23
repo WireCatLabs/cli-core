@@ -62,6 +62,11 @@ export interface TokenSessionOptions {
   token?: string
   /** One sentence more for `session start --help`: which token, and what it can see. */
   about?: string
+  /**
+   * How a person who never made one gets the token: the steps and their links, in plain words. `session start` prints
+   * it before the question at a terminal, and `session start --help` ends with it.
+   */
+  guide?: string
   /** One sentence more for `session end --help`, such as what of the service's own tools it leaves alone. */
   endNote?: string
 }
@@ -154,6 +159,7 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
       storageOf,
       "keyring" as TokenStorage,
     )
+  if (options.guide) start.addHelpText("after", `\n${options.guide}`)
   if (options.login) start.option("--login <name>", `the ${service} user name the password belongs to`)
   if (options.site)
     start.option(
@@ -177,8 +183,10 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     const page = options.login?.page?.(site)
     const input = secretInputOf(this).input ?? process.stdin
     // Only a person at a terminal pastes it; piped in, the note would stand before the answer on stderr.
-    if (page && (input as { isTTY?: boolean }).isTTY)
-      renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
+    if ((input as { isTTY?: boolean }).isTTY) {
+      if (options.guide) renderer.note(options.guide)
+      if (page) renderer.note(`the ${word} of ${login}: make one at ${page}, then paste it here`)
+    }
     // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
     const secret = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
     if (!secret) throw new CliError("validation_error", `no ${word} was given`)

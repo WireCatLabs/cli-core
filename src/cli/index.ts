@@ -224,6 +224,7 @@ export {
   setupDocumentSchema,
   setupJsonSchema,
 } from "../setup/document.js"
+export { plainSetupText } from "../setup/plain.js"
 export {
   answerStdinOption,
   type Need,

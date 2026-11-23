@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Readable } from "node:stream"
+import { PassThrough, Readable } from "node:stream"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
@@ -236,4 +236,32 @@ it("names the sign-in it keeps in the group's help", () => {
   expect(session({ token: "application password" })).toBe(
     "keep this profile's Pages application password in the OS keyring",
   )
+})
+
+it("shows its guide before the question at a terminal and in the help, never before piped input", async () => {
+  const guide = "1. Open https://pages.example/tokens\n2. Copy the token"
+  const signIn = async (argv: string[], tty: boolean) => {
+    const root = mkdtempSync(join(tmpdir(), "token-session-"))
+    roots.push(root)
+    const env = { HOME: root, PAGES_STATE_DIR: join(root, "s"), PAGES_CONFIG_DIR: join(root, "c") }
+    const stdin = Object.assign(new PassThrough(), { isTTY: tty, setRawMode: () => stdin })
+    const streams = captureStreams()
+    const commands = () => [
+      tokenSessionCommand({
+        app,
+        service: "Pages",
+        resolveSettings: settingsFor(app).resolveSettings,
+        guide,
+        verify: async () => ({ id: "w", account: {} }),
+      }),
+    ]
+    setTimeout(() => stdin.end("good-token\n"), 20)
+    const code = await run(argv, { app, commands }, { streams, tty, env, keyring: memoryKeyring(), stdin })
+    return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
+  }
+  const asked = await signIn(["personal", "session", "start"], true)
+  expect(asked.code).toBe(0)
+  expect(asked.err).toContain(guide.split("\n")[0])
+  expect((await signIn(["personal", "session", "start", "--json"], false)).err).not.toContain("pages.example")
+  expect((await signIn(["personal", "session", "start", "--help"], false)).out).toContain(guide)
 })
