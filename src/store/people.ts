@@ -46,6 +46,7 @@ import {
   personDoubts,
   type TestDataPerson,
 } from "./sqlite/person-doubts.js"
+import { erasePerson, type PersonErasure } from "./sqlite/person-erase.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { linkPhones, PROPOSAL_SCORE, RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
@@ -209,6 +210,11 @@ export interface PeopleStore extends AccountPeople {
    * The owner's alone; refused for the owner's own person.
    */
   markTestData(person: string, by: Decider): Promise<TestDataPerson>
+  /**
+   * Deletes a person and what memo knows of them alone; see `erasePerson`. `apply: false` answers what would go and
+   * changes nothing. The owner's alone; refused for the owner's own person.
+   */
+  erase(person: string, by: Decider, options: { apply: boolean }): Promise<PersonErasure>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -379,6 +385,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     doubts: async (page) => personDoubts(context, page),
     keep: async (person, by) => write(database, () => keepPerson(context, person, by)),
     markTestData: async (person, by) => write(database, () => markTestData(context, person, by)),
+    erase: async (person, by, { apply }) => write(database, () => erasePerson(context, person, by, apply)),
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
     counts: async (query) => countPeople(database, query),
