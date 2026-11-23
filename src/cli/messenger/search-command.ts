@@ -278,6 +278,7 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
           : {
               "--chat": `search in one chat with chat:<chat> in the query: search ${path} 'chat:<chat> words'`,
               "--around": AROUND_HINT,
+              "--filter": `a filter goes in the query: search ${path} 'words from:me date:7d'`,
               ...hintsFor(
                 SENDER_FLAGS,
                 `the sender goes in the query: search ${path} 'from:<sender> words' (from:me for you)`,

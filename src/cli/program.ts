@@ -63,6 +63,7 @@ import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
+import { queryAfterDashes, siblingOption } from "./option-hints.js"
 import { tooLargeSteps } from "./output-budget.js"
 import type { CommandPermissions } from "./permission-keys.js"
 import { PreviewComplete, preview } from "./preview.js"
@@ -80,7 +81,7 @@ import { shareShadowedOptions } from "./shadowed-options.js"
 import { assertSharedContracts } from "./shared-contracts.js"
 import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
-import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
+import { commandAt, failureSteps, lineOf, typedCommandPath, withLines } from "./steps.js"
 import { isSignIn, unknownProfile } from "./unknown-profile.js"
 
 const OUTPUT_OPTIONS = [
@@ -656,7 +657,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   // An agent's call builds its own argv, with its values after `--` on purpose: none of them may become an option.
   const lifted = options.agent
     ? profiled.rest
-    : liftOptionsAfterDashes(profiled.rest, (words) => commandAt(program, commandPath(program, words)))
+    : liftOptionsAfterDashes(profiled.rest, (words) => commandAt(program, typedCommandPath(program, words)))
   const liftedEnd = lifted.indexOf("--")
   const liftedFlags = lifted.slice(0, liftedEnd < 0 ? undefined : liftedEnd)
   machine ||= isMachine(liftedFlags)
@@ -676,7 +677,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     return report(streams, reporting, failed(definition, program, lifted, failure, settled, debug))
   }
   if (profile !== undefined) program.setOptionValue("profile", profile)
-  const requested = liftJson(lifted, (words) => commandAt(program, commandPath(program, words)))
+  const requested = liftJson(lifted, (words) => commandAt(program, typedCommandPath(program, words)))
   const rest = requested.argv
   if (requested.fields !== undefined) program.setOptionValue("fields", requested.fields)
 
@@ -708,7 +709,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     return code
   } catch (caught) {
     if (caught instanceof Relayed) return caught.code
-    const error = control.failure() ?? caught
+    let error = control.failure() ?? caught
     if (error instanceof PreviewComplete) return 0
     if (signalExit === 0) return 0
     if (isCommanderFailure(error)) {
@@ -723,9 +724,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           streams.diagnostic(help.replace(/\n$/, ""))
           return exitCodeFor("validation_error")
         }
-        const group = commandPath(program, rest)
+        const group = typedCommandPath(program, rest)
         message = `give a command — run \`${[command, group, "--help"].filter(Boolean).join(" ")}\` for the commands`
       }
+      if (error.code === "commander.unknownOption")
+        message += siblingOption(commandAt(program, typedCommandPath(program, rest)), message)
       if (
         profile !== undefined &&
         error.code === "commander.unknownCommand" &&
@@ -740,6 +743,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
       return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
     }
+    if (!options.agent) error = queryAfterDashes(error, commandAt(program, typedCommandPath(program, rest)), rest)
     const settled = await settleFailure(error, { definition, program, rest, argv, profile, options })
     // An MCP call's profile is the one its server was started for, not a word typed now.
     const told = options.agent
@@ -867,7 +871,7 @@ const failureSettings = (
   profile: string | undefined,
   options: RunOptions,
 ) => {
-  const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const path = typedCommandPath(program, program.args.length > 0 ? program.args : rest)
   if (isSignIn(path)) return undefined
   const { resolveSettings } = definition.configuration ?? settingsFor(definition.app)
   try {
@@ -891,7 +895,7 @@ const keepFailure = async (
 ): Promise<void> => {
   if (wasSettled(failure)) return
   const env = options.env ?? process.env
-  const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const path = typedCommandPath(program, program.args.length > 0 ? program.args : rest)
   // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.
   const settings = failureSettings(definition, program, rest, profile, options)
   const command = `${options.agent ? "mcp " : ""}${path || definition.app.command}`
@@ -928,19 +932,6 @@ const keepFailure = async (
 }
 
 /** Mounted, or reached through a command that takes no subcommand, where the rest of the path is its argument. */
-/** `messages list` from `messages list 111 --limit 5`: the words that name commands, up to the first that does not. */
-const commandPath = (program: Command, rest: string[]): string => {
-  const words: string[] = []
-  let current = program
-  for (const token of rest) {
-    if (token.startsWith("-")) continue
-    const next = current.commands.find((one) => one.name() === token || one.aliases().includes(token))
-    if (!next) break
-    words.push(token)
-    current = next
-  }
-  return words.join(" ")
-}
 
 const budgetSteps = (program: Command, path: string, failure: unknown) => {
   const command = path ? commandAt(program, path) : undefined
@@ -973,7 +964,7 @@ const failed = (
   settled: { settlementFailed?: true },
   debug: boolean,
 ): Failure => {
-  const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const path = typedCommandPath(program, program.args.length > 0 ? program.args : rest)
   const told =
     error instanceof NoProfileHere && !commandAt(program, "setup")
       ? error.withoutSetup(path)

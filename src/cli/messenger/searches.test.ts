@@ -243,6 +243,24 @@ describe("searches", () => {
     expect(await message("messages", "list", "--chat", "7")).toContain("messages list <chat>")
     expect(await message("messages", "list", "7", "--after", "2026-10-01")).toContain("date>=2026-10-01")
   })
+
+  it("names the sibling that takes a flag, the query for --filter, and the query words left after --", async () => {
+    const call = await setup()
+    const message = async (...argv: string[]) => JSON.parse((await call(...argv, "--json")).stderr).error.message
+    expect(await message("search", "messages", "invoice", "--like", "a reply")).toBe(
+      "unknown option '--like' — --like is an option of search conversations",
+    )
+    for (const path of ["messages", "all"])
+      expect(await message("search", path, "invoice", "--filter", "from:me")).toContain(
+        `the query: search ${path} 'words from:me date:7d'`,
+      )
+    expect(await message("search", "messages", "invoice", "--limt", "3")).toBe(
+      "unknown option '--limt' (Did you mean --limit?)",
+    )
+    const dashes = await message("messages", "list", "--", "7", "--around", "101", "--limit", "5")
+    expect(dashes).toMatch(/^messages list: query\.invalid-syntax at position \d+ — /)
+    expect(dashes).toContain('after --, every word is an argument, so "--around 101" was read as the query')
+  })
 })
 
 it("tells in each search's help what transcript:, content: and filename: narrow to and which keys hold the answer", async () => {
