@@ -59,14 +59,15 @@ export interface LocalPathInput {
 
 /**
  * Every file or folder on this machine the run was given, as the command's options (its parents' too) and arguments
- * hold them. A default the command itself chose is left out: only what the caller named.
+ * hold them. Only what the caller named: a default, an environment variable or a config value the owner set is left
+ * out.
  */
 export const localPathsOf = (action: Command): LocalPathInput[] => {
   const found: LocalPathInput[] = []
   for (let at: Command | null = action; at; at = at.parent) {
     for (const option of at.options) {
       const key = option.attributeName()
-      if (!isLocalPathOption(at, option) || at.getOptionValueSource(key) === "default") continue
+      if (!isLocalPathOption(at, option) || at.getOptionValueSource(key) !== "cli") continue
       const flag = option.long ?? option.flags
       for (const value of valuesOf(at.getOptionValue(key)))
         found.push({ flag, value, inBackups: marked(IN_BACKUPS, at, key) })

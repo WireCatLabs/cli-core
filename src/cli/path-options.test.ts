@@ -111,6 +111,15 @@ describe("refuseAgentPaths: one check for every path an MCP call names", () => {
     expect(refusal(["--output", "https://example.com/.ssh/x"], env)).toBeUndefined()
   })
 
+  it("leaves out a path the owner set in the environment", () => {
+    const { home, env } = sandbox()
+    const from = (source: string) => (one: Command) =>
+      one.option("--state-dir <dir>", "state").setOptionValueWithSource("stateDir", join(home, ".ssh"), source)
+
+    expect(refusal([], env, from("env"))).toBeUndefined()
+    expect(refusal([], env, from("cli"))).toBeDefined()
+  })
+
   it("lets a command marked for it name the store's backups folder, and nothing else of the WireCat folder", () => {
     const { env, store } = sandbox()
     const backups = join(dirname(store), "backups")
