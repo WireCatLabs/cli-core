@@ -58,6 +58,8 @@ export interface TrackerCommandOptions {
 }
 
 const MOST = 500
+// The documents' own answer has a `skipped` list of files; a part that did not run says why in a string.
+const isSkipped = (item: object): boolean => typeof (item as { skipped?: unknown }).skipped === "string"
 
 const integer = (most: number) => (value: string) => {
   const number = Number(value)
@@ -433,6 +435,8 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
             ...(deadline ? { deadline } : {}),
           }),
         )
+        // A skipped documents part did not run, so a failed tracker part is the whole answer, as without documents.
+        if ("error" in tracker && "value" in docs && isSkipped(docs.value.item)) throw tracker.error
         if ("error" in tracker && "error" in docs) {
           const failed = errorOf(docs.error)
           // An error envelope has no meta and keeps only the details its reason registers, so the documents'

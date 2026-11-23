@@ -135,7 +135,8 @@ return [...library.commands, ...holder.commands]
   report) and in `meta.issues` with `source` `tracker` or `documents`, a failed document's included. The other part's
   answer still shows, as a partial answer that exits 0 (`meta.complete: false`), as a failed kind does; the shared
   documents-only `sync` exits non-zero there. When both fail, the tracker's error answers, its message naming the
-  documents' failure too (an error envelope has no `meta`). A cancel ends both.
+  documents' failure too (an error envelope has no `meta`). A failed tracker part beside a skipped documents part
+  answers with the tracker's error alone, as a tracker-only `sync` would. A cancel ends both.
 - **One account.** The documents part is refused (`documents.other-account`) when its sign-in is another account of
   the provider than the one the tracker part synced, so the copy never splits into two accounts.
 - **No folder chosen.** While no folder is chosen and the profile keeps no documents, the documents part is skipped,
