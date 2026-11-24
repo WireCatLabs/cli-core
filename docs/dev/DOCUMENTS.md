@@ -211,6 +211,12 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   `childrenPage(id, cursor, folder)`, `content(id, maxChars, file)` and `bytes(id, file)`. Its ids stay stable ids
   (Yandex Disk's `resource_id`), so a moved file keeps its notes and tags; a root it cannot find by id is the CLI's
   to resolve from its own settings.
+- **A source whose listing is slow lists several folders at once** with `parallelListings` (a whole number up to 8;
+  one when unset): the folders at the top of the walk's stack, each charged to the run's budget before it starts.
+  Results apply in stack order, so the walk files what a walk one folder at a time files, though not always in the
+  same order. A folder stays on the saved stack until its listing is applied; when one listing of a batch fails, the
+  others are kept and the walk is saved before the error, so the next sync lists only the failed folder again. The
+  entries bound can be passed by the rest of a batch.
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one
   `changes()`. A folder listed with `children()` is listed whole, so a source caps its own listing (drive at 10 000
   entries in one folder or one change feed).

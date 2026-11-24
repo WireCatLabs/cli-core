@@ -607,3 +607,71 @@ describe("a sync of a tree larger than one call's bound", () => {
     }
   })
 })
+
+describe("a sync of a source that lists folders in parallel", () => {
+  /** The tree's source with `width` listings at once; `most` is the most it saw in flight. */
+  const parallel = (tree: ReturnType<typeof treeSync>, width: number, failing = new Set<string>()) => {
+    const base = tree.options.source as DocumentSource
+    let flying = 0
+    const seen = { most: 0 }
+    const source: DocumentSource = {
+      ...base,
+      parallelListings: width,
+      children: async (id) => {
+        flying++
+        seen.most = Math.max(seen.most, flying)
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 1))
+          if (failing.delete(id)) throw new CliError("provider_error", "synthetic outage")
+          return await base.children(id)
+        } finally {
+          flying--
+        }
+      },
+    }
+    return { source, seen }
+  }
+
+  it("lists up to that many folders at once and saves what a walk one folder at a time saves", async () => {
+    const one = treeSync(pageTree(5, 3, 4))
+    await syncDocuments(one.options)
+    const tree = treeSync(pageTree(5, 3, 4))
+    const { source, seen } = parallel(tree, 4)
+    expect(await syncDocuments({ ...tree.options, source })).toMatchObject({ complete: true, removed: 0 })
+    expect(seen.most).toBe(4)
+    expect(Object.keys(tree.state().documents).sort()).toEqual(Object.keys(one.state().documents).sort())
+    expect(new Set(tree.listed).size).toBe(tree.listed.length)
+    expect(tree.listed).toHaveLength(one.listed.length)
+  })
+
+  it("goes on from a batch its budget cut short, each folder listed once and nothing removed", async () => {
+    const tree = treeSync(pageTree(4, 4, 3))
+    const { source } = parallel(tree, 4)
+    const runs = await untilComplete(() => syncDocuments({ ...tree.options, source, budget: requests(3) }))
+    expect(runs.length).toBeGreaterThan(2)
+    expect(Object.keys(tree.state().documents)).toHaveLength(1 + 4 + 16 + 48)
+    expect(new Set(tree.listed).size).toBe(tree.listed.length)
+    expect(tree.removed).toEqual([])
+  })
+
+  it("lists one folder at a time when the number is not a whole one above one", async () => {
+    for (const width of [Number.NaN, 0, 2.5, Number.POSITIVE_INFINITY]) {
+      const tree = treeSync(pageTree(3, 1, 1))
+      const { source, seen } = parallel(tree, width)
+      expect(await syncDocuments({ ...tree.options, source })).toMatchObject({ complete: true, removed: 0 })
+      expect(seen.most).toBe(1)
+      expect(Object.keys(tree.state().documents)).toHaveLength(1 + 3 + 3 + 3)
+    }
+  })
+
+  it("keeps the batch's other listings when one fails, and lists only the failed folder again", async () => {
+    const tree = treeSync(pageTree(4, 2, 2))
+    const { source } = parallel(tree, 4, new Set(["h2"]))
+    await expect(syncDocuments({ ...tree.options, source })).rejects.toMatchObject({ code: "provider_error" })
+    expect(tree.walk()?.visited).toEqual(expect.arrayContaining(["root", "h0", "h1", "h3"]))
+    expect(tree.walk()?.visited).not.toContain("h2")
+    expect(await syncDocuments({ ...tree.options, source })).toMatchObject({ complete: true, removed: 0 })
+    expect(Object.keys(tree.state().documents)).toHaveLength(1 + 4 + 8 + 16)
+    expect(new Set(tree.listed).size).toBe(tree.listed.length)
+  })
+})
