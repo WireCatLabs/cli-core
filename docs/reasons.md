@@ -571,13 +571,17 @@ headings.
 | `store.damaged` | `configuration_error` | the store file is damaged; store recover says what is lost and recovers it |  |
 | `store.dry-run` | `conflict` | a dry run of an import holds the store; the read or write waits for it to end |  |
 | `store.file-damaged` | `validation_error` | the named store file is damaged or not a database |  |
+| `store.foreign-keys` | `configuration_error` | a migration would break references between rows, so it was not run; the store is whole |  |
 | `store.in-use` | `validation_error` | a process or a scheduled timer has the store open; stop it, then recover the store |  |
 | `store.journal-replaced` | `conflict` | another program deleted or replaced the store's journal file while it was open; store recover says what to do |  |
 | `store.not-writable` | `permission_error` | the message store cannot be written from this process |  |
 | `store.recovering` | `validation_error` | another recovery of the store is running; wait for it to finish |  |
 | `store.recovery-failed` | `validation_error` | the recovered store did not pass its check, so the store was left as it was |  |
 | `store.refused` | `validation_error` | the local store refused the document text |  |
+| `store.rows-break-checks` | `configuration_error` | the store holds rows the new schema refuses, so it was not migrated; the rows are named |  |
+| `store.rows-lost` | `configuration_error` | a migration would change how many rows a table holds, so it was not run; the tables and counts are named |  |
 | `store.sqlite3-missing` | `configuration_error` | recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command |  |
+| `store.unknown-columns` | `configuration_error` | a migration would drop columns this store has and this build does not know; nothing was changed |  |
 | `store.unopenable` | `configuration_error` | the store file cannot be opened at its path; details.path names it |  |
 | `store.unreadable` | `configuration_error` | the store file's header or schema is damaged, so it cannot be recovered |  |
 | `store.vector-extension-failed` | `configuration_error` | the sqlite-vec extension did not load; reinstall the CLI |  |

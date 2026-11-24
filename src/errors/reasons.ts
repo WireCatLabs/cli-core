@@ -5,6 +5,7 @@ import { defineReasons } from "@wirecat/cli-base/standards"
 import { CHAT_SENDING_ASK_DETAILS } from "../models/chat-sending.js"
 
 import { type Entry, SFTP, validation } from "./sftp-reasons.js"
+import { STORE_MIGRATION } from "./store-reasons.js"
 
 /** The query reasons only message search raises; the shared ones are cli-base's `QUERY_REASONS`. */
 const QUERY: Entry[] = [
@@ -892,12 +893,14 @@ const DETAILED: Record<string, readonly string[]> = {
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...SQL, ...OFFICE, ...OTHERS].map(([reason, code, message]) => ({
-    reason,
-    code,
-    message,
-    details: DETAILED[reason] ?? [],
-  })),
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...STORE_MIGRATION, ...SQL, ...OFFICE, ...OTHERS].map(
+    ([reason, code, message]) => ({
+      reason,
+      code,
+      message,
+      details: DETAILED[reason] ?? [],
+    }),
+  ),
 ])
 
 /**
