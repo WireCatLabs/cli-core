@@ -112,6 +112,8 @@ const synced = async () => {
     deal("d3", "Window replacement at the office"),
     deal("d4", "Монтаж ТП «Вектор»"),
     deal("d5", "Подстанция КТП-630"),
+    deal("d6", "Ferrara Design chatbot"),
+    deal("d7", "Ferraro Arredamenti configuratore"),
   ])
   const refs = Object.fromEntries(
     (await store.deals.list({ account: PORTAL })).items.map((one) => [one.externalId as string, one.ref]),
@@ -202,6 +204,16 @@ it("corrects a misspelt word only when nothing matched, and says so", async () =
   expect(found.items[0]).toMatchObject({ match: "corrected", corrections: [{ from: "поствка", to: ["поставка"] }] })
   expect((await find("поствка цемента", { exact: true })).items).toEqual([])
   expect((await find("цемента")).items[0]?.match).toBeUndefined()
+})
+
+it("lists a name one letter off the one that matched after it, as a correction, so a near-duplicate hides nothing", async () => {
+  const { refs, find } = await synced()
+  const found = await find("Ferrara")
+  expect(found.items.map(({ ref }) => ref)).toEqual([refs.d6, refs.d7])
+  expect(found.items[0]?.match).toBeUndefined()
+  expect(found.items[1]).toMatchObject({ match: "corrected", corrections: [{ from: "ferrara", to: ["ferraro"] }] })
+  expect((await find("Ferrara", { exact: true })).items.map(({ ref }) => ref)).toEqual([refs.d6])
+  expect((await find("ТП")).items.every(({ match }) => match === undefined)).toBe(true)
 })
 
 it("refuses a filter by stage, naming the list that filters by it, instead of finding nothing", async () => {
