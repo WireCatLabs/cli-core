@@ -38,6 +38,11 @@ export interface FileUpdateCommands {
   write(extra: readonly string[], act: (port: FileUpdatePort) => Promise<object>, command: Command): Promise<object>
   /** The key an overwrite also asks; `files.delete` when absent. */
   deleteKey?: string
+  /**
+   * False where the provider names a file by an id it gives, so a path the user types can't name a new file:
+   * `sheets create` and `documents create` are left out.
+   */
+  creates?: boolean
 }
 
 const SHA256 = /^[0-9a-f]{64}$/u
