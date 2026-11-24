@@ -248,96 +248,138 @@ export const planDocuments = async <M extends SourceFile>(
     let spent = 0
     let listed = 0
     let stopped: WalkStop | null = null
-    try {
-      for (let step = walk.stack.at(-1); step; step = walk.stack.at(-1)) {
-        if (step.ancestry.includes(step.id)) throw new CliError("invalid_response", "folder traversal contains a cycle")
-        if (visited.has(step.id)) {
-          walk.stack.pop()
-          continue
-        }
-        // One listing at least per call, so a folder with more children than the bound still moves on.
-        // The run's own signal too: a cooperative sync is not cut from outside, and a CLI may pass no budget.
-        // The time budget keeps a margin of 5 s or more, so a short run would never list a folder: its first request
-        // goes ahead while one still fits before the deadline itself.
-        const taken = options.signal?.aborted
-          ? "cancelled"
-          : listed > 0 && spent >= maxEntries
-            ? "entries"
-            : budget?.take()
-        stopped = taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
-        if (stopped) break
-        if (!step.folder) {
-          const known = state.folders[step.id]
-          let root: M
-          try {
-            root = await source.metadata(step.id, known)
-          } catch (error) {
-            // Without a feed, a folder the last pass held and the provider no longer finds is skipped as unavailable,
-            // as a round of changes does, so a moved or deleted root does not fail every sync. A source with a feed
-            // walks in full only on a rescan, where a root it cannot read still fails and keeps what it holds.
-            if (feed || !known || errorOf(error).code !== "not_found") throw error
-            walk.stack.pop()
-            visited.add(step.id)
-            folders[step.id] = { ...known, trashed: true }
-            spent++
-            listed++
-            continue
-          }
-          if (!isFolder(root) || root.trashed)
-            throw new CliError("validation_error", "configured root is not an accessible folder")
-          container(root)
-          // Kept on the step, so a call stopped before the listing does not read the root again.
-          step.folder = root
-          stopped = charge()
-          if (stopped) break
-        }
-        const folder = step.folder
-        let children: M[]
-        let more: string | undefined
+    type Step = (typeof current.stack)[number]
+    type Listed =
+      | { kind: "root-gone" }
+      | { kind: "root"; stopped: WalkStop }
+      | { kind: "listed"; children: M[]; more?: string }
+      | { kind: "relist" }
+      | { kind: "gone" }
+    // A value that is not a whole number would leave the batch empty and end the walk as if it found nothing.
+    const asked = source.parallelListings
+    const width = Number.isInteger(asked) && (asked as number) > 1 ? Math.min(asked as number, 8) : 1
+    // A root read in a listing that then fails is still filed, as the walk saves it on the step.
+    const rootsRead = new Map<Step, M>()
+    const list = async (step: Step): Promise<Listed> => {
+      if (!step.folder) {
+        let root: M
         try {
-          if (source.childrenPage)
-            ({ files: children, cursor: more } = await source.childrenPage(folder.id, step.listing, folder))
-          else children = await source.children(folder.id, folder)
+          root = await source.metadata(step.id, state.folders[step.id])
         } catch (error) {
-          if (errorOf(error).code !== "not_found") throw error
-          // A later page's 404 can be a cursor the provider no longer knows: the folder is listed again from its first
-          // page, which tells a gone folder from a stale cursor, and the files already kept are only kept again.
-          if (step.listing !== undefined) {
-            delete step.listing
-            spent++
-            listed++
-            continue
-          }
-          // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
-          // A listing's 404 alone can be passing, so the folder is read again and is gone only when that read is a
-          // 404 too or finds it trashed; on any doubt the call fails and the next sync lists it again.
-          if (!(await vanished(folder.id, folder))) throw error
-          walk.stack.pop()
-          visited.add(folder.id)
-          folders[folder.id] = { ...folder, trashed: true }
-          drop(folder.id, "unavailable")
-          spent++
-          listed++
-          continue
+          // Without a feed, a folder the last pass held and the provider no longer finds is skipped as unavailable,
+          // as a round of changes does, so a moved or deleted root does not fail every sync. A source with a feed
+          // walks in full only on a rescan, where a root it cannot read still fails and keeps what it holds.
+          if (feed || !state.folders[step.id] || errorOf(error).code !== "not_found") throw error
+          return { kind: "root-gone" }
         }
-        spent += 1 + children.length
-        listed++
-        walk.discovered += children.length
-        folders[folder.id] = folder
-        const nested = []
-        for (const file of children)
-          if (isFolder(file)) {
-            container(file)
-            if (excluded(file)) continue
-            if (walked(file.id)) folders[file.id] = file
-            else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
-          } else if (file.trashed) trash(file)
-          else keep(file)
-        walk.stack.pop()
-        for (const entry of nested.reverse()) walk.stack.push(entry)
-        // A folder with more pages goes back on top with its cursor, above its child folders.
-        if (more) walk.stack.push({ ...step, folder, listing: more })
-        else visited.add(folder.id)
+        if (!isFolder(root) || root.trashed)
+          throw new CliError("validation_error", "configured root is not an accessible folder")
+        rootsRead.set(step, root)
+        // Kept on the step, so a call stopped before the listing does not read the root again.
+        step.folder = root
+        const after = charge()
+        if (after) return { kind: "root", stopped: after }
+      }
+      const folder = step.folder
+      try {
+        if (!source.childrenPage) return { kind: "listed", children: await source.children(folder.id, folder) }
+        const page = await source.childrenPage(folder.id, step.listing, folder)
+        return { kind: "listed", children: page.files, ...(page.cursor ? { more: page.cursor } : {}) }
+      } catch (error) {
+        if (errorOf(error).code !== "not_found") throw error
+        // A later page's 404 can be a cursor the provider no longer knows: the folder is listed again from its first
+        // page, which tells a gone folder from a stale cursor, and the files already kept are only kept again.
+        if (step.listing !== undefined) return { kind: "relist" }
+        // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
+        // A listing's 404 alone can be passing, so the folder is read again and is gone only when that read is a
+        // 404 too or finds it trashed; on any doubt the call fails and the next sync lists it again.
+        if (!(await vanished(folder.id, folder))) throw error
+        return { kind: "gone" }
+      }
+    }
+    // In the step's own place, so the stack keeps the order a walk one folder at a time has.
+    const place = (step: Step, entries: Step[]) => current.stack.splice(current.stack.indexOf(step), 1, ...entries)
+    const apply = (step: Step, result: Listed) => {
+      if (result.kind === "root") {
+        stopped ??= result.stopped
+        return
+      }
+      spent++
+      listed++
+      if (result.kind === "relist") {
+        delete step.listing
+        return
+      }
+      if (result.kind === "root-gone") {
+        place(step, [])
+        visited.add(step.id)
+        folders[step.id] = { ...(state.folders[step.id] as M), trashed: true }
+        return
+      }
+      const folder = step.folder as M
+      if (result.kind === "gone") {
+        place(step, [])
+        visited.add(folder.id)
+        folders[folder.id] = { ...folder, trashed: true }
+        drop(folder.id, "unavailable")
+        return
+      }
+      const { children, more } = result
+      spent += children.length
+      current.discovered += children.length
+      folders[folder.id] = folder
+      const nested = []
+      for (const file of children)
+        if (isFolder(file)) {
+          container(file)
+          if (excluded(file)) continue
+          if (walked(file.id)) folders[file.id] = file
+          else nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
+        } else if (file.trashed) trash(file)
+        else keep(file)
+      // A folder with more pages goes back on top with its cursor, above its child folders.
+      place(step, [...nested.reverse(), ...(more ? [{ ...step, folder, listing: more }] : [])])
+      if (!more) visited.add(folder.id)
+    }
+    const done = (step: Step) => {
+      if (step.ancestry.includes(step.id)) throw new CliError("invalid_response", "folder traversal contains a cycle")
+      return visited.has(step.id)
+    }
+    try {
+      for (;;) {
+        for (let top = current.stack.at(-1); top && done(top); top = current.stack.at(-1)) current.stack.pop()
+        // The folders at the top of the stack, listed together on a source that allows it; each takes its request
+        // before it starts, so the budget and the deadline bound the batch as they bound one listing.
+        const batch: Step[] = []
+        for (let at = current.stack.length - 1; at >= 0 && batch.length < width; at--) {
+          const step = current.stack[at] as Step
+          if (done(step) || batch.some((one) => one.id === step.id)) continue
+          // One listing at least per call, so a folder with more children than the bound still moves on.
+          // The run's own signal too: a cooperative sync is not cut from outside, and a CLI may pass no budget.
+          // The time budget keeps a margin of 5 s or more, so a short run would never list a folder: its first
+          // request goes ahead while one still fits before the deadline itself.
+          const taken = options.signal?.aborted
+            ? "cancelled"
+            : (listed > 0 || batch.length > 0) && spent >= maxEntries
+              ? "entries"
+              : budget?.take()
+          stopped = taken === "deadline" && budget?.first?.() ? null : (taken ?? null)
+          if (stopped) break
+          batch.push(step)
+        }
+        if (!batch.length) break
+        const results = await Promise.allSettled(batch.map(list))
+        let failure: { reason: unknown } | undefined
+        batch.forEach((step, at) => {
+          const root = rootsRead.get(step)
+          if (root) container(root)
+          rootsRead.delete(step)
+          const result = results[at] as PromiseSettledResult<Listed>
+          if (result.status === "fulfilled") apply(step, result.value)
+          else failure ??= { reason: result.reason }
+        })
+        if (failure) throw failure.reason
+        if (stopped) break
         if (now() - savedAt > SAVE_EVERY_MS) record()
       }
       if (stopped) {

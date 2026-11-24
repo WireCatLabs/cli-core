@@ -66,6 +66,12 @@ export interface FeedlessDocumentSource<M extends SourceFile = SourceFile> {
   content(id: string, maxChars?: number, file?: M): Promise<SourceContent<M>>
   bytes(id: string, file?: M): Promise<Uint8Array>
   /**
+   * How many folders a sync lists at once, for a provider whose one listing takes seconds (Yandex Disk): a whole
+   * number up to 8; one when unset or anything else. Each listing takes its own request from the run's budget; a source that paces its requests keeps pacing
+   * them, so stay within the provider's rate limit.
+   */
+  parallelListings?: number
+  /**
    * Whether a saved document is read again though it did not change: one saved before the source learned to read
    * something (a page's authors). The sync reads at most `REREAD_BATCH` of them a pass, so new edits are not held back;
    * `content()` must give what this asks for, or the document is read again on every pass.
