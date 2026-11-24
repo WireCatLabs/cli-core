@@ -4987,7 +4987,10 @@
       "in": "all"
     },
     "store migrate": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--no-backup": "all"
+      }
     },
     "store rebuild": {
       "in": "all"
