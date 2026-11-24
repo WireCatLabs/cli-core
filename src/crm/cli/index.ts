@@ -59,6 +59,7 @@ import { addCrmFileCommands } from "./files.js"
 import { pipelineView } from "./pipeline-view.js"
 import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
 import { addCrmSearchAll } from "./search-all.js"
+import { crmSyncEmbeddings, syncEmbeddings } from "./sync-embed.js"
 
 export * from "./account.js"
 export {
@@ -247,6 +248,7 @@ const crmSync = v.strictObject({
   progress: v.strictObject({ requests: count, saved: count, steps: count }),
   hint: v.optional(text),
   group_hint: v.optional(text),
+  embeddings: v.optional(crmSyncEmbeddings),
 })
 
 const crmSyncProgress = v.strictObject({
@@ -367,15 +369,17 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         "after",
         `\nWith the activities setting on, it also copies the activities and tasks on the ${dealsAndLeads} it keeps. ` +
           `Then each ${hasLeads ? "deal or lead" : "deal"} that moved into a stage the stage-tasks setting names ` +
-          "opens a local task, once per move.",
+          "opens a local task, once per move. With --embed it then indexes the activities' text with a model " +
+          "already downloaded, so search all finds their deals and leads by meaning, not only by words.",
       ),
     "sync",
     "sync --rescan",
-    "sync --max-pages 20",
+    "sync --embed",
   )
     .option("--rescan", "list everything again, every id too, dropping a round in progress")
     .option("--max-pages <pages>", "at most this many requests to the CRM in this run", integer(100_000))
-    .action(async (opts: { maxPages?: number; rescan?: boolean }, command: Command) => {
+    .option("--embed", "also index new activities and tasks for search all by meaning, with a model already downloaded")
+    .action(async (opts: { maxPages?: number; rescan?: boolean; embed?: boolean }, command: Command) => {
       const { signal } = environmentOf(command)
       await within(command, async (run) => {
         const source = run.source()
@@ -394,6 +398,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         const retried = failed.filter((one) => one.setting === undefined)
         const settings = [...new Set(failed.flatMap((one) => one.setting ?? []))]
         const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+        const again = { max_pages: opts.maxPages, timeout, embed: opts.embed }
         // The same command again, never --rescan: that would drop the round this run leaves in progress.
         const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
         const next: NextStep[] | undefined =
@@ -403,9 +408,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
                   kind: "command",
                   step: "crm.sync",
                   command: "sync",
-                  args: Object.fromEntries(
-                    Object.entries({ max_pages: opts.maxPages, timeout }).filter(([, value]) => value !== undefined),
-                  ),
+                  args: Object.fromEntries(Object.entries(again).filter(([, value]) => value !== undefined)),
                   why: retried.length
                     ? "a kind failed to sync; running sync again retries it"
                     : "the sync stopped before its end to answer in time; running it again goes on from there",
@@ -425,6 +428,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
               ? `run sync again to continue; see progress: ${progressAt}`
               : undefined
         const { hint: _hint, ...rest } = report
+        const embedded = opts.embed ? await syncEmbeddings(command, run.store, report, options.app, again) : undefined
         // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
         const issues = [
           ...failed.map((one) => ({
@@ -437,11 +441,12 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
             reason: one.reason,
             source: one.externalId === undefined ? `crm:${one.kind}` : `crm:${one.kind}/${one.externalId}`,
           })),
+          ...(embedded?.issues ?? []),
         ]
         const partial = report.state === "partial" || issues.length > 0
-        return itemOf(snakeKeys({ ...rest, stageTasks, ...(hint === undefined ? {} : { hint }) }), {
+        return itemOf(snakeKeys({ ...rest, stageTasks, ...(hint === undefined ? {} : { hint }), ...embedded?.item }), {
           ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
-          ...(next ? { next } : {}),
+          ...(next || embedded?.next ? { next: next ?? embedded?.next } : {}),
         })
       })
     })

@@ -28,6 +28,7 @@ import type {
   TrackerItem,
   TrackerNearest,
 } from "../store/store.js"
+import { nearestCrmActivities } from "./crm-meaning.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -141,6 +142,13 @@ export interface SearchAllFound {
   events?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** How issues, projects and comments were searched, when they were; never by meaning with `exact`. */
   tracker?: { by: "words" | "words and meaning"; meaningSkipped?: string }
+  /** How deals and leads were searched, when they were: by meaning too through their activities' vectors. */
+  crm?: {
+    by: "words" | "words and meaning"
+    meaningSkipped?: string
+    /** No model, or no activity embedded yet: the CRM's `sync --embed` builds the vectors. */
+    needsVectors?: true
+  }
   /** How the messages were searched, when they were; never by meaning with `exact` or the server alone. */
   messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** How the mail was searched, when it was; never by meaning with `exact`. */
@@ -192,6 +200,11 @@ export interface SearchAllRequest {
   crmViewers?: CopyViewer[]
   /** `crm` also reads the text of downloaded CRM files under the same viewers; false when the profile denies it. */
   crmFiles?: boolean
+  /**
+   * `crm` also finds deals and leads by the meaning of their activities' text, shown in the hit; false when the
+   * profile denies reading activities.
+   */
+  crmActivities?: boolean
   /**
    * Search harder: a hosted model reorders the first 30 hits, only with the owner's consent and a key. Absent, nothing
    * is read of the consent or the key and nothing is sent.
@@ -357,7 +370,7 @@ const trackerTitle = ({ kind, record }: TrackerItem): string => {
  * What the meaning half embeds: the words and phrases asked for, OR included, as notes take them. `title:` narrows to
  * the title, which a hit by meaning cannot be held to, so such a query is searched by words only.
  */
-const trackerMeaningWords = (text: string): string | undefined => {
+const meaningWordsOf = (text: string): string | undefined => {
   try {
     const { root } = parseLucene(text, SEARCH_QUERY)
     const nodes = root.kind === "boolean" ? root.clauses.map(({ node }) => node) : [root]
@@ -397,6 +410,31 @@ const oneHitPerItem = (
       cosines.set(held.ref, cosine)
   }
   return [...kept.values()]
+}
+
+/**
+ * One list for a lane found both ways, as notes and messages fuse theirs: each hit's rank in either list votes, a
+ * question's hit voting once; a hit found both ways keeps its words' text and is found by meaning too.
+ */
+const fusedLane = (
+  byWords: SearchAllRecordItem[],
+  byMeaning: { hit: SearchAllRecordItem; score: number }[],
+  discover: boolean,
+  cosines: Map<string, number>,
+): SearchAllRecordItem[] => {
+  const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
+  byWords.forEach((item, rank) => {
+    fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
+  })
+  byMeaning.forEach(({ hit, score }, rank) => {
+    cosines.set(hit.ref, score)
+    const held = fused.get(hit.ref)
+    if (held && !held.item.foundBy.includes("meaning")) held.item.foundBy = [...held.item.foundBy, "meaning"]
+    const vote = 1 / (RRF_K + rank + 1)
+    if (held && discover) held.score = Math.max(held.score, vote)
+    else fused.set(hit.ref, { item: held?.item ?? hit, score: (held?.score ?? 0) + vote })
+  })
+  return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
 }
 
 /** The accounts of every CRM the store holds copies of. */
@@ -442,6 +480,7 @@ export const searchAll = async (
   let notes: SearchAllFound["notes"]
   let events: SearchAllFound["events"]
   let tracker: SearchAllFound["tracker"]
+  let crm: SearchAllFound["crm"]
   const by: { messages?: SearchAllFound["messages"]; mail?: SearchAllFound["mail"] } = {}
   let server: ServerSearched | undefined
   // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
@@ -637,21 +676,67 @@ export const searchAll = async (
           })
           hasMore ||= found.hasMore
           const titled = /(?:^|[\s(+])title:/u.test(request.text)
-          lists.push(
-            found.items
-              .filter((deal) => !titled || deal.matched.includes("title"))
-              .map((deal) => ({
-                kind: deal.kind,
-                ref: deal.ref,
-                provider: deal.account?.provider ?? "crm",
-                account: deal.account?.account ?? INTERNAL_NOTES,
-                title: deal.title,
-                timestamp: deal.updatedAt,
-                text: deal.summary,
-                foundBy: deal.matched.includes("title") ? ["title"] : ["words"],
-                ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
-              })),
-          )
+          const byWords: SearchAllRecordItem[] = found.items
+            .filter((deal) => !titled || deal.matched.includes("title"))
+            .map((deal) => ({
+              kind: deal.kind,
+              ref: deal.ref,
+              provider: deal.account?.provider ?? "crm",
+              account: deal.account?.account ?? INTERNAL_NOTES,
+              title: deal.title,
+              timestamp: deal.updatedAt,
+              text: deal.summary,
+              foundBy: deal.matched.includes("title") ? ["title"] : ["words"],
+              ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
+            }))
+          const plain = titled ? undefined : meaningWordsOf(discover ? questionText(request.text) : request.text)
+          let near: Awaited<ReturnType<typeof nearestCrmActivities>> | undefined
+          let meaningSkipped: string | undefined
+          if (request.crmActivities === false) meaningSkipped = "the profile may not read activities"
+          else if (request.exact) meaningSkipped = "--exact searches words as written"
+          else if (plain === undefined) meaningSkipped = "the query names a title, which meaning cannot follow"
+          else
+            try {
+              near = await nearestCrmActivities(store, plain, {
+                limit: Math.min(depth, 500),
+                accounts: chosen,
+                viewers,
+                embedders,
+                ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
+                ...(command === undefined ? {} : { command }),
+                ...(request.env === undefined ? {} : { env: request.env }),
+              })
+            } catch (error) {
+              if (!(error instanceof CliError && error.code === "not_found")) throw error
+              meaningSkipped = error.message
+            }
+          crm = {
+            by: near === undefined ? "words" : "words and meaning",
+            ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
+            ...(near === undefined && plain !== undefined && !request.exact && request.crmActivities !== false
+              ? { needsVectors: true as const }
+              : {}),
+          }
+          if (near === undefined) lists.push(byWords)
+          else {
+            const byMeaning = await Promise.all(
+              near.map(async ({ ref, kind, account: at, subject, body, score }) => {
+                const deal = await store.deals.get(ref)
+                const hit: SearchAllRecordItem = {
+                  kind,
+                  ref,
+                  provider: at.provider,
+                  account: at.account,
+                  title: deal.title,
+                  timestamp: deal.updatedAt,
+                  text: excerpt([subject, body].filter(Boolean).join("\n"), request.text),
+                  foundBy: ["meaning"],
+                }
+                return { hit, score }
+              }),
+            )
+            lists.push(fusedLane(byWords, byMeaning, discover, cosines))
+          }
           if (request.crmFiles !== false) {
             const files = await store.crmFiles.find({
               words,
@@ -722,7 +807,7 @@ export const searchAll = async (
             }
           }
           const byWords = found.items.map(({ account: at, item, excerpt: text }) => hitOf(at, item, text, ["words"]))
-          const plain = trackerMeaningWords(discover ? questionText(request.text) : request.text)
+          const plain = meaningWordsOf(discover ? questionText(request.text) : request.text)
           let near: TrackerNearest[] | undefined
           let meaningSkipped: string | undefined
           if (request.exact) meaningSkipped = "--exact searches words as written"
@@ -746,27 +831,11 @@ export const searchAll = async (
           }
           if (near === undefined) lists.push(oneHitPerItem(byWords, cosines, items))
           else {
-            // As notes and messages fuse theirs: one list for the lane, a question's hit voting once.
-            const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
-            byWords.forEach((item, rank) => {
-              fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
-            })
-            near.forEach(({ account: at, item, score }, rank) => {
-              const hit = hitOf(at, item, trackerExcerpt(item, request.text), ["meaning"])
-              cosines.set(hit.ref, score)
-              const held = fused.get(hit.ref)
-              if (held) held.item.foundBy = ["words", "meaning"]
-              const vote = 1 / (RRF_K + rank + 1)
-              if (held && discover) held.score = Math.max(held.score, vote)
-              else fused.set(hit.ref, { item: held?.item ?? hit, score: (held?.score ?? 0) + vote })
-            })
-            lists.push(
-              oneHitPerItem(
-                [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item),
-                cosines,
-                items,
-              ),
-            )
+            const byMeaning = near.map(({ account: at, item, score }) => ({
+              hit: hitOf(at, item, trackerExcerpt(item, request.text), ["meaning"]),
+              score,
+            }))
+            lists.push(oneHitPerItem(fusedLane(byWords, byMeaning, discover, cosines), cosines, items))
           }
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {
@@ -847,6 +916,7 @@ export const searchAll = async (
     ...(notes === undefined ? {} : { notes }),
     ...(events === undefined ? {} : { events }),
     ...(tracker === undefined ? {} : { tracker }),
+    ...(crm === undefined ? {} : { crm }),
     ...(by.messages === undefined ? {} : { messages: by.messages }),
     ...(by.mail === undefined ? {} : { mail: by.mail }),
     ...(server === undefined ? {} : { server }),

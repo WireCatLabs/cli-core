@@ -127,6 +127,19 @@ A hidden deal is never named in an activity's `on`.
   `activities`. It answers `crm_activity`: open ones first (overdue, then by due time, then undated), then the rest,
   newest first, `status:open` unless a status or `overdue:true` is given. With the account's `activities` setting off
   it answers no items and a `missing` entry that names the setting.
+- `search all` finds deals and leads by the meaning of their activities too, once the activities have vectors:
+  `sync --embed` builds them with a model already downloaded (`embedCrmActivities` in
+  `src/services/crm-meaning.ts`, at most 600 chunks, within the deadline, answered under `embeddings`; a run its
+  budget stopped embeds nothing, a missing model is a `crm:embeddings` issue beside the sync's report). Each saved
+  activity's subject and text are cut into chunks (`chunks.chunkable_type = 'crm_activity'`, `chunkable_id` its
+  `records.id`, `crm-activity-chunks.ts`) when it is saved; one shorter than 16 characters is not, so a task's bare
+  `Call` never sits near every query. An activity that leaves the copy loses its chunks, and `refresh` cuts those of
+  activities saved before. A hit by meaning is the deal or lead the activity is on, with the note's excerpt, fused
+  by rank with the word hits as the tracker's are (`foundBy` `meaning`, or `words` and `meaning`). It goes only
+  through a live deal or lead of the kinds asked that every viewer may read: an activity on contacts or companies
+  alone is never found by meaning, and a hidden deal is never named. A profile that denies `activities.list` gets
+  words only, since the hit shows the note. Without vectors the CLI's `search all` says so in `missing` and names
+  `sync --embed`; `found.crm` says how deals were searched.
 - `changes list` is always mounted. It answers `crm_change`, newest first, over a window (`at:`, the last day by
   default, read against the CLI's clock): `created`, `moved`, `won`, `lost`, `owner_changed`, `activity_added`,
   `activity_done`, `person_added` (`CRM_CHANGES`). One SQL over the stage entries, owner changes, activities and

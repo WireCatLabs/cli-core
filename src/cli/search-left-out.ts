@@ -16,6 +16,8 @@ const LIST_KEYS = {
   events: "events.list",
   meetings: "meetings.list",
   crm_file: "files.list",
+  // A deal found by the meaning of its activities shows their text.
+  crm_activity: "activities.list",
   tracker: "issues.list",
 } as const satisfies Record<string, PermissionKey>
 
