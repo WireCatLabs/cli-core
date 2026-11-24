@@ -259,8 +259,9 @@ const addActivityWrites = (group: Command, options: CrmActivityCommandOptions) =
       .addArgument(new Argument("<kind>", "what to add").choices(kinds))
       .option(
         "--subject <ref>",
-        `a record it is on: ${leads ? "deal:<id> or lead:<id>" : "deal:<id>"} as a list shows it, or person:<id> or ` +
-          "organization:<id> by the CRM's id as people list and organizations list print it; repeat it for more",
+        `a record it is on: ${leads ? "deal:<id>, lead:<id>" : "deal:<id>"}, person:<id> or organization:<id> as a ` +
+          "list or deals show gives it, or person:crm:<id> or organization:crm:<id> by the CRM's id as people list " +
+          "and organizations list print it; repeat it for more",
         (value: string, previous: string[] = []) => [...previous, value],
         // The empty default marks the flag as repeatable, so an agent's tool takes a list.
         [] as string[],
