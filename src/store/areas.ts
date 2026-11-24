@@ -11,6 +11,8 @@ export {
 export type { ContractFilter } from "./sqlite/business-contracts.js"
 export type { CatalogEntry, CatalogInput, CatalogQuery } from "./sqlite/catalog.js"
 export type { CrmChange, CrmChangeKind } from "./sqlite/crm-changes.js"
+export { crmIdentityId } from "./sqlite/crm-rows.js"
+export { crmSettingKey } from "./sqlite/crm-settings.js"
 export type { Deal, DealFilter, Pipeline, PipelineReport } from "./sqlite/deals.js"
 export type { EmailInput, FolderEmail, MailboxInput } from "./sqlite/emails.js"
 export { type EvidenceInput, QUOTE_LIMIT, quoteKept } from "./sqlite/evidence-signature.js"
