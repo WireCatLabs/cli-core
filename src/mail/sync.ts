@@ -8,11 +8,12 @@ import { DEFAULT_ATTACHMENT_POLICY, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttac
 import { BULK, bulkBox } from "./bulk.js"
 import { parsedEmail } from "./email-input.js"
 import { factsOf } from "./facts.js"
-import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
+import { GMAIL_ALL_MAIL, mailFolders, sentFolder } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
 import { flagsToRefresh, proveByLocation } from "./locations.js"
 import { saveMeetingNotes } from "./meeting-notes.js"
+import { ownAddresses, SENT_LABEL, sentByOwner, settleOwnMail } from "./own.js"
 import { MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
 import { completePartial } from "./partial.js"
 import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
@@ -271,7 +272,12 @@ const syncRound = async (
   const key = mailAccountKey(account.address)
   const accountId = await store.accounts.saveAccount(key, { name: account.address })
 
-  const folders = await mailFolders(account, source)
+  const list = source.folders?.bind(source)
+  let listing: ReturnType<NonNullable<MailSource["folders"]>> | undefined
+  const named: Pick<MailSource, "folders"> = list ? { folders: () => (listing ??= list()) } : {}
+  const folders = await mailFolders(account, named)
+  const sent = await sentFolder(account, named)
+  const own = await ownAddresses(store, key, account.addresses)
   if (folders.length < 1 || folders.length > 50) throw new Error("select 1–50 mail folders")
   const rules = account.rules ?? []
   // An archive file is a snapshot of the same account: it adds mail, and changes nothing IMAP keeps current.
@@ -668,6 +674,9 @@ const syncRound = async (
     ...[...(foundFolders.get(item.messageId) ?? [])].map(mailbox),
     ...(labelsOf.get(item.messageId)?.labels ?? []).map(label),
   ]
+  const inSent = (item: Listed) =>
+    (sent !== undefined && (foundFolders.get(item.messageId)?.has(sent) ?? false)) ||
+    (labelsOf.get(item.messageId)?.labels ?? []).includes(SENT_LABEL)
   const flagsOf = (item: Listed) => {
     const { seen, flagged } = labelsOf.get(item.messageId) ?? {}
     return { ...(seen === undefined ? {} : { read: seen }), ...(flagged === undefined ? {} : { flagged }) }
@@ -796,7 +805,7 @@ const syncRound = async (
           receivedAt: Date.parse(item.receivedAt),
           bodyText: null,
           size: item.size ?? null,
-          outgoing: headers?.from === key.account,
+          outgoing: sentByOwner(headers?.from, own, inSent(item)) ?? false,
           mailboxes: [...inMailboxes(item), envelopeBox(rule.match)],
           ...locationOf(item),
           ...flagsOf(item),
@@ -879,7 +888,7 @@ const syncRound = async (
         now: startedAt,
         emails: [
           {
-            ...parsedEmail(mail, item, header, key.account),
+            ...parsedEmail(mail, item, header, own, inSent(item)),
             mailboxes: inMailboxes(item),
             ...locationOf(item),
             ...flagsOf(item),
@@ -938,6 +947,10 @@ const syncRound = async (
   if (bulk.size) await store.mail.setMailboxes(accountId, [bulkBox], bulk, startedAt)
   if (!snapshot) await store.sync.setSyncState(key, "mail_folder_scope", scope)
   if (!snapshot) await store.mail.backfillSentAt(accountId, SENT_AT_BACKFILL_PER_RUN)
+  await settleOwnMail(store, key, accountId, own, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], {
+    name: account.address,
+    now: startedAt,
+  })
   await stopIfAborted()
   const indexed = await index?.(store, key)
   const coverage = {

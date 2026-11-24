@@ -29,7 +29,13 @@ import {
   setLocations,
   storedWhole,
 } from "./email-locations.js"
-import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, setEmailFlags } from "./email-state.js"
+import {
+  markEmailsDeleted,
+  markEmailsRestored,
+  markOwnMail,
+  recountEmailThread as recount,
+  setEmailFlags,
+} from "./email-state.js"
 import { EMAIL_ENRICHMENT, enrichmentText } from "./enrichments.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
@@ -326,6 +332,16 @@ export interface MailStore extends PartialMailStore, MailActivityStore {
     flags: ReadonlyMap<string, { read?: boolean; flagged?: boolean }>,
     now: number,
   ): Promise<number>
+  /**
+   * Takes the senders of the live mail in `mailboxes` (the Sent folder, Gmail's `label:Sent`) as the owner's, beside
+   * `addresses`, and marks the account's mail from any of them outgoing, so mail stored before it was known counts.
+   * Answers the addresses, lower case.
+   */
+  markOwnMail(
+    accountId: number,
+    own: { addresses: readonly string[]; mailboxes: readonly string[] },
+    now: number,
+  ): Promise<string[]>
   /** Gives up to `limit` emails stored without `sent_at` their internal date; answers how many. */
   backfillSentAt(accountId: number, limit: number): Promise<number>
   /** The live emails whose location in `folder` has this UIDVALIDITY, oldest UID first. */
@@ -964,6 +980,7 @@ export const mailStoreOver = (
     })
   },
   setFlags: async (accountId, flags, now) => write(database, () => setEmailFlags(database, accountId, flags, now)),
+  markOwnMail: async (accountId, own, at) => write(database, () => markOwnMail(database, accountId, own, at)),
   backfillSentAt: async (accountId, limit) => write(database, () => backfillSentAt(database, accountId, limit)),
   folderEmails: async (accountId, folder, uidvalidity) => folderEmails(database, accountId, folder, uidvalidity),
   setLocations: async (accountId, folder, uidvalidity, found) =>

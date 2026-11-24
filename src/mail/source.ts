@@ -97,8 +97,11 @@ export interface MailSource {
     to: string,
     known?: ReadonlyMap<string, string>,
   ): Promise<{ moved: string[]; missing: string[] }>
-  /** All Mail and Trash under the names this account's language gives them. */
-  folders?(): Promise<{ all: string; trash: string }>
+  /**
+   * All Mail and Trash under the names this account's language gives them, and on IMAP the folder the server marks
+   * `\Sent` (RFC 6154), else the one a common name gives when the server marks no folder at all.
+   */
+  folders?(): Promise<{ all: string; trash: string; sent?: string }>
   /** Which of these UIDs `folder` still holds. */
   present?(uids: readonly string[], folder: string): Promise<string[]>
   /** Puts labels back on messages in `folder`, by Gmail id. */

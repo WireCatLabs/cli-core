@@ -18,6 +18,7 @@ import { bulkBox } from "./bulk.js"
 import { parsedEmail } from "./email-input.js"
 import { factsOf } from "./facts.js"
 import { mailHeadersOf } from "./headers.js"
+import { ownAddresses, SENT_LABEL } from "./own.js"
 import { parseMail } from "./parse.js"
 import { PARTIAL } from "./partial.js"
 import { storedMailRules } from "./rule-stored.js"
@@ -124,6 +125,7 @@ export const searchMailServer = async (
     report.failed.push({ chat: call?.folder ?? null, reason })
   }
   const accountId = await store.accounts.saveAccount(mailbox, { name: mailbox.account })
+  const own = await ownAddresses(store, mailbox)
   const fresh: Listed[] = []
   let rules: MailRule[] = []
   const ruled = new Map<Listed, { ruleId: number | null; tags: string[] }>()
@@ -217,7 +219,7 @@ export const searchMailServer = async (
           now,
           emails: [
             {
-              ...parsedEmail(mail, item, mailHeadersOf(raw), mailbox.account),
+              ...parsedEmail(mail, item, mailHeadersOf(raw), own, item.labels?.includes(SENT_LABEL)),
               mailboxes: [
                 { externalId: folder, name: folder, kind: null },
                 ...(item.labels ?? []).map((name) => ({ externalId: `label:${name}`, name, kind: "label" })),

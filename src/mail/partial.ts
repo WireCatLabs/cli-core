@@ -2,9 +2,11 @@ import type { BudgetStop } from "../background/budget.js"
 import type { JsonValue } from "../meetings/index.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore, PartialEmail } from "../store/index.js"
+import { mailAccountKey } from "./account-key.js"
 import { type AttachmentLog, FETCH_CHUNK, type MailAttachmentPolicy, readAttachments } from "./attachments.js"
 import { parsedEmail } from "./email-input.js"
 import { mailHeadersOf } from "./headers.js"
+import { ownAddresses, SENT_LABEL } from "./own.js"
 import { parseMail } from "./parse.js"
 import type { Listed, MailSource, Quick } from "./source.js"
 
@@ -64,6 +66,7 @@ export const completePartial = async ({
 }): Promise<PartialOutcome> => {
   const { emails, total, stuck } = await store.mail.partialEmails(accountId, PARTIAL_PER_RUN)
   if (emails.length === 0) return { completed: 0, left: 0, stuck }
+  const own = await ownAddresses(store, mailAccountKey(address))
   let given = 0
   // A failed read is counted, so an email the server no longer gives is not read whole on every sync forever.
   const failed = async (email: PartialEmail, forGood = false) => {
@@ -138,7 +141,7 @@ export const completePartial = async ({
           now,
           emails: [
             {
-              ...parsedEmail(mail, whole, mailHeadersOf(raw), address),
+              ...parsedEmail(mail, whole, mailHeadersOf(raw), own, whole.labels?.includes(SENT_LABEL)),
               receivedAt: email.receivedAt,
               size: raw.byteLength,
               metadata,

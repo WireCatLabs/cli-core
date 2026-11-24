@@ -30,6 +30,8 @@ export interface FakeMail {
   flagged?: boolean
   /** `trash` puts it in the trash folder; otherwise it is in All Mail, which INBOX also shows. */
   folder?: "trash"
+  /** Also in the mailbox's `sent` folder, as an IMAP server files mail the owner sent. */
+  sent?: boolean
   /** Folders that do not hold it although its `folder` says they do, as a server's delete from one folder leaves it. */
   absentFrom?: string[]
   /** Listed without headers even when they are asked for, as a server does when it cannot read them. */
@@ -42,6 +44,8 @@ export interface FakeMailbox {
   /** All Mail under the account's language, as Gmail names it. */
   allMail?: string
   trash?: string
+  /** An IMAP Sent folder: `folders` names it, and it holds the mail marked `sent`. */
+  sent?: string
   validity?: number
   /** Each answer of `search` and `list` ends in this failure. */
   searchFails?: string
@@ -154,6 +158,7 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
   const all = () => mailbox.allMail ?? GMAIL_ALL_MAIL
   const trash = () => mailbox.trash ?? TRASH
   const inFolder = (folder: string): FakeMail[] => {
+    if (folder === mailbox.sent) return mailbox.messages.filter((m) => m.sent && !m.absentFrom?.includes(folder))
     if (![all(), trash(), "INBOX"].includes(folder)) throw failure(`Gmail has no such mailbox: ${folder}`)
     return mailbox.messages.filter(
       (m) => (folder === trash() ? m.folder === "trash" : m.folder !== "trash") && !m.absentFrom?.includes(folder),
@@ -260,7 +265,7 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
       return { moved, missing: messageIds.filter((id) => !moved.includes(id)) }
     },
 
-    folders: async () => ({ all: all(), trash: trash() }),
+    folders: async () => ({ all: all(), trash: trash(), ...(mailbox.sent ? { sent: mailbox.sent } : {}) }),
 
     present: async (uids, folder) => inFolder(folder).flatMap((m) => (uids.includes(m.uid) ? [m.uid] : [])),
 

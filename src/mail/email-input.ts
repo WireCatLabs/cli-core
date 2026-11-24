@@ -1,5 +1,6 @@
 import type { EmailInput } from "../store/index.js"
 import { addressOf } from "./attachments.js"
+import { sentByOwner } from "./own.js"
 import type { ParsedMail } from "./parse.js"
 import type { Listed } from "./source.js"
 
@@ -14,7 +15,8 @@ export const parsedEmail = (
   mail: ParsedMail,
   item: Listed,
   header: Record<string, string | boolean>,
-  address: string,
+  own: ReadonlySet<string>,
+  inSent = false,
 ): Omit<EmailInput, "mailboxes"> => ({
   externalId: item.messageId,
   subject: mail.subject,
@@ -27,5 +29,5 @@ export const parsedEmail = (
   bodyText: mail.text || null,
   size: item.size ?? null,
   ...(Object.keys(header).length ? { headers: header } : {}),
-  outgoing: mail.from === null ? null : mail.from.email === address,
+  outgoing: sentByOwner(mail.from?.email, own, inSent),
 })

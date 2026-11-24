@@ -13,6 +13,8 @@ export interface MailAccount {
   address: string
   mode?: "gmail" | "imap" | "mbox"
   folders?: string[]
+  /** The owner's other addresses on this mailbox, such as aliases: mail from them is the owner's. */
+  addresses?: string[]
   rules?: MailRule[]
 }
 
