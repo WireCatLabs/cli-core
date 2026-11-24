@@ -211,7 +211,7 @@ const resumeStep = (opts: SyncOptions, why: string, extra: Record<string, unknow
   safe_to_auto_execute: true,
 })
 
-/** A kind the sign-in could not read is left out of the copy, though the sync itself went through. */
+// Not a failure of the run: a key without the scope lacks it on every sync, so it must not mark the sync partial.
 const UNREAD = "tracker.kind-unread"
 
 const trackerIssues = (report: TrackerReport) => [
@@ -294,7 +294,6 @@ const combinedAnswer = (
     ...(outcome?.meta.issues ?? []),
     ...(documentsError ? [failed("documents", documentsError)] : []),
   ]
-  // A kind the sign-in cannot read stays unread on every sync: it is named, but the sync is still complete.
   const complete =
     report?.state === "complete" &&
     outcome !== undefined &&
@@ -430,8 +429,8 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     ).description(
       "bring the tracker's copy in the local store up to date: teams, users, states, labels, projects, sprints, " +
         "issues and comments that changed since the last sync, or everything with --rescan; once a day it also finds " +
-        "what the tracker deleted, and says when it next will. Open issues assigned to you become your tasks, and close when the issue is done, " +
-        "canceled, deleted or goes to someone else. " +
+        "what the tracker deleted, and says when it next will. Open issues assigned to you become your tasks, " +
+        "and close when the issue is done, canceled, a duplicate, deleted or goes to someone else. " +
         (documents
           ? "It also imports what changed in the chosen document folders, answered under documents; a part that " +
             "fails leaves the other's answer. "

@@ -27,9 +27,11 @@ too), is marked deleted in the copy when it is read so: a manifest maps `deleted
 deleted. Linear moves no `updatedAt` when it trashes, restores or archives an issue (checked on 2026-11-24), so a read
 of changes never sees the trash. The kind's `ids` call selects the same path, and `ids()` leaves a deleted row out, so
 the daily id pass marks it deleted, as a row deleted outright. An issue marked deleted takes its comments with it
-(Linear only archives them), and a comment read under a deleted issue stays deleted; an issue read live again brings
-back the comments it took. A restored issue is read live again only by a full list (`sync --rescan`): Linear's audit
-log names a trashing (`issueDeleted`) but not a restore, and only to an admin key.
+(Linear only archives them), and a comment read under a deleted issue stays deleted. A row the id pass lists again
+after it was marked deleted is back, as an issue restored from the trash is, and an issue brings back the comments it
+took; a comment stays deleted while its issue is. So a restore is seen at the next id pass, without `--rescan`.
+Linear's audit log names a trashing (`issueDeleted`) but not a restore, and only to an admin key, so it is not read.
+A source that names `deleted` names it on every read: a save keeps a field a read leaves out.
 
 ## The port
 
@@ -94,10 +96,10 @@ A save merges: a field the read left out keeps its stored value, so a partial se
 
 ## `store.tracker`
 
-`save`, `removeUnlisted`, `get`, `issueByKey` (`ENG-12`, any case), `list` with issue filters (team, project,
-assignee or none, sprint or none, state, state types through the state rows, label, archived), `find` over titles, descriptions and
-comment bodies, `count`, and `people`: the tracker users whose e-mail an identity linked to a person has, joined when
-read. Nothing is written to the people graph.
+`save`, `removeUnlisted`, `get`, `issueByKey` (`ENG-12`, any case), `list` with issue filters (team, project, assignee
+or none, sprint or none, state, state types through the state rows, label, archived), `find` over titles, descriptions
+and comment bodies, `count`, and `people`: the tracker users whose e-mail an identity linked to a person has, joined
+when read. Nothing is written to the people graph.
 
 `find` matches words as a CRM's deals are matched (`src/search/word-match.ts`): a query word finds the same word, a
 word it begins when it has four letters or more, or a word of the same stem by the default Snowball stemmers (Russian,
@@ -166,10 +168,10 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
 ## Commands
 
 `addTrackerCommands(program, { app, open, writes?, documents? })` mounts `sync`, `issues list|show|search|assign`, and
-`list` for `projects`, `sprints`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
-`TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)); with `documents`, a `sync`
-that brings the documents too ([One sync with documents](#one-sync-with-documents)). `sync --embed` then embeds new
-issues, projects and comments (`embedTracker` in `src/services/tracker-meaning.ts`, at most 600 chunks, within the
+`list` for `projects`, `sprints`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the
+writer's `TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)); with `documents`, a
+`sync` that brings the documents too ([One sync with documents](#one-sync-with-documents)). `sync --embed` then embeds
+new issues, projects and comments (`embedTracker` in `src/services/tracker-meaning.ts`, at most 600 chunks, within the
 deadline) with a model already downloaded, answered under `embeddings`. A run its budget stopped embeds nothing, and the
 step that goes on keeps `embed`. A missing model keeps the sync's report and its step, and is named in `meta.issues`
 with `source` `tracker:embeddings`. Every text field from the tracker is named in the row's `untrusted`. Each list
@@ -354,11 +356,11 @@ result.
 
 ## The contract kit
 
-`trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor
-read again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an
-archived row still listed, a deleted row leaving `ids()`, a trashed row read as deleted and left out of `ids()`, a list cut after its first page, a spent budget ending a
-call that pages inside, and `self()`, when the tracker has it, naming one of its users. `fakeTrackerSource` and
-`exampleTrackerRows` are an in-memory tracker for tests.
+`trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor read
+again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an archived
+row still listed, a deleted row leaving `ids()`, a trashed row read as deleted and left out of `ids()`, a list cut after
+its first page, a spent budget ending a call that pages inside, and `self()`, when the tracker has it, naming one of its
+users. `fakeTrackerSource` and `exampleTrackerRows` are an in-memory tracker for tests.
 
 A source built from a manifest runs the contract with no code for the service, as a CLI made from `wirecat.config.ts`
 does in its generated test:
@@ -384,12 +386,12 @@ for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions }
   refused and listed in `fake.refusals`, beside `graphqlFake`'s own (an unknown variable, a field the type lacks).
   `touch`, `archive`, `trash` and `remove` change a row on the tracker's side. Building the fake fails for a kind with
   `changes` whose `updatedAt` the map does not read from a path.
-- `trackerManifestFixture` adds the source over it, the ids it holds per kind (`held`), a dead cursor (`"not a
-  time"`, which the source answers with `reset` itself, without a call: the case checks the source, never the fake or
-  the tracker's own refusal of a stale cursor), and the faults
-  on the issue kind, else the last kind with `changes`: `skewed` and `change`, `archive` when the map reads
-  `archivedAt`, `trash` when it reads `deleted` too, and `remove`. `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose
-  calls the fake refused, with the refusals as its message.
+- `trackerManifestFixture` adds the source over it, the ids it holds per kind (`held`), a dead cursor (`"not a time"`,
+  which the source answers with `reset` itself, without a call: the case checks the source, never the fake or the
+  tracker's own refusal of a stale cursor), and the faults on the issue kind, else the last kind with `changes`:
+  `skewed` and `change`, `archive` when the map reads `archivedAt`, `trash` when it reads `deleted` too, and `remove`.
+  `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose calls the fake refused, with the
+  refusals as its message.
 - With `writes`, it answers the mutations: a create adds a row, an update changes the row its `"{id}"` names, each
   answered within the call's selection at its `items`, and an update of an id it does not hold gets the tracker's own
   error. `graphqlFake` refuses variables that break the input schema (an unknown field, a missing required one such as

@@ -200,7 +200,8 @@ export const PAGE_INFO = "pageInfo { hasNextPage endCursor }"
 const TIMES = "id createdAt updatedAt archivedAt"
 const ISSUE_ROW =
   `${TIMES} identifier title description state { id } team { id } project { id } assignee { id } ` +
-  "creator { id } labels { nodes { id } } parent { id } cycle { id } priority dueDate completedAt canceledAt trashed url"
+  "creator { id } labels { nodes { id } } parent { id } cycle { id } priority dueDate completedAt canceledAt " +
+  "trashed url"
 const COMMENT_ROW = `${TIMES} body issue { id } user { id } url`
 const SELECTIONS: Record<TrackerKind, string> = {
   team: `nodes { ${TIMES} name key } ${PAGE_INFO}`,

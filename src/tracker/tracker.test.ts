@@ -154,7 +154,7 @@ describe("syncTracker: sprints, trashed issues and what changed", () => {
     expect(again.progress.saved).toBe(0)
   })
 
-  it("marks a trashed issue deleted with its comments at the id pass, and keeps it so on a full list", async () => {
+  it("marks a trashed issue deleted with its comments at the id pass, and brings both back once restored", async () => {
     const store = await storeOf()
     const rows = exampleTrackerRows()
     const source = fakeTrackerSource({ rows })
@@ -178,8 +178,9 @@ describe("syncTracker: sprints, trashed issues and what changed", () => {
 
     const issue = rows.issue.find((one) => one.externalId === "issue-1") as (typeof rows.issue)[number]
     Object.assign(issue, { deleted: null, archivedAt: null })
-    await syncTracker(source, store, account, { now: now + 4 * 86_400_000, rescan: true })
+    await syncTracker(source, store, account, { now: now + 5 * 86_400_000 })
     expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toBeNull()
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.record.deleted).toBe(false)
     expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBeNull()
   })
 
@@ -188,9 +189,8 @@ describe("syncTracker: sprints, trashed issues and what changed", () => {
     const rows = exampleTrackerRows()
     await syncTracker(fakeTrackerSource({ rows }), store, account, { now })
     const [issue] = rows.issue
-    expect(
-      await store.tracker.save(account, "issue", [{ ...(issue as (typeof rows.issue)[number]), deleted: true }], now),
-    ).toBe(1)
+    const trashed = { ...(issue as (typeof rows.issue)[number]), deleted: true }
+    expect(await store.tracker.save(account, "issue", [trashed], now)).toBe(1)
     expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toBe(now)
     expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBe(now)
     expect(await store.tracker.save(account, "comment", rows.comment, now + 1)).toBe(0)

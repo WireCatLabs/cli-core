@@ -299,7 +299,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         // A comment saved under a deleted issue goes with it: Linear lists it as archived, not deleted.
         const parentGone =
           kind === "comment"
-            ? issueDeletedAt.get(accountId, (merged as TrackerRecords["comment"]).issue)?.deleted_at
+            ? issueDeletedAt.get(accountId, (merged as TrackerRecords["comment"]).issue ?? null)?.deleted_at
             : undefined
         const deletedAt = merged.deleted === true ? now : parentGone == null ? null : Number(parentGone)
         const saved = upsert.get(
@@ -375,6 +375,33 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       return changed
     })
 
+  /**
+   * Linear moves no `updatedAt` when an issue leaves the trash, so the id pass listing a deleted row again is the
+   * only sign it is back. A comment stays deleted while its issue is: Linear lists a trashed issue's comments.
+   */
+  const restoreListed = (accountId: number, kind: TrackerKind, listed: readonly string[]) => {
+    const found = database
+      .prepare(
+        "SELECT t.id, t.external_id, t.deleted_at FROM tracker_items t WHERE t.account_id = ? AND t.kind = ? " +
+          "AND t.deleted_at IS NOT NULL AND t.external_id IN (SELECT value FROM json_each(?)) " +
+          "AND (t.kind <> 'comment' OR NOT EXISTS (SELECT 1 FROM tracker_items i WHERE i.account_id = t.account_id " +
+          "AND i.kind = 'issue' AND i.external_id = t.parent_id AND i.deleted_at IS NOT NULL))",
+      )
+      .all(accountId, kind, JSON.stringify(listed))
+    const restore = database.prepare(
+      "UPDATE tracker_items SET deleted_at = NULL, data = CASE WHEN json_extract(data, '$.deleted') IS NULL " +
+        "THEN data ELSE json_set(data, '$.deleted', json('false')) END WHERE id = ?",
+    )
+    const comments = database.prepare(
+      "UPDATE tracker_items SET deleted_at = NULL WHERE account_id = ? AND kind = 'comment' AND parent_id = ? " +
+        "AND deleted_at = ?",
+    )
+    for (const row of found) {
+      restore.run(Number(row.id))
+      if (kind === "issue") comments.run(accountId, String(row.external_id), Number(row.deleted_at))
+    }
+  }
+
   const removeUnlisted = (
     key: AccountKey,
     kind: TrackerKind,
@@ -407,6 +434,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       }
       if (isChunkedTrackerKind(kind)) dropTrackerChunks(database, marked)
       deleteComments(database, accountId, issues, now)
+      if (!dryRun) restoreListed(accountId, kind, listed)
       return removed
     })
   }
