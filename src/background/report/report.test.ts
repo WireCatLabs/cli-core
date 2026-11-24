@@ -452,7 +452,10 @@ describe("an answer as a report", () => {
 
   it.each([
     ["sections[0].items[0].type", [{ kind: "today", items: [{ type: "joke", topic: "x" }] }]],
-    ["sections[0].items[0].since", [{ kind: "today", items: [{ type: "reply", who: "a", topic: "b", action: "c" }] }]],
+    [
+      "sections[0].items[0].since",
+      [{ kind: "today", items: [{ type: "reply", who: "a", topic: "b", action: "c", since: "вчера" }] }],
+    ],
     ["sections[0].kind", [{ kind: "health", items: [] }]],
   ])("refuses a document that fails at %s, and shows one line instead", async (path, sections) => {
     const prepared = await prepareReport(digest(sections), options)
@@ -462,6 +465,15 @@ describe("an answer as a report", () => {
       run: { invalid: path, reasons: ["delivery.report-invalid"] },
     })
     expect((await prepareReport("{ not json", { ...options, language: "en" }))?.text).toMatch(/^The report could/)
+  })
+
+  it("keeps a digest whose reply has no time, and shows that reply without how long it waits", async () => {
+    const reply = { type: "reply", who: "Диана", topic: "встреча", action: "ответить" }
+    const prepared = await prepareReport(digest([{ kind: "today", items: [reply] }]), options)
+    expect(prepared?.invalid).toBeFalsy()
+    expect(prepared?.document).toBeTruthy()
+    expect(prepared?.text).toContain("Диана · встреча")
+    expect(prepared?.text).not.toContain("ждёт")
   })
 
   it("renders in English, and in English words for a language with no template", async () => {
