@@ -82,6 +82,9 @@ None open.
   beta) that every CLI and Desktop read, and that can replace the agent where a model can do the job. `models ai`
   and image reading are built; the `ai-model` reader, enrichment and tg/max are open:
   [plans/2026-11-09-ai-model-setting.md](plans/2026-11-09-ai-model-setting.md).
+- **CORE-71** · P2 · 🚩 Contact kinds as three answers (who sent it, how it reached the owner, whether the owner
+  knows them) instead of one kind, so service mail and newsletters leave Strangers and merge review (#3314). Draft plan
+  waits for review: [plans/2026-11-24-contact-kinds.md](plans/2026-11-24-contact-kinds.md).
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
