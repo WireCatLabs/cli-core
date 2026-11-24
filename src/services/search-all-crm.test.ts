@@ -114,6 +114,7 @@ const synced = async () => {
     deal("d5", "Подстанция КТП-630"),
     deal("d6", "Ferrara Design chatbot"),
     deal("d7", "Ferraro Arredamenti configuratore"),
+    deal("d8", "Аудит для ФинПоинт"),
   ])
   const refs = Object.fromEntries(
     (await store.deals.list({ account: PORTAL })).items.map((one) => [one.externalId as string, one.ref]),
@@ -222,6 +223,15 @@ it("finds a Latin name typed in Cyrillic, and says what it read it as", async ()
   expect(found.items.map(({ ref }) => ref)).toEqual([refs.d6])
   expect(found.items[0]).toMatchObject({ match: "corrected", corrections: [{ from: "феррара", to: ["ferrara"] }] })
   expect((await find("ферраро")).items.map(({ ref }) => ref)).toEqual([refs.d7])
+})
+
+it("finds a Cyrillic name typed in Latin, and says what it read it as", async () => {
+  const { refs, find } = await synced()
+  const found = await find("finpoint")
+  expect(found.items.map(({ ref }) => ref)).toEqual([refs.d8])
+  expect(found.items[0]).toMatchObject({ match: "corrected", corrections: [{ from: "finpoint", to: ["финпоинт"] }] })
+  expect((await find("finpoynt")).items.map(({ ref }) => ref)).toEqual([refs.d8])
+  expect((await find("Ferarro")).items.map(({ ref }) => ref)).toEqual([refs.d7])
 })
 
 it("refuses a filter by stage, naming the list that filters by it, instead of finding nothing", async () => {
