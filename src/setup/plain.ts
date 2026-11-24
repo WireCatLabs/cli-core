@@ -3,6 +3,7 @@
  * `[…](…)` as typed. Headings, bold and code lose their marks. A link keeps its address beside its words, since the
  * address is what a person copies, unless `link` draws it, as a terminal that shows OSC 8 links does. Single `*` and
  * `_` stay: in plain text they are as often a product or a name as italics.
+ * @experimental
  */
 export const plainSetupText = (
   text: string,

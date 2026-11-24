@@ -634,6 +634,7 @@ headings.
 | `transcription.too-large` | `validation_error` | the audio is over the transcription provider's size limit |  |
 | `upgrade.install-failed` | `provider_error` | the installer failed; the old version stays |  |
 | `upload.mismatch` | `conflict` | the uploaded file reads back with other content; the local file changed meanwhile |  |
+| `upload.replace-interrupted` | `conflict` | another file took the path during a replace; the new content is kept |  |
 | `usage.unknown-command` | `validation_error` | no command by this name; the CLI's help lists them |  |
 | `usage.unknown-option` | `validation_error` | the command takes no option by this name; its help lists them |  |
 | `verify.no-id` | `provider_error` | the answer to the sign-in check holds no account id where auth.verify says |  |
