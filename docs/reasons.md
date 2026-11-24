@@ -142,8 +142,11 @@ headings.
 | `decision.token-used` | `permission_error` | this button was already pressed |  |
 | `doctor.report-exists` | `validation_error` | the report's file exists; a problem report never overwrites a file |  |
 | `document.changed` | `validation_error` | the document changed while it was read; nothing was saved |  |
+| `document.needs-ocr` | `validation_error` | the PDF has no text layer; a documents sync reads it with OCR (read_scans) |  |
 | `document.not-found` | `not_found` | no listed document has that reference |  |
 | `document.not-imported` | `not_found` | the document is not imported in this source account |  |
+| `document.scan-later` | `validation_error` | OCR stopped at its page limit or a busy model; the next sync goes on |  |
+| `document.scan-unread` | `validation_error` | OCR could not read the scan or picture; a sync tries again once the file changes |  |
 | `document.version-missing` | `not_found` | the local copy holds no such version of the document |  |
 | `documents.other-account` | `configuration_error` | the documents are signed in as another account than the tracker copy of the same provider |  |
 | `download.mismatch` | `invalid_response` | the downloaded file has other content than the listing said |  |
@@ -532,6 +535,7 @@ headings.
 | `source-review.reason-required` | `validation_error` | a challenge says why in 1–2000 characters |  |
 | `source-review.suggestion-length` | `validation_error` | a suggestion with a challenge takes 1–2000 characters |  |
 | `source.changes-too-many` | `invalid_response` | more changed since one sync than a round reads, and the provider does not list changes oldest first |  |
+| `source.deletions-unchecked` | `permission_error` | the provider refused its deletions; sync --rescan finds them |  |
 | `source.engine-missing` | `configuration_error` | reading this source needs a reader package that is not installed |  |
 | `source.needs-sign-in` | `authentication_error` | the page asks for a sign-in; add a private Google document with drive documents add <url> --profiles <names\|all> |  |
 | `source.no-account` | `invalid_response` | the provider's answer does not name the signed-in account |  |
