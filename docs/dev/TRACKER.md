@@ -7,12 +7,29 @@ covers what runs over them.
 
 ## The domain
 
-Seven kinds, in the order a sync reads them: `team`, `user`, `state`, `label`, `project`, `issue`, `comment`
-(`TRACKER_KINDS`, `src/domain/tracker.ts`). Each record carries the tracker's `externalId`, its `createdAt`,
-`updatedAt` and `archivedAt` in epoch milliseconds, and refers to other rows by their tracker ids: an issue's `state`,
-`team`, `project`, `assignee`, `labels` and `parent`, a comment's `issue`. A state has one of six types
-(`STATE_TYPES`): `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`, so "open work" reads the same
-whatever each team named its states.
+Eight kinds, in the order a sync reads them: `team`, `user`, `state`, `label`, `project`, `sprint`, `issue`,
+`comment` (`TRACKER_KINDS`, `src/domain/tracker.ts`). Each record carries the tracker's `externalId`, its `createdAt`,
+`updatedAt` and `archivedAt` in epoch milliseconds, maybe `deleted`, and refers to other rows by their tracker ids: an
+issue's `state`, `team`, `project`, `sprint`, `assignee`, `labels` and `parent`, a comment's `issue`. A state has one
+of seven types (`STATE_TYPES`): `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`, `duplicate`, so
+"open work" reads the same whatever each team named its states. `duplicate` is closed as `canceled` is; it has a type
+of its own because Linear (a Duplicate state) and GitHub (`state_reason: duplicate`) both name it, and folding it into
+`canceled` would lose `type:duplicate`.
+
+A sprint is a time-boxed run of a team's work: a Linear cycle, a Jira sprint. It has a `name`, a `number`, a `team`,
+`startsAt`, `endsAt` and `completedAt`. Linear leaves most cycles unnamed; such a sprint is titled `Sprint <number>`.
+Sprints have no chunks and are not searched: their names say little.
+
+### Deleted and trashed rows
+
+A row the tracker still lists but calls deleted, as an issue in Linear's trash (`trashed: true`, with an `archivedAt`
+too), is marked deleted in the copy when it is read so: a manifest maps `deleted` to that path. Archived alone is not
+deleted. Linear moves no `updatedAt` when it trashes, restores or archives an issue (checked on 2026-11-24), so a read
+of changes never sees the trash. The kind's `ids` call selects the same path, and `ids()` leaves a deleted row out, so
+the daily id pass marks it deleted, as a row deleted outright. An issue marked deleted takes its comments with it
+(Linear only archives them), and a comment read under a deleted issue stays deleted; an issue read live again brings
+back the comments it took. A restored issue is read live again only by a full list (`sync --rescan`): Linear's audit
+log names a trashing (`issueDeleted`) but not a restore, and only to an admin key.
 
 ## The port
 
@@ -66,13 +83,19 @@ stops keeps its ids and the page it reached.
   they were and `tasks.skipped` says why; the copy is saved either way.
 - **`rescan`.** Lists everything again and every id, dropping a round in progress, and lets a held pass through unless a
   gap held it. A rescan that stops goes on as one in the next run.
+- **What the answer says.** `synced[].saved` and `progress.saved` count the rows that changed in the copy (new,
+  different, deleted or back again), so a sync with nothing new answers 0; `store.tracker.save` answers the same.
+  `deletions: { checked, due }` says when the id pass last ran for every kind (`null` before the first) and when it is
+  next due: a sync between them finds no deletion. Each gap is in `gaps` with its message, and the CLI's answer names
+  it in `meta.issues` as `tracker.kind-unread`, `meta.complete` false; the answer's own `complete`, which Desktop reads,
+  stays as the sync made it, since a key that lacks a scope lacks it on every sync.
 
 A save merges: a field the read left out keeps its stored value, so a partial selection never erases.
 
 ## `store.tracker`
 
 `save`, `removeUnlisted`, `get`, `issueByKey` (`ENG-12`, any case), `list` with issue filters (team, project,
-assignee or none, state, state types through the state rows, label, archived), `find` over titles, descriptions and
+assignee or none, sprint or none, state, state types through the state rows, label, archived), `find` over titles, descriptions and
 comment bodies, `count`, and `people`: the tracker users whose e-mail an identity linked to a person has, joined when
 read. Nothing is written to the people graph.
 
@@ -143,7 +166,7 @@ issue's key and title as its title (`ENG-12 Fix login`). The same issue never ma
 ## Commands
 
 `addTrackerCommands(program, { app, open, writes?, documents? })` mounts `sync`, `issues list|show|search|assign`, and
-`list` for `projects`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
+`list` for `projects`, `sprints`, `teams`, `users` (each with its person), `states` and `labels`; with `writes`, the writer's
 `TrackerWriter.writes`, also `issues create`, `update` and `comment` ([Writes](#writes)); with `documents`, a `sync`
 that brings the documents too ([One sync with documents](#one-sync-with-documents)). `sync --embed` then embeds new
 issues, projects and comments (`embedTracker` in `src/services/tracker-meaning.ts`, at most 600 chunks, within the
@@ -151,7 +174,7 @@ deadline) with a model already downloaded, answered under `embeddings`. A run it
 step that goes on keeps `embed`. A missing model keeps the sync's report and its step, and is named in `meta.issues`
 with `source` `tracker:embeddings`. Every text field from the tracker is named in the row's `untrusted`. Each list
 narrows by its query, as `deals list` does: `issues list team:<id> assignee:none type:started`, and `archived:include`
-for archived rows too.
+for archived rows too, and `sprint:<id>` or `sprint:none` for the issues of a sprint or of none.
 
 ## One sync with documents
 
@@ -267,6 +290,11 @@ Over GraphQL a call's `selection` replaces the operation's default one, so a tra
 a field missing from the request would read as "the tracker cleared it". The variables travel as the request body;
 the selection rides on the request as `selection`, which the `api` group's GraphQL executor sends.
 
+A map that reads `deleted` has its `ids` call select that path too, which `parseTrackerManifest` checks; Linear's
+issues map `deleted: "trashed"` and read their ids with `nodes { id trashed }`. Linear's cycles are `sprint`, read
+from `cycles` with `number name description startsAt endsAt completedAt team { id }`, and an issue's `sprint` is
+`cycle.id`.
+
 `self: { call, path }` names the signed-in user. `hooks.after` corrects a record; `hooks.extend` adds methods.
 
 `writes` maps each write to a mutation, in the shape the CRM manifest's writes use: `writes.issue.create` and
@@ -328,7 +356,7 @@ result.
 
 `trackerSourceContract(make)` checks an adapter: full lists in the domain's shape, every held row listed, a cursor
 read again, `ids()` covering the full list, a dead cursor answering reset, a clock off by ten minutes either way, an
-archived row still listed, a deleted row leaving `ids()`, a list cut after its first page, a spent budget ending a
+archived row still listed, a deleted row leaving `ids()`, a trashed row read as deleted and left out of `ids()`, a list cut after its first page, a spent budget ending a
 call that pages inside, and `self()`, when the tracker has it, naming one of its users. `fakeTrackerSource` and
 `exampleTrackerRows` are an in-memory tracker for tests.
 
@@ -354,13 +382,13 @@ for (const { name, run } of trackerManifestContract(SOURCE, { api, definitions }
   is trusted: it only picks which call of the manifest is answered, and the fake answers as if the tracker applied it.
 - A call whose fixed variables match no call of the manifest, a cursor the fake never gave and an unreadable since are
   refused and listed in `fake.refusals`, beside `graphqlFake`'s own (an unknown variable, a field the type lacks).
-  `touch`, `archive` and `remove` change a row on the tracker's side. Building the fake fails for a kind with
+  `touch`, `archive`, `trash` and `remove` change a row on the tracker's side. Building the fake fails for a kind with
   `changes` whose `updatedAt` the map does not read from a path.
 - `trackerManifestFixture` adds the source over it, the ids it holds per kind (`held`), a dead cursor (`"not a
   time"`, which the source answers with `reset` itself, without a call: the case checks the source, never the fake or
   the tracker's own refusal of a stale cursor), and the faults
   on the issue kind, else the last kind with `changes`: `skewed` and `change`, `archive` when the map reads
-  `archivedAt`, and `remove`. `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose
+  `archivedAt`, `trash` when it reads `deleted` too, and `remove`. `trackerManifestContract` runs `trackerSourceContract` over it and fails a case whose
   calls the fake refused, with the refusals as its message.
 - With `writes`, it answers the mutations: a create adds a row, an update changes the row its `"{id}"` names, each
   answered within the call's selection at its `items`, and an update of an id it does not hold gets the tracker's own

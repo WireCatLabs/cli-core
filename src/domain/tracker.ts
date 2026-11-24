@@ -1,13 +1,16 @@
 /**
  * What an issue tracker holds that the store copies (Linear, and any tracker after it): its teams, users, workflow
- * states, labels, projects, issues and the comments on them. Teams, users, states and labels come before the
- * projects and issues that name them.
+ * states, labels, projects, sprints, issues and the comments on them. Teams, users, states and labels come before the
+ * projects, sprints and issues that name them.
  */
-export const TRACKER_KINDS = ["team", "user", "state", "label", "project", "issue", "comment"] as const
+export const TRACKER_KINDS = ["team", "user", "state", "label", "project", "sprint", "issue", "comment"] as const
 export type TrackerKind = (typeof TRACKER_KINDS)[number]
 
-/** Where an issue in a state stands in its work, whatever the team named the state. */
-export const STATE_TYPES = ["triage", "backlog", "unstarted", "started", "completed", "canceled"] as const
+/**
+ * Where an issue in a state stands in its work, whatever the team named the state. `duplicate` is closed as
+ * `canceled` is, kept apart because Linear and GitHub both name it and a list may want those alone.
+ */
+export const STATE_TYPES = ["triage", "backlog", "unstarted", "started", "completed", "canceled", "duplicate"] as const
 export type StateType = (typeof STATE_TYPES)[number]
 
 /** A tracker's 0–4 priority as the family's label: 0 is none, the tracker's 1 urgent is critical. */
@@ -23,6 +26,11 @@ interface TrackerRecord {
   updatedAt?: number | null
   /** The tracker archived it: it still exists, and a read that asks for archived rows lists it. */
   archivedAt?: number | null
+  /**
+   * The tracker still lists it but it is deleted, as an issue in Linear's trash: the copy treats it as gone. Archived
+   * alone is not deleted.
+   */
+  deleted?: boolean | null
 }
 
 export interface TrackerTeam extends TrackerRecord {
@@ -64,6 +72,18 @@ export interface TrackerProject extends TrackerRecord {
   url?: string | null
 }
 
+/** A time-boxed run of a team's work: a Linear cycle, a Jira sprint. */
+export interface TrackerSprint extends TrackerRecord {
+  /** Linear leaves most cycles unnamed: then the title is `Sprint <number>`. */
+  name: string
+  number?: number | null
+  description?: string | null
+  team?: string | null
+  startsAt?: number | null
+  endsAt?: number | null
+  completedAt?: number | null
+}
+
 export interface TrackerIssue extends TrackerRecord {
   title: string
   /** The readable key people say: `ENG-12`. */
@@ -72,6 +92,7 @@ export interface TrackerIssue extends TrackerRecord {
   state?: string | null
   team?: string | null
   project?: string | null
+  sprint?: string | null
   /** Users' ids. */
   assignee?: string | null
   creator?: string | null
@@ -101,6 +122,7 @@ export interface TrackerRecords {
   state: TrackerState
   label: TrackerLabel
   project: TrackerProject
+  sprint: TrackerSprint
   issue: TrackerIssue
   comment: TrackerComment
 }
@@ -111,7 +133,9 @@ export const trackerTitleOf = <K extends TrackerKind>(kind: K, record: TrackerRe
     ? (record as TrackerIssue).title
     : kind === "comment"
       ? (record as TrackerComment).body.split("\n")[0]?.slice(0, 120) || "(comment)"
-      : (record as { name: string }).name
+      : kind === "sprint" && !(record as TrackerSprint).name
+        ? `Sprint ${(record as TrackerSprint).number ?? ""}`.trim()
+        : (record as { name: string }).name
 
 /** The record's text that search reads beside its title: a description or a comment's body. */
 export const trackerBodyOf = <K extends TrackerKind>(kind: K, record: TrackerRecords[K]): string | null | undefined =>
@@ -121,14 +145,14 @@ export const trackerBodyOf = <K extends TrackerKind>(kind: K, record: TrackerRec
       ? (record as TrackerIssue | TrackerProject).description
       : null
 
-/** The record its row hangs under: a comment's issue, a state's or a label's team. */
+/** The record its row hangs under: a comment's issue, a state's, a label's or a sprint's team. */
 export const trackerParentOf = <K extends TrackerKind>(
   kind: K,
   record: TrackerRecords[K],
 ): string | null | undefined =>
   kind === "comment"
     ? (record as TrackerComment).issue
-    : kind === "state" || kind === "label"
+    : kind === "state" || kind === "label" || kind === "sprint"
       ? (record as TrackerState).team
       : kind === "issue"
         ? (record as TrackerIssue).team

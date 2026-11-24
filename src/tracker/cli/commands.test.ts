@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { provide } from "../../cli/context.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type MessageStore, openStore } from "../../store/store.js"
+import type { TrackerSource } from "../source.js"
 import { exampleTrackerRows, fakeTrackerSource } from "../testing/index.js"
 import { addTrackerCommands } from "./index.js"
 
@@ -26,10 +27,10 @@ afterEach(async () => {
 
 type Answer = Record<string, unknown> & { items: Record<string, unknown>[]; item: Record<string, unknown> }
 
-const setup = async () => {
+const setup = async (wrap: (source: TrackerSource) => TrackerSource = (source) => source) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "tracker-cli-")), "store.db") })
   opened.push(store)
-  const source = fakeTrackerSource({ rows: exampleTrackerRows(), self: "user-1" })
+  const source = wrap(fakeTrackerSource({ rows: exampleTrackerRows(), self: "user-1" }))
   const cli = async (...args: string[]): Promise<Answer> => {
     let data = ""
     const root = new Command("tracker")
@@ -95,8 +96,45 @@ describe("tracker commands", () => {
     expect(stored[1]?.task).not.toHaveProperty("description")
     expect((await cli("sync")).item).toMatchObject({ tasks: { opened: 0, closed: 0, reopened: 0, renamed: 0 } })
 
-    expect(ids(await cli("states", "list", "--limit", "10"))).toHaveLength(6)
+    expect(ids(await cli("states", "list", "--limit", "10"))).toHaveLength(7)
     await expect(cli("issues", "list", "team:a", "team:b")).rejects.toThrow()
     expect(ids(await cli("projects", "list"))).toEqual(["project-1"])
+  })
+
+  it("lists sprints, narrows issues by sprint, and says when deletions are next looked for", async () => {
+    const { cli } = await setup()
+    const synced = await cli("sync")
+    expect(synced.item.deletions).toEqual({
+      checked: new Date(NOW).toISOString(),
+      due: new Date(NOW + 86_400_000).toISOString(),
+    })
+    expect(synced.meta).not.toHaveProperty("issues")
+    expect((await cli("sync")).item.synced).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "issue", saved: 0 })]),
+    )
+    const [sprint] = (await cli("sprints", "list")).items
+    expect(sprint).toMatchObject({ external_id: "sprint-1", number: 1, starts_at: "2026-11-01T00:00:00.000Z" })
+    expect(sprint?.untrusted).toEqual(["name", "description"])
+    expect(ids(await cli("issues", "list", "sprint:sprint-1"))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", "sprint:none")).sort()).toEqual(["issue-2", "issue-3"])
+  })
+
+  it("names a kind the sign-in could not read in meta.issues, and still answers the sync complete", async () => {
+    const { cli } = await setup((source) => ({
+      ...source,
+      changes: (kind, cursor, page, context) => {
+        if (kind === "label") {
+          context?.gap({ kind, message: "the key cannot read labels", scope: "read:labels" })
+          return Promise.resolve({ items: [], hasMore: false, cursor: null })
+        }
+        return source.changes(kind, cursor, page, context)
+      },
+    }))
+    const answer = await cli("sync")
+    expect(answer.item).toMatchObject({ complete: true, gaps: [{ kind: "label", scope: "read:labels" }] })
+    expect(answer.meta).toMatchObject({
+      complete: false,
+      issues: [{ code: "permission_error", reason: "tracker.kind-unread", source: "tracker:label" }],
+    })
   })
 })

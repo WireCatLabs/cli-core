@@ -96,11 +96,12 @@ const ISSUES_QUERY = {
     termField("state", "kw", "state:state-1", { relation: "the state's id, as states list shows it" }),
     termField("type", "enum", "type:started", { values: [...STATE_TYPES], relation: "repeat for any of several" }),
     termField("label", "kw", "label:label-1", { relation: "the label's id, as labels list shows it" }),
+    termField("sprint", "kw", "sprint:sprint-1", { relation: "the sprint's id, as sprints list shows it, or none" }),
     ARCHIVED,
   ],
 } as const satisfies QueryRegistry
 
-const TIMES = new Set(["createdAt", "updatedAt", "archivedAt", "completedAt", "canceledAt"])
+const TIMES = new Set(["createdAt", "updatedAt", "archivedAt", "completedAt", "canceledAt", "startsAt", "endsAt"])
 
 const snake = (name: string) => name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
@@ -111,6 +112,7 @@ const UNTRUSTED: Record<TrackerKind, string[]> = {
   state: ["name"],
   label: ["name"],
   project: ["name", "description", "status"],
+  sprint: ["name", "description"],
   issue: ["title", "description", "state_name", "labels_names"],
   comment: ["body"],
 }
@@ -151,6 +153,7 @@ const trackerSync = v.strictObject({
   ),
   gaps: v.array(v.strictObject({ kind: v.picklist(TRACKER_KINDS), message: text, scope: v.optional(text) })),
   progress: v.strictObject({ requests: count, saved: count, steps: count }),
+  deletions: v.strictObject({ checked: v.nullable(text), due: text }),
   tasks: v.optional(
     v.union([
       v.strictObject({ opened: count, closed: count, reopened: count, renamed: count }),
@@ -208,7 +211,11 @@ const resumeStep = (opts: SyncOptions, why: string, extra: Record<string, unknow
   safe_to_auto_execute: true,
 })
 
+/** A kind the sign-in could not read is left out of the copy, though the sync itself went through. */
+const UNREAD = "tracker.kind-unread"
+
 const trackerIssues = (report: TrackerReport) => [
+  ...report.gaps.map((gap) => ({ code: "permission_error" as const, reason: UNREAD, source: `tracker:${gap.kind}` })),
   ...report.synced
     .filter((one) => one.error !== undefined)
     .map((one) => ({ code: "provider_error" as const, reason: "sync.partial", source: `tracker:${one.kind}` })),
@@ -287,8 +294,12 @@ const combinedAnswer = (
     ...(outcome?.meta.issues ?? []),
     ...(documentsError ? [failed("documents", documentsError)] : []),
   ]
+  // A kind the sign-in cannot read stays unread on every sync: it is named, but the sync is still complete.
   const complete =
-    report?.state === "complete" && outcome !== undefined && outcome.meta.complete !== false && issues.length === 0
+    report?.state === "complete" &&
+    outcome !== undefined &&
+    outcome.meta.complete !== false &&
+    issues.every((one) => one.reason === UNREAD)
   const [trackerStep] = report ? trackerNext(report, opts) : []
   const resume = trackerStep !== undefined || outcome?.next.some(({ step }) => step === "sync.run")
   const next: NextStep[] = [
@@ -306,7 +317,7 @@ const combinedAnswer = (
     ? { ...report, complete, documents: documentsPart }
     : { complete: false as const, synced: [], error: trackerError, documents: documentsPart }
   return itemOf(item, {
-    ...(complete ? {} : { meta: { complete: false, ...(issues.length ? { issues } : {}) } }),
+    ...(complete && !issues.length ? {} : { meta: { complete: false, ...(issues.length ? { issues } : {}) } }),
     ...(next.length ? { next } : {}),
   })
 }
@@ -417,9 +428,9 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       documents ? "tracker_documents_sync" : "tracker_sync",
       documents ? trackerDocumentsSync : trackerSync,
     ).description(
-      "bring the tracker's copy in the local store up to date: teams, users, states, labels, projects, issues and " +
-        "comments that changed since the last sync, or everything with --rescan; once a day it also finds what the " +
-        "tracker deleted. Open issues assigned to you become your tasks, and close when the issue is done, " +
+      "bring the tracker's copy in the local store up to date: teams, users, states, labels, projects, sprints, " +
+        "issues and comments that changed since the last sync, or everything with --rescan; once a day it also finds " +
+        "what the tracker deleted, and says when it next will. Open issues assigned to you become your tasks, and close when the issue is done, " +
         "canceled, deleted or goes to someone else. " +
         (documents
           ? "It also imports what changed in the chosen document folders, answered under documents; a part that " +
@@ -557,7 +568,9 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     const terms = new Map(
       [...lists].filter(([field]) => field !== "type").map(([field, [one]]) => [field, one?.value as string]),
     )
-    const assignee = terms.get("assignee")?.toLowerCase() === "none" ? "none" : terms.get("assignee")
+    const noneOr = (field: string) => (terms.get(field)?.toLowerCase() === "none" ? "none" : terms.get(field))
+    const assignee = noneOr("assignee")
+    const sprint = noneOr("sprint")
     await within(command, true, async (run) => {
       const filter: TrackerFilter = {
         ...(terms.has("team") ? { parent: terms.get("team") as string } : {}),
@@ -566,6 +579,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
         ...(terms.has("state") ? { state: terms.get("state") as string } : {}),
         ...(types.length ? { stateTypes: types } : {}),
         ...(terms.has("label") ? { label: terms.get("label") as string } : {}),
+        ...(sprint !== undefined ? { sprint: sprint === "none" ? null : sprint } : {}),
         ...(terms.has("archived") ? { archived: true } : {}),
         limit: opts.limit,
         offset: (opts.page - 1) * opts.limit,
@@ -663,6 +677,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
 
   for (const [kind, plural, what] of [
     ["project", "projects", "the tracker's projects: status, lead, teams and target date"],
+    ["sprint", "sprints", "each team's sprints (Linear's cycles): number, start, end and when completed"],
     ["team", "teams", "the tracker's teams"],
     ["user", "users", "the tracker's users, each with the person the store knows by the same e-mail"],
     ["state", "states", "each team's workflow states and their type"],

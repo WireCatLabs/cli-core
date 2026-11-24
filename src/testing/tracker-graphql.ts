@@ -56,6 +56,15 @@ export const definitions: Record<string, SchemaNode> = {
     targetDate: text,
     url: text,
   }),
+  Cycle: node({
+    name: text,
+    number: { type: "number", nullable: true },
+    description: text,
+    team: ref("Team"),
+    startsAt: text,
+    endsAt: text,
+    completedAt: text,
+  }),
   Issue: node({
     identifier: text,
     title: text,
@@ -63,6 +72,7 @@ export const definitions: Record<string, SchemaNode> = {
     state: ref("WorkflowState"),
     team: ref("Team"),
     project: ref("Project"),
+    cycle: ref("Cycle"),
     assignee: ref("User"),
     creator: ref("User"),
     labels: ref("IssueLabelConnection", false),
@@ -71,11 +81,12 @@ export const definitions: Record<string, SchemaNode> = {
     dueDate: text,
     completedAt: text,
     canceledAt: text,
+    trashed: { type: "boolean", nullable: true },
     url: text,
   }),
   Comment: node({ body: text, issue: ref("Issue"), user: ref("User"), url: text }),
 }
-for (const name of ["Team", "User", "WorkflowState", "IssueLabel", "Project", "Issue", "Comment"])
+for (const name of ["Team", "User", "WorkflowState", "IssueLabel", "Project", "Cycle", "Issue", "Comment"])
   definitions[`${name}Connection`] = connection(name)
 
 const ids: SchemaNode = { type: "array", items: { type: "string" }, nullable: true }
@@ -123,6 +134,7 @@ export const FIELDS: Record<TrackerKind, [field: string, type: string]> = {
   state: ["workflowStates", "WorkflowState"],
   label: ["issueLabels", "IssueLabel"],
   project: ["projects", "Project"],
+  sprint: ["cycles", "Cycle"],
   issue: ["issues", "Issue"],
   comment: ["comments", "Comment"],
 }
@@ -188,7 +200,7 @@ export const PAGE_INFO = "pageInfo { hasNextPage endCursor }"
 const TIMES = "id createdAt updatedAt archivedAt"
 const ISSUE_ROW =
   `${TIMES} identifier title description state { id } team { id } project { id } assignee { id } ` +
-  "creator { id } labels { nodes { id } } parent { id } priority dueDate completedAt canceledAt url"
+  "creator { id } labels { nodes { id } } parent { id } cycle { id } priority dueDate completedAt canceledAt trashed url"
 const COMMENT_ROW = `${TIMES} body issue { id } user { id } url`
 const SELECTIONS: Record<TrackerKind, string> = {
   team: `nodes { ${TIMES} name key } ${PAGE_INFO}`,
@@ -196,6 +208,7 @@ const SELECTIONS: Record<TrackerKind, string> = {
   state: `nodes { ${TIMES} name type position team { id } } ${PAGE_INFO}`,
   label: `nodes { ${TIMES} name team { id } } ${PAGE_INFO}`,
   project: `nodes { ${TIMES} name description state lead { id } teams { nodes { id } } targetDate url } ${PAGE_INFO}`,
+  sprint: `nodes { ${TIMES} name number description team { id } startsAt endsAt completedAt } ${PAGE_INFO}`,
   issue: `nodes { ${ISSUE_ROW} } ${PAGE_INFO}`,
   comment: `nodes { ${COMMENT_ROW} } ${PAGE_INFO}`,
 }
@@ -218,14 +231,26 @@ const MAPS: { [K in TrackerKind]: Record<string, unknown> } = {
     targetDate: "targetDate",
     url: "url",
   },
+  sprint: {
+    ...TIME_MAP,
+    name: "name",
+    number: "number",
+    description: "description",
+    team: "team.id",
+    startsAt: "startsAt",
+    endsAt: "endsAt",
+    completedAt: "completedAt",
+  },
   issue: {
     ...TIME_MAP,
+    deleted: "trashed",
     key: ISSUE_KEY,
     title: "title",
     description: "description",
     state: "state.id",
     team: "team.id",
     project: "project.id",
+    sprint: "cycle.id",
     assignee: "assignee.id",
     creator: "creator.id",
     labels: { each: "labels.nodes", id: "id" },
@@ -242,7 +267,7 @@ const MAPS: { [K in TrackerKind]: Record<string, unknown> } = {
 export const ALL = { first: 50, includeArchived: true }
 export const MANIFEST = {
   provider: "example-tracker",
-  kinds: ["team", "user", "state", "label", "project", "issue", "comment"],
+  kinds: ["team", "user", "state", "label", "project", "sprint", "issue", "comment"],
   entities: Object.fromEntries(
     (Object.keys(FIELDS) as TrackerKind[]).map((kind) => {
       const [operation] = FIELDS[kind]
@@ -256,7 +281,11 @@ export const MANIFEST = {
             selection: SELECTIONS[kind],
             since: "iso",
           },
-          ids: { operation, variables: ALL, selection: `nodes { id } ${PAGE_INFO}` },
+          ids: {
+            operation,
+            variables: ALL,
+            selection: kind === "issue" ? `nodes { id trashed } ${PAGE_INFO}` : `nodes { id } ${PAGE_INFO}`,
+          },
           map: MAPS[kind],
         },
       ]

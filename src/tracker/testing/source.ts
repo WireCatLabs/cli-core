@@ -29,6 +29,11 @@ export interface FakeTrackerSource extends TrackerSource, TrackerWriter {
   archive(kind: TrackerKind, externalId: string): void
   /** Deletes one row outright, as only an id pass finds. */
   remove(kind: TrackerKind, externalId: string): void
+  /**
+   * Moves one row to the trash, as Linear does: still listed, archived and `deleted`, with its `updatedAt` as it was,
+   * so a change read misses it and only a full list or an id pass, which leaves it out, finds it.
+   */
+  trash(kind: TrackerKind, externalId: string): void
   /** The same tracker, read from a computer whose clock is `ms` off. */
   skewed(ms: number): FakeTrackerSource
 }
@@ -92,7 +97,9 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
     },
     async ids(kind: TrackerKind, page?: string, _context?: TrackerCallContext): Promise<TrackerIdPage> {
       const offset = page === undefined ? 0 : Number(page)
-      const all = listOf(kind).map((one) => one.externalId)
+      const all = listOf(kind)
+        .filter((one) => one.deleted !== true)
+        .map((one) => one.externalId)
       const items = all.slice(offset, offset + size)
       return offset + size < all.length
         ? { items, hasMore: true, nextCursor: String(offset + size) }
@@ -105,6 +112,11 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
       const found = find(kind, externalId)
       found.archivedAt = clock()
       found.updatedAt = found.archivedAt
+    },
+    trash(kind, externalId) {
+      const found = find(kind, externalId)
+      found.archivedAt = clock()
+      found.deleted = true
     },
     remove(kind, externalId) {
       const list = rows[kind] as { externalId: string }[] | undefined
@@ -164,7 +176,10 @@ export const fakeTrackerSource = (options: FakeTrackerSourceOptions): FakeTracke
 
 const T0 = Date.UTC(2026, 10, 1)
 
-/** A small Linear-like workspace: one team, two users, the six state types, a label, a project, three issues. */
+/**
+ * A small Linear-like workspace: one team, two users, the seven state types, a label, a project, a sprint, three
+ * issues.
+ */
 export const exampleTrackerRows = (): Required<FakeTrackerRows> => ({
   team: [{ externalId: "team-1", key: "ENG", name: "Engineering", updatedAt: T0 }],
   user: [
@@ -178,6 +193,7 @@ export const exampleTrackerRows = (): Required<FakeTrackerRows> => ({
     { externalId: "state-doing", name: "In Progress", type: "started", team: "team-1", position: 3, updatedAt: T0 },
     { externalId: "state-done", name: "Done", type: "completed", team: "team-1", position: 4, updatedAt: T0 },
     { externalId: "state-gone", name: "Canceled", type: "canceled", team: "team-1", position: 5, updatedAt: T0 },
+    { externalId: "state-twin", name: "Duplicate", type: "duplicate", team: "team-1", position: 6, updatedAt: T0 },
   ],
   label: [{ externalId: "label-bug", name: "Bug", team: "team-1", updatedAt: T0 }],
   project: [
@@ -191,6 +207,17 @@ export const exampleTrackerRows = (): Required<FakeTrackerRows> => ({
       updatedAt: T0,
     },
   ],
+  sprint: [
+    {
+      externalId: "sprint-1",
+      name: "",
+      number: 1,
+      team: "team-1",
+      startsAt: T0,
+      endsAt: T0 + 14 * 86_400_000,
+      updatedAt: T0,
+    },
+  ],
   issue: [
     {
       externalId: "issue-1",
@@ -200,6 +227,7 @@ export const exampleTrackerRows = (): Required<FakeTrackerRows> => ({
       state: "state-doing",
       team: "team-1",
       project: "project-1",
+      sprint: "sprint-1",
       assignee: "user-1",
       labels: ["label-bug"],
       priority: 1,

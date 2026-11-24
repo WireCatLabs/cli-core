@@ -72,6 +72,7 @@ export interface TrackerSyncResult {
   /** The cursor was dead, so the round became a full one. */
   reset: boolean
   state: "partial" | "complete"
+  /** Rows that changed in the copy: new, different, or deleted or back again. A row read again as it was is not. */
   saved: number
   /** Rows a complete id pass did not list, now marked deleted. */
   unlisted: number
@@ -97,6 +98,11 @@ export interface TrackerSyncReport {
   state: "partial" | "complete"
   stopped?: BudgetStop
   progress: { requests: number; saved: number; steps: number }
+  /**
+   * When the id pass that finds deleted rows last ran for every kind (`null` before the first) and when it is next due:
+   * a sync between them finds no deletion.
+   */
+  deletions: { checked: string | null; due: string }
   /**
    * The owner's tasks from issues assigned to the signed-in user, brought in line with the copy. Absent when the
    * tracker cannot name its user or the run was cancelled; `skipped` says why they were left as they were.
@@ -157,8 +163,9 @@ const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResul
       continue
     }
     if (page.items.length) {
-      result.saved += await store.tracker.save(account, kind, page.items, run.now)
-      run.report.progress.saved += page.items.length
+      const changed = await store.tracker.save(account, kind, page.items, run.now)
+      result.saved += changed
+      run.report.progress.saved += changed
     }
     run.report.progress.steps += 1
     if (!page.hasMore) {
@@ -270,6 +277,7 @@ export const syncTracker = async (
     complete: true,
     state: "complete",
     progress: { requests: 0, saved: 0, steps: 0 },
+    deletions: { checked: null, due: new Date(now).toISOString() },
   }
   const said = new Set<string>()
   const run: Run = {
@@ -341,6 +349,15 @@ export const syncTracker = async (
     report.stopped ? JSON.stringify({ v: 1, done: [...done], ...(mode.full ? { rescan: true } : {}) }) : "null",
   )
   await store.sync.setSyncState(account, GAPS, JSON.stringify(report.gaps))
+  const passes = await Promise.all(
+    kinds.map(
+      async (kind) =>
+        parsed<TrackerCursor>((await store.sync.syncState(account, trackerCursorName(kind)))?.value)?.passAt ?? 0,
+    ),
+  )
+  const checked = passes.reduce((least, one) => Math.min(least, one), passes[0] ?? 0)
+  if (checked > 0)
+    report.deletions = { checked: new Date(checked).toISOString(), due: new Date(checked + passEvery).toISOString() }
   if (source.self && source.traits.kinds.includes("issue") && report.stopped !== "cancelled")
     report.tasks = await ownTasks(run, source.self.bind(source))
   return report
