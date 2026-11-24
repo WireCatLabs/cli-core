@@ -107,6 +107,44 @@ describe("store version 73", () => {
     database.close()
   })
 
+  it("**builds a new store's empty tables without copying them**, to the schema and rows a copy gives", async () => {
+    const shape = (database: CacheDatabase) => ({
+      schema: database
+        .prepare("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name")
+        .all()
+        .map((row) => ({
+          type: row.type,
+          name: row.name,
+          sql: String(row.sql).replace(/^CREATE TABLE [`"]?\w+[`"]?/, "CREATE TABLE"),
+        })),
+      rows: Object.fromEntries(
+        // The seeded rows carry the clock time, not `now`.
+        V73.map((table) => [
+          table,
+          database
+            .prepare(`SELECT * FROM "${table}" ORDER BY rowid`)
+            .all()
+            .map(({ created_at: _created, updated_at: _updated, ...row }) => row),
+        ]),
+      ),
+    })
+    const dir = mkdtempSync(join(tmpdir(), "version-73-"))
+    const created = await openCache(join(dir, "new.db"))
+    migrate(created, { now: () => 1, rollback: { store: join(dir, "new.db"), freeBytes: plenty } })
+    const copied = await openCache(join(dir, "copied.db"))
+    migrate(copied, { migrations: upTo(72), now: () => 1 })
+    migrate(copied, { now: () => 1, rollback: { store: join(dir, "copied.db"), freeBytes: plenty } })
+
+    const declared = (database: CacheDatabase) =>
+      String(database.prepare("SELECT sql FROM sqlite_master WHERE name = 'accounts'").get()?.sql).split("(")[0]
+    expect(version(created)).toEqual({ version: 73, min_compatible: 73 })
+    // A renamed table keeps the name SQLite wrote into its definition; one created under its name keeps drizzle's.
+    expect([declared(created), declared(copied)]).toEqual(["CREATE TABLE `accounts` ", 'CREATE TABLE "accounts" '])
+    expect(shape(created)).toEqual(shape(copied))
+    created.close()
+    copied.close()
+  })
+
   it("leaves another tool's tables, rows, counters and triggers as they were", async () => {
     const { path, database } = await fileAt72()
     const sql = database.prepare("SELECT sql FROM sqlite_master WHERE name = 'other_tool_items'").get()?.sql

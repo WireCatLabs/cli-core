@@ -35,6 +35,31 @@ export const rebuildOf = (statements: string[]): Rebuild | undefined => {
 
 export const rebuilds = (statements: string[]): boolean => rebuildOf(statements) !== undefined
 
+/**
+ * The same migration with each empty copied table dropped and created under its own name, with no copy and no
+ * rename; a table with rows is copied as drizzle-kit wrote it. A hundred renames were most of a new store's first open.
+ */
+export const withoutEmptyCopies = (statements: string[], rows: ReadonlyMap<string, number>): string[] => {
+  const copied = new Set(
+    statements
+      .flatMap((statement) => /^CREATE TABLE `__new_(\w+)`/.exec(statement)?.[1] ?? [])
+      .filter((table) => rows.get(table) === 0),
+  )
+  const skipped = (statement: string) => {
+    const name =
+      /^INSERT INTO `__new_(\w+)`/.exec(statement)?.[1] ??
+      /^DROP TABLE `(\w+)`;$/.exec(statement.trim())?.[1] ??
+      /^ALTER TABLE `__new_(\w+)` RENAME TO `\w+`;$/.exec(statement.trim())?.[1]
+    return name !== undefined && copied.has(name)
+  }
+  return statements.flatMap((statement) => {
+    const created = /^CREATE TABLE `__new_(\w+)`/.exec(statement)?.[1]
+    if (created && copied.has(created))
+      return [`DROP TABLE IF EXISTS \`${created}\`;`, statement.replace(`\`__new_${created}\``, `\`${created}\``)]
+    return skipped(statement) ? [] : [statement]
+  })
+}
+
 export interface Saved {
   objects: { name: string; sql: string }[]
   notes: string[]

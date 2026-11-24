@@ -9,6 +9,7 @@ import {
   legacyRenames,
   pauseForeignKeys,
   rebuildOf,
+  withoutEmptyCopies,
 } from "./sqlite/rebuild.js"
 import {
   discardRollbackCopy,
@@ -250,7 +251,10 @@ const migrateLocked = (
       migration.before?.(database, now)
       if (rebuild) legacyRenames(database, true)
       try {
-        for (const statement of migration.statements) database.exec(statement)
+        // Only for a store new in this run; an existing store keeps the copies drizzle-kit wrote, empty tables included.
+        const statements =
+          saved && file.version === 0 ? withoutEmptyCopies(migration.statements, saved.rows) : migration.statements
+        for (const statement of statements) database.exec(statement)
       } finally {
         if (rebuild) legacyRenames(database, false)
       }
