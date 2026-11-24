@@ -536,7 +536,9 @@ const libraryOf = <M extends SourceFile>(
                 isFolder: options.isFolder,
                 ...(options.isDocument ? { isDocument: options.isDocument } : {}),
                 skipReason: options.skipReason ?? (() => undefined),
-                retryable: () => false,
+                // A file an older version kept by name for its type is read once a newer one reads that type; the
+                // planner asks only when `skipReason` no longer gives a reason. The words are the CLIs' own.
+                retryable: (skip) => skip.reason.startsWith("unsupported type: "),
                 errorOf,
                 assertHeld,
                 storeVersion: app.version,

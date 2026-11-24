@@ -4,17 +4,31 @@ import { attachmentMaxBytes } from "../../attachments/limits.js"
 
 const READABLE = new Set([
   "application/pdf",
+  "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/epub+zip",
+  "application/rtf",
+  "text/rtf",
+  "text/html",
+  "application/xhtml+xml",
   "text/csv",
   "text/tab-separated-values",
   "text/plain",
   "text/markdown",
 ])
 
-/** A file a documents sync reads the text of: PDF, docx, xlsx, CSV, TSV, plain text and Markdown. */
+/**
+ * A file a documents sync reads the text of: PDF, Word (doc, docx), RTF, OpenDocument (odt, ods, odp), xlsx, pptx,
+ * EPUB, HTML, CSV, TSV, plain text and Markdown. Images and scans are kept by name only.
+ */
 export const readableFile = ({ name, mime }: { name: string; mime: string }): boolean =>
-  READABLE.has(mime) || /\.(md|markdown|txt|pdf|docx|xlsx|csv|tsv)$/iu.test(name)
+  READABLE.has(mime) ||
+  /\.(md|markdown|txt|pdf|doc|docx|rtf|odt|ods|odp|xlsx|pptx|epub|html?|xhtml|csv|tsv)$/iu.test(name)
 
 /**
  * The text of a downloaded file through cli-core's readers, or a `validation_error` that says why there is none, in
