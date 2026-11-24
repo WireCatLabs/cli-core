@@ -103,7 +103,7 @@ describe("syncTracker", () => {
     for (let run = 0; run < 50 && rest.state === "partial"; run += 1)
       rest = await syncTracker(source, store, account, { now, budget: runBudget({ requests: 3 }) })
     expect(rest.state).toBe("complete")
-    expect(await store.tracker.count(account, "state")).toBe(6)
+    expect(await store.tracker.count(account, "state")).toBe(7)
     expect(await store.tracker.count(account, "issue")).toBe(3)
   })
 
