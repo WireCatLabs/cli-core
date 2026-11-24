@@ -38,7 +38,61 @@ export const rebuilds = (statements: string[]): boolean => rebuildOf(statements)
 export interface Saved {
   objects: { name: string; sql: string }[]
   notes: string[]
+  /** References that already pointed at missing rows before the copy, by `referenceKey`. */
+  broken: Set<string>
 }
+
+interface Dangling {
+  table: string
+  rowid: number
+  parent: string
+  column: string
+}
+
+/**
+ * By the referring columns, not `fkid`: the copy may list the foreign keys in another order. Each copied table has an
+ * integer `id`, so its rowid survives the copy.
+ */
+const referenceKey = ({ table, rowid, parent, column }: Dangling) =>
+  `${table}\u0000${rowid}\u0000${parent}\u0000${column}`
+
+const danglingIn = (database: CacheDatabase, tables: string[]): Dangling[] =>
+  tables.flatMap((table) => {
+    const rows = database.prepare(`PRAGMA foreign_key_check(${quote(table)})`).all()
+    if (rows.length === 0) return []
+    const columns = new Map<number, string[]>()
+    for (const fk of database.prepare('SELECT id, "from" FROM pragma_foreign_key_list(?) ORDER BY id, seq').all(table))
+      columns.set(Number(fk.id), [...(columns.get(Number(fk.id)) ?? []), String(fk.from)])
+    return rows.map((row) => ({
+      table,
+      rowid: Number(row.rowid),
+      parent: String(row.parent),
+      column: (columns.get(Number(row.fkid)) ?? []).join(", "),
+    }))
+  })
+
+interface DanglingGroup {
+  table: string
+  column: string
+  parent: string
+  rows: number
+  ids: number[]
+}
+
+const grouped = (dangling: Dangling[]): DanglingGroup[] => {
+  const groups = new Map<string, DanglingGroup>()
+  for (const { table, rowid, parent, column } of dangling) {
+    const key = `${table}\u0000${column}\u0000${parent}`
+    const group = groups.get(key) ?? { table, column, parent, rows: 0, ids: [] }
+    group.rows += 1
+    if (group.ids.length < KEPT_IDS) group.ids.push(rowid)
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+}
+
+const described = ({ table, column, parent, rows, ids }: DanglingGroup) =>
+  `${table}.${column} in ${rows === 1 ? "1 row" : `${rows} rows`} (${listed(ids)}) → ${parent}`
 
 const columnsOf = (database: CacheDatabase, table: string): string[] =>
   database
@@ -114,7 +168,18 @@ export const beforeRebuild = (database: CacheDatabase, rebuild: Rebuild, version
     database
       .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
       .run(`migration:${version}:repaired`, JSON.stringify(repaired), now)
-  return { objects, notes }
+  // Rows a sync or an older tool left pointing at deleted rows: the copy keeps them as they are, and says so.
+  const dangling = danglingIn(database, names)
+  if (dangling.length > 0) {
+    const groups = grouped(dangling)
+    notes.push(
+      `these references already pointed at rows that do not exist, and are kept as they were: ${groups.map(described).join("; ")}`,
+    )
+    database
+      .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+      .run(`migration:${version}:broken-references`, JSON.stringify(groups), now)
+  }
+  return { objects, notes, broken: new Set(dangling.map(referenceKey)) }
 }
 
 /** After the statements, still inside the transaction. */
@@ -126,13 +191,16 @@ export const afterRebuild = (database: CacheDatabase, rebuild: Rebuild, saved: S
       .map((row) => String(row.name)),
   )
   for (const { name, sql } of saved.objects) if (!present.has(name)) database.exec(sql)
-  const broken = rebuild.tables.flatMap(({ name }) =>
-    database.prepare(`PRAGMA foreign_key_check(${quote(name)})`).all().length > 0 ? [name] : [],
-  )
+  const broken = danglingIn(
+    database,
+    rebuild.tables.map(({ name }) => name),
+  ).filter((reference) => !saved.broken.has(referenceKey(reference)))
   if (broken.length > 0)
     throw new CliError(
       "configuration_error",
-      `schema ${version} would leave rows of ${broken.join(", ")} pointing at rows that do not exist — nothing was changed`,
+      `the migration to schema ${version} would break these references, so it was not run and nothing was changed: ` +
+        `${grouped(broken).map(described).join("; ")}. The store is whole and the tool you used before still opens ` +
+        "it; keep using that one and report this at https://github.com/WireCatLabs/cli-core/issues",
       { reason: "store.foreign-keys" },
     )
 }

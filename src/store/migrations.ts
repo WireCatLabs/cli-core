@@ -270,6 +270,8 @@ const migrateLocked = (
     return said.length > 0 ? said.join("\n") : undefined
   } catch (error) {
     rollBack(database)
+    // Only the copy this attempt wrote: the store is still at its version, and each retry would add another.
+    if (copy) discardRollbackCopy(copy)
     if (error instanceof CliError) throw error
     const cause = error instanceof Error ? error.message : String(error)
     throw new CliError(

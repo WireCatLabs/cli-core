@@ -1,9 +1,9 @@
-import { mkdtempSync, readdirSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { CacheDatabase } from "./driver.js"
-import { MIGRATIONS, migrate } from "./migrations.js"
+import { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 import { openCache } from "./open.js"
 import { MANIFEST } from "./sqlite/manifest.js"
 import { rollBack } from "./sqlite/rollback-copy.js"
@@ -251,6 +251,88 @@ describe("store version 73", () => {
       /copies persons without its columns other_tool_flag/,
     )
     expect(version(database)).toEqual({ version: 72, min_compatible: 56 })
+    database.close()
+  })
+
+  it("**keeps references that already pointed at missing rows**, names them and records them", async () => {
+    const { path, database } = await fileAt72()
+    database.exec("PRAGMA foreign_keys = OFF")
+    database.exec(`INSERT INTO chats (id, account_id, external_id, kind, title, created_at, updated_at)
+      VALUES (2, 99, '8', 'group', 'Gone account', 0, 0), (3, 'message', '9', 'group', 'Shifted columns', 0, 0)`)
+    database.exec("PRAGMA foreign_keys = ON")
+    const notice = migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+
+    expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
+    expect(notice).toContain("already pointed at rows that do not exist, and are kept as they were")
+    expect(notice).toContain("chats.account_id in 2 rows (2, 3) → accounts")
+    expect(
+      JSON.parse(
+        String(
+          database.prepare("SELECT value FROM store_settings WHERE key = 'migration:73:broken-references'").get()
+            ?.value,
+        ),
+      ),
+    ).toEqual([{ table: "chats", column: "account_id", parent: "accounts", rows: 2, ids: [2, 3] }])
+    // Text where an id belongs sorts above every number; the counter still counts from the largest id.
+    expect(sequence(database, "accounts")).toBe(99 + 1000)
+    expect(database.prepare("SELECT DISTINCT typeof(seq) AS type FROM sqlite_sequence").all()).toEqual([
+      { type: "integer" },
+    ])
+    expect(database.prepare("SELECT account_id FROM chats WHERE id = 2").get()).toEqual({ account_id: 99 })
+    database.close()
+  })
+
+  it("still refuses a reference the copy itself breaks, naming it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "version-73-"))
+    const database = await openCache(join(dir, "toy.db"))
+    const toy: Migration[] = [
+      {
+        version: 1,
+        minCompatible: 1,
+        statements: [
+          "CREATE TABLE `store_settings` (`key` text PRIMARY KEY, `value` text, `at` integer)",
+          "CREATE TABLE `parents` (`id` integer PRIMARY KEY)",
+          "CREATE TABLE `children` (`id` integer PRIMARY KEY, `parent_id` integer REFERENCES `parents`(`id`))",
+        ],
+      },
+      {
+        version: 2,
+        minCompatible: 1,
+        statements: [
+          "CREATE TABLE `__new_children` (\n\t`id` integer PRIMARY KEY,\n\t`parent_id` integer REFERENCES `parents`(`id`)\n);",
+          "INSERT INTO `__new_children`(`id`, `parent_id`) SELECT `id`, `parent_id` + 100 FROM `children`;",
+          "DROP TABLE `children`;",
+          "ALTER TABLE `__new_children` RENAME TO `children`;",
+        ],
+      },
+    ]
+    migrate(database, { migrations: toy.slice(0, 1), now: () => 1, ownTable: null })
+    database.exec("INSERT INTO parents (id) VALUES (1)")
+    database.exec("INSERT INTO children (id, parent_id) VALUES (1, 1)")
+    database.exec("PRAGMA foreign_keys = OFF")
+    database.exec("INSERT INTO children (id, parent_id) VALUES (2, 50)")
+    database.exec("PRAGMA foreign_keys = ON")
+
+    expect(() => migrate(database, { migrations: toy, now: () => 2, ownTable: null })).toThrow(
+      /would break these references, so it was not run and nothing was changed: children\.parent_id in 1 row \(1\) → parents\. .*report this/,
+    )
+    expect(database.prepare("SELECT max(version) AS v FROM schema_migrations").get()?.v).toBe(1)
+    expect(database.prepare("SELECT id, parent_id FROM children ORDER BY id").all()).toEqual([
+      { id: 1, parent_id: 1 },
+      { id: 2, parent_id: 50 },
+    ])
+    database.close()
+  })
+
+  it("discards the rollback copy of a refused run, and leaves older copies", async () => {
+    const { dir, path, database } = await fileAt72()
+    mkdirSync(join(dir, "backups"), { recursive: true })
+    writeFileSync(join(dir, "backups", "wirecat-rollback-schema-60-older.db"), "")
+    database.exec("UPDATE facts SET confirmed_by_type = 'person', confirmed_by_id = NULL")
+    expect(() => migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })).toThrow(
+      /break facts_confirmed_by_pair/,
+    )
+    expect(readdirSync(join(dir, "backups"))).toEqual(["wirecat-rollback-schema-60-older.db"])
     database.close()
   })
 })

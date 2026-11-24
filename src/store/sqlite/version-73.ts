@@ -84,8 +84,16 @@ const shapesOf = (database: CacheDatabase): Shape[] =>
       return { table, pairs, references }
     })
 
-const highest = (database: CacheDatabase, sql: string, ...params: string[]): number =>
-  Number(database.prepare(sql).get(...params)?.n ?? 0)
+const highest = (database: CacheDatabase, sql: string, ...params: string[]): number => {
+  const found = Number(database.prepare(sql).get(...params)?.n ?? 0)
+  return Number.isFinite(found) ? found : 0
+}
+
+/**
+ * SQLite sorts text above every number, so one row holding text where an id belongs (a real store had `'message'` in
+ * `emails.account_id`) would win `max()` and leave the counter empty.
+ */
+const largestId = (column: string) => `max(CASE WHEN typeof(${quote(column)}) = 'integer' THEN ${quote(column)} END)`
 
 /** Every id the store knows was handed out for `table`: its rows, and what names them from anywhere in the file. */
 const largestKnown = (database: CacheDatabase, table: string, shapes: Shape[]): number => {
@@ -97,21 +105,21 @@ const largestKnown = (database: CacheDatabase, table: string, shapes: Shape[]): 
   for (const shape of shapes) {
     for (const [column, parent] of shape.references)
       if (parent === table)
-        top = Math.max(top, highest(database, `SELECT max(${quote(column)}) AS n FROM ${quote(shape.table)}`))
+        top = Math.max(top, highest(database, `SELECT ${largestId(column)} AS n FROM ${quote(shape.table)}`))
     for (const [typeColumn, idColumn] of shape.pairs)
       for (const type of types)
         top = Math.max(
           top,
           highest(
             database,
-            `SELECT max(${quote(idColumn)}) AS n FROM ${quote(shape.table)} WHERE ${quote(typeColumn)} = ?`,
+            `SELECT ${largestId(idColumn)} AS n FROM ${quote(shape.table)} WHERE ${quote(typeColumn)} = ?`,
             type,
           ),
         )
   }
   for (const [other, column] of NAMED_BY[table] ?? [])
     if (shapes.some((shape) => shape.table === other))
-      top = Math.max(top, highest(database, `SELECT max(${quote(column)}) AS n FROM ${quote(other)}`))
+      top = Math.max(top, highest(database, `SELECT ${largestId(column)} AS n FROM ${quote(other)}`))
   return top
 }
 
@@ -125,7 +133,8 @@ export const seedSequences = (database: CacheDatabase, tables: string[], { margi
   const shapes = shapesOf(database)
   const seeds = tables.map((table) => [table, largestKnown(database, table, shapes) + (margin ? MARGIN : 0)] as const)
   const remove = database.prepare("DELETE FROM sqlite_sequence WHERE name = ?")
-  const insert = database.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)")
+  // node:sqlite binds a number as a double, and sqlite_sequence has no column types to turn it back.
+  const insert = database.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES (?, CAST(? AS INTEGER))")
   for (const [table, seed] of seeds) {
     remove.run(table)
     insert.run(table, seed)
