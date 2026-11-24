@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import { annotate, describeProgram } from "@wirecat/cli-base/commands"
+import { PNG } from "pngjs"
 import { describe, expect, it } from "vitest"
 import {
   documentIngestion,
@@ -12,6 +13,7 @@ import {
   type SourceFile,
 } from "../../documents.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
+import { pdf } from "../../testing/files.js"
 import { officeFixture } from "../../testing/office-files.js"
 import { REMOTE_READ } from "../effects.js"
 import { listOf } from "../envelope.js"
@@ -344,6 +346,98 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     await cli(["sync"])
     expect(reads).toEqual([])
   })
+})
+
+describe("scans and pictures in a documents sync", () => {
+  // A stand-in for the tesseract program: its version and a failure are files the test changes between syncs.
+  const fakeTesseract = () => {
+    const bin = mkdtempSync(join(tmpdir(), "fake-tesseract-"))
+    const program = join(bin, "tesseract")
+    writeFileSync(join(bin, "version"), "5.3.0")
+    writeFileSync(
+      program,
+      [
+        "#!/bin/sh",
+        `dir="${bin}"`,
+        'case "$1" in',
+        '  --version) echo "tesseract $(/bin/cat "$dir/version")" ;;',
+        "  --list-langs) printf 'List of available languages (2):\\neng\\nrus\\n' ;;",
+        '  *) [ -f "$dir/fail" ] && exit 1; /bin/cat > /dev/null; echo "$@" >> "$dir/calls"; echo "scanneedle words" ;;',
+        "esac",
+        "",
+      ].join("\n"),
+    )
+    chmodSync(program, 0o755)
+    const calls = () => {
+      try {
+        return readFileSync(join(bin, "calls"), "utf8").trim().split("\n").filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    return { bin, calls, reset: () => rmSync(join(bin, "calls"), { force: true }) }
+  }
+
+  it("reads a scan and a picture with tesseract once it is installed, again for another version, and keeps the text", async () => {
+    const tesseract = fakeTesseract()
+    const source = fakeDocumentSource("alpha", { feed: false })
+    source.put({ ...fakeFile("scan", ["root"], "application/pdf"), name: "scan.pdf" })
+    source.put({ ...fakeFile("photo", ["root"], "image/png"), name: "photo.png" })
+    const bytesOf: Record<string, Uint8Array> = {
+      scan: pdf(undefined, true),
+      photo: PNG.sync.write(new PNG({ width: 40, height: 20 })),
+    }
+    const content = source.content
+    const bytes = source.bytes
+    source.content = async (id, maxChars, file) => {
+      const known = source.files.get(id) as SourceFile
+      if (id !== "scan") return content(id, maxChars, file)
+      const text = await fileText(bytesOf.scan as Uint8Array, known, "box")
+      return { metadata: known, markdown: text, text, tabs: [] }
+    }
+    source.bytes = async (id, file) => bytesOf[id] ?? bytes(id, file)
+    const typed = (file: SourceFile) => (readableFile(file) ? undefined : `unsupported type: ${file.mime}`)
+    const { cli, env } = setup(source, memoryKeyring(), WORDS, undefined, typed)
+    env.PATH = dirname(process.execPath)
+    const skips = async () =>
+      Object.fromEntries(
+        JSON.parse((await cli(["sync"])).stdout).item.skipped.map((one: { id: string; reason: string }) => [
+          one.id,
+          one.reason,
+        ]),
+      )
+    const found = async () =>
+      JSON.parse((await cli(["search", "scanneedle", "--exact"])).stdout)
+        .item.hits.map((hit: { id: string }) => hit.id)
+        .sort()
+
+    await cli(["folders", "add", "root"])
+    const before = await skips()
+    expect(before.scan).toMatch(/^scans are not read: .*tesseract/)
+    expect(before.photo).toBe("unsupported type: image/png")
+
+    env.PATH = `${tesseract.bin}:${dirname(process.execPath)}`
+    expect(await skips()).toEqual({})
+    expect(tesseract.calls()).toEqual(["stdin stdout -l rus+eng", "stdin stdout -l rus+eng"])
+    expect(await found()).toEqual(["photo", "scan"])
+
+    tesseract.reset()
+    await cli(["sync"])
+    expect(tesseract.calls()).toEqual([])
+
+    writeFileSync(join(tesseract.bin, "version"), "5.4.0")
+    await cli(["sync"])
+    expect(tesseract.calls()).toHaveLength(2)
+
+    writeFileSync(join(tesseract.bin, "version"), "5.5.0")
+    writeFileSync(join(tesseract.bin, "fail"), "")
+    tesseract.reset()
+    expect(await skips()).toEqual({})
+    expect(await found()).toEqual(["photo", "scan"])
+    rmSync(join(tesseract.bin, "fail"))
+    await cli(["sync"])
+    expect(tesseract.calls()).toEqual([])
+  }, 60_000)
 })
 
 describe("other people's text in a documents CLI's answers", () => {
