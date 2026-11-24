@@ -5,6 +5,7 @@ import { CliError, type ErrorCode, isCliError, resolvePaths, writeSecurely } fro
 import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import * as v from "valibot"
 import { resolveAISettings } from "../../analysis/settings.js"
 import type { Deadline, RunBudget } from "../../background/budget.js"
 import { progressOf } from "../../background/checkpoints.js"
@@ -13,10 +14,15 @@ import {
   type documentIngestion,
   documentKnowledge,
   type FeedlessDocumentSource,
+  SCAN_READERS,
+  type ScanReaderChoice,
   type SourceContent,
   type SourceFile,
   type SourceState,
   type SourceStatePort,
+  scanReader,
+  scanRetry,
+  scanSkipReason,
   syncDocuments,
 } from "../../documents.js"
 import type { ProviderEntry } from "../../domain/providers.js"
@@ -35,6 +41,7 @@ import { writesOwnerFiles } from "../effects.js"
 import { type Body, renderAnswer } from "../envelope.js"
 import { accountFileFor, profilesHere, rememberAccount } from "../messenger/accounts.js"
 import { ProfileTokenStore } from "../profile-token.js"
+import { fromFile, type Settings } from "../settings.js"
 import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { addDocumentCatalogCommands, type DocumentCatalogCommands } from "./catalog.js"
 import { addLocalDocumentCommands, type LocalDocumentCommands } from "./documents.js"
@@ -52,6 +59,25 @@ import {
   documentSyncPart,
 } from "./sync.js"
 import { type DocumentWords, wordsOf } from "./words.js"
+
+/** `read_scans`: a documents CLI adds it to `settingsFor`; left out, scans are read on this computer. */
+export const DOCUMENT_SCAN_SETTINGS = {
+  profile: {
+    read_scans: v.optional(v.picklist(SCAN_READERS, `has to be one of ${SCAN_READERS.join(", ")}`)),
+  },
+  settings: [
+    {
+      key: "read_scans",
+      default: "local",
+      description:
+        "who reads the text of scans and pictures: local (the tesseract program), anthropic or openai " +
+        "(the AI model `ai set` chose, with pictures allowed), or off",
+    },
+  ],
+}
+
+const readScans = (settings: Pick<Settings, "configured" | "shared">): ScanReaderChoice =>
+  fromFile<ScanReaderChoice>(settings, "read_scans", "local").value
 
 type Resolve = Parameters<typeof baseContext>[1]
 type Group<T> = Omit<T, "words" | "output">
@@ -516,6 +542,16 @@ const libraryOf = <M extends SourceFile>(
               { reason: "documents.other-account" },
             )
           claimDocumentAccount(app, env(), name, live, tokens())
+          const { keyring, settings } = context()
+          const signal = environmentOf(command()).signal as AbortSignal | undefined
+          const scans = await scanReader(readScans(settings), {
+            app,
+            env: env(),
+            command: app.command,
+            ...(keyring ? { keyring } : {}),
+            ...(signal ? { signal } : {}),
+          })
+          const skipReason = options.skipReason ?? (() => undefined)
           return files().locked((assertHeld) =>
             withStore(true, async (store) => {
               const result = await syncDocuments<M>({
@@ -535,10 +571,11 @@ const libraryOf = <M extends SourceFile>(
                 maxEntries: options.maxEntries,
                 isFolder: options.isFolder,
                 ...(options.isDocument ? { isDocument: options.isDocument } : {}),
-                skipReason: options.skipReason ?? (() => undefined),
+                skipReason: (file) => scanSkipReason(scans, file, skipReason(file)),
                 // A file an older version kept by name for its type is read once a newer one reads that type; the
                 // planner asks only when `skipReason` no longer gives a reason. The words are the CLIs' own.
-                retryable: (skip) => skip.reason.startsWith("unsupported type: "),
+                retryable: (skip) => skip.reason.startsWith("unsupported type: ") || scanRetry(scans, skip.reason),
+                ...(scans ? { scans } : {}),
                 errorOf,
                 assertHeld,
                 storeVersion: app.version,

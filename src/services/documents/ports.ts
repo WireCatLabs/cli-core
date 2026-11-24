@@ -8,6 +8,7 @@ import type {
   SourceStatePort,
 } from "../../documents/model.js"
 import type { SourceQuery } from "../../documents/scope.js"
+import type { ScanReader } from "./scans.js"
 export interface SyncOptions<M extends SourceFile> {
   source: FeedlessDocumentSource<M> | undefined
   index: SourceIndex<M>
@@ -43,6 +44,8 @@ export interface SyncOptions<M extends SourceFile> {
   isDocument?(file: M): boolean
   skipReason(file: M): string | undefined
   retryable(skip: SourceSkip<M>, limit: number): boolean
+  /** Reads scans and pictures by OCR: a PDF whose `content()` answers `document.needs-ocr`, and a picture. */
+  scans?: ScanReader
   errorOf(error: unknown): CliError
   assertHeld(): void
   storeVersion: string

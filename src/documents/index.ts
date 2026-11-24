@@ -39,6 +39,14 @@ export {
   scanLocal,
   skippedName,
 } from "../services/documents/push.js"
+export {
+  SCAN_READERS,
+  type ScanReader,
+  type ScanReaderChoice,
+  scanReader,
+  scanRetry,
+  scanSkipReason,
+} from "../services/documents/scans.js"
 export { KEEP_VERSIONS_FOR_DAYS, type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export {
   type FileConflictResolution,

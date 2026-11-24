@@ -11,7 +11,8 @@ export interface OcrPipeline {
   transcribe: (image: ModelImage) => Promise<string>
 }
 
-const MAX_PAGES = 20
+/** Pages one PDF may have to be read by OCR; a longer one answers `too-large`. */
+export const MAX_PAGES = 20
 const MAX_PIXELS = 20_000_000
 
 interface PdfPage {
