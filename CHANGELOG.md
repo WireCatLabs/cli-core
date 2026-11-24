@@ -5,6 +5,31 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.746.0 — 24.11.2026
+
+### Added
+
+- **`messengerSessionCommands(messenger)` gives a messenger `session status` and `session list`** (WC-ACCT-12), to
+  mount beside its own `session start` and `session end`. `session list` takes no profile and answers what
+  `account list` answers, from this computer alone. `session status` says whether the profile has a session here and
+  the account it was logged in as; `--check` asks the messenger whose the session is, without the phone number.
+  `account list` stays as it is.
+- **`*` in an untrusted path, for an object whose keys differ.** `properties.*.name` marks `name` under each property,
+  and `properties.*` every string under `properties`, at any depth. `API_UNTRUSTED`, for a CLI's own raw call such as
+  `api call`, is exported from `@wirecat/cli-core/documents/cli` ([DOCUMENTS.md](docs/dev/DOCUMENTS.md)).
+
+### Fixed
+
+- **Every `api <operation>` answer, `mirrors preview` and `mirrors conflicts list` are marked untrusted for a
+  scheduled agent.** In a run locked read-only with a mark, each generated `api` operation marks every string of the
+  provider's answer, with no code in the CLI; an object's keys stay as they are. `mirrors preview` marks the files its
+  plan names and `mirrors conflicts list` each conflict's path. Elsewhere the answers are unchanged. A CLI that wrapped
+  its `api` operations with its own list now has it added to every string ([DOCUMENTS.md](docs/dev/DOCUMENTS.md)). A marked text cut short in compact
+  output keeps its closing marker.
+- **A marked value an agent copies into the next command works.** A locked run takes each block of its own mark off
+  the command's arguments, so a marked id, path or property name reads as the text inside. A block of another mark
+  stays as typed. A body read from a file or stdin is not changed.
+
 ## 0.745.0 — 24.11.2026
 
 ### Fixed
