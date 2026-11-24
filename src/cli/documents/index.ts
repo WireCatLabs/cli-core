@@ -62,6 +62,7 @@ export {
   mirrorRow,
   tagRow,
 } from "./queries.js"
+export { rekeySyncedDocument, type SyncedDocumentRekey } from "./rekey.js"
 export { addDocumentSearchCommand, type DocumentSearchCommands, type DocumentSearchOptions } from "./search.js"
 export { addDocumentSyncCommands, type DocumentSyncArgs, type DocumentSyncCommands } from "./sync.js"
 export { ageOf, type CopyAge, type DocumentTexts, type DocumentWords, staleCopy } from "./words.js"

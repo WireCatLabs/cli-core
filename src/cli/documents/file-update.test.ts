@@ -100,6 +100,16 @@ describe("files update", () => {
     expect(disk.files.get("/notes.md")).toBe(OLD)
   })
 
+  it("a conflict the target names with its own reason reaches the caller as the target said it", async () => {
+    const disk = harness()
+    const own = "another file took /notes.md; the new content is kept at /.notes.md.tmp"
+    disk.whenUploading(() => {
+      throw new CliError("conflict", own, { reason: "upload.replace-interrupted" })
+    })
+    const refused = disk.run("/notes.md", "--text", NEW, "--expected-fingerprint", sha256(OLD))
+    await expect(refused).rejects.toMatchObject({ message: own, details: { reason: "upload.replace-interrupted" } })
+  })
+
   it("a change after the file was kept is caught by the target's check, and nothing is uploaded", async () => {
     const disk = harness()
     disk.whenUploading(() => disk.files.set("/notes.md", "another device's edit"))

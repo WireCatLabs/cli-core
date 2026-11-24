@@ -25,6 +25,7 @@ import { documentHistoryOver, keepRevision, logDocumentChange, removeDocument } 
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
 import { fileNoteRow } from "./file-note.js"
+import { foldRekeyed } from "./file-note-rekey.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind, RELATION_KINDS } from "./link-kinds.js"
@@ -165,8 +166,11 @@ export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources,
   /** Every documents account the store holds, by provider then account. */
   documentsAccounts(): Promise<NoteFolder[]>
   saveFileNote(input: FileNoteInput): Promise<{ note: Note; changed: boolean }>
-  /** Moves a file note to a new path in its folder, keeping its id, links and tags; a gone note at `to` is dropped. */
-  renameFileNote(folderId: string, from: string, to: string): Promise<Note>
+  /**
+   * Moves a file note to a new path in its folder, keeping its id, links and tags; a gone note at `to` is dropped.
+   * `fold` is for a source that gave the file a new id: see `foldRekeyed`.
+   */
+  renameFileNote(folderId: string, from: string, to: string, options?: { fold?: boolean }): Promise<Note>
   /**
    * Sets the time the source dates each note at these paths (ISO 8601), the note's `modifiedAt`, without counting
    * as an edit: text, revision and `updatedAt` stay. Answers how many notes it changed.
@@ -712,11 +716,12 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         if (!same) followPreferred(id, at)
         return { note: noteAt(id, folder, path), changed: !same }
       }),
-    renameFileNote: async (folderId, from, to) =>
+    renameFileNote: async (folderId, from, to, options) =>
       write(database, () => {
         const folder = Number(folderRow(folderId, true).id)
         const target = textOf(to, "a note's path", 4096)
         const at = now()
+        if (options?.fold) foldRekeyed(database, folder, from, target, at)
         const place = fileAt(folder, from, true)
         const legacy = database
           .prepare("SELECT id FROM documents WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")

@@ -706,9 +706,16 @@ writes over the content the caller read and nothing else, through the same `File
 2. The current content is downloaded into the profile's version store, under its state folder and never in a mirrored
    folder. Its hash is the proof: another one is `conflict`, reason `mirror.remote-changed`, with the command that
    reads the file again, and nothing is uploaded.
-3. The target's `upload` checks `{ sha256: expected }` again just before it sends. Few providers have a conditional
-   upload, so a change landing between that check and the upload is not caught. What the write replaced is kept and
-   logged (`changed`, `from: "remote"`), so the write can be undone.
+3. The target's `upload` checks `{ sha256: expected }` again. Few providers have a conditional upload, so most check
+   just before they send, and a change landing between that check and the upload is not caught. A target that can
+   have the provider check it (Yandex Disk replaces through a temporary file and a delete at the md5) does so. What
+   the write replaced is kept and logged (`changed`, `from: "remote"`), so the write can be undone. A `conflict` the
+   target raises with a reason of its own other than `mirror.remote-changed` (`upload.replace-interrupted`) reaches
+   the caller as the target worded it, here and in a mirror's sync, since it says what was done.
+4. A target whose replace gives the file a new id calls `rekeySyncedDocument` (`@wirecat/cli-core/documents/cli`)
+   after it, with the CLI's documents ingestion: the synced copy moves to the new id (`renameFileNote` with
+   `fold`), so the owner's tags, the notes about it and its links follow the file. A sync that ran in between and
+   filed the file anew is folded into the old document. A failure only warns: the write already happened.
 
 The answer is the file as the remote now has it and the replaced sha256. The store's retention is not run here: it
 runs under a mirror sync's lock.
