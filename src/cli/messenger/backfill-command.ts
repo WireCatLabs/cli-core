@@ -229,6 +229,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           pageSize,
           pause,
           catchUp: prepare,
+          ...(include ? { fullHistory: true } : {}),
           ...(withMuted ? { withMuted } : {}),
           ...(catchUpChunks === undefined ? {} : { catchUpChunks }),
           ...(catchUpMessages === undefined ? {} : { catchUpMessages }),
@@ -535,6 +536,7 @@ const fetchArgv = (
     since,
     last,
     catchUp,
+    fullHistory,
     withMuted,
     catchUpChunks,
     catchUpMessages,
@@ -547,6 +549,7 @@ const fetchArgv = (
     since?: string
     last?: number
     catchUp?: boolean
+    fullHistory?: boolean
     withMuted?: boolean
     catchUpChunks?: number
     catchUpMessages?: number
@@ -567,6 +570,7 @@ const fetchArgv = (
     ...(since === undefined ? [] : ["--since-time", since]),
     ...(last === undefined ? [] : ["--last", String(last)]),
     ...(catchUp === undefined ? [] : [catchUp ? "--catch-up" : "--no-catch-up"]),
+    ...(fullHistory ? ["--full-history"] : []),
     ...(withMuted ? ["--with-muted"] : []),
     ...(catchUpChunks === undefined ? [] : ["--catch-up-chunks", String(catchUpChunks)]),
     ...(catchUpMessages === undefined ? [] : ["--catch-up-messages", String(catchUpMessages)]),

@@ -616,6 +616,9 @@ describe("store fetch in the background", () => {
     await call(["messages", "sync", "--all", "--with-muted", "--background", "--json"], idle, setup(), { spawnJob })
     expect(calls[1]?.argv).toContain("--with-muted")
     expect(calls[0]?.argv).not.toContain("--with-muted")
+    await call(["messages", "sync", "7", "--full-history", "--background", "--json"], idle, setup(), { spawnJob })
+    expect(calls[2]?.argv).toContain("--full-history")
+    expect(calls[0]?.argv).not.toContain("--full-history")
   })
 
   it("**starts a job that runs the same fetch apart, pinned to the profile, with no shell timeout**", async () => {
