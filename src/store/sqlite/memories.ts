@@ -415,6 +415,8 @@ export const memoriesStoreOver = (
       }
       return made
     })
+    // A read-only open never builds the index, so a memory added from a CLI would stay unfound by its search.
+    drainCorpus(database, CORPORA.memory, stemmerFor)
     return memoryOf(rowOf(`memory:${id}`))
   }
   /** Applies a pending correction; only the owner retires a confirmed memory, whatever `agent_decisions` says. */

@@ -9,7 +9,13 @@ import { addDocumentSearchCommand, type DocumentSearchCommands } from "./search.
 import { addDocumentSyncCommands, type DocumentSyncCommands } from "./sync.js"
 import type { DocumentWords } from "./words.js"
 
-export { DOCUMENT_CONTEXT_UNTRUSTED, DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
+export {
+  DOCUMENT_CONTEXT_UNTRUSTED,
+  DOCUMENT_UNTRUSTED,
+  IDENTITY_UNTRUSTED,
+  KNOWLEDGE_UNTRUSTED,
+  marksUntrusted,
+} from "../untrusted-marks.js"
 export {
   addDocumentCatalogCommands,
   CATALOG_FIELDS,

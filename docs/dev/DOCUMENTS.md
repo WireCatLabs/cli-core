@@ -389,16 +389,24 @@ the answer is as before, and no answer gains a field. `DOCUMENT_UNTRUSTED` (`nam
 `search`, `folders list`, a library CLI's `folders browse` and `catalog show|list|search|tree`, whatever the CLI's
 row holds. `relationships list` marks only the link text written in the document (`targetText`): the rest of a
 relationship is the owner's or an agent's.
-`documents context` marks only `document.title|text|path` and the links' `targetText`: the notes, memories, facts
-and tags beside it are the owner's, as a note is in `search notes`, and `notes`, `memories` and `facts` stay
-unmarked. `files sheets show` marks a sheet's name and its cells' values and formulas, `files documents show` the
+`memories list|show|search` and `facts list|show` mark each one's `text` (`KNOWLEDGE_UNTRUSTED`), whoever wrote
+it: a model's repeats the document's words, and the store cannot tell which of the owner's or an agent's did
+([Facts, memories and what agents do](KNOWLEDGE.md#facts-memories-and-what-agents-do)). `identities list` marks the
+`name` the provider shows for an account and the person's `name` beside it (`IDENTITY_UNTRUSTED`): the account's
+holder chose it, and a CLI seeds a new person's name from it. `documents context` marks the same:
+`document.title|text|path`, the links' `targetText`, `memories.text`, `facts.text` and `people.items.name|person.name`.
+The notes and tags beside it are the owner's, as a note is in `search notes`, and `notes` stays unmarked.
+`memories extract` and the other writes never answer a locked run, which refuses them.
+`files sheets show` marks a sheet's name and its cells' values and formulas, `files documents show` the
 paragraphs' text, and `mirrors conflicts show` the path, the three versions' text, the merge and each hunk.
 `documents export` answers only the owner's own `--output` path, so it marks nothing.
 
 A CLI with its own reads of the same text marks them itself: drive-cli's own `documents`, `catalog` and knowledge
 commands, notion-cli's `documents get` and `folders browse`, yandex-disk-cli's `files` reads. It imports
-`DOCUMENT_UNTRUSTED` (or `DOCUMENT_CONTEXT_UNTRUSTED` for a context answer) and `marksUntrusted` from
-`@wirecat/cli-core/documents/cli` and wraps each such command: `marksUntrusted(command, DOCUMENT_UNTRUSTED)`.
+`DOCUMENT_UNTRUSTED` (or `DOCUMENT_CONTEXT_UNTRUSTED` for a context answer, `KNOWLEDGE_UNTRUSTED` for memories and
+facts, `IDENTITY_UNTRUSTED` for `identities list`) and `marksUntrusted` from `@wirecat/cli-core/documents/cli` and
+wraps each such command: `marksUntrusted(command, DOCUMENT_UNTRUSTED)`. These lists name cli-core's fields; a CLI
+whose rows use other names passes its own, such as drive-cli's `displayName` for an account.
 
 `@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
 for pages with sub-pages, `change` to check the change feed, and `change` with `remove` for a source without one), and `documentCommandsContract` the CLI's mounted

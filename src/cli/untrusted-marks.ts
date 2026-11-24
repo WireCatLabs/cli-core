@@ -113,10 +113,29 @@ export const DOCUMENT_UNTRUSTED = [
 ] as const
 
 /**
- * `documents context`: the document and the links written in it. The notes, memories, facts and tags beside it are
- * the owner's own, as a note is in `search notes`, so a bare `text` or `title` would mark them too.
+ * A memory's or a fact's text about a document. A model's repeats the words of whoever wrote the document, and the
+ * store cannot tell which text an owner or an agent copied from it, so every one is marked.
  */
-export const DOCUMENT_CONTEXT_UNTRUSTED = ["document.title", "document.text", "document.path", "links.targetText"]
+export const KNOWLEDGE_UNTRUSTED = ["text"] as const
+
+/** The accounts a provider shows on a document: the names their holders chose, and the person named after one. */
+export const IDENTITY_UNTRUSTED = ["name"] as const
+
+/**
+ * `documents context`: the document, the links written in it, the memories and facts about it and the provider's
+ * names of its accounts. The notes and tags beside it are the owner's own, as a note is in `search notes`, so a bare
+ * `text` or `title` would mark them too.
+ */
+export const DOCUMENT_CONTEXT_UNTRUSTED = [
+  "document.title",
+  "document.text",
+  "document.path",
+  "links.targetText",
+  "memories.text",
+  "facts.text",
+  "people.items.name",
+  "people.items.person.name",
+]
 
 const DECLARED = new WeakMap<Command, readonly string[]>()
 
