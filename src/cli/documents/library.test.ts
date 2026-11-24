@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
@@ -15,6 +15,7 @@ import {
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { pdf } from "../../testing/files.js"
 import { officeFixture } from "../../testing/office-files.js"
+import { fakeTesseract } from "../../testing/tesseract.js"
 import { REMOTE_READ } from "../effects.js"
 import { listOf } from "../envelope.js"
 import { commandPermissions } from "../permission-keys.js"
@@ -349,35 +350,6 @@ describe("documentLibraryCommands over a source without a change feed", () => {
 })
 
 describe("scans and pictures in a documents sync", () => {
-  // A stand-in for the tesseract program: its version and a failure are files the test changes between syncs.
-  const fakeTesseract = () => {
-    const bin = mkdtempSync(join(tmpdir(), "fake-tesseract-"))
-    const program = join(bin, "tesseract")
-    writeFileSync(join(bin, "version"), "5.3.0")
-    writeFileSync(
-      program,
-      [
-        "#!/bin/sh",
-        `dir="${bin}"`,
-        'case "$1" in',
-        '  --version) echo "tesseract $(/bin/cat "$dir/version")" ;;',
-        "  --list-langs) printf 'List of available languages (2):\\neng\\nrus\\n' ;;",
-        '  *) [ -f "$dir/fail" ] && exit 1; /bin/cat > /dev/null; echo "$@" >> "$dir/calls"; echo "scanneedle words" ;;',
-        "esac",
-        "",
-      ].join("\n"),
-    )
-    chmodSync(program, 0o755)
-    const calls = () => {
-      try {
-        return readFileSync(join(bin, "calls"), "utf8").trim().split("\n").filter(Boolean)
-      } catch {
-        return []
-      }
-    }
-    return { bin, calls, reset: () => rmSync(join(bin, "calls"), { force: true }) }
-  }
-
   it("reads a scan and a picture with tesseract once it is installed, again for another version, and keeps the text", async () => {
     const tesseract = fakeTesseract()
     const source = fakeDocumentSource("alpha", { feed: false })

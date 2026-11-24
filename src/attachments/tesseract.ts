@@ -8,6 +8,7 @@ import type { OcrPipeline } from "./ocr.js"
 const LANGUAGES = ["rus", "eng"]
 const PAGE_MS = 120_000
 const PROBE_MS = 10_000
+const PROBE_BYTES = 64 * 1024
 
 export const TESSERACT_HINT =
   "reading scans on this computer needs the tesseract program with its Russian and English data " +
@@ -18,13 +19,18 @@ interface Ran {
   stdout: string
 }
 
-const run = (args: string[], env: NodeJS.ProcessEnv, timeout: number, input?: Uint8Array, signal?: AbortSignal) =>
+const run = (
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  timeout: number,
+  { input, signal, errors = false }: { input?: Uint8Array; signal?: AbortSignal | undefined; errors?: boolean } = {},
+) =>
   new Promise<Ran>((resolve, reject) => {
     // The PATH of the run's own environment finds the program, so a test or a moved run picks its own.
     const child = spawn("tesseract", args, {
       env,
       shell: false,
-      stdio: ["pipe", "pipe", "ignore"],
+      stdio: ["pipe", "pipe", "pipe"],
       timeout,
       windowsHide: true,
       ...(signal ? { signal } : {}),
@@ -36,6 +42,11 @@ const run = (args: string[], env: NodeJS.ProcessEnv, timeout: number, input?: Ui
       // Four bytes a character at most: more than that is never text the store keeps.
       if (size > MAX_TEXT_CHARS * 4) child.kill()
       else chunks.push(chunk)
+    })
+    // Tesseract 3 printed its version and languages to stderr, so a probe reads both; a page's warnings are dropped.
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (errors && size < PROBE_BYTES) chunks.push(chunk)
+      if (errors) size += chunk.length
     })
     child.on("error", reject)
     child.on("close", (code) => resolve({ code, stdout: Buffer.concat(chunks).toString("utf8") }))
@@ -54,8 +65,8 @@ export const tesseractPipeline = async (
   let version: Ran
   let listed: Ran
   try {
-    version = await run(["--version"], env, PROBE_MS)
-    listed = await run(["--list-langs"], env, PROBE_MS)
+    version = await run(["--version"], env, PROBE_MS, { errors: true })
+    listed = await run(["--list-langs"], env, PROBE_MS, { errors: true })
   } catch {
     return { missing: TESSERACT_HINT }
   }
@@ -69,13 +80,10 @@ export const tesseractPipeline = async (
       // The version and the languages name the reading, so installing Russian data later reads the scans again.
       extractor: `ocr:v1:tesseract@${number}:${chosen}`,
       transcribe: async (image: ModelImage) => {
-        const read = await run(
-          ["stdin", "stdout", "-l", chosen],
-          env,
-          PAGE_MS,
-          Buffer.from(image.data, "base64"),
+        const read = await run(["stdin", "stdout", "-l", chosen], env, PAGE_MS, {
+          input: Buffer.from(image.data, "base64"),
           signal,
-        ).catch((error: unknown) => {
+        }).catch((error: unknown) => {
           if (signal?.aborted) throw new CliError("cancelled", "OCR cancelled")
           throw error
         })

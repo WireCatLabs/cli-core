@@ -239,9 +239,11 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   downloaded: tesseract.js was left out because it fetches its language data from a CDN. A PDF whose `content()`
   answers `document.needs-ocr` (what `fileText` says for a file with no text layer) and a JPEG, PNG or WebP picture
   up to 25 MB (which a CLI keeps as `unsupported type: …`) are downloaded once more with `bytes()` and read page by
-  page, at most 20 pages a file and 100 a sync; the rest wait for the next sync. TIFF, HEIC and BMP stay by name
-  only. With no reader (tesseract missing, the model not allowed), a scan is kept by name with the reason and the
-  install hint, and is read on the first sync after that is fixed. The engine's name (`ocr:v1:tesseract@5.3.0:rus+eng`,
+  page, at most 20 pages a file and 100 a sync; the rest wait for the next sync, and are refused before any download,
+  so they take none of the run's budget. TIFF, HEIC and BMP stay by name only. With no reader (tesseract missing,
+  the model not allowed, the PDF engines missing for a PDF), a scan is kept by name with the reason and the install
+  hint, and is read on the first sync after that is fixed. A rate limit or an unreachable model leaves the file for
+  the next sync too; a file OCR finds no text in stays by name until it changes. The engine's name (`ocr:v1:tesseract@5.3.0:rus+eng`,
   `ocr:v1:openai/gpt-5`) is saved with the text, so another engine or model reads those files again, 50 a sync.
   Text OCR read once stays when a later reading fails or `read_scans` is `off`; only an edit of the file makes it old.
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one

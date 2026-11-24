@@ -209,7 +209,9 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           }
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
-          const stop = ask()
+          const picture = scans?.extractor !== undefined && job.file !== undefined && readsAsPicture(job.file)
+          // A picture past this sync's OCR page limit is refused without a download, so it takes none of the budget.
+          const stop = picture && scans?.full?.() ? null : ask()
           if (stop) {
             result.stopped = stop
             break
@@ -217,14 +219,12 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           // A scan's text comes from OCR of its bytes, one more download, taken from the budget as a read is.
           const scanned = async (file: M): Promise<SourceContent<M>> => {
             const reader = scans as NonNullable<typeof scans>
-            // A reader with no engine only says why; the file need not be downloaded for that.
-            const bytes = reader.extractor ? await source.bytes(file.id, file) : new Uint8Array()
-            const text = (await reader.read(bytes, file)).slice(0, limit)
+            const text = (await reader.read(() => source.bytes(file.id, file), file)).slice(0, limit)
             return { metadata: file, markdown: text, text, tabs: [] }
           }
           let content: SourceContent<M>
           let ocr: string | undefined
-          if (scans?.extractor && job.file && readsAsPicture(job.file)) {
+          if (picture && job.file) {
             content = await scanned(job.file)
             ocr = scans.extractor
           } else
@@ -232,7 +232,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
               content = await source.content(job.id, limit, job.file)
             } catch (error) {
               if (!scans || !job.file || errorOf(error).details.reason !== "document.needs-ocr") throw error
-              const again = ask()
+              const again = scans.full?.() ? null : ask()
               if (again) {
                 result.stopped = again
                 break
