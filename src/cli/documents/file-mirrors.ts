@@ -36,6 +36,7 @@ import { FETCH, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_READ, REMOTE_WR
 import { type Body, itemOf, jsonlRecords, listOf, snakeKeys } from "../envelope.js"
 import { commandPath } from "../list-query.js"
 import { terminalAsker } from "../messenger/ask.js"
+import { marksUntrusted } from "../untrusted-marks.js"
 import { fileConflictsCommand } from "./file-conflicts.js"
 
 /** One write a sync is about to make, as the app's permission keys see it. */
@@ -130,6 +131,23 @@ interface Cycle {
 
 const ID = "mirror id from mirrors list"
 const PATH = "the file's path inside the mirror, like notes/plan.md"
+// A mirror's own path is the owner's folder; the files in it and their new names are whoever shares the remote's.
+const PREVIEW_UNTRUSTED = [
+  "uploaded",
+  "downloaded",
+  "merged",
+  "rewritten",
+  "adopted",
+  "trashed.path",
+  "renamed.from",
+  "renamed.to",
+  "plan.path",
+  "plan.to",
+  "unknown.path",
+  "errors.path",
+  "conflicts.path",
+  "conflicts.remote_changed_by",
+]
 /** The engine's refusals of a whole run, which a sync ends with instead of the generic partial one. */
 const STOPS = new Set(["mirror.too-many-deletions", "mirror.too-many-replacements", "mirror.no-space"])
 
@@ -628,13 +646,19 @@ export const fileMirrorsCommand = (helpers: FileMirrorCommands): Command => {
       })
 
   const previewCommand = () =>
-    annotate(new Command("preview"), {
-      effects: REMOTE_READ,
-      offline: false,
-      // Listing a big remote can take minutes: it stops before its deadline (5 min, 45 s over MCP) and says so.
-      cooperative: true,
-      examples: [`${CLI} personal mirrors preview --json`, `${CLI} personal mirrors preview 1a2b3c4d --keep ${REMOTE}`],
-    })
+    marksUntrusted(
+      annotate(new Command("preview"), {
+        effects: REMOTE_READ,
+        offline: false,
+        // Listing a big remote can take minutes: it stops before its deadline (5 min, 45 s over MCP) and says so.
+        cooperative: true,
+        examples: [
+          `${CLI} personal mirrors preview --json`,
+          `${CLI} personal mirrors preview 1a2b3c4d --keep ${REMOTE}`,
+        ],
+      }),
+      PREVIEW_UNTRUSTED,
+    )
       .summary(`list ${service} and show what mirrors sync would do`)
       .description(
         `list ${service} and show what mirrors sync would do: each upload, download, merge, rename, trash and ` +

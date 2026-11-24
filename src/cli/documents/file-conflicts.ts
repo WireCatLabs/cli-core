@@ -73,10 +73,13 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
         `that conflict, and resolve each by keeping a side or giving the final file`,
     )
     .addCommand(
-      annotate(new Command("list"), {
-        effects: LOCAL_READ,
-        examples: [`${app} personal mirrors conflicts list --json`],
-      })
+      marksUntrusted(
+        annotate(new Command("list"), {
+          effects: LOCAL_READ,
+          examples: [`${app} personal mirrors conflicts list --json`],
+        }),
+        ["path"],
+      )
         .summary("list the conflicts the last sync left")
         .description("list the conflicts each mirror's last sync left, with why and when it found them")
         .argument("[id]", `${ID}; every mirror of the profile when omitted`)

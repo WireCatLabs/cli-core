@@ -90,6 +90,12 @@ describe("compactText", () => {
     expect(compactText(list([long]), message, { ...zone, textChars: 0 })).toContain(`${"я".repeat(450)}`)
   })
 
+  it("cuts the inside of a marked text and keeps its closing marker", () => {
+    const mark = "0123456789abcdef"
+    const long = msg(1, { text: `⟦untrusted:${mark} source=text id=1⟧${"я".repeat(450)}⟦/untrusted:${mark}⟧` })
+    expect(compactText(list([long]), message, zone)).toContain(`${"я".repeat(400)}…(+50)⟦/untrusted:${mark}⟧`)
+  })
+
   it("leaves out a column the item has no value for", () => {
     const { timestamp: _, chat_title: __, ...bare } = msg(1)
     expect(compactText(list([bare]), message, zone)).toBe("msg:max/500/-1001/1 · Анна · Встречаемся в четверг?")

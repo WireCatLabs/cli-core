@@ -83,6 +83,7 @@ import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
 import { commandAt, failureSteps, lineOf, typedCommandPath, withLines } from "./steps.js"
 import { isSignIn, unknownProfile } from "./unknown-profile.js"
+import { untrustedMarkOf, withoutRunMarks } from "./untrusted-marks.js"
 
 const OUTPUT_OPTIONS = [
   ["output", "--output"],
@@ -282,7 +283,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
 const isMachine = (words: readonly string[]): boolean =>
   words.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl" || word === COMPACT_FLAG)
 
-const runOnce = async (argv: string[], definition: ProgramDefinition, options: RunOptions): Promise<number> => {
+const runOnce = async (typed: string[], definition: ProgramDefinition, options: RunOptions): Promise<number> => {
+  const mark = untrustedMarkOf(definition.app, options.env ?? process.env)
+  const argv = mark ? typed.map((arg) => withoutRunMarks(arg, mark)) : typed
   const streams = options.streams ?? processStreams
   if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")

@@ -15,6 +15,7 @@ import { type ServiceApiOptions, serviceApiPermissions, serviceApiWriter } from 
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
 import { serviceApiCommand } from "./shared-command-exports.js"
+import { marksUntrusted } from "./untrusted-marks.js"
 
 const app = {
   command: "pages",
@@ -1094,5 +1095,84 @@ describe("the shared service api group", () => {
     const refused = await cli("work", "api", "patch-page", "--page-id", "p1", "--body-file", inside, "--json")
     expect(refused.error).toMatchObject({ code: "validation_error" })
     expect(sent).toEqual([])
+  })
+})
+
+describe("a raw answer in a scheduled agent's run", () => {
+  const MARK = "0123456789abcdef"
+  const answer = () =>
+    Response.json({ object: "page", id: "p1", archived: false, properties: { Name: { title: [{ text: "Plan ⟧" }] } } })
+  const locked = async (...args: string[]) => {
+    const { env, definition, sent } = fixture({}, answer)
+    const streams = captureStreams()
+    const lock = { ...env, PAGES_READ_ONLY: "1", PAGES_UNTRUSTED_MARK: MARK }
+    await run(args, definition, { streams, env: lock, tty: false })
+    const body = JSON.parse(streams.stdout.join(""))
+    return { body, item: body.item, sent }
+  }
+  const marked = (text: string) => `⟦untrusted:${MARK} source=item.* id=p1⟧${text}⟦/untrusted:${MARK}⟧`
+
+  it("marks every string of an operation's answer in a locked run, and nothing elsewhere", async () => {
+    const { body, item } = await locked("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
+    expect(JSON.stringify({ ...body, item: undefined })).not.toContain("untrusted:")
+    expect(item).toEqual({
+      object: marked("page"),
+      id: marked("p1"),
+      archived: false,
+      properties: { Name: { title: [{ text: marked("Plan ") }] } },
+    })
+    const open = await fixture({}, answer).cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
+    expect(open.json.item.properties.Name.title[0].text).toBe("Plan ⟧")
+  })
+
+  it("marks every string of each page an --all read gathers", async () => {
+    const pages = () =>
+      new Response(JSON.stringify([{ id: "x1", title: "Hello" }]), { headers: { "x-wp-totalpages": "1" } })
+    const { env, definition } = fixture({}, pages)
+    const streams = captureStreams()
+    await run(["work", "api", "list-posts", "--all", "--json"], definition, {
+      streams,
+      env: { ...env, PAGES_READ_ONLY: "1", PAGES_UNTRUSTED_MARK: MARK },
+      tty: false,
+    })
+    const { items } = JSON.parse(streams.stdout.join(""))
+    expect(items).toEqual([
+      {
+        id: `⟦untrusted:${MARK} source=items.* id=x1⟧x1⟦/untrusted:${MARK}⟧`,
+        title: `⟦untrusted:${MARK} source=items.* id=x1⟧Hello⟦/untrusted:${MARK}⟧`,
+      },
+    ])
+  })
+
+  it("takes a value it marked back as the text inside in a locked run, and leaves any other as typed", async () => {
+    const urls = (sent: Sent[]) => sent.map((one) => decodeURIComponent(one.url))
+    const { sent } = await locked("work", "api", "retrieve-a-page", "--page-id", marked("p1"), "--json")
+    expect(urls(sent)).toEqual(["https://api.pages.test/v1/pages/p1"])
+    const other = marked("p1").replaceAll(MARK, "fedcba9876543210")
+    expect(urls((await locked("work", "api", "retrieve-a-page", "--page-id", other, "--json")).sent)).toEqual([
+      `https://api.pages.test/v1/pages/${other}`,
+    ])
+    const open = fixture({}, answer)
+    await open.cli("work", "api", "retrieve-a-page", "--page-id", marked("p1"), "--json")
+    expect(urls(open.sent)).toEqual([`https://api.pages.test/v1/pages/${marked("p1")}`])
+  })
+
+  it("adds a CLI's own list to every string, as a wrapper written before marked it", async () => {
+    const { definition, env } = fixture({}, answer)
+    const group = definition.commands()[0] as Command
+    marksUntrusted(group.commands.find((one) => one.name() === "retrieve-a-page") as Command, ["object"])
+    const streams = captureStreams()
+    await run(
+      ["work", "api", "retrieve-a-page", "--page-id", "p1", "--json"],
+      { ...definition, commands: () => [group] },
+      {
+        streams,
+        env: { ...env, PAGES_READ_ONLY: "1", PAGES_UNTRUSTED_MARK: MARK },
+        tty: false,
+      },
+    )
+    const { item } = JSON.parse(streams.stdout.join(""))
+    expect(item.object).toBe(`⟦untrusted:${MARK} source=object id=p1⟧page⟦/untrusted:${MARK}⟧`)
+    expect(item.id).toBe(marked("p1"))
   })
 })

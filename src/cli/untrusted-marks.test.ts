@@ -86,3 +86,22 @@ describe("other people's text in a scheduled agent's run", () => {
     expect(marked?.sender_is_me).toBe(false)
   })
 })
+
+describe("a wildcard in an untrusted path", () => {
+  it("marks every string under an object whose keys differ, at any depth, and nothing beside it", () => {
+    const row = { id: "r1", url: "https://x", properties: { Status: "Done", Owner: { name: "Eve" }, Count: 3 } }
+    const [marked] = withFieldsMarked({ items: [row] }, ["properties.*"], MARK).items
+    expect(marked?.properties.Status).toBe(`⟦untrusted:${MARK} source=properties.* id=r1⟧Done⟦/untrusted:${MARK}⟧`)
+    expect(marked?.properties.Owner.name).toMatch(block("Eve"))
+    expect(marked?.properties.Count).toBe(3)
+    expect(marked?.url).toBe("https://x")
+  })
+
+  it("stands for one key in the middle of a path", () => {
+    const answer = withUntrustedMarked(
+      { properties: { A: { name: "Eve", type: "people" } }, untrusted: ["properties.*.name"] },
+      MARK,
+    )
+    expect(answer.properties.A).toEqual({ name: expect.stringMatching(block("Eve")), type: "people" })
+  })
+})

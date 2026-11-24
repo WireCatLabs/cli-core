@@ -33,6 +33,16 @@ const idOf = (value: Record<string, unknown>): string | undefined => {
   return typeof id === "string" || typeof id === "number" ? String(id) : undefined
 }
 
+const everyStringAt = (value: unknown, mark: string, source: string, id?: string): unknown => {
+  if (Array.isArray(value)) return value.map((one) => everyStringAt(one, mark, source, id))
+  if (value === null || typeof value !== "object") return markAt(value, [], mark, source, id)
+  const record = value as Record<string, unknown>
+  const own = idOf(record) ?? id
+  return Object.fromEntries(
+    Object.entries(record).map(([key, child]) => [key, everyStringAt(child, mark, source, own)]),
+  )
+}
+
 const markAt = (value: unknown, path: readonly string[], mark: string, source: string, id?: string): unknown => {
   if (Array.isArray(value)) return value.map((one) => markAt(one, path, mark, source, id))
   // A text a nested answer already marked holds no bracket of its own, so its opening one is the mark's.
@@ -40,12 +50,34 @@ const markAt = (value: unknown, path: readonly string[], mark: string, source: s
     return typeof value === "string" && !value.startsWith(`${OPEN}untrusted:${mark} `)
       ? marked(value, mark, source, id)
       : value
+  if (path.length === 1 && path[0] === "*") return everyStringAt(value, mark, source, id)
   if (value === null || typeof value !== "object") return value
   const [key = "", ...rest] = path
   const record = value as Record<string, unknown>
+  const own = idOf(record) ?? id
+  if (key === "*")
+    return Object.fromEntries(
+      Object.entries(record).map(([name, child]) => [name, markAt(child, rest, mark, source, own)]),
+    )
   if (!(key in record)) return value
-  return { ...record, [key]: markAt(record[key], rest, mark, source, idOf(record) ?? id) }
+  return { ...record, [key]: markAt(record[key], rest, mark, source, own) }
 }
+
+/**
+ * The argument with each block of the run's own mark taken off, so a marked name or id an agent copies from one answer
+ * into the next command reads as the text inside. A block of another mark stays as it is.
+ */
+export const withoutRunMarks = (text: string, mark: string): string =>
+  text.replace(
+    new RegExp(`${OPEN}untrusted:${mark}(?: [^${OPEN}${CLOSE}]*)?${CLOSE}|${OPEN}/untrusted:${mark}${CLOSE}`, "gu"),
+    "",
+  )
+
+/**
+ * A raw provider answer's untrusted fields: every string in it. Its shape is the provider's, and every name, title and
+ * text in it can be someone else's, so a list of paths would miss what the CLI did not foresee.
+ */
+export const API_UNTRUSTED = ["item.*", "items.*"] as const
 
 /**
  * The answer with each field an object names in its `untrusted` list between the run's markers, at any depth. Other
@@ -139,9 +171,15 @@ export const DOCUMENT_CONTEXT_UNTRUSTED = [
 
 const DECLARED = new WeakMap<Command, readonly string[]>()
 
-/** Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. */
+/**
+ * Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. A
+ * `*` in a path stands for every key of an object, as a database's own property names; a path ending in `*` marks
+ * every string under it. A path starts with a field's name: a leading `*` would mark the answer's envelope too.
+ */
 export const marksUntrusted = <T extends Command>(command: T, fields: readonly string[] = MESSAGE_UNTRUSTED): T => {
-  DECLARED.set(command, fields)
+  // A CLI's own list on a raw api operation adds to every string, as drive's, notion's and ydisk's did before it.
+  const raw = DECLARED.get(command) === API_UNTRUSTED
+  DECLARED.set(command, raw ? [...new Set([...API_UNTRUSTED, ...fields])] : fields)
   return command
 }
 
