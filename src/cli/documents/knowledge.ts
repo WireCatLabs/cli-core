@@ -8,7 +8,12 @@ import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { queryHelp, queryTerms, withQuery } from "../list-query.js"
-import { DOCUMENT_CONTEXT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
+import {
+  DOCUMENT_CONTEXT_UNTRUSTED,
+  IDENTITY_UNTRUSTED,
+  KNOWLEDGE_UNTRUSTED,
+  marksUntrusted,
+} from "../untrusted-marks.js"
 import {
   bindQuery,
   documentQueries,
@@ -253,10 +258,12 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
       ),
     )
   withQuery(
-    examples(annotate(memories.command("list"), { effects: LOCAL_READ }).description("list a document's memories"), [
-      `${prefix} memories list DOC_ID scope:work`,
-      `${prefix} memories list DOC_ID kind:preference status:confirmed`,
-    ]).argument("<document>", documentArgument),
+    examples(
+      marksUntrusted(annotate(memories.command("list"), { effects: LOCAL_READ }), KNOWLEDGE_UNTRUSTED).description(
+        "list a document's memories",
+      ),
+      [`${prefix} memories list DOC_ID scope:work`, `${prefix} memories list DOC_ID kind:preference status:confirmed`],
+    ).argument("<document>", documentArgument),
     MEMORY_QUERY,
   )
     .option("--limit <n>", "how many memories to return", positive, 50)
@@ -276,9 +283,10 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
   } as const
   for (const [action, description] of Object.entries(memoryActions) as [keyof typeof memoryActions, string][])
     examples(
-      annotate(memories.command(action), { effects: action === "show" ? LOCAL_READ : LOCAL_WRITE }).description(
-        description,
-      ),
+      marksUntrusted(
+        annotate(memories.command(action), { effects: action === "show" ? LOCAL_READ : LOCAL_WRITE }),
+        KNOWLEDGE_UNTRUSTED,
+      ).description(description),
       [`${prefix} memories ${action} DOC_ID memory:MEMORY_ID`],
     )
       .argument("<document>", documentArgument)
@@ -295,7 +303,9 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
         ),
       )
   const search = examples(
-    annotate(memories.command("search"), { effects: LOCAL_READ }).description("search a document's memories by words"),
+    marksUntrusted(annotate(memories.command("search"), { effects: LOCAL_READ }), KNOWLEDGE_UNTRUSTED).description(
+      "search a document's memories by words",
+    ),
     [`${prefix} memories search DOC_ID reviews scope:work`, `${prefix} memories search DOC_ID "async reviews"`],
   )
     .argument("<document>", documentArgument)
@@ -377,10 +387,12 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
         ),
     )
   withQuery(
-    examples(annotate(facts.command("list"), { effects: LOCAL_READ }).description("list a document's facts"), [
-      `${prefix} facts list DOC_ID status:proposed`,
-      `${prefix} facts list DOC_ID kind:decision`,
-    ]).argument("<document>", documentArgument),
+    examples(
+      marksUntrusted(annotate(facts.command("list"), { effects: LOCAL_READ }), KNOWLEDGE_UNTRUSTED).description(
+        "list a document's facts",
+      ),
+      [`${prefix} facts list DOC_ID status:proposed`, `${prefix} facts list DOC_ID kind:decision`],
+    ).argument("<document>", documentArgument),
     FACT_QUERY,
   )
     .option("--limit <n>", "how many facts to return", positive, 50)
@@ -399,9 +411,10 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
   } as const
   for (const [action, description] of Object.entries(factActions) as [keyof typeof factActions, string][])
     examples(
-      annotate(facts.command(action), { effects: action === "show" ? LOCAL_READ : LOCAL_WRITE }).description(
-        description,
-      ),
+      marksUntrusted(
+        annotate(facts.command(action), { effects: action === "show" ? LOCAL_READ : LOCAL_WRITE }),
+        KNOWLEDGE_UNTRUSTED,
+      ).description(description),
       [`${prefix} facts ${action} DOC_ID fact:FACT_ID`],
     )
       .argument("<document>", documentArgument)
@@ -419,9 +432,12 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
       )
   const identities = annotate(program.command("identities"), { effects: LOCAL_READ }).description(text.identities)
   bindQuery(
-    examples(annotate(identities.command("list"), { effects: LOCAL_READ }).description(text.identitiesList), [
-      `${prefix} identities list DOC_ID`,
-    ]).argument("<document>", documentArgument),
+    examples(
+      marksUntrusted(annotate(identities.command("list"), { effects: LOCAL_READ }), IDENTITY_UNTRUSTED).description(
+        text.identitiesList,
+      ),
+      [`${prefix} identities list DOC_ID`],
+    ).argument("<document>", documentArgument),
     queries.identities,
     identityRow,
   ).action(async (doc: string, words: string[]) => {

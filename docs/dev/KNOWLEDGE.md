@@ -111,6 +111,15 @@ the source the claim rests on; a quote the source's text does not hold is refuse
 source's columns, never its text, and includes its deletion (`SOURCE_KINDS` in `evidence-signature.ts` lists each
 kind's columns, text and revision lookup). `cited_rev` names the version cited and never changes; `rev` is the version
 last signed. A cited row deleted for good leaves its links in place with no pointer and no quote, marked `gone`.
+
+A documents CLI marks the text of every memory and fact it shows a scheduled agent as untrusted
+(`KNOWLEDGE_UNTRUSTED`; [DOCUMENTS.md](DOCUMENTS.md) names the commands), whoever wrote it. The owner's rule is that
+text from other people is marked in every answer an agent reads. A model's memory or fact repeats the words of whoever
+wrote the document, so an instruction planted there survives extraction. The store cannot tell which text the owner
+or an agent copied from the source either, so the owner's are marked too
+([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)).
+Memory reads in other kinds of CLI are not marked.
+
 `proposedActions` keeps what an agent wants done outside the store until the owner
 approves or rejects it; `list` filters by status. `approveAsTask` (`./services`) approves one as a `request`
 task in the account that would act, with source `proposed-action:<id>`, and records `{ task }` as its result;
