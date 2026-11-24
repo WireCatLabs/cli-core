@@ -714,16 +714,17 @@ describe("a source that asks for a full walk every so often", () => {
       complete: false,
       rescan: { every_ms: 7 * DAY, last_full_walk: new Date(START).toISOString() },
     })
-    expect(first.rescan?.why).toContain("more than 7 days ago")
+    expect(first.rescan?.why).toContain("7 days or more ago")
     tree.listed.length = 0
     const second = await syncDocuments(small)
     expect(second).not.toHaveProperty("rescan")
     expect(second.walk?.entries).toBeGreaterThan(first.walk?.entries ?? 0)
+    at(START + 7 * DAY + 60_000)
     const rest = await untilComplete(() => syncDocuments(small))
     expect(rest.some((run) => run.rescan)).toBe(false)
     expect(new Set(tree.listed).size).toBe(tree.listed.length)
     expect(tree.state().documents.back).toBeDefined()
-    expect(tree.state().fullWalkAt).toBe(new Date(START + 7 * DAY).toISOString())
+    expect(tree.state().fullWalkAt).toBe(new Date(START + 7 * DAY + 60_000).toISOString())
 
     tree.listed.length = 0
     at(START + 8 * DAY)
@@ -740,6 +741,16 @@ describe("a source that asks for a full walk every so often", () => {
     expect(runs[0]?.rescan).toMatchObject({ last_full_walk: null })
     expect(runs[0]?.rescan?.why).toContain("no full walk")
     expect(tree.state().documents.back).toBeDefined()
+  })
+
+  it("walks in full when the recorded walk is later than now, and refuses a period that is not positive", async () => {
+    const { tree, options, at } = setUp(7 * DAY)
+    await untilComplete(() => syncDocuments(options))
+    at(START - DAY)
+    expect((await untilComplete(() => syncDocuments(options)))[0]).toHaveProperty("rescan")
+    expect(tree.state().fullWalkAt).toBe(new Date(START - DAY).toISOString())
+    const broken = { ...options, source: { ...(options.source as DocumentSource), rescanEveryMs: 0 } }
+    await expect(syncDocuments(broken)).rejects.toThrow(/rescanEveryMs must be a positive whole number/)
   })
 
   it("leaves a source without the setting to its feed, however long ago it walked", async () => {

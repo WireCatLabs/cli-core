@@ -129,7 +129,9 @@ ends, as a `--rescan` does, and is not started again in between. The sync that s
 `rescan: { why, every_ms, last_full_walk }`. The state records the end of each full walk in `fullWalkAt` (a first
 sync, a `--rescan`, a changed scope or one started this way). A profile synced before `fullWalkAt` existed has none,
 so its first plain sync after the upgrade walks in full: that brings back what was restored before. The manifest
-refuses `rescanEvery` without a change feed, as a source without one walks in full on every sync anyway. Left out,
+refuses `rescanEvery` without a change feed, as a source without one walks in full on every sync anyway. A CLI that
+validates its state file with a strict schema must keep `fullWalkAt`: without it every plain sync of such a source
+walks in full. A `fullWalkAt` later than now (a clock set back) counts as due. Left out,
 only `--rescan` walks again. A source with a complete feed (Drive) leaves it out.
 
 The config also says what the `api` group and the source send with every request (`api.headers`, such as the API's

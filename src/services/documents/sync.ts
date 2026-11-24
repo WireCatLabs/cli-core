@@ -23,7 +23,13 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export const KEEP_VERSIONS_FOR_DAYS = 365
 const isPicture = (file: SourceFile) => file.mime.startsWith("image/") && file.canDownload
 const describe = (ms: number) =>
-  ms % DAY_MS === 0 ? `${ms / DAY_MS} days` : ms % 3_600_000 === 0 ? `${ms / 3_600_000} hours` : `${ms} ms`
+  ms % DAY_MS === 0
+    ? `${ms / DAY_MS} days`
+    : ms % 3_600_000 === 0
+      ? `${ms / 3_600_000} hours`
+      : ms % 60_000 === 0
+        ? `${ms / 60_000} minutes`
+        : `${ms} ms`
 const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
 export interface SyncResult {
   saved: number
@@ -106,19 +112,22 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     // Only a source whose feed misses something asks for it, and only between walks: the walk it starts drops the
     // cursor, so the calls that go on with that walk are not due again.
     const every = source ? feedOf(source)?.rescanEveryMs : undefined
-    const lastWalk = state.fullWalkAt ? Date.parse(state.fullWalkAt) : Number.NaN
+    if (every !== undefined && !(Number.isSafeInteger(every) && every > 0))
+      throw new CliError("configuration_error", "a source's rescanEveryMs must be a positive whole number")
+    const sinceWalk = now() - (state.fullWalkAt ? Date.parse(state.fullWalkAt) : Number.NaN)
+    // A walk recorded in the future (a clock set back, a state copied from another machine) would hold it off for good.
     const due =
       !asked &&
       every !== undefined &&
       state.cursor !== undefined &&
       state.scope === currentScope &&
-      !(now() - lastWalk < every)
+      !(sinceWalk >= 0 && sinceWalk < every)
     if (due)
       result.rescan = {
         why:
           state.fullWalkAt === undefined
             ? "no full walk of the chosen folders is recorded; the source's changes miss some edits, such as a restore"
-            : `the last full walk finished more than ${describe(every)} ago; the source's changes miss some edits, ` +
+            : `the last full walk finished ${describe(every)} or more ago; the source's changes miss some edits, ` +
               "such as a restore",
         every_ms: every,
         last_full_walk: state.fullWalkAt ?? null,
