@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.747.0 — 24.11.2026
+
+### Fixed
+
+- **A report's `reply` item no longer needs `since`.** A morning digest whose agent could not date one message was
+  refused whole: memo kept no `.report.json`, and the delivery said the digest did not come together. Such a reply is
+  now kept and shown without "waiting N days"; a `since` that is not a date is still refused.
+
 ## 0.746.0 — 24.11.2026
 
 ### Added
