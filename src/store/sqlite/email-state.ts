@@ -95,3 +95,35 @@ export const markEmailsRestored = (
   for (const id of new Set(threads)) recountEmailThread(database, id, now)
   return threads.length
 }
+
+/**
+ * Takes the senders of the live mail in `mailboxes` as the owner's, beside `addresses`, and marks every email of the
+ * account from any of them outgoing. Answers the addresses, lower case.
+ */
+export const markOwnMail = (
+  database: CacheDatabase,
+  accountId: number,
+  { addresses, mailboxes }: { addresses: readonly string[]; mailboxes: readonly string[] },
+  now: number,
+): string[] => {
+  const own = new Set(addresses.map((address) => address.trim().toLowerCase()))
+  if (mailboxes.length > 0)
+    for (const row of database
+      .prepare(
+        `SELECT DISTINCT lower(trim(e.from_address)) AS address FROM mailboxes b
+           JOIN email_mailboxes m ON m.mailbox_id = b.id JOIN emails e ON e.id = m.email_id
+         WHERE b.account_id = ? AND b.external_id IN (SELECT value FROM json_each(?))
+           AND e.deleted_at IS NULL AND e.from_address IS NOT NULL`,
+      )
+      .all(accountId, JSON.stringify(mailboxes)))
+      if (typeof row.address === "string" && row.address !== "") own.add(row.address)
+  if (own.size > 0)
+    database
+      .prepare(
+        `UPDATE emails SET outgoing = 1, updated_at = ? WHERE account_id = ? AND outgoing IS NOT 1
+           AND from_identity_id IN (SELECT id FROM identities WHERE provider = 'email'
+             AND external_id IN (SELECT value FROM json_each(?)))`,
+      )
+      .run(now, accountId, JSON.stringify([...own]))
+  return [...own].sort()
+}

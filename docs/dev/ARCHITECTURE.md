@@ -643,7 +643,10 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
   so the two paths name the same evidence. `linkOwnIdentities` joins an account's own identity to the owner only under
   the owner's name, script and spelling aside (`domain/name-variants.ts`); under another name, a partner's mailbox or a
-  spouse's messenger, it proposes with the signal `account`, and never for a bot. Its merges are authored `rule`: a
+  spouse's messenger, it proposes with the signal `account`, and never for a bot. A mail account's other own addresses
+  (`mail_own_addresses`, [MAIL.md](MAIL.md#syncmailsource-store-options)) follow the account: their people join the
+  owner once the account's own identity is the owner's, whatever name their mail carries, and stay as they are while it
+  is not. Its merges are authored `rule`: a
   move the owner authored counts as a separation, so an automatic one must never be. Last, people with one `nameKey`
   (`variantKey` in `domain/name-variants.ts`: case, quotes, punctuation, word order, script and transliteration set
   aside, so `Светлана Кузнецова` is `Svetlana Kuznetsova`) are proposed, never joined, when they share a trace

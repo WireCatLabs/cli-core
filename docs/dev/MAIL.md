@@ -21,7 +21,7 @@ the member out.
 | `search?(since, folder)` | the folder's UIDs in the window and its UIDVALIDITY, without reading a message; absent for a file, which has no UIDs |
 | `stamp?()` | a file's size and modification time, so an unchanged file read to the end is not read again |
 | `find?(messageIds, folder, { headers? })` | the messages with these provider ids, listed as `list` lists them; a message no longer there is left out. Absent where messages have no provider id |
-| `move?`, `present?`, `label?`, `folders?` | moving between folders, which UIDs a folder still holds, putting labels back, and the All Mail and Trash folders under the account's language. Used by cleanup and restore, not by the sync, except `folders` |
+| `move?`, `present?`, `label?`, `folders?` | moving between folders, which UIDs a folder still holds, putting labels back, and the All Mail and Trash folders under the account's language, with on IMAP the `sent` folder: the one the server marks `\Sent` ([RFC 6154](https://www.rfc-editor.org/rfc/rfc6154)), else one by a common name when the server marks no folder. Used by cleanup and restore, not by the sync, except `folders` |
 
 An item is a `Listed`: `uid`, `messageId` (the provider's id, the same in every folder and across a UID reset),
 `threadId`, `receivedAt`, and when the source knows them `folder`, `labels`, `seen`, `flagged`, `size` and `headers`.
@@ -30,12 +30,20 @@ when there is none.
 
 ## `syncMail(source, store, options)`
 
-Reads each folder of `options.account` (`mailFolders` gives them: the `folders` it names, `INBOX` for `mode: "imap"`,
-else All Mail by its role), saves each new message with `store.mail.saveThread`, and returns a `MailSyncResult`
+Reads each folder of `options.account` (`mailFolders` gives them: the `folders` it names, `INBOX` and the source's
+`sent` folder for `mode: "imap"`, else All Mail by its role), saves each new message with `store.mail.saveThread`, and
+returns a `MailSyncResult`
 (`listed`, `saved`, `alreadyStored`, `skipped`, `envelopes`, `deleted`, `complete`, `pass`, `coverage`, and when there
 are any `unreadable`, `attachments`, `deletionsSkipped`, `tagsReused`, `tagsSkipped`, `indexed`). Every message is the
 account `{ provider: "email", account: <address, lower case> }`.
 
+- **The owner's mail.** An email is `outgoing` when it is in the source's `sent` folder or under Gmail's `Sent` label,
+  whatever its From, or when its From is one of the owner's addresses: the account's, the `addresses` the owner set on
+  `options.account` (aliases), and those stored under `mail_own_addresses`. After the save the senders of the live mail
+  in Sent join that list, the account's mail from any of them becomes outgoing, stored earlier or not
+  (`store.mail.markOwnMail`), and the account is saved again, so `linkOwnIdentities` joins their identities to the
+  owner. Partial completion, `readEmailWhole` and a server search read the same list. A mail tie needs mail the owner
+  wrote, so this is what gives the people an alias writes to their tie. Nothing is taken from a name.
 - **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists the UID, flags,
   date and size of every message in the window, and reads the raw bytes of the newest `max` not done and not located
   (a budgeted run: `fetchBatch` a round). It takes the id from the Message-ID, so stored mail keeps its id and the same
@@ -194,6 +202,7 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 | `mail_resume:<folder>` | a `ResumePoint`: the folder's UIDVALIDITY, the UID ranges done, from when its mail is located (`located`), the hash of the rules they were decided under, the widest full listing and its time, and the widest window ever listed. A later run lists only the UIDs not done, while the point's full listing is under a day old (`FULL_PASS_MS`) and the window is at least `resumeFrom` (5,000) UIDs; a new UIDVALIDITY, other rules or `rescan` list everything again |
 | `mail_resume:mbox` | a `MboxPoint`: the file's size and modification time, and whether every message was read |
 | `mail_folder_scope` | the mode and folders of the last run; a change skips deletions once |
+| `mail_own_addresses` | the owner's other addresses on the account, lower case: the configured ones and the senders of mail in Sent |
 | `mail_coverage` | the folders, window and whether the last run was complete |
 | `mail_sender_scores` | when `scoreSenders` last ran, its version (`SCORE_VERSION`) and the senders it ranks lower |
 | `consumer:<holder>` | a holder's processing mark: `throughId`, `throughAt`, `held`, `read`, `skipped` by reason |

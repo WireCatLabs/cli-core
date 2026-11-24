@@ -6,6 +6,7 @@ import { mailAccountKey } from "./account-key.js"
 import { type AttachmentLog, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { parsedEmail } from "./email-input.js"
 import { mailHeadersOf } from "./headers.js"
+import { ownAddresses, SENT_LABEL } from "./own.js"
 import { MAX_BODY_CHARS, parseMail } from "./parse.js"
 import { PARTIAL } from "./partial.js"
 import type { Listed, MailSource, Quick } from "./source.js"
@@ -72,6 +73,7 @@ export const readEmailWhole = async ({
   if (!source.find && source.identify?.(raw, item).messageId !== externalId)
     throw new CliError("not_found", `the mail server holds another email where ${externalId} was`)
   const mail = await parseMail(raw, maxBodyChars)
+  const own = await ownAddresses(store, mailAccountKey(address))
   const log: AttachmentLog = []
   const files = await readAttachments(mail, externalId, { loadEngine, maxAttachmentChars, at: now }, log)
   const { [PARTIAL]: _partial, ...metadata } = stored.metadata ?? {}
@@ -82,7 +84,7 @@ export const readEmailWhole = async ({
     now,
     emails: [
       {
-        ...parsedEmail(mail, whole, mailHeadersOf(raw), address),
+        ...parsedEmail(mail, whole, mailHeadersOf(raw), own, whole.labels?.includes(SENT_LABEL)),
         receivedAt: stored.receivedAt,
         size: raw.byteLength,
         metadata,

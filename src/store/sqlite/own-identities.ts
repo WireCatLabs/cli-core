@@ -16,6 +16,9 @@ interface OwnIdentity {
   name: string | null
 }
 
+/** Sync state under a mail account: the owner's other addresses on it, lower case, as a JSON array. */
+export const OWN_MAIL_ADDRESSES = "mail_own_addresses"
+
 const ACCOUNT_REASON =
   "an account you connected, under another name: a mailbox or messenger you read may be someone else's"
 
@@ -62,7 +65,6 @@ export const linkOwnIdentities = (context: StoreContext): number => {
     own.push({ identity: Number(row.identity), person, name: typeof row.name === "string" ? row.name : null })
     byPerson.set(person, own)
   }
-  if (byPerson.size === 0) return 0
   return write(context.database, () => {
     let joined = 0
     for (const [person, own] of byPerson) {
@@ -85,9 +87,33 @@ export const linkOwnIdentities = (context: StoreContext): number => {
         reason: ACCOUNT_REASON,
       })
     }
+    for (const person of aliasPeople(context, owner)) {
+      if (separated(context, person, owner)) continue
+      mergePerson(context, person, owner, { method: "account", by: "rules" })
+      joined += 1
+    }
     return joined
   })
 }
+
+/**
+ * People holding one of a mail account's other own addresses (`OWN_MAIL_ADDRESSES`), once the account's own identity
+ * is the owner's: an alias follows the account, whatever name its mail carries. A partner's mailbox keeps its aliases.
+ */
+const aliasPeople = ({ database }: StoreContext, owner: number): number[] =>
+  database
+    .prepare(
+      "SELECT DISTINCT l.person_id AS person FROM sync_cursors s " +
+        "JOIN accounts a ON a.id = s.account_id AND a.provider = 'email' " +
+        "JOIN json_each(CASE WHEN json_valid(s.value) THEN s.value ELSE '[]' END) j " +
+        "JOIN identities i ON i.provider = 'email' AND i.external_id = j.value AND i.bot IS NOT 1 " +
+        "JOIN identity_links l ON l.identity_id = i.id " +
+        "WHERE s.key = ? AND l.person_id <> ? AND EXISTS (SELECT 1 FROM identities ai " +
+        "JOIN identity_links al ON al.identity_id = ai.id " +
+        "WHERE ai.provider = a.provider AND ai.external_id = a.external_id AND al.person_id = ?) ORDER BY l.person_id",
+    )
+    .all(OWN_MAIL_ADDRESSES, owner, owner)
+    .map(({ person }) => Number(person))
 
 /** `contacts link <person> me`: an identity the account id does not name, a Zoom user for one, is the owner. */
 export const linkToOwner = (context: StoreContext, ref: IdentityRef): PersonRecord => {
