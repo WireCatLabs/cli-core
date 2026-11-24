@@ -164,6 +164,26 @@ describe("people, organizations and users, read live", () => {
     expect(root.commands.map((one) => one.name())).not.toContain("people")
   })
 
+  it("people create and update offer only the flags the CRM's write takes", () => {
+    const root = new Command("crm")
+    addCrmCommands(root, {
+      app: APP,
+      open: () => Promise.reject(new Error("not opened")),
+      live: ["person"],
+      writes: {
+        kinds: ["person"],
+        verbs: ["create", "update"],
+        idempotent: false,
+        fields: { person: ["name", "firstName", "lastName", "emails"] },
+      },
+    })
+    for (const verb of ["create", "update"]) {
+      const flags = commandAt(root, ["people", verb])?.options.map((one) => one.long)
+      expect(flags).toEqual(expect.arrayContaining(["--name", "--first-name", "--email"]))
+      for (const missing of ["--owner", "--field", "--phone", "--position"]) expect(flags).not.toContain(missing)
+    }
+  })
+
   it("people list pages the CRM's own pages, newest first, in the shared shape", async () => {
     const { cli, source } = await setup()
     const first = await cli("people", "list", "--limit", "2")

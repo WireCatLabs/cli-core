@@ -556,6 +556,10 @@ describe("crmWriterFromManifest", () => {
       kinds: ["person", "deal"],
       verbs: ["create", "update", "move", "close", "remove"],
       idempotent: false,
+      fields: {
+        person: ["name", "firstName", "lastName", "position", "emails", "phones", "custom"],
+        deal: ["title", "pipeline", "stage", "owner", "amount", "currency", "organization", "people", "custom"],
+      },
     })
     const { writes: _, ...reads } = ATTIO
     expect(crmManifestWriteCapabilities(reads, api)).toBeUndefined()

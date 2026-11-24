@@ -508,31 +508,37 @@ const crmRecordWrite = v.strictObject({
 const addRecordWrites = (group: Command, noun: Noun, { within, example, writes }: CrmRecordCommandOptions) => {
   if (!writes?.kinds.includes(noun.kind)) return
   const person = noun.kind === "person"
+  const written = writes.fields?.[noun.kind]
+  const takes = (field: string) => !written || written.includes(field)
   const fields = (command: Command) => {
     command.option("--name <name>", person ? "the whole name" : "the company's name")
-    if (person)
+    if (person) {
       command
         .option("--first-name <name>", "the first name; empty clears it")
         .option("--last-name <name>", "the last name; empty clears it")
-        .option("--position <title>", "the job title; empty clears it")
+      if (takes("position")) command.option("--position <title>", "the job title; empty clears it")
+    }
     const repeated = (value: string, previous: string[] = []) => [...previous, value]
-    command
-      .option(
+    if (takes("emails"))
+      command.option(
         "--email <address>",
         "an e-mail address to give it; repeat it for more; replaces its list, and an empty one clears it",
         repeated,
       )
-      .option(
+    if (takes("phones"))
+      command.option(
         "--phone <phone>",
         "a phone number to give it, in international form starting with +; repeat it for more; replaces its list, " +
           "and an empty one clears it",
         repeated,
       )
-      .option(
+    if (takes("owner"))
+      command.option(
         "--owner <user>",
         "the CRM user it is assigned to; anyone but the sign-in's own user checks crm.assign-others",
       )
-      .option(
+    if (takes("custom"))
+      command.option(
         "--field <key=value>",
         "one of the CRM's own fields, by its code or label as `fields list` prints them, and its value; a list " +
           "field takes its option's label or id; repeat it for more fields, or for each value of a multiple field; " +
