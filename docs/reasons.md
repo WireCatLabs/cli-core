@@ -147,6 +147,7 @@ headings.
 | `document.not-imported` | `not_found` | the document is not imported in this source account |  |
 | `document.scan-later` | `validation_error` | OCR stopped at its page limit or a busy model; the next sync goes on |  |
 | `document.scan-unread` | `validation_error` | OCR could not read the scan or picture; a sync tries again once the file changes |  |
+| `document.scan-unturned` | `configuration_error` | tesseract has no osd data, so a page on its side is read as it lies; install it to read scans again |  |
 | `document.version-missing` | `not_found` | the local copy holds no such version of the document |  |
 | `documents.other-account` | `configuration_error` | the documents are signed in as another account than the tracker copy of the same provider |  |
 | `download.mismatch` | `invalid_response` | the downloaded file has other content than the listing said |  |

@@ -112,6 +112,7 @@ export const addMeetingProjectCandidatesCommand = sharedCommand(addMeetingProjec
 /** @experimental */
 export const addMeetingSeriesInventoryCommand = sharedCommand(addMeetingSeriesInventoryCommandDefinition)
 export const accountCommand = sharedCommand(accountCommandDefinition)
+/** @experimental */
 export const messengerSessionCommands = sharedCommand(messengerSessionCommandsDefinition)
 export const storeCommand = sharedCommand(storeCommandDefinition)
 export const attachmentsCommand = sharedCommand(attachmentsCommandDefinition)
