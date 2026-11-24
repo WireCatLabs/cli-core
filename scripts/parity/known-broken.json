@@ -1,20 +1,8 @@
 [
   {
-    "repo": "mail-cli",
-    "pr": 3258,
-    "until": "2026-11-30",
-    "reason": "#3258 no longer offers schedule exec over MCP; src/mcp.test.ts still expects it in the catalogue as a write"
-  },
-  {
     "repo": "bitrix24-cli",
     "pr": 3258,
     "until": "2026-11-30",
     "reason": "#3258 no longer offers schedule exec over MCP; src/mcp.test.ts still pins it among the offered schedule commands"
-  },
-  {
-    "repo": "max-cli",
-    "pr": 3258,
-    "until": "2026-11-30",
-    "reason": "#3258 no longer offers schedule exec over MCP; docs/mcp.md must list it among the commands kept off MCP (src/mcp-catalogue.test.ts)"
   }
 ]
