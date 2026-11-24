@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.740.0 — 24.11.2026
+
+### Added
+
+- **A documents source from a manifest reads a deletions feed in every round of changes.** `deletions` names a call
+  that lists the documents deleted since a time (Linear's audit log, where its trash leaves `updatedAt` as it was),
+  and each id it names leaves the local copy as `deleted` in the next `sync`, not only after `sync --rescan`. A
+  provider that refuses the feed (`permission_error`) does not fail the sync: its answer warns
+  `source.deletions-unchecked`, which says `sync --rescan` finds them. A source with `deletions` passes the run's
+  `warn` to `documentSourceFromManifest`, or it is refused when built
+  ([a deletions feed](docs/dev/DOCUMENTS.md#a-deletions-feed)).
+- **A documents sync reads the text of scans and pictures.** A PDF with no text layer and a JPEG, PNG or WebP picture
+  are read by OCR, chosen by the profile's `read_scans`: `local` by default (the `tesseract` program on this
+  computer, Russian and English, nothing downloaded), `anthropic` or `openai` (the `ai set` model at that provider's
+  own address, with pictures allowed), or `off`. At most 20 pages a file and 100 a sync. A scan an earlier sync kept
+  by name is read on the next sync, and a sync with no reader says how to install one. A CLI adds
+  `DOCUMENT_SCAN_SETTINGS` to `settingsFor` for its config file to take `read_scans`
+  ([scans and pictures](docs/dev/DOCUMENTS.md#scans-and-pictures)).
+
 ## 0.739.0 — 24.11.2026
 
 ### Added
