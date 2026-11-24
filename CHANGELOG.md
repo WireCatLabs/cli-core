@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.741.0 — 24.11.2026
+
+### Fixed
+
+- `search all` and `deals list` find a CRM record whose Latin name is typed in Cyrillic: `феррара` finds Ferrara
+  Design, marked as corrected to `ferrara`, as message search already did (#3285).
+- `search all` and `deals list` find a CRM record whose name is one letter off a query word that matched another
+  record: `Ferrara` finds Ferrara Design first and Ferraro Arredamenti after it, marked as a correction. A misspelt
+  word was corrected only when it matched nothing, so a near-duplicate hid the record asked for (#3285).
+- **A picture OCR finds no text in is still found by what it shows.** With `picture_search` on and a scan reader
+  set, a photo with no text was kept by name only and got no picture vector, and the next sync downloaded and read it
+  by OCR again for the missing vector. It now gets its vector as a picture kept by name for its type does. Its reason
+  names the reading (`OCR found no text in the file (read by ocr:v1:tesseract@5.3.0:rus+eng)`), so another engine or
+  model reads it again, and the same one does not
+  ([scans and pictures](docs/dev/DOCUMENTS.md#scans-and-pictures)).
+
 ## 0.740.0 — 24.11.2026
 
 ### Added
