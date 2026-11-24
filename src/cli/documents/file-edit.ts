@@ -171,11 +171,51 @@ const docxEditsOf = (payload: v.InferOutput<typeof PAYLOAD>): DocxEdit[] =>
     return edit
   })
 
+const SCALAR = v.union([v.string(), v.number(), v.boolean(), v.null()])
+const BOLD = v.optional(v.boolean())
+const NEW_ROWS = v.array(
+  v.array(
+    v.union([
+      SCALAR,
+      v.strictObject({ formula: v.string(), bold: BOLD }),
+      v.strictObject({ value: SCALAR, bold: BOLD }),
+    ]),
+  ),
+)
+const NEW_VALUES = v.union([
+  v.pipe(NEW_ROWS, v.minLength(1)),
+  v.pipe(
+    v.array(v.strictObject({ name: v.string(), rows: NEW_ROWS, header: v.optional(v.boolean()) })),
+    v.minLength(1),
+  ),
+])
+const isRows = (values: v.InferOutput<typeof NEW_VALUES>): values is v.InferOutput<typeof NEW_ROWS> =>
+  values.every(Array.isArray)
+const NEW_VALUES_SHAPE =
+  'rows of cells as JSON, such as [["Item", "Cost"], ["Rent", 950], ["Total", {"formula": "SUM(B2)"}]], or sheets ' +
+  'as [{"name": "Budget", "rows": [...], "header": true}]; a cell is a text, number, boolean, null, ' +
+  '{"formula": "…"} or {"value": …, "bold": true}'
+
+const STYLE = v.optional(v.picklist(NEW_PARAGRAPH_STYLES))
 const NEW_PARAGRAPHS = v.pipe(
-  v.array(v.strictObject({ text: v.string(), style: v.optional(v.picklist(NEW_PARAGRAPH_STYLES)) })),
+  v.array(
+    v.union([
+      v.strictObject({ text: v.string(), style: STYLE, bold: BOLD, italic: BOLD }),
+      v.strictObject({
+        runs: v.pipe(v.array(v.strictObject({ text: v.string(), bold: BOLD, italic: BOLD })), v.minLength(1)),
+        style: STYLE,
+      }),
+      v.strictObject({
+        table: v.array(v.array(v.pipe(v.union([v.string(), v.number()]), v.toString()))),
+        header: v.optional(v.boolean()),
+      }),
+    ]),
+  ),
   v.minLength(1),
 )
-const NEW_PARAGRAPHS_SHAPE = `paragraphs as JSON: [{"text": "…", "style": "Heading1"}]; a style is one of ${NEW_PARAGRAPH_STYLES.join(", ")}`
+const NEW_PARAGRAPHS_SHAPE =
+  'paragraphs and tables as JSON: [{"text": "…", "style": "Heading1"}, {"runs": [{"text": "…", "bold": true}]}, ' +
+  `{"table": [["Item", "Cost"], ["Rent", "950"]], "header": true}]; a style is one of ${NEW_PARAGRAPH_STYLES.join(", ")}`
 
 const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands) => {
   const { prefix, place } = wordsOf(helpers.words)
@@ -396,23 +436,38 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
   if (helpers.creates !== false)
     examples(
       annotate(sheets.command("create"), { effects: REMOTE_WRITE, offline: false })
-        .summary("create a new workbook from rows of values")
+        .summary("create a new workbook from rows of values and formulas")
         .description(
-          `create a new .xlsx on ${place} with one sheet holding these rows from A1. Numbers and booleans are typed, a ` +
-            "text stays text, even one that starts with =. A file already there is refused: change it with sheets update",
+          `create a new .xlsx on ${place} from rows from A1: one sheet, or several given as [{name, rows, header?}]. ` +
+            "Numbers and booleans are typed, a text stays text, even one that starts with =. A formula is only " +
+            '{"formula": "SUM(B2:B3)"}, computed when the file opens; {"value": "Total", "bold": true} is a bold cell ' +
+            "and header: true makes a sheet's first row bold. A file already there is refused: change it with sheets update",
         )
         .argument("<path>", `the new .xlsx file on ${place}`)
-        .option("--values <json>", "the rows as JSON; null leaves a cell empty")
-        .option("--name <name>", "the sheet's name; Sheet1 without it"),
-      [`${prefix} ${group} sheets create /budget.xlsx --values '[["Item", "Cost"], ["Rent", 950]]' --name Budget`],
+        .option(
+          "--values <json>",
+          'the rows as JSON, or [{"name", "rows", "header"?}] for several sheets; a cell is a text, number, ' +
+            'boolean, null (empty), {"formula": "…", "bold"?} or {"value": …, "bold"?}',
+        )
+        .option("--name <name>", "the sheet's name when --values is rows; Sheet1 without it"),
+      [
+        `${prefix} ${group} sheets create /budget.xlsx --values '[["Item", "Cost"], ["Rent", 950]]' --name Budget`,
+        `${prefix} ${group} sheets create /budget.xlsx --values '[{"name": "Budget", "header": true, "rows": [["Item", "Cost"], ["Rent", 950], ["Food", 300], [{"value": "Total", "bold": true}, {"formula": "SUM(B2:B3)"}]]}]'`,
+      ],
     ).action(async function (this: Command, input: string, args: { values?: string; name?: string }) {
       if (args.values === undefined)
-        throw new CliError("validation_error", `give the rows with --values: ${VALUES_SHAPE}`, { param: "--values" })
-      const rows = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
-      const name = args.name ?? "Sheet1"
+        throw new CliError("validation_error", `give the rows with --values: ${NEW_VALUES_SHAPE}`, {
+          param: "--values",
+        })
+      const values = jsonOf(args.values, "--values", NEW_VALUES, NEW_VALUES_SHAPE)
+      const sheets = isRows(values) ? [{ name: args.name ?? "Sheet1", rows: values }] : values
+      if (args.name !== undefined && !isRows(values))
+        throw new CliError("validation_error", "--name names the one sheet of rows; with sheets, each has its name", {
+          param: "--name",
+        })
       await createNew(this, "sheets", input, ".xlsx", {
-        bytes: createXlsx({ sheets: [{ name, rows }] }),
-        answer: { sheets: [{ name, rows: rows.length }] },
+        bytes: createXlsx({ sheets }),
+        answer: { sheets: sheets.map(({ name, rows }) => ({ name, rows: rows.length })) },
       })
     })
 
@@ -479,16 +534,22 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
   if (helpers.creates !== false)
     examples(
       annotate(documents.command("create"), { effects: REMOTE_WRITE, offline: false })
-        .summary("create a new Word document from paragraphs")
+        .summary("create a new Word document from paragraphs and tables")
         .description(
           `create a new .docx on ${place} with these paragraphs, each in a style: ${NEW_PARAGRAPH_STYLES.join(", ")} ` +
-            "(Normal without one; ListBullet is a bullet list). A file already there is refused: change it with " +
-            "documents update",
+            "(Normal without one; ListBullet is a bullet list), and tables. A paragraph is bold or italic as a whole, " +
+            "or made of runs that each are; a table is rows of cell texts, its first row bold with header: true. A " +
+            "file already there is refused: change it with documents update",
         )
         .argument("<path>", `the new .docx file on ${place}`)
-        .option("--payload <json>", "the paragraphs as JSON: [{text, style?}]"),
+        .option(
+          "--payload <json>",
+          "the body as JSON, in order: [{text, style?, bold?, italic?}, {runs: [{text, bold?, italic?}], style?}, " +
+            "{table: [[cell, …], …], header?}]",
+        ),
       [
         `${prefix} ${group} documents create /report.docx --payload '[{"text": "Report", "style": "Title"}, {"text": "Revenue grew 12%."}]'`,
+        `${prefix} ${group} documents create /report.docx --payload '[{"runs": [{"text": "Revenue "}, {"text": "grew 12%", "bold": true}]}, {"table": [["Item", "Cost"], ["Rent", "950"]], "header": true}]'`,
       ],
     ).action(async function (this: Command, input: string, args: { payload?: string }) {
       if (args.payload === undefined)
@@ -496,9 +557,10 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
           param: "--payload",
         })
       const paragraphs = jsonOf(args.payload, "--payload", NEW_PARAGRAPHS, NEW_PARAGRAPHS_SHAPE)
+      const tables = paragraphs.filter((block) => "table" in block).length
       await createNew(this, "documents", input, ".docx", {
         bytes: createDocx({ paragraphs }),
-        answer: { paragraphs: paragraphs.length },
+        answer: { paragraphs: paragraphs.length - tables, ...(tables ? { tables } : {}) },
       })
     })
 

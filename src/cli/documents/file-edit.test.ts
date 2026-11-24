@@ -276,6 +276,77 @@ describe("files sheets create and documents create", () => {
     expect(disk.item()).toMatchObject({ changed: [{ cell: "B2", before: 950, after: 1000 }] })
   })
 
+  it("create several sheets with formulas and bold cells, and a document with bold runs and a table", async () => {
+    const disk = harness()
+    const sheets = [
+      {
+        name: "Budget",
+        header: true,
+        rows: [
+          ["Item", "Cost"],
+          ["Rent", 950],
+          [{ value: "Total", bold: true }, { formula: "SUM(B2,Data!A1)" }],
+        ],
+      },
+      { name: "Data", rows: [["=not a formula"]] },
+    ]
+    await disk.run("sheets", "create", "/plan.xlsx", "--values", JSON.stringify(sheets))
+    expect(disk.item()).toMatchObject({
+      sheets: [
+        { name: "Budget", rows: 3 },
+        { name: "Data", rows: 1 },
+      ],
+    })
+    const [budget, data] = await readXlsxCells(disk.files.get("/plan.xlsx") as Uint8Array)
+    expect(budget?.cells.map(({ address, formula, style }) => [address, formula, style])).toEqual([
+      ["A1", undefined, 1],
+      ["B1", undefined, 1],
+      ["A2", undefined, 0],
+      ["B2", undefined, 0],
+      ["A3", undefined, 1],
+      ["B3", "SUM(B2,Data!A1)", 0],
+    ])
+    expect(data?.cells).toMatchObject([{ value: "=not a formula", type: "string" }])
+
+    const body = [
+      { runs: [{ text: "Rent is " }, { text: "due", bold: true }] },
+      {
+        table: [
+          ["Item", "Cost"],
+          ["Rent", 950],
+        ],
+        header: true,
+      },
+    ]
+    await disk.run("documents", "create", "/plan.docx", "--payload", JSON.stringify(body))
+    expect(disk.item()).toMatchObject({ paragraphs: 1, tables: 1 })
+    const paragraphs = await readDocxParagraphs(disk.files.get("/plan.docx") as Uint8Array)
+    expect(paragraphs.map((paragraph) => [paragraph.text, paragraph.location])).toEqual([
+      ["Rent is due", "body"],
+      ["Item", "table"],
+      ["Cost", "table"],
+      ["Rent", "table"],
+      ["950", "table"],
+      ["", "body"],
+    ])
+  })
+
+  it("refuse --name beside sheets, a formula that is not a text, and text mixed with runs", async () => {
+    const disk = harness()
+    const create = (...args: string[]) => disk.run("sheets", "create", "/new.xlsx", "--values", ...args)
+    await expect(create('[{"name": "A", "rows": []}]', "--name", "B")).rejects.toMatchObject({
+      details: { param: "--name" },
+    })
+    await expect(create('[[{"formula": 1}]]')).rejects.toMatchObject({ details: { param: "--values" } })
+    await expect(create('[[{"formula": "SUM(A1)", "value": 2}]]')).rejects.toMatchObject({
+      details: { param: "--values" },
+    })
+    await expect(
+      disk.run("documents", "create", "/new.docx", "--payload", '[{"text": "x", "runs": [{"text": "y"}]}]'),
+    ).rejects.toMatchObject({ details: { param: "--payload" } })
+    expect(disk.uploads).toEqual([])
+  })
+
   it("refuse a file already there, naming update, and upload nothing", async () => {
     const disk = harness()
     const there = disk.run("sheets", "create", "/budget.xlsx", "--values", "[[1]]")
