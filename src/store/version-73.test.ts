@@ -153,6 +153,26 @@ describe("store version 73", () => {
     expect(readdirSync(join(dir, "backups"))).toEqual([])
   })
 
+  it("asks for room to write the copied tables again, not only for the rollback copy", async () => {
+    const { path, database } = await fileAt72()
+    const tables = ["store_settings", "search_index_state", ...V73]
+    const copy = Number(
+      database
+        .prepare(
+          `SELECT sum(pgsize) AS bytes FROM dbstat WHERE aggregate = 1 AND name IN (${tables.map(() => "?").join(", ")})`,
+        )
+        .get(...tables)?.bytes,
+    )
+    const headroom = 256 * 1024 * 1024
+    const enoughForTheCopyOnly = () => headroom + copy * 2
+    expect(() =>
+      migrate(database, { now: () => 2, rollback: { store: path, freeBytes: enoughForTheCopyOnly } }),
+    ).toThrow(/not enough free disk space/)
+    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: () => headroom + copy * 3 } })
+    expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
+    database.close()
+  })
+
   it("takes the rollback copy of every table it copies", async () => {
     const { dir, path, database } = await fileAt72()
     migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })

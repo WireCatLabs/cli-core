@@ -538,12 +538,12 @@ const migrateCommand = (owner: StoreOwner): Command =>
       "bring the store up to this build's schema, then normalize, index and stem the messages and notes stored before it",
     )
     .option(
-      "--without-rollback-copy",
+      "--no-backup",
       "migrate even when no rollback copy can be written; older tools then cannot open the store again",
     )
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
-      const { withoutRollbackCopy = false } = this.opts<{ withoutRollbackCopy?: boolean }>()
+      const { backup = true } = this.opts<{ backup?: boolean }>()
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
         result(this, { path, exists: false })
@@ -555,7 +555,7 @@ const migrateCommand = (owner: StoreOwner): Command =>
         const notice = migrate(database, {
           command: owner.app.command,
           version: owner.app.version,
-          rollback: { store: path, warn: (line) => renderer.warn(line), withoutCopy: withoutRollbackCopy },
+          rollback: { store: path, warn: (line) => renderer.warn(line), withoutCopy: !backup },
         })
         if (notice) renderer.warn(notice)
         const { normalized, indexed, terms } = buildWordIndex(database, (note) => renderer.note(note))

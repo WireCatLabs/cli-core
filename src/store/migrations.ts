@@ -144,7 +144,14 @@ const copyBeforeBreaking = (
     for (const table of migration.tables ?? []) tables.push(table)
   }
   if (floor === file.minCompatible) return undefined
-  return takeRollbackCopy(database, { from: file.version, to: latest(migrations), tables, at: now() }, options)
+  const copiesTables = migrations.some(
+    (migration) => migration.version > file.version && rebuildOf(migration.statements) !== undefined,
+  )
+  return takeRollbackCopy(
+    database,
+    { from: file.version, to: latest(migrations), tables, at: now(), copiesTables },
+    options,
+  )
 }
 
 /**

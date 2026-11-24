@@ -743,6 +743,9 @@ it by editing that line in a PR of its own, merged before the migration.
    A breaking version (its `minCompatible` is its own number, as 73 is) may keep drizzle-kit's copies: the runner
    turns foreign keys off before `BEGIN`, refuses a table with a column the copy would lose, puts back every trigger
    and index of the copied tables and checks their foreign keys before `COMMIT` (`src/store/sqlite/rebuild.ts`).
+   Since version 73 most base tables carry table-level `CHECK`s (`scripts/schema/checks.mjs`, frozen). SQLite cannot add
+   one in place, so a column added later gets a `RAISE(ABORT)` trigger instead, and a column a `CHECK` names can only
+   be dropped by such a copy.
 4. **Triggers, FTS5 tables and data fills go in a custom migration**, since `schema.ts` holds neither
    triggers nor FTS: `pnpm db:generate --custom --name version-<n>-<what>`, then write the SQL into
    the empty file. Put `--> statement-breakpoint` between statements — the bundle splits on nothing

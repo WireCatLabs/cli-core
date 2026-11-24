@@ -19,7 +19,7 @@ export interface RollbackCopyOptions {
   store: string
   freeBytes?: (dir: string) => number
   warn?: (line: string) => void
-  /** The owner chose to migrate even when no copy can be written (`store migrate --without-rollback-copy`). */
+  /** The owner chose to migrate even when no copy can be written (`store migrate --no-backup`). */
   withoutCopy?: boolean
 }
 
@@ -93,7 +93,13 @@ const attach = (database: CacheDatabase, path: string) => database.prepare(`ATTA
  */
 export const takeRollbackCopy = (
   database: CacheDatabase,
-  { from, to, tables, at }: { from: number; to: number; tables: string[]; at: number },
+  {
+    from,
+    to,
+    tables,
+    at,
+    copiesTables = false,
+  }: { from: number; to: number; tables: string[]; at: number; copiesTables?: boolean },
   {
     store,
     freeBytes = freeBytesOf,
@@ -107,7 +113,10 @@ export const takeRollbackCopy = (
   let path: string | undefined
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
-    const needed = tableBytes(database, present)
+    const copy = tableBytes(database, present)
+    // A migration that copies tables writes them again into the file and its write-ahead log before it drops the old
+    // ones: 1M messages (216 MB) took a 208 MB log and grew the file by 138 MB (2026-11-24).
+    const needed = copiesTables ? copy * 3 : copy
     const free = freeBytes(dir)
     if (free < needed + HEADROOM) {
       const short = `not enough free disk space for a rollback copy before schema ${to} (about ${megabytes(needed + HEADROOM)} needed, ${megabytes(free)} free in ${dir})`
@@ -161,7 +170,7 @@ const noCopy = (why: string, from: number) =>
   new CliError(
     "configuration_error",
     `${why}, so the store stays at schema ${from} and nothing was changed. Free the space and open it again, or ` +
-      "run `store migrate --without-rollback-copy` to migrate with no way back to the tools that speak it",
+      "run `store migrate --no-backup` to migrate with no way back to the tools that speak it",
     { reason: NO_COPY },
   )
 

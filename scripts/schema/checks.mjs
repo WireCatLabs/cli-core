@@ -10,54 +10,237 @@ export const autoIncrements = (table) =>
   !DERIVED.test(table.name) &&
   (table.cols ?? []).some((col) => col.name === "id" && col.pk && col.type === "integer")
 
-// Noted as JSON but holds plain text the caller encodes.
-const NOT_JSON = new Set(["sync_cursors.value"])
-
-// Both halves nullable, and a type with no id means nothing. `links.to` keeps an unresolved target's type.
-const HALF_SET_BY_DESIGN = new Set(["links.to"])
-
-// The amounts a validation trigger already refuses below zero.
-const AMOUNTS = {
-  invoices: ["total"],
-  invoice_lines: ["amount", "unit_price"],
-  orders: ["total"],
-  order_lines: ["amount", "unit_price"],
-  deals: ["amount"],
-  leads: ["amount"],
-  catalog_items: ["unit_price"],
-  contracts: ["value"],
-  subscription_prices: ["amount"],
+/**
+ * Frozen at version 73: JSON columns, pointer pairs (`<name>_type` and `<name>_id`, whole or empty) and amounts a
+ * validation trigger already keeps non-negative. SQLite cannot add a table CHECK in place, so a column added later
+ * gets a `RAISE(ABORT)` trigger instead; a new table lists its own here when it is created.
+ */
+const CHECKS = {
+  accounts: {
+    json: ["settings"],
+  },
+  bot_updates: {
+    json: ["payload"],
+  },
+  syncs: {
+    json: ["counts"],
+  },
+  identities: {
+    json: ["metadata"],
+  },
+  identity_revisions: {
+    json: ["marks"],
+  },
+  organizations: {
+    json: ["metadata"],
+  },
+  bots: {
+    json: ["metadata"],
+  },
+  chats: {
+    json: ["metadata"],
+  },
+  messages: {
+    json: ["reply_to", "forward", "reactions", "metadata", "mentions"],
+  },
+  poll_votes: {
+    json: ["answers"],
+  },
+  link_revisions: {
+    json: ["before"],
+  },
+  email_threads: {
+    json: ["metadata"],
+  },
+  emails: {
+    json: ["references", "headers", "metadata"],
+  },
+  mail_rules: {
+    json: ["conditions", "actions"],
+  },
+  attachments: {
+    json: ["provider_ref", "contact"],
+  },
+  documents: {
+    json: ["front_matter", "metadata"],
+  },
+  files: {
+    json: ["metadata"],
+  },
+  document_revisions: {
+    json: ["front_matter"],
+  },
+  notes: {
+    pairs: ["author"],
+  },
+  memories: {
+    pairs: ["subject"],
+  },
+  calendar_entries: {
+    json: ["recurrence", "metadata"],
+  },
+  meeting_series: {
+    json: ["recurrence", "metadata"],
+  },
+  meetings: {
+    json: ["metadata"],
+  },
+  meeting_participants: {
+    json: ["sessions", "metadata"],
+  },
+  meeting_transcripts: {
+    json: ["metadata"],
+  },
+  meeting_transcript_rows: {
+    json: ["metadata"],
+  },
+  meeting_chat_messages: {
+    json: ["metadata"],
+  },
+  meeting_summaries: {
+    json: ["sections", "next_steps", "metadata"],
+  },
+  projects: {
+    pairs: ["owner"],
+  },
+  tasks: {
+    json: ["metadata"],
+    pairs: ["closed_by", "close_suggested_by"],
+  },
+  task_events: {
+    json: ["changes"],
+    pairs: ["actor"],
+  },
+  task_pairs: {
+    json: ["levels", "reasons"],
+    pairs: ["decided_by"],
+  },
+  decisions: {
+    json: ["metadata"],
+    pairs: ["confirmed_by"],
+  },
+  facts: {
+    json: ["metadata"],
+    pairs: ["subject", "confirmed_by"],
+  },
+  invoices: {
+    json: ["metadata"],
+    pairs: ["issuer", "confirmed_by"],
+    amounts: ["total"],
+  },
+  invoice_lines: {
+    amounts: ["amount", "unit_price"],
+  },
+  payments: {
+    json: ["metadata"],
+    pairs: ["payer", "payee", "confirmed_by"],
+  },
+  orders: {
+    json: ["metadata"],
+    pairs: ["supplier", "confirmed_by"],
+    amounts: ["total"],
+  },
+  deals: {
+    json: ["metadata"],
+    amounts: ["amount"],
+  },
+  leads: {
+    json: ["metadata"],
+    amounts: ["amount"],
+  },
+  crm_fields: {
+    json: ["options"],
+  },
+  catalog_items: {
+    json: ["metadata"],
+    pairs: ["supplier"],
+    amounts: ["unit_price"],
+  },
+  order_lines: {
+    amounts: ["amount", "unit_price"],
+  },
+  contracts: {
+    json: ["metadata"],
+    pairs: ["confirmed_by"],
+    amounts: ["value"],
+  },
+  subscriptions: {
+    json: ["metadata"],
+    pairs: ["confirmed_by"],
+  },
+  subscription_prices: {
+    json: ["metadata"],
+    pairs: ["confirmed_by"],
+    amounts: ["amount"],
+  },
+  financial_accounts: {
+    json: ["metadata"],
+    pairs: ["holder"],
+  },
+  financial_transactions: {
+    json: ["metadata"],
+    pairs: ["counterparty", "confirmed_by"],
+  },
+  records: {
+    json: ["fields"],
+    pairs: ["entity"],
+  },
+  proposed_actions: {
+    json: ["payload", "result"],
+    pairs: ["target", "decided_by"],
+  },
+  agent_actions: {
+    pairs: ["target"],
+  },
+  links: {
+    json: ["metadata"],
+  },
+  searches: {
+    json: ["params"],
+  },
+  taggings: {
+    pairs: ["author"],
+  },
+  tag_consolidations: {
+    json: ["source_member_ids", "survivor_member_ids", "counts"],
+  },
+  link_reviews: {
+    json: ["candidates"],
+  },
+  tracker_items: {
+    json: ["data"],
+  },
+  content_authors: {
+    json: ["data"],
+  },
+  content_terms: {
+    json: ["data"],
+  },
+  content_posts: {
+    json: ["data"],
+  },
+  content_metrics: {
+    json: ["raw"],
+  },
 }
 
-const jsonColumns = (table) =>
-  table.cols.filter((col) => /\bJSON\b/.test(col.note ?? "") && !NOT_JSON.has(`${table.name}.${col.name}`))
-
-const pointerPairs = (table) =>
-  table.cols
-    .filter((col) => col.name.endsWith("_type"))
-    .map((col) => [col, table.cols.find((other) => other.name === col.name.replace(/_type$/, "_id"))])
-    // An `_id` with a foreign key is not a pointer: `calendar_entries.event_type` is the entry's kind.
-    .filter(([type, id]) => id && !id.ref && !type.notnull && !id.notnull)
-    .map(([type]) => type.name.replace(/_type$/, ""))
-    .filter((pointer) => !HALF_SET_BY_DESIGN.has(`${table.name}.${pointer}`))
-
-/** `{ name, column(s), sql }` per rule, in a fixed order: JSON columns, pointer pairs, amounts. */
+/** `{ name, kind, columns, sql }` per rule, in a fixed order: JSON columns, pointer pairs, amounts. */
 export const checksOf = (table) => {
-  if (!autoIncrements(table)) return []
+  const { json = [], pairs = [], amounts = [] } = CHECKS[table.name] ?? {}
   return [
-    ...jsonColumns(table).map((col) => ({
-      name: `${table.name}_${col.name}_json`,
+    ...json.map((col) => ({
+      name: `${table.name}_${col}_json`,
       kind: "json",
-      columns: [col.name],
-      sql: `"${col.name}" IS NULL OR json_valid("${col.name}")`,
+      columns: [col],
+      sql: `"${col}" IS NULL OR json_valid("${col}")`,
     })),
-    ...pointerPairs(table).map((pointer) => ({
+    ...pairs.map((pointer) => ({
       name: `${table.name}_${pointer}_pair`,
       kind: "pair",
       columns: [`${pointer}_type`, `${pointer}_id`],
       sql: `("${pointer}_type" IS NULL) = ("${pointer}_id" IS NULL)`,
     })),
-    ...(AMOUNTS[table.name] ?? []).map((col) => ({
+    ...amounts.map((col) => ({
       name: `${table.name}_${col}_not_negative`,
       kind: "amount",
       columns: [col],
