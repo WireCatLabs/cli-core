@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { Chat } from "../../domain/models.js"
 import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
+import { openStore } from "../../store/index.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { accountCommand } from "./account-command.js"
@@ -75,13 +76,16 @@ describe("a command run with the connection waits in its environment", () => {
       chatArgument: "a chat",
       accountOf: () => ({ provider: "chat", account: "500" }),
     }
+    const env = sandbox()
+    // Built before the clock starts: a new store runs every migration, which is not the wait this measures.
+    await (await openStore({ path: env.MESSAGING_STORE })).close()
     const streams = captureStreams()
     const started = performance.now()
 
     const code = await run(
       ["account", "show", "--json"],
       { app, commands: () => [accountCommand(messenger)] },
-      { streams, tty: false, env: sandbox(), closeWaitMs: 10, rekeyPacing: { lockMs: 1000, pauseMs: 0 } },
+      { streams, tty: false, env, closeWaitMs: 10, rekeyPacing: { lockMs: 1000, pauseMs: 0 } },
     )
 
     expect(code).toBe(0)

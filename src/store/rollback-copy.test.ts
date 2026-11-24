@@ -274,7 +274,7 @@ describe("the rollback copy", () => {
     }
   })
 
-  it("**a failed migration leaves the store as it was and the copy whole**, and cleanup keeps it", async () => {
+  it("**a failed migration leaves the store as it was** and deletes the copy it took, so a retry adds none", async () => {
     const { path, backups, database } = await fileAt(latest)
     try {
       const schema = schemaOf(database)
@@ -294,11 +294,7 @@ describe("the rollback copy", () => {
       expect(schemaOf(database)).toEqual(schema)
       expect(baseRows(database)).toEqual(rows)
       expect(pointers(database)).toHaveLength(0)
-      const [copy] = copiesIn(backups)
-      expect((await tablesOfCopy(join(backups, String(copy)))).rows.chats).toBe(2)
-
-      pruneRollbackCopies(database, T + 48 * HOUR)
-      expect(copiesIn(backups)).toEqual([copy])
+      expect(copiesIn(backups)).toEqual([])
     } finally {
       database.close()
     }
