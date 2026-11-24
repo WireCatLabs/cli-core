@@ -22,6 +22,9 @@ const PICTURES = new Set(["image/jpeg", "image/png", "image/webp"])
 const UNAVAILABLE = "scans are not read: "
 const LATER = "OCR page limit of this sync reached"
 const BUSY = "OCR is unavailable for now"
+const NO_TEXT = "OCR found no text in the file"
+/** The reading that found no text, in the reason: another engine or model may find some, the same one would not. */
+const readBy = (extractor: string) => ` (read by ${extractor})`
 /** Errors of a model that pass: the file is read on a later sync, not kept by name for good. */
 const PASSING = new Set(["rate_limited", "timeout", "network_error", "provider_unavailable"])
 
@@ -62,7 +65,8 @@ export const scanRetry = (reader: ScanReader | undefined, reason: string): boole
   (reason.startsWith(NO_TEXT_LAYER) ||
     reason.startsWith(UNAVAILABLE) ||
     reason.startsWith(LATER) ||
-    reason.startsWith(BUSY))
+    reason.startsWith(BUSY) ||
+    (reason.startsWith(NO_TEXT) && !reason.endsWith(readBy(reader.extractor))))
 
 const refusing = (why: string): ScanReader => ({
   read: async () => {
@@ -83,13 +87,13 @@ const modelPipeline = (choice: "anthropic" | "openai", deps: AiCallDeps): OcrPip
   return reader.pipeline
 }
 
-const reasonOf = (status: string, error?: string) =>
+const reasonOf = (extractor: string, status: string, error?: string) =>
   status === "too-large"
     ? `scan is over ${SCAN_PAGES_PER_FILE} pages, or a page is too large to read`
     : status === "needs-agent"
       ? "picture is too large to read"
       : error === "empty_answer"
-        ? "OCR found no text in the file"
+        ? `${NO_TEXT}${readBy(extractor)}`
         : "OCR could not read the file"
 
 const later = (why: string) => new CliError("validation_error", why, { reason: "document.scan-later" })
@@ -160,7 +164,7 @@ export const scanReader = async (
         throw later(`${BUSY}; the next sync tries again`)
       throw new CliError(
         "validation_error",
-        reasonOf(read.status, read.status === "unreadable" ? read.error : undefined),
+        reasonOf(pipeline.extractor, read.status, read.status === "unreadable" ? read.error : undefined),
         {
           reason: "document.scan-unread",
         },

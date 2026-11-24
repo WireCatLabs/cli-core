@@ -243,7 +243,9 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   so they take none of the run's budget. TIFF, HEIC and BMP stay by name only. With no reader (tesseract missing,
   the model not allowed, the PDF engines missing for a PDF), a scan is kept by name with the reason and the install
   hint, and is read on the first sync after that is fixed. A rate limit or an unreachable model leaves the file for
-  the next sync too; a file OCR finds no text in stays by name until it changes. The engine's name (`ocr:v1:tesseract@5.3.0:rus+eng`,
+  the next sync too. A file OCR finds no text in stays by name, its reason naming the engine or model that read it,
+  until it changes or another engine or model reads it. A picture OCR cannot read still gets its picture vector
+  when the profile has `picture_search`, and a picture OCR reads gets both its text and its vector. The engine's name (`ocr:v1:tesseract@5.3.0:rus+eng`,
   `ocr:v1:openai/gpt-5`) is saved with the text, so another engine or model reads those files again, 50 a sync.
   Text OCR read once stays when a later reading fails or `read_scans` is `off`; only an edit of the file makes it old.
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one

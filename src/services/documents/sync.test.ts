@@ -1,7 +1,8 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { PNG } from "pngjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { catalogFiles } from "../../documents/catalog.js"
 import type {
@@ -15,18 +16,21 @@ import type {
 } from "../../documents/model.js"
 import { within } from "../../documents/scope.js"
 import { type MessageStore, openStore } from "../../store/index.js"
+import { fakeTesseract } from "../../testing/tesseract.js"
 import { documentSource } from "../document-source.js"
 import { searchNotesQuery } from "../notes-search.js"
 import { documentIngestion } from "./ingestion.js"
 import { documentKnowledge } from "./knowledge.js"
 import { REREAD_BATCH } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
+import { scanReader, scanRetry, scanSkipReason } from "./scans.js"
 import { syncDocuments } from "./sync.js"
 
 const must = <T>(value: T | undefined): T => {
   if (value === undefined) throw new Error("missing synthetic fixture")
   return value
 }
+const OCR_APP = { command: "box", appName: "box-cli", envPrefix: "BOX", description: "", version: "1" }
 const live: MessageStore[] = []
 afterEach(async () => {
   for (const store of live.splice(0)) await store.close()
@@ -371,6 +375,45 @@ describe("provider-neutral document sync", () => {
     expect(f.state().documents.b?.picture).toBe("saved")
     expect(() => within(file("cycle", ["cycle"]), ["root"], { cycle: file("cycle", ["cycle"]) })).toThrow("cycle")
   })
+  it("gives a picture OCR finds no text in its picture vector, and reads it again only with another reader", async () => {
+    const tesseract = fakeTesseract()
+    writeFileSync(join(tesseract.bin, "empty"), "")
+    const env = { ...process.env, PATH: `${tesseract.bin}:${dirname(process.execPath)}` }
+    const reader = () => scanReader("local", { app: OCR_APP, env, command: "box" })
+    const f = await setup()
+    f.files.set("b", { ...must(f.files.get("b")), mime: "image/png" })
+    vi.mocked(f.source.bytes).mockResolvedValue(PNG.sync.write(new PNG({ width: 40, height: 20 })))
+    const run = async () => {
+      const scans = await reader()
+      return syncDocuments({
+        ...f.options,
+        pictures: true,
+        ...(scans ? { scans } : {}),
+        skipReason: (item) => scanSkipReason(scans, item, f.options.skipReason(item)),
+        retryable: (skip) => scanRetry(scans, skip.reason),
+      })
+    }
+
+    const first = await run()
+    expect(first.skipped).toEqual([
+      { id: "b", reason: "OCR found no text in the file (read by ocr:v1:tesseract@5.3.0:rus+eng)" },
+    ])
+    expect(first.pictures).toBe(1)
+    expect(f.state().documents.b?.picture).toBe("saved")
+    expect(tesseract.calls()).toHaveLength(1)
+
+    tesseract.reset()
+    await run()
+    expect(tesseract.calls()).toEqual([])
+
+    writeFileSync(join(tesseract.bin, "version"), "5.4.0")
+    rmSync(join(tesseract.bin, "empty"))
+    const again = await run()
+    expect(again).toMatchObject({ saved: 1, skipped: [] })
+    expect(tesseract.calls()).toHaveLength(1)
+    expect(f.state().documents.b).toMatchObject({ ocr: "ocr:v1:tesseract@5.4.0:rus+eng", picture: "saved" })
+    expect(f.writer.save).toHaveBeenCalledTimes(2)
+  }, 30_000)
   it("asks the budget before a picture download, and leaves the picture for the next call when it says no", async () => {
     const f = await setup()
     f.files.set("b", { ...must(f.files.get("b")), mime: "image/png" })
