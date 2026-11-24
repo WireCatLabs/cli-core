@@ -16,7 +16,7 @@ import {
 import { dayIn } from "../../domain/moment.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { notOverriddenSql } from "../../domain/relations.js"
-import { correctWords, type Vocabulary } from "../../search/correct.js"
+import { correctWords, editDistance, type Vocabulary } from "../../search/correct.js"
 import { clauseIn, probeOf, type QueryWord, type StoredWord, tokensOf, wordMatches } from "../../search/word-match.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
@@ -238,7 +238,10 @@ export type DealPart = "title" | "company" | "contact" | "activity"
 export interface FoundDeal extends Deal {
   /** Where the query's words were found, in the order of `DealPart`. */
   matched: DealPart[]
-  /** Set when nothing matched as typed: each query word that was corrected, and the stored words it became. */
+  /**
+   * Set when nothing matched as typed, or on a hit found only through a name one letter off a query word that did
+   * match elsewhere: each query word that was corrected, and the stored words it became.
+   */
   corrections?: { from: string; to: string[] }[]
 }
 
@@ -336,6 +339,8 @@ const accountOf = (provider: unknown, external: unknown) =>
   provider == null ? null : { provider: String(provider), account: String(external) }
 
 const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact", "activity"]
+/** Below five letters one edit turns too many names into each other (Ivan, Ivas). */
+const NEAR_NAME = 5
 const listOf = (json: unknown): string[] => {
   if (typeof json !== "string") return []
   try {
@@ -910,19 +915,39 @@ export const dealOperationsOver = (context: StoreContext) => {
           found = search(queryWith(fixes))
         }
       }
-      const ranked = found
-        .sort(
-          (a, b) =>
-            b.score - a.score ||
-            Number(b.row.updated_at) - Number(a.row.updated_at) ||
-            Number(b.row.id) - Number(a.row.id),
-        )
+      // A name one letter off another that matched (Ferrara, Ferraro) comes after the exact hits, as a correction:
+      // the correction above runs only when nothing matched, so a near-duplicate would hide the record asked for.
+      let near: typeof found = []
+      const nearFixes = new Map<string, string[]>()
+      if (found.length && !exact) {
+        const names = new Set<string>()
+        for (const { parts } of records)
+          for (const { part, words: held } of parts)
+            if (part !== "activity")
+              for (const word of held) if (word.literal.length >= NEAR_NAME) names.add(word.literal)
+        for (const literal of new Set(probes.flat().map((probe) => probe.literal))) {
+          if (literal.length < NEAR_NAME) continue
+          const close = [...names].filter((name) => name !== literal && editDistance(literal, name, 1) === 1)
+          if (close.length) nearFixes.set(literal, close.slice(0, 5))
+        }
+        if (nearFixes.size) {
+          const held = new Set(found.map(({ row }) => row))
+          near = search(queryWith(nearFixes)).filter(({ row }) => !held.has(row))
+        }
+      }
+      const byScore = (a: (typeof found)[number], b: (typeof found)[number]) =>
+        b.score - a.score || Number(b.row.updated_at) - Number(a.row.updated_at) || Number(b.row.id) - Number(a.row.id)
+      const nearCorrections = [...nearFixes].map(([from, to]) => ({ from, to }))
+      const ranked = [
+        ...found.sort(byScore).map((one) => ({ ...one, fixes: corrections })),
+        ...near.sort(byScore).map((one) => ({ ...one, fixes: nearCorrections })),
+      ]
         .slice(offset, offset + most + 1)
         .map(
-          ({ kind, row, matched }): FoundDeal => ({
+          ({ kind, row, matched, fixes }): FoundDeal => ({
             ...read(`${kind}:${row.id}`),
             matched,
-            ...(corrections ? { corrections } : {}),
+            ...(fixes ? { corrections: fixes } : {}),
           }),
         )
       return pageOfRows(ranked, most, offset)
