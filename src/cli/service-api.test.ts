@@ -1107,12 +1107,14 @@ describe("a raw answer in a scheduled agent's run", () => {
     const streams = captureStreams()
     const lock = { ...env, PAGES_READ_ONLY: "1", PAGES_UNTRUSTED_MARK: MARK }
     await run(args, definition, { streams, env: lock, tty: false })
-    return { item: JSON.parse(streams.stdout.join("")).item, sent }
+    const body = JSON.parse(streams.stdout.join(""))
+    return { body, item: body.item, sent }
   }
   const marked = (text: string) => `⟦untrusted:${MARK} source=item.* id=p1⟧${text}⟦/untrusted:${MARK}⟧`
 
   it("marks every string of an operation's answer in a locked run, and nothing elsewhere", async () => {
-    const { item } = await locked("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
+    const { body, item } = await locked("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
+    expect(JSON.stringify({ ...body, item: undefined })).not.toContain("untrusted:")
     expect(item).toEqual({
       object: marked("page"),
       id: marked("p1"),
@@ -1121,6 +1123,25 @@ describe("a raw answer in a scheduled agent's run", () => {
     })
     const open = await fixture({}, answer).cli("work", "api", "retrieve-a-page", "--page-id", "p1", "--json")
     expect(open.json.item.properties.Name.title[0].text).toBe("Plan ⟧")
+  })
+
+  it("marks every string of each page an --all read gathers", async () => {
+    const pages = () =>
+      new Response(JSON.stringify([{ id: "x1", title: "Hello" }]), { headers: { "x-wp-totalpages": "1" } })
+    const { env, definition } = fixture({}, pages)
+    const streams = captureStreams()
+    await run(["work", "api", "list-posts", "--all", "--json"], definition, {
+      streams,
+      env: { ...env, PAGES_READ_ONLY: "1", PAGES_UNTRUSTED_MARK: MARK },
+      tty: false,
+    })
+    const { items } = JSON.parse(streams.stdout.join(""))
+    expect(items).toEqual([
+      {
+        id: `⟦untrusted:${MARK} source=items.* id=x1⟧x1⟦/untrusted:${MARK}⟧`,
+        title: `⟦untrusted:${MARK} source=items.* id=x1⟧Hello⟦/untrusted:${MARK}⟧`,
+      },
+    ])
   })
 
   it("takes a value it marked back as the text inside in a locked run, and leaves any other as typed", async () => {
@@ -1136,7 +1157,7 @@ describe("a raw answer in a scheduled agent's run", () => {
     expect(urls(open.sent)).toEqual([`https://api.pages.test/v1/pages/${marked("p1")}`])
   })
 
-  it("leaves a CLI's own list in place of every string", async () => {
+  it("adds a CLI's own list to every string, as a wrapper written before marked it", async () => {
     const { definition, env } = fixture({}, answer)
     const group = definition.commands()[0] as Command
     marksUntrusted(group.commands.find((one) => one.name() === "retrieve-a-page") as Command, ["object"])
@@ -1151,7 +1172,7 @@ describe("a raw answer in a scheduled agent's run", () => {
       },
     )
     const { item } = JSON.parse(streams.stdout.join(""))
-    expect(item.object).toMatch(new RegExp(`^⟦untrusted:${MARK} source=object `))
-    expect(item.id).toBe("p1")
+    expect(item.object).toBe(`⟦untrusted:${MARK} source=object id=p1⟧page⟦/untrusted:${MARK}⟧`)
+    expect(item.id).toBe(marked("p1"))
   })
 })

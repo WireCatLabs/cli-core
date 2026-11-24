@@ -218,8 +218,13 @@ const sourceOf = (item: Fields, column: RowColumn): string | undefined =>
 // Whitespace runs become one space and control or direction characters show, so a text cannot start a row of its own.
 const clean = (text: string): string => visibleControls(text.replace(/\s+/g, " ").trim())
 
+const BLOCK = /^(⟦untrusted:([0-9a-f]{16}) [^⟦⟧]*⟧)([^⟦⟧]*)(⟦\/untrusted:\2⟧)$/su
+
 const cut = (text: string, chars: number): string => {
   if (chars <= 0) return text
+  // A marked text loses its inside, never its closing marker, or the rest of the row would read as inside it.
+  const block = BLOCK.exec(text)
+  if (block) return `${block[1]}${cut(block[3] ?? "", chars)}${block[4]}`
   const letters = Array.from(text)
   return letters.length <= chars ? text : `${letters.slice(0, chars).join("")}…(+${letters.length - chars})`
 }

@@ -174,10 +174,12 @@ const DECLARED = new WeakMap<Command, readonly string[]>()
 /**
  * Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. A
  * `*` in a path stands for every key of an object, as a database's own property names; a path ending in `*` marks
- * every string under it.
+ * every string under it. A path starts with a field's name: a leading `*` would mark the answer's envelope too.
  */
 export const marksUntrusted = <T extends Command>(command: T, fields: readonly string[] = MESSAGE_UNTRUSTED): T => {
-  DECLARED.set(command, fields)
+  // A CLI's own list on a raw api operation adds to every string, as drive's, notion's and ydisk's did before it.
+  const raw = DECLARED.get(command) === API_UNTRUSTED
+  DECLARED.set(command, raw ? [...new Set([...API_UNTRUSTED, ...fields])] : fields)
   return command
 }
 

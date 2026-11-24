@@ -425,16 +425,19 @@ owner's folder and stays as it is.
 Every generated `api <operation>` marks every string of the provider's answer (`API_UNTRUSTED`, `item.*` and
 `items.*`), with no code in the CLI: the answer's shape is the provider's, and a list of paths would miss a field the
 CLI did not foresee. Ids, dates and URLs come marked too; `api list` and `api show` are the CLI's own text and stay
-as they are. A CLI that wraps an operation with its own `marksUntrusted` list keeps that list in its place; a CLI's
+as they are. A CLI that wraps an operation with its own `marksUntrusted` list adds that list to every string; a CLI's
 own raw call, such as drive-cli's `api call`, declares `API_UNTRUSTED` from `@wirecat/cli-core/documents/cli`.
 
 A `*` in a path stands for every key of an object, for keys that differ from one answer to the next, as a database's
 own property names: `properties.*.name`. A path that ends in `*` marks every string under it, at any depth:
-`properties.*`. Keys stay as they are, so a property's name is not marked.
+`properties.*`. Keys stay as they are, so a property's name is not marked. A path starts with a field's name: a
+leading `*` would mark the answer's own `kind` and `meta` too.
 
 A marked value goes back into the next command as it is. A locked run takes each block of its own mark off its
 arguments before it reads them, so `--page-id ⟦untrusted:…⟧p1⟦/untrusted:…⟧` reads `p1`. A block
-of another mark is left as typed, and a file or stdin is read as it is.
+of another mark is left as typed, and a body from a file or stdin is read as it is. A bracket `⟦` or `⟧` in the
+original text is dropped by the marking, so such a value does not come back as it was. In compact output a long marked
+text is cut inside its markers, so the closing one stays.
 
 A CLI with its own reads of the same text marks them itself: drive-cli's own `documents`, `catalog` and knowledge
 commands, notion-cli's `documents get` and `folders browse`, yandex-disk-cli's `files` reads. It imports

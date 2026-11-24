@@ -100,7 +100,7 @@ const setup = (rewrite?: (text: string) => string, env?: NodeJS.ProcessEnv) => {
       },
       output: (command, body) => {
         bodies.push(body)
-        if (env) renderAnswer(command, outputFor(command), body)
+        if (env !== undefined) renderAnswer(command, outputFor(command), body)
       },
       profile: () => "personal",
       stateDir: () => state,

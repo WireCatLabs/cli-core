@@ -130,6 +130,9 @@ describe("mirrors conflicts", () => {
     const [item] = JSON.parse(streams.stdout.join("")).items
     expect(item.path).toBe(`⟦untrusted:${MARK} source=path id=m1⟧plan.md⟦/untrusted:${MARK}⟧`)
     expect(item.reason).toBe("changed on both sides in the same lines")
+    const open = await setup()
+    await open.program.parseAsync(["--json", "mirrors", "conflicts", "list"], { from: "user" })
+    expect(JSON.parse(open.streams.stdout.join("")).items[0].path).toBe("plan.md")
   })
 
   it("refuses a final file from the app's own folders, which hold sign-ins and state", async () => {
