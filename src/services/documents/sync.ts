@@ -304,8 +304,12 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
             ...(safe.details.text_limit ? { textLimit: limit } : {}),
             ...(safe.details.store_refused_in ? { storeRefusedIn: VERSION } : {}),
           }
-          if (job.file && safe.code === "validation_error") await saveNamesOnly(job.file, skipped.reason)
-          else {
+          let stop: WalkStop | null = null
+          if (job.file && safe.code === "validation_error") {
+            await saveNamesOnly(job.file, skipped.reason)
+            // A picture OCR could not read is still found by what it shows.
+            stop = await savePictureOf(job.file)
+          } else {
             // A 404 or a refusal says the sign-in cannot read it now, not that it is gone: its text stays.
             await index.remove(profile.principal, job.id, "unavailable")
             statePort.removeSnapshot(job.id)
@@ -314,6 +318,10 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           state.skipped = state.skipped.filter((item) => item.id !== job.id)
           state.skipped.push(skipped)
           result.skipped.push({ id: skipped.id, reason: skipped.reason })
+          if (stop) {
+            result.stopped = stop
+            break
+          }
           pending.jobs = pending.jobs.filter((item) => item !== job)
           progress()
           continue
