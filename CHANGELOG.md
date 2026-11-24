@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.748.0 — 24.11.2026
+
+### Added
+
+- **A documents source can ask for a full walk every so often.** A manifest's `rescanEvery` (such as `"7d"`) makes a
+  plain `sync` walk the chosen folders in full, as `--rescan` does, once that long has passed since the last full
+  walk. A Linear document restored from the trash, which neither its changes nor its deletions name, comes back without
+  `--rescan`. The sync that starts the walk says why in its answer (`rescan`). Unset, nothing changes.
+  ([docs](docs/dev/DOCUMENTS.md#a-full-walk-every-so-often))
+
+### Changed — may break callers
+
+- **`activities create --subject person:<n>` and `organization:<n>` name the copy's record, as `deals show` gives it
+  and `people show` reads it.** They named the CRM's id, so in a CRM that numbers its records a reference taken from
+  `deals show` put the note on someone else's contact or company. A contact or company by the CRM's id, as
+  `people list` prints it, is now `person:crm:<id>`. An id that cannot be a reference, such as Attio's UUIDs, works
+  as before. A reference that stands for more than one CRM record is refused with `crm.record-ambiguous`, one the
+  copy does not hold with `not_found` naming the `crm:` form.
+
 ## 0.747.0 — 24.11.2026
 
 ### Fixed
