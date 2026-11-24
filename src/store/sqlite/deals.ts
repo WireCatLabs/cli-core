@@ -16,7 +16,8 @@ import {
 import { dayIn } from "../../domain/moment.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { notOverriddenSql } from "../../domain/relations.js"
-import { correctWords, editDistance, type Vocabulary } from "../../search/correct.js"
+import { editDistance, type Vocabulary } from "../../search/correct.js"
+import { respelled } from "../../search/respell.js"
 import { clauseIn, probeOf, type QueryWord, type StoredWord, tokensOf, wordMatches } from "../../search/word-match.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
@@ -909,7 +910,8 @@ export const dealOperationsOver = (context: StoreContext) => {
           .flat()
           .filter((probe) => ![...stored.values()].some((word) => wordMatches(probe, word, false)))
           .map(({ literal }) => literal)
-        const fixes = unmatched.length ? await correctWords(vocabulary, [...new Set(unmatched)]) : new Map()
+        // A name typed in Cyrillic (феррара) stands for the Latin one the CRM holds (Ferrara), as in messages.
+        const fixes = unmatched.length ? await respelled(vocabulary, [...new Set(unmatched)]) : new Map()
         if (fixes.size) {
           corrections = [...fixes].map(([from, to]) => ({ from, to }))
           found = search(queryWith(fixes))
