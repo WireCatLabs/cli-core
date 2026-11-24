@@ -40,6 +40,8 @@ export interface Saved {
   notes: string[]
   /** References that already pointed at missing rows before the copy, by `referenceKey`. */
   broken: Set<string>
+  /** Rows in each copied table before the copy. */
+  rows: Map<string, number>
 }
 
 interface Dangling {
@@ -55,6 +57,11 @@ interface Dangling {
  */
 const referenceKey = ({ table, rowid, parent, column }: Dangling) =>
   `${table}\u0000${rowid}\u0000${parent}\u0000${column}`
+
+const rowsOf = (database: CacheDatabase, tables: string[]): Map<string, number> =>
+  new Map(
+    tables.map((table) => [table, Number(database.prepare(`SELECT count(*) AS n FROM ${quote(table)}`).get()?.n)]),
+  )
 
 const danglingIn = (database: CacheDatabase, tables: string[]): Dangling[] =>
   tables.flatMap((table) => {
@@ -179,7 +186,7 @@ export const beforeRebuild = (database: CacheDatabase, rebuild: Rebuild, version
       .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
       .run(`migration:${version}:broken-references`, JSON.stringify(groups), now)
   }
-  return { objects, notes, broken: new Set(dangling.map(referenceKey)) }
+  return { objects, notes, broken: new Set(dangling.map(referenceKey)), rows: rowsOf(database, names) }
 }
 
 /** After the statements, still inside the transaction. */
@@ -191,6 +198,18 @@ export const afterRebuild = (database: CacheDatabase, rebuild: Rebuild, saved: S
       .map((row) => String(row.name)),
   )
   for (const { name, sql } of saved.objects) if (!present.has(name)) database.exec(sql)
+  // A copy that drops rows breaks the references other tables hold to them, which the check below does not see.
+  const after = rowsOf(database, [...saved.rows.keys()])
+  const changed = [...saved.rows].filter(([table, rows]) => after.get(table) !== rows)
+  if (changed.length > 0)
+    throw new CliError(
+      "configuration_error",
+      `the migration to schema ${version} would change how many rows these tables hold, so it was not run and nothing ` +
+        `was changed: ${changed.map(([table, rows]) => `${table} ${rows} → ${after.get(table)}`).join("; ")}. The ` +
+        "store is whole and the tool you used before still opens it; keep using that one and report this at " +
+        "https://github.com/WireCatLabs/cli-core/issues",
+      { reason: "store.rows-lost" },
+    )
   const broken = danglingIn(
     database,
     rebuild.tables.map(({ name }) => name),

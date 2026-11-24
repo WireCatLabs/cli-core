@@ -324,6 +324,40 @@ describe("store version 73", () => {
     database.close()
   })
 
+  it("refuses a copy that loses rows other tables point at, naming the table and both counts", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "version-73-"))
+    const database = await openCache(join(dir, "toy.db"))
+    const toy: Migration[] = [
+      {
+        version: 1,
+        minCompatible: 1,
+        statements: [
+          "CREATE TABLE `parents` (`id` integer PRIMARY KEY)",
+          "CREATE TABLE `children` (`id` integer PRIMARY KEY, `parent_id` integer REFERENCES `parents`(`id`))",
+        ],
+      },
+      {
+        version: 2,
+        minCompatible: 1,
+        statements: [
+          "CREATE TABLE `__new_parents` (\n\t`id` integer PRIMARY KEY\n);",
+          "INSERT INTO `__new_parents`(`id`) SELECT `id` FROM `parents` WHERE `id` > 1;",
+          "DROP TABLE `parents`;",
+          "ALTER TABLE `__new_parents` RENAME TO `parents`;",
+        ],
+      },
+    ]
+    migrate(database, { migrations: toy.slice(0, 1), now: () => 1, ownTable: null })
+    database.exec("INSERT INTO parents (id) VALUES (1), (2)")
+    database.exec("INSERT INTO children (id, parent_id) VALUES (1, 1)")
+
+    expect(() => migrate(database, { migrations: toy, now: () => 2, ownTable: null })).toThrow(
+      /would change how many rows these tables hold, so it was not run and nothing was changed: parents 2 → 1\./,
+    )
+    expect(database.prepare("SELECT id FROM parents ORDER BY id").all()).toEqual([{ id: 1 }, { id: 2 }])
+    database.close()
+  })
+
   it("discards the rollback copy of a refused run, and leaves older copies", async () => {
     const { dir, path, database } = await fileAt72()
     mkdirSync(join(dir, "backups"), { recursive: true })
