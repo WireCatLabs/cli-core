@@ -52,6 +52,8 @@ export interface TrackerManifestFake extends GraphqlFake {
   archive(kind: TrackerKind, id: string): void
   /** Deletes one row outright. */
   remove(kind: TrackerKind, id: string): void
+  /** Moves one row to the trash, as Linear does: archived now and `deleted`, its change time as it was. */
+  trash(kind: TrackerKind, id: string): void
 }
 
 /** Three rows in pages of two: every kind pages at least once, whatever `first` the manifest asks for. */
@@ -70,6 +72,7 @@ const TARGETS: Readonly<Record<string, TrackerKind>> = {
   label: "label",
   labels: "label",
   project: "project",
+  sprint: "sprint",
   lead: "user",
   assignee: "user",
   creator: "user",
@@ -213,6 +216,7 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     if (field === "externalId") return idOf(kind, n)
     // A state of a type outside STATE_TYPES is dropped by the map, and its issues with it.
     if (kind === "state" && field === "type") return STATE_TYPES[n % STATE_TYPES.length] as string
+    if (field === "deleted") return false
     switch (type) {
       case "epoch":
         return field === "createdAt" || field === "updatedAt" ? { ms: SEEDED + n * 60_000 } : null
@@ -229,7 +233,7 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
     }
   }
 
-  const timePath = (kind: TrackerKind, field: "updatedAt" | "archivedAt") => {
+  const timePath = (kind: TrackerKind, field: "updatedAt" | "archivedAt" | "deleted") => {
     const rule: CrmRule | undefined = manifest.entities[kind]?.map[field]
     return typeof rule === "string" ? rule : typeof rule === "object" && "path" in rule ? rule.path : undefined
   }
@@ -530,6 +534,13 @@ export const trackerManifestFake = (input: unknown, options: TrackerManifestFake
       const row = find(kind, id)
       rows[kind]?.splice(rows[kind].indexOf(row), 1)
     },
+    trash(kind, id) {
+      const row = find(kind, id)
+      const path = timePath(kind, "deleted")
+      if (path === undefined) throw new Error(`${kind}: map deleted to a path, so the fake can trash a row`)
+      stamp(kind, row, "archivedAt")
+      write(row, items.get(kind), path, true)
+    },
   }
 }
 
@@ -577,6 +588,7 @@ export const trackerManifestFixture = (
     (kind) => parsed.kinds.includes(kind) && parsed.entities[kind]?.changes,
   )
   const archivable = changed && parsed.entities[changed]?.map.archivedAt !== undefined
+  const trashable = archivable && parsed.entities[changed]?.map.deleted !== undefined
   const first = (kind: TrackerKind) => held[kind]?.[0] as string
   const last = (kind: TrackerKind) => held[kind]?.at(-1) as string
   return {
@@ -603,6 +615,14 @@ export const trackerManifestFixture = (
         ? {
             archive: () => {
               fake.archive(changed, last(changed))
+              return { kind: changed, id: last(changed) }
+            },
+          }
+        : {}),
+      ...(changed && trashable
+        ? {
+            trash: () => {
+              fake.trash(changed, last(changed))
               return { kind: changed, id: last(changed) }
             },
           }

@@ -55,6 +55,8 @@ export interface TrackerFilter {
   /** Issues whose state is of one of these types. */
   stateTypes?: readonly StateType[]
   label?: string
+  /** Issues only; `null`, the issues in no sprint. */
+  sprint?: string | null
   /** Archived rows too; absent, only the live ones. */
   archived?: boolean
   limit?: number
@@ -95,7 +97,8 @@ export interface TrackerPerson {
 export interface TrackerStore {
   /**
    * Upserts records of one kind; a field a record leaves out keeps its stored value, and a record listed again after
-   * the tracker stopped listing it comes back. Answers how many were written.
+   * the tracker stopped listing it comes back. A record the tracker calls `deleted` is marked deleted, and an issue
+   * takes its comments with it. Answers how many changed: a row read again as it was stored is not counted.
    */
   save<K extends TrackerKind>(
     key: AccountKey,
@@ -105,7 +108,8 @@ export interface TrackerStore {
   ): Promise<number>
   /**
    * After a complete list of the kind's ids: marks deleted every stored one the list lacks that has not been synced
-   * since `before`, so a row saved while the list was read is never taken for a deleted one. Answers how many.
+   * since `before`, so a row saved while the list was read is never taken for a deleted one, and the comments of an
+   * issue it marks. Answers how many of the kind.
    */
   removeUnlisted(
     key: AccountKey,
@@ -197,7 +201,23 @@ export const resetTrackerItemWords = (database: CacheDatabase): number => {
 const keyOf = (data: unknown): string | undefined =>
   data == null ? undefined : (JSON.parse(String(data)) as { key?: string }).key
 
-const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state" } as const
+const ISSUE_FIELDS = { assignee: "assignee", project: "project", state: "state", sprint: "sprint" } as const
+
+/**
+ * Marks the live comments of these issues deleted with them; a comment of a trashed issue is only archived in Linear,
+ * and would stay found under an issue that is gone.
+ */
+const deleteComments = (database: CacheDatabase, accountId: number, issues: readonly string[], now: number) => {
+  if (!issues.length) return
+  const ids = database
+    .prepare(
+      "UPDATE tracker_items SET deleted_at = ? WHERE account_id = ? AND kind = 'comment' AND deleted_at IS NULL " +
+        "AND parent_id IN (SELECT value FROM json_each(?)) RETURNING id",
+    )
+    .all(now, accountId, JSON.stringify(issues))
+    .map((row) => Number(row.id))
+  dropTrackerChunks(database, ids)
+}
 
 /**
  * The words as clauses for `clauseIn`, and the index expression that finds the rows they could match: a word, a word
@@ -238,6 +258,14 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const stored = database.prepare(
         "SELECT data, title, body, deleted_at FROM tracker_items WHERE account_id = ? AND kind = ? AND external_id = ?",
       )
+      const issueDeletedAt = database.prepare(
+        "SELECT deleted_at FROM tracker_items WHERE account_id = ? AND kind = 'issue' AND external_id = ?",
+      )
+      const reviveComments = database.prepare(
+        "UPDATE tracker_items SET deleted_at = NULL WHERE account_id = ? AND kind = 'comment' AND parent_id = ? " +
+          "AND deleted_at = ?",
+      )
+      let changed = 0
       const scope = database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountId)?.scope
       const chunked = isChunkedTrackerKind(kind)
       const chunk = trackerChunkWriter(database)
@@ -249,12 +277,14 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const upsert = database.prepare(
         "INSERT INTO tracker_items (account_id, kind, external_id, parent_id, title, title_folded, body, " +
           "normalized_text, data, source_created_at, source_updated_at, archived_at, deleted_at, synced_at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
           "ON CONFLICT (account_id, kind, external_id) DO UPDATE SET parent_id = excluded.parent_id, " +
           "title = excluded.title, title_folded = excluded.title_folded, body = excluded.body, " +
           "normalized_text = excluded.normalized_text, data = excluded.data, " +
           "source_created_at = excluded.source_created_at, source_updated_at = excluded.source_updated_at, " +
-          "archived_at = excluded.archived_at, deleted_at = NULL, synced_at = excluded.synced_at RETURNING id",
+          "archived_at = excluded.archived_at, deleted_at = CASE WHEN excluded.deleted_at IS NULL THEN NULL " +
+          "ELSE coalesce(tracker_items.deleted_at, excluded.deleted_at) END, synced_at = excluded.synced_at " +
+          "RETURNING id, deleted_at",
       )
       for (const record of records) {
         const before = stored.get(accountId, kind, record.externalId)
@@ -265,6 +295,13 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         } as unknown as TrackerRecords[K]
         const title = trackerTitleOf(kind, merged)
         const body = trackerBodyOf(kind, merged) ?? null
+        const data = JSON.stringify(merged)
+        // A comment saved under a deleted issue goes with it: Linear lists it as archived, not deleted.
+        const parentGone =
+          kind === "comment"
+            ? issueDeletedAt.get(accountId, (merged as TrackerRecords["comment"]).issue ?? null)?.deleted_at
+            : undefined
+        const deletedAt = merged.deleted === true ? now : parentGone == null ? null : Number(parentGone)
         const saved = upsert.get(
           accountId,
           kind,
@@ -274,12 +311,24 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
           fold(title),
           body,
           normalize([title, body].filter(Boolean).join("\n")),
-          JSON.stringify(merged),
+          data,
           merged.createdAt ?? null,
           merged.updatedAt ?? null,
           merged.archivedAt ?? null,
+          deletedAt,
           now,
         )
+        const gone = saved?.deleted_at != null
+        if (!before || before.data !== data || (before.deleted_at != null) !== gone) changed += 1
+        if (gone) {
+          if (before?.deleted_at == null) {
+            if (chunked) dropTrackerChunks(database, [Number(saved?.id)])
+            if (kind === "issue") deleteComments(database, accountId, [merged.externalId], Number(saved?.deleted_at))
+          }
+          continue
+        }
+        if (kind === "issue" && before?.deleted_at != null)
+          reviveComments.run(accountId, merged.externalId, Number(before.deleted_at))
         // Most rows of a sync come back with the text they had; their chunks stay, and only a revived row needs new.
         const same = before?.deleted_at == null && before?.title === title && (before?.body ?? null) === body
         // A comment is embedded after its issue's key and title, so a new, revived, renamed or moved issue cuts its
@@ -323,8 +372,35 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         for (const hash of freed?.released ?? []) released.push(hash)
       }
       dropUnusedVectors(database, released)
-      return records.length
+      return changed
     })
+
+  /**
+   * Linear moves no `updatedAt` when an issue leaves the trash, so the id pass listing a deleted row again is the
+   * only sign it is back. A comment stays deleted while its issue is: Linear lists a trashed issue's comments.
+   */
+  const restoreListed = (accountId: number, kind: TrackerKind, listed: readonly string[]) => {
+    const found = database
+      .prepare(
+        "SELECT t.id, t.external_id, t.deleted_at FROM tracker_items t WHERE t.account_id = ? AND t.kind = ? " +
+          "AND t.deleted_at IS NOT NULL AND t.external_id IN (SELECT value FROM json_each(?)) " +
+          "AND (t.kind <> 'comment' OR NOT EXISTS (SELECT 1 FROM tracker_items i WHERE i.account_id = t.account_id " +
+          "AND i.kind = 'issue' AND i.external_id = t.parent_id AND i.deleted_at IS NOT NULL))",
+      )
+      .all(accountId, kind, JSON.stringify(listed))
+    const restore = database.prepare(
+      "UPDATE tracker_items SET deleted_at = NULL, data = CASE WHEN json_extract(data, '$.deleted') IS NULL " +
+        "THEN data ELSE json_set(data, '$.deleted', json('false')) END WHERE id = ?",
+    )
+    const comments = database.prepare(
+      "UPDATE tracker_items SET deleted_at = NULL WHERE account_id = ? AND kind = 'comment' AND parent_id = ? " +
+        "AND deleted_at = ?",
+    )
+    for (const row of found) {
+      restore.run(Number(row.id))
+      if (kind === "issue") comments.run(accountId, String(row.external_id), Number(row.deleted_at))
+    }
+  }
 
   const removeUnlisted = (
     key: AccountKey,
@@ -341,6 +417,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       const mark = database.prepare("UPDATE tracker_items SET deleted_at = ? WHERE id = ?")
       let removed = 0
       const marked: number[] = []
+      const issues: string[] = []
       for (const row of database
         .prepare(
           "SELECT id, external_id FROM tracker_items WHERE account_id = ? AND kind = ? AND deleted_at IS NULL " +
@@ -351,10 +428,13 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         if (!dryRun) {
           mark.run(now, Number(row.id))
           marked.push(Number(row.id))
+          if (kind === "issue") issues.push(String(row.external_id))
         }
         removed += 1
       }
       if (isChunkedTrackerKind(kind)) dropTrackerChunks(database, marked)
+      deleteComments(database, accountId, issues, now)
+      if (!dryRun) restoreListed(accountId, kind, listed)
       return removed
     })
   }

@@ -4,7 +4,13 @@ import type { Conversion } from "../../crm/manifest/map.js"
 import { convert, mapFields, rulePaths } from "../../crm/manifest/map.js"
 import { STATE_TYPES, type TrackerKind, type TrackerRecords } from "../../domain/tracker.js"
 
-const TIMES = { externalId: "id", createdAt: "epoch", updatedAt: "epoch", archivedAt: "epoch" } as const
+const TIMES = {
+  externalId: "id",
+  createdAt: "epoch",
+  updatedAt: "epoch",
+  archivedAt: "epoch",
+  deleted: "bool",
+} as const
 // A literal after `key:` reads as a permission key to src/cli/permission-keys.test.ts.
 const KEY: Conversion = "text"
 
@@ -24,6 +30,16 @@ export const TRACKER_FIELDS: { readonly [K in TrackerKind]: Readonly<Record<stri
     targetDate: "day",
     url: "text",
   },
+  sprint: {
+    ...TIMES,
+    name: "text",
+    number: "number",
+    description: "text",
+    team: "id",
+    startsAt: "epoch",
+    endsAt: "epoch",
+    completedAt: "epoch",
+  },
   issue: {
     ...TIMES,
     title: "text",
@@ -32,6 +48,7 @@ export const TRACKER_FIELDS: { readonly [K in TrackerKind]: Readonly<Record<stri
     state: "id",
     team: "id",
     project: "id",
+    sprint: "id",
     assignee: "id",
     creator: "id",
     labels: "ids",
@@ -52,6 +69,7 @@ const REQUIRED: { readonly [K in TrackerKind]: Readonly<Record<string, unknown>>
   state: { name: "" },
   label: { name: "" },
   project: { name: "" },
+  sprint: { name: "" },
   issue: { title: "" },
   comment: { body: "" },
 }

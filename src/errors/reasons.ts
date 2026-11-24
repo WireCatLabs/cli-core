@@ -619,6 +619,11 @@ const OTHERS: Entry[] = [
   validation("tracker.reference", "a team, state, label, project or user no single row of the copy has by that name"),
   validation("tracker.team-required", "a new issue needs its team: name one, or sync a copy that holds one"),
   ["tracker.no-record", "invalid_response", "the tracker answered a write with no record and no error; sync and look"],
+  [
+    "tracker.kind-unread",
+    "permission_error",
+    "the sign-in cannot read this kind of the tracker; the copy has none of it",
+  ],
   validation(
     "content.unlisted-held",
     "a content id list would mark too much deleted, the sign-in read only part, or the site moved; nothing was",

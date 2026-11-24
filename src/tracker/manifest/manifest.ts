@@ -34,7 +34,10 @@ export interface TrackerManifestEntity<K extends TrackerKind = TrackerKind> {
   list: TrackerOperationCall
   /** Rows changed since `{since}`, the last cursor less the overlap; absent, every sync lists in full. */
   changes?: TrackerChangesCall
-  /** Every id, archived ones too, to find deletions; absent, `list`. Give one that selects only the id. */
+  /**
+   * Every id, archived ones too, to find deletions; absent, `list`. Give one that selects only the id, and what the
+   * map's `deleted` reads: a row the tracker lists but calls deleted is left out, so the pass marks it deleted.
+   */
   ids?: TrackerOperationCall
   map: { readonly [F in keyof TrackerRecords[K]]?: CrmRule }
   /** A kind the plan or the sign-in may not have: its refusal is a gap with this text, and the others still sync. */
@@ -246,7 +249,11 @@ export const parseTrackerManifest = (input: unknown, api: ServiceApiManifest): T
       if (!holds(one.changes.variables, "{since}"))
         throw invalid(`entities.${kind}.changes`, 'no "{since}" in its variables')
     }
-    if (one.ids) checkCall(`entities.${kind}.ids`, one.ids, { externalId: one.map.externalId })
+    if (one.ids)
+      checkCall(`entities.${kind}.ids`, one.ids, {
+        externalId: one.map.externalId,
+        ...(one.map.deleted === undefined ? {} : { deleted: one.map.deleted }),
+      })
   }
   for (const [kind, one] of Object.entries(manifest.entities))
     if (one && !manifest.kinds.includes(kind as TrackerKind))

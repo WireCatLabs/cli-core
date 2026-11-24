@@ -46,6 +46,10 @@ describe("fake tracker source", () => {
           source.remove("issue", "issue-3")
           return { kind: "issue", id: "issue-3" }
         },
+        trash: () => {
+          source.trash("issue", "issue-3")
+          return { kind: "issue", id: "issue-3" }
+        },
       },
     }
   }))
@@ -62,7 +66,11 @@ describe("syncTracker", () => {
     const first = await syncTracker(source, store, account, { now })
     expect(first.state).toBe("complete")
     expect(first.synced.map((one) => [one.kind, one.round, one.pass])).toEqual(
-      ["team", "user", "state", "label", "project", "issue", "comment"].map((kind) => [kind, "full", "complete"]),
+      ["team", "user", "state", "label", "project", "sprint", "issue", "comment"].map((kind) => [
+        kind,
+        "full",
+        "complete",
+      ]),
     )
     expect(await store.tracker.count(account, "issue")).toBe(3)
 
@@ -95,7 +103,7 @@ describe("syncTracker", () => {
     for (let run = 0; run < 50 && rest.state === "partial"; run += 1)
       rest = await syncTracker(source, store, account, { now, budget: runBudget({ requests: 3 }) })
     expect(rest.state).toBe("complete")
-    expect(await store.tracker.count(account, "state")).toBe(6)
+    expect(await store.tracker.count(account, "state")).toBe(7)
     expect(await store.tracker.count(account, "issue")).toBe(3)
   })
 
@@ -113,6 +121,80 @@ describe("syncTracker", () => {
     expect(report.state).toBe("partial")
     expect(report.synced.find((one) => one.kind === "label")?.error).toBe("labels refused")
     expect(await store.tracker.count(account, "issue")).toBe(3)
+  })
+})
+
+describe("syncTracker: sprints, trashed issues and what changed", () => {
+  const now = Date.UTC(2026, 10, 17)
+
+  it("copies sprints, titles an unnamed one by its number, and narrows issues by sprint", async () => {
+    const store = await storeOf()
+    await syncTracker(fakeTrackerSource({ rows: exampleTrackerRows() }), store, account, { now })
+    const [sprint] = (await store.tracker.list(account, "sprint")).items
+    expect(sprint?.record).toMatchObject({ externalId: "sprint-1", number: 1, team: "team-1" })
+    const ids = async (sprint: string | null) =>
+      (await store.tracker.list(account, "issue", { sprint })).items.map((one) => one.record.externalId).sort()
+    expect(await ids("sprint-1")).toEqual(["issue-1"])
+    expect(await ids(null)).toEqual(["issue-2", "issue-3"])
+  })
+
+  it("counts only the rows that changed, and says when it next looks for deletions", async () => {
+    const store = await storeOf()
+    const source = fakeTrackerSource({ rows: exampleTrackerRows() })
+    const first = await syncTracker(source, store, account, { now })
+    expect(first.progress.saved).toBe(first.synced.reduce((sum, one) => sum + one.saved, 0))
+    expect(first.synced.find((one) => one.kind === "issue")?.saved).toBe(3)
+    expect(first.deletions).toEqual({
+      checked: new Date(now).toISOString(),
+      due: new Date(now + 86_400_000).toISOString(),
+    })
+
+    const again = await syncTracker(source, store, account, { now: now + 60_000, rescan: true })
+    expect(again.synced.every((one) => one.saved === 0)).toBe(true)
+    expect(again.progress.saved).toBe(0)
+  })
+
+  it("marks a trashed issue deleted with its comments at the id pass, and brings both back once restored", async () => {
+    const store = await storeOf()
+    const rows = exampleTrackerRows()
+    const source = fakeTrackerSource({ rows })
+    await syncTracker(source, store, account, { now })
+    source.trash("issue", "issue-1")
+
+    const plain = await syncTracker(source, store, account, { now: now + 60_000 })
+    expect(plain.synced.find((one) => one.kind === "issue")).toMatchObject({ round: "changes", saved: 0 })
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toBeNull()
+
+    const passed = await syncTracker(source, store, account, { now: now + 2 * 86_400_000 })
+    expect(passed.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "complete", unlisted: 1 })
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toEqual(expect.any(Number))
+    expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toEqual(expect.any(Number))
+    expect((await store.tracker.find({ words: ["accounts"], accounts: [account] })).items).toEqual([])
+
+    const rescan = await syncTracker(source, store, account, { now: now + 3 * 86_400_000, rescan: true })
+    expect(rescan.synced.find((one) => one.kind === "issue")?.saved).toBe(1)
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toEqual(expect.any(Number))
+    expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toEqual(expect.any(Number))
+
+    const issue = rows.issue.find((one) => one.externalId === "issue-1") as (typeof rows.issue)[number]
+    Object.assign(issue, { deleted: null, archivedAt: null })
+    await syncTracker(source, store, account, { now: now + 5 * 86_400_000 })
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toBeNull()
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.record.deleted).toBe(false)
+    expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBeNull()
+  })
+
+  it("marks a row read as deleted at once, and takes the issue's comments with it", async () => {
+    const store = await storeOf()
+    const rows = exampleTrackerRows()
+    await syncTracker(fakeTrackerSource({ rows }), store, account, { now })
+    const [issue] = rows.issue
+    const trashed = { ...(issue as (typeof rows.issue)[number]), deleted: true }
+    expect(await store.tracker.save(account, "issue", [trashed], now)).toBe(1)
+    expect((await store.tracker.get(account, "issue", "issue-1"))?.deletedAt).toBe(now)
+    expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBe(now)
+    expect(await store.tracker.save(account, "comment", rows.comment, now + 1)).toBe(0)
+    expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBe(now)
   })
 })
 
@@ -314,6 +396,14 @@ describe("syncTracker and the owner's tasks", () => {
     expect(await sync()).toMatchObject({ opened: 0, reopened: 1 })
     expect(await tasks()).toEqual([expect.objectContaining({ state: "open" })])
     expect((await tasks())[0]).not.toHaveProperty("reason")
+
+    change("issue-1", { state: "state-twin" })
+    await sync()
+    expect(await tasks()).toMatchObject([
+      { state: "dismissed", reason: "the issue was marked a duplicate in fake-tracker" },
+    ])
+    change("issue-1", { state: "state-doing" })
+    expect(await sync()).toMatchObject({ reopened: 1 })
 
     change("issue-1", { state: "state-gone" })
     await sync()

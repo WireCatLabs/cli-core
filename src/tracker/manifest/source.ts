@@ -4,7 +4,7 @@ import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import { nextPage, parameterValue, type ServiceApiManifest, withValue } from "../../cli/service-api-manifest.js"
 import { crmValues } from "../../crm/index.js"
-import { at, evaluate, MISSING } from "../../crm/manifest/map.js"
+import { at, convert, evaluate, MISSING } from "../../crm/manifest/map.js"
 import type { TrackerKind, TrackerRecords } from "../../domain/tracker.js"
 import type { TrackerCallContext, TrackerChanges, TrackerIdPage, TrackerSource } from "../source.js"
 import {
@@ -184,7 +184,10 @@ export const trackerSourceFromManifest = (input: unknown, options: TrackerManife
     const entity = entityOf(kind)
     const { rows, next } = await readPage(entity.ids ?? entity.list, undefined, page, metered(context))
     const rule = entity.map.externalId as NonNullable<typeof entity.map.externalId>
+    const { deleted } = entity.map
     const items = rows.flatMap((raw) => {
+      // Linear's trash moves no updatedAt, so only this pass sees a trashed row: leaving it out marks it deleted.
+      if (deleted !== undefined && convert("bool", evaluate(deleted, raw)) === true) return []
       const found = evaluate(rule, raw)
       const externalId = found === MISSING ? null : crmValues.id(found)
       return externalId === null ? [] : [externalId]

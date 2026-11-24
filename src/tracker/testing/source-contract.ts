@@ -14,6 +14,8 @@ export interface TrackerSourceFaults {
   archive?(): { kind: TrackerKind; id: string } | Promise<{ kind: TrackerKind; id: string }>
   /** Deletes one row on the tracker's side outright. */
   remove?(): { kind: TrackerKind; id: string } | Promise<{ kind: TrackerKind; id: string }>
+  /** Moves one row to the tracker's trash, where it is still listed but deleted, as Linear's trash keeps an issue. */
+  trash?(): { kind: TrackerKind; id: string } | Promise<{ kind: TrackerKind; id: string }>
 }
 
 /** One adapter over recorded or faked answers, fresh for each case. Every kind its traits name lists at least one row. */
@@ -78,15 +80,29 @@ const optionalTime = (value: unknown) =>
 const checkShape = (kind: TrackerKind, record: Record<string, unknown>) => {
   const at = `${kind} ${String(record.externalId)}`
   assert.ok(typeof record.externalId === "string" && record.externalId.trim(), `${kind}: a record has an id`)
-  for (const field of ["createdAt", "updatedAt", "archivedAt", "completedAt", "canceledAt"])
+  for (const field of ["createdAt", "updatedAt", "archivedAt", "completedAt", "canceledAt", "startsAt", "endsAt"])
     assert.ok(optionalTime(record[field]), `${at}: ${field} is epoch ms or null`)
   const named = kind === "issue" ? "title" : kind === "comment" ? "body" : "name"
   assert.ok(typeof record[named] === "string", `${at} has its ${named}`)
   if (kind === "state")
     assert.ok((STATE_TYPES as readonly string[]).includes(String(record.type)), `${at}: type is one of ${STATE_TYPES}`)
   if (kind === "comment") assert.ok(typeof record.issue === "string", `${at} names its issue`)
-  for (const field of ["team", "state", "project", "assignee", "creator", "lead", "author", "parent", "key", "email"])
+  for (const field of [
+    "team",
+    "state",
+    "project",
+    "sprint",
+    "assignee",
+    "creator",
+    "lead",
+    "author",
+    "parent",
+    "key",
+    "email",
+  ])
     assert.ok(optionalText(record[field]), `${at}: ${field} is an id or text, or null`)
+  if (record.deleted !== undefined && record.deleted !== null)
+    assert.equal(typeof record.deleted, "boolean", `${at}: deleted is true, false or null`)
   for (const field of ["labels", "teams"])
     if (record[field] !== undefined)
       assert.ok(
@@ -225,6 +241,17 @@ export const trackerSourceContract = (
       if (!faults?.remove) return
       const { kind, id } = await faults.remove()
       assert.ok(!(await allIds(source, kind)).has(id), `${kind} ${id}: a deleted row is not in ids()`)
+    },
+  },
+  {
+    name: "faults: a trashed row is a deleted one: a full list calls it deleted, and ids() leaves it out",
+    async run() {
+      const { source, faults } = await make()
+      if (!faults?.trash) return
+      const { kind, id } = await faults.trash()
+      const found = (await listAll(source, kind, null)).items.find((one) => one.externalId === id)
+      assert.ok(found?.deleted === true, `${kind} ${id}: a full list carries deleted: true`)
+      assert.ok(!(await allIds(source, kind)).has(id), `${kind} ${id}: a trashed row is not in ids()`)
     },
   },
   {

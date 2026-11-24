@@ -205,7 +205,7 @@ describe("a source the contract catches over the fake", () => {
 
   it("a fixture over the fake offers every fault the manifest allows", () => {
     const { faults, held } = trackerManifestFixture(MANIFEST, { api, definitions })
-    expect(Object.keys(faults ?? {}).sort()).toEqual(["archive", "change", "remove", "skewed"])
+    expect(Object.keys(faults ?? {}).sort()).toEqual(["archive", "change", "remove", "skewed", "trash"])
     expect(held?.comment).toEqual(["comment-1", "comment-2", "comment-3"])
   })
 })

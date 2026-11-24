@@ -82,11 +82,12 @@ export interface TrackerTaskChanges {
   renamed: number
 }
 
-type Why = "completed" | "canceled" | "deleted" | "archived" | "reassigned" | "unassigned"
+type Why = "completed" | "canceled" | "duplicate" | "deleted" | "archived" | "reassigned" | "unassigned"
 
 const closing: Record<Why, { as: ClosedState; reason: (provider: string) => string }> = {
   completed: { as: "done", reason: (provider) => `the issue was completed in ${provider}` },
   canceled: { as: "dismissed", reason: (provider) => `the issue was canceled in ${provider}` },
+  duplicate: { as: "dismissed", reason: (provider) => `the issue was marked a duplicate in ${provider}` },
   deleted: { as: "dismissed", reason: (provider) => `the issue was deleted in ${provider}` },
   archived: { as: "dismissed", reason: (provider) => `the issue was archived in ${provider}` },
   reassigned: { as: "dismissed", reason: (provider) => `the issue was assigned to someone else in ${provider}` },
@@ -122,10 +123,10 @@ const lastClose = async (store: MessageStore, id: string) => {
 /**
  * Brings the owner's tasks in line with the tracker's copy, after a sync: each live issue assigned to `self` whose
  * state is open work becomes a task, and every task from an issue takes the issue's current title. A task closes when
- * its issue is completed, canceled, archived or deleted, and a task the sync made also when the issue goes to someone
- * else; `issues assign` picks an issue whoever holds it. A task the sync closed opens again once its issue is open
- * work again (and, for one the sync made, assigned to `self` again); one the owner closed stays closed, as a dismissed
- * task does. Nothing is written to the tracker.
+ * its issue is completed, canceled, a duplicate, archived or deleted, and a task the sync made also when the issue goes
+ * to someone else; `issues assign` picks an issue whoever holds it. A task the sync closed opens again once its issue
+ * is open work again (and, for one the sync made, assigned to `self` again); one the owner closed stays closed, as a
+ * dismissed task does. Nothing is written to the tracker.
  */
 export const syncTrackerTasks = async (
   store: MessageStore,
@@ -172,7 +173,7 @@ export const syncTrackerTasks = async (
         ? "deleted"
         : issue?.archivedAt
           ? "archived"
-          : type === "completed" || type === "canceled"
+          : type === "completed" || type === "canceled" || type === "duplicate"
             ? type
             : task.origin === "rule" && !picked.has(task.id) && issue?.assignee !== self
               ? issue?.assignee

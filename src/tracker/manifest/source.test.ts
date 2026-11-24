@@ -56,6 +56,17 @@ const seed = (): Record<TrackerKind, Row[]> => {
       url: `https://tracker.example/p${n}`,
       ...times(n),
     })),
+    sprint: [1, 2, 3].map((n) => ({
+      id: `y${n}`,
+      name: null,
+      number: n,
+      description: null,
+      team: ref1("t1"),
+      startsAt: at(SEEDED + n * 14 * 86_400_000),
+      endsAt: at(SEEDED + (n + 1) * 14 * 86_400_000),
+      completedAt: null,
+      ...times(n),
+    })),
     issue: [1, 2, 3].map((n) => ({
       id: `i${n}`,
       identifier: `ENG-${n}`,
@@ -68,6 +79,8 @@ const seed = (): Record<TrackerKind, Row[]> => {
       creator: ref1("u2"),
       labels: { nodes: n === 1 ? [{ id: "l1" }] : [] },
       parent: null,
+      cycle: n === 1 ? ref1("y1") : null,
+      trashed: null,
       priority: n,
       dueDate: null,
       completedAt: null,
@@ -151,6 +164,11 @@ const tracker = (answers: Readonly<Record<string, (call: GraphqlFakeCall) => unk
     remove(kind: TrackerKind, id: string) {
       rows[kind].splice(rows[kind].indexOf(find(kind, id)), 1)
     },
+    trash(kind: TrackerKind, id: string) {
+      const row = find(kind, id)
+      row.archivedAt = at(clock())
+      row.trashed = true
+    },
   }
 }
 
@@ -177,6 +195,10 @@ describe("trackerSourceFromManifest over a Linear-shaped GraphQL fake", () => {
           one.remove("issue", "i3")
           return { kind: "issue", id: "i3" }
         },
+        trash: () => {
+          one.trash("issue", "i3")
+          return { kind: "issue", id: "i3" }
+        },
       },
     }
   }))
@@ -194,12 +216,14 @@ describe("trackerSourceFromManifest over a Linear-shaped GraphQL fake", () => {
       createdAt: SEEDED,
       updatedAt: SEEDED + 1000,
       archivedAt: null,
+      deleted: false,
       key: "ENG-1",
       title: "Issue 1",
       description: null,
       state: "s1",
       team: "t1",
       project: "p1",
+      sprint: "y1",
       assignee: "u1",
       creator: "u2",
       labels: ["l1"],
@@ -210,7 +234,10 @@ describe("trackerSourceFromManifest over a Linear-shaped GraphQL fake", () => {
       canceledAt: null,
       url: "https://tracker.example/ENG-1",
     })
-    expect(page.items[1]).toMatchObject({ externalId: "i2", assignee: null, labels: [] })
+    expect(page.items[1]).toMatchObject({ externalId: "i2", assignee: null, labels: [], sprint: null })
+    const sprints = await source.changes("sprint", null)
+    if ("reset" in sprints) throw new Error("a full list is never a reset")
+    expect(sprints.items[0]).toMatchObject({ externalId: "y1", name: "", number: 1, team: "t1" })
     expect(await source.self?.()).toBe("u1")
     expect(one.fake.refusals).toEqual([])
   })

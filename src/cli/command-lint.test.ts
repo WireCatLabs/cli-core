@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -252,6 +252,18 @@ it("a documents host's history and change log pass the command lint with no over
 })
 
 // A tracker CLI (linear) mounts these; the shared program above is a messenger's and never does.
+/**
+ * cli-base #717 registers `sprints` on its 1.0 line, and cli-core still pins 0.132: until it moves, only a
+ * tracker host mounts the word, so only its lint carries it in the baseline.
+ */
+const trackerBaseline = () => {
+  const folder = mkdtempSync(join(tmpdir(), "command-lint-baseline-"))
+  cpSync("lint/baseline", folder, { recursive: true })
+  const file = join(folder, "unknown-resource.json")
+  writeFileSync(file, JSON.stringify([...(JSON.parse(readFileSync(file, "utf8")) as string[]), "sprints"]))
+  return folder
+}
+
 it("a tracker host's commands, its writes too, pass the command lint with no overrides", async () => {
   const refuse = async (): Promise<never> => {
     throw new Error("not read in a lint")
@@ -272,7 +284,7 @@ it("a tracker host's commands, its writes too, pass the command lint with no ove
         return [...holder.commands, runsCommand(app)]
       },
     },
-    ["--allow-stale"],
+    ["--allow-stale", "--baseline", relative(process.cwd(), trackerBaseline())],
   )
 
   expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
