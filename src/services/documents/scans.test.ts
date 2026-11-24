@@ -68,7 +68,7 @@ describe("scanReader on this computer", () => {
     const tesseract = fakeTesseract()
     const env = { ...machine(), PATH: `${tesseract.bin}:${dirname(process.execPath)}` }
     const reader = await scanReader("local", { app, env, command: "box" }, undefined, 1)
-    expect(reader?.extractor).toBe("ocr:v1:tesseract@5.3.0:rus+eng")
+    expect(reader?.extractor).toBe("ocr:v2:tesseract@5.3.0:rus+eng")
     const bytes = vi.fn(async () => picture)
     expect(await reader?.read(bytes, { name: "a.png", mime: "image/png" })).toBe("scanneedle words")
     expect(reader?.full?.()).toBe(true)

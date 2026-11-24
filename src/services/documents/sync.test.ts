@@ -396,7 +396,7 @@ describe("provider-neutral document sync", () => {
 
     const first = await run()
     expect(first.skipped).toEqual([
-      { id: "b", reason: "OCR found no text in the file (read by ocr:v1:tesseract@5.3.0:rus+eng)" },
+      { id: "b", reason: "OCR found no text in the file (read by ocr:v2:tesseract@5.3.0:rus+eng)" },
     ])
     expect(first.pictures).toBe(1)
     expect(f.state().documents.b?.picture).toBe("saved")
@@ -411,7 +411,7 @@ describe("provider-neutral document sync", () => {
     const again = await run()
     expect(again).toMatchObject({ saved: 1, skipped: [] })
     expect(tesseract.calls()).toHaveLength(1)
-    expect(f.state().documents.b).toMatchObject({ ocr: "ocr:v1:tesseract@5.4.0:rus+eng", picture: "saved" })
+    expect(f.state().documents.b).toMatchObject({ ocr: "ocr:v2:tesseract@5.4.0:rus+eng", picture: "saved" })
     expect(f.writer.save).toHaveBeenCalledTimes(2)
   }, 30_000)
   it("asks the budget before a picture download, and leaves the picture for the next call when it says no", async () => {

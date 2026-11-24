@@ -57,6 +57,8 @@ export interface ScanReader {
   full?(): boolean
   /** `bytes` downloads the file; it is called only when the reader will read it. */
   read(bytes: () => Promise<Uint8Array>, file: { name: string; mime: string }): Promise<string>
+  /** Why this reader reads worse than it could, for the sync's answer: tesseract without its osd data. */
+  warning?: string
 }
 
 /** A skip this reader would now read: a scan an earlier sync could not, or one this sync's page limit held back. */
@@ -110,10 +112,12 @@ export const scanReader = async (
 ): Promise<ScanReader | undefined> => {
   if (choice === "off") return undefined
   let pipeline: OcrPipeline
+  let warning: string | undefined
   if (choice === "local") {
     const local = await tesseractPipeline(deps.env, deps.signal)
     if ("missing" in local) return refusing(local.missing)
     pipeline = local.pipeline
+    warning = local.warning
   } else {
     const model = modelPipeline(choice, deps)
     if (typeof model === "string") return refusing(model)
@@ -142,6 +146,7 @@ export const scanReader = async (
   }
   return {
     extractor: pipeline.extractor,
+    ...(warning ? { warning } : {}),
     full: () => pages >= pagesPerSync,
     read: async (bytes, file) => {
       if (pages >= pagesPerSync) throw later(`${LATER}; the next sync goes on`)

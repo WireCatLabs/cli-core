@@ -394,7 +394,7 @@ describe("scans and pictures in a documents sync", () => {
 
     env.PATH = `${tesseract.bin}:${dirname(process.execPath)}`
     expect(await skips()).toEqual({})
-    expect(tesseract.calls()).toEqual(["stdin stdout -l rus+eng", "stdin stdout -l rus+eng"])
+    expect(tesseract.calls()).toEqual(["stdin stdout -l rus+eng --psm 1", "stdin stdout -l rus+eng --psm 1"])
     expect(await found()).toEqual(["photo", "scan"])
 
     tesseract.reset()
@@ -412,6 +412,37 @@ describe("scans and pictures in a documents sync", () => {
     expect(await found()).toEqual(["photo", "scan"])
     rmSync(join(tesseract.bin, "fail"))
     await cli(["sync"])
+    expect(tesseract.calls()).toEqual([])
+  }, 60_000)
+
+  it("reads pages as they lie with a warning when tesseract has no osd data, and turns them once it has", async () => {
+    const tesseract = fakeTesseract()
+    writeFileSync(join(tesseract.bin, "no-osd"), "")
+    const source = fakeDocumentSource("alpha", { feed: false })
+    source.put({ ...fakeFile("photo", ["root"], "image/png"), name: "photo.png" })
+    const bytes = source.bytes
+    source.bytes = async (id, file) =>
+      id === "photo" ? PNG.sync.write(new PNG({ width: 40, height: 20 })) : bytes(id, file)
+    const typed = (file: SourceFile) => (readableFile(file) ? undefined : `unsupported type: ${file.mime}`)
+    const { cli, env } = setup(source, memoryKeyring(), WORDS, undefined, typed)
+    env.PATH = `${tesseract.bin}:${dirname(process.execPath)}`
+    const sync = async () => JSON.parse((await cli(["sync"])).stdout).item
+    await cli(["folders", "add", "root"])
+
+    const unturned = await sync()
+    expect(unturned.skipped).toEqual([])
+    expect(unturned.warnings).toEqual([
+      expect.objectContaining({ code: "configuration_error", reason: "document.scan-unturned" }),
+    ])
+    expect(unturned.warnings[0].message).toContain("tesseract-ocr-osd")
+    expect(tesseract.calls()).toEqual(["stdin stdout -l rus+eng"])
+
+    rmSync(join(tesseract.bin, "no-osd"))
+    tesseract.reset()
+    expect((await sync()).warnings).toEqual([])
+    expect(tesseract.calls()).toEqual(["stdin stdout -l rus+eng --psm 1"])
+    tesseract.reset()
+    await sync()
     expect(tesseract.calls()).toEqual([])
   }, 60_000)
 })
