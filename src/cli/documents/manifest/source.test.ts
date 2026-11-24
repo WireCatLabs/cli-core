@@ -321,7 +321,8 @@ describe("a source's deletions feed", () => {
     fake.put({ id: "d", title: "Delta", parent: "root", kind: "page" })
     fake.feed.refuse = new CliError("permission_error", "admins only")
     const round = await changes(token)
-    expect(round.items.map((item) => item.id)).toEqual(["d"])
+    expect(round.items.map((item) => item.id)).toContain("d")
+    expect(round.items.filter((item) => item.gone)).toEqual([])
     expect(warnings).toEqual([
       {
         code: "permission_error",
