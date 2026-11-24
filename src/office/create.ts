@@ -8,6 +8,8 @@ import { escapeText } from "./xml.js"
 const MAX_ROW = 1_048_576
 const MAX_COLUMN = 16_384
 const MAX_CELL_TEXT = 32_767
+const MAX_FORMULA = 8_192
+const MAX_TABLE_COLUMNS = 63
 
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
 const CONTENT_TYPES = "http://schemas.openxmlformats.org/package/2006/content-types"
@@ -44,11 +46,27 @@ const relationships = (entries: [type: string, target: string][]) =>
     .join("") +
   "</Relationships>"
 
+/** A formula without a cached result, computed when the file opens; `=` in front is optional. */
+export interface NewFormulaCell {
+  readonly formula: string
+  readonly bold?: boolean
+}
+
+/** A value with formatting; a text that starts with `=` stays text here too. */
+export interface NewValueCell {
+  readonly value: CellValue
+  readonly bold?: boolean
+}
+
+export type NewCell = CellValue | NewFormulaCell | NewValueCell
+
 export interface NewSheet {
   /** 1 to 31 characters, none of `[]:*?/\`, not starting or ending with `'`; unique in the workbook, ignoring case. */
   readonly name: string
   /** Rows from A1 down; `null` leaves a cell empty. */
-  readonly rows: readonly (readonly CellValue[])[]
+  readonly rows: readonly (readonly NewCell[])[]
+  /** This sheet's first row in bold. */
+  readonly header?: boolean
 }
 
 export interface CreateXlsxOptions {
@@ -95,6 +113,14 @@ class SharedStrings {
   }
 }
 
+const formulaXml = (address: string, formula: string, style: string) => {
+  const text = formula.startsWith("=") ? formula.slice(1) : formula
+  if (!text.trim()) throw refuse(`${address}: a formula cannot be empty`, "office.invalid-value")
+  if (text.length > MAX_FORMULA)
+    throw refuse(`${address}: a formula holds at most 8,192 characters`, "office.invalid-value")
+  return `<c r="${address}"${style}><f>${escapeText(text)}</f></c>`
+}
+
 const cellXml = (address: string, value: Exclude<CellValue, null>, style: string, strings: SharedStrings) => {
   if (typeof value === "boolean") return `<c r="${address}"${style} t="b"><v>${value ? 1 : 0}</v></c>`
   if (typeof value === "number") {
@@ -106,7 +132,7 @@ const cellXml = (address: string, value: Exclude<CellValue, null>, style: string
   return `<c r="${address}"${style} t="s"><v>${strings.index(value)}</v></c>`
 }
 
-const worksheetXml = (sheet: NewSheet, strings: SharedStrings, boldHeader: boolean) => {
+const worksheetXml = (sheet: NewSheet, strings: SharedStrings, boldHeader: boolean, formulas: { count: number }) => {
   if (sheet.rows.length > MAX_ROW)
     throw refuse(`sheet "${sheet.name}" has more than 1,048,576 rows`, "office.invalid-cell")
   let right = 0
@@ -114,11 +140,19 @@ const worksheetXml = (sheet: NewSheet, strings: SharedStrings, boldHeader: boole
   const rows = sheet.rows.flatMap((values, down) => {
     if (values.length > MAX_COLUMN)
       throw refuse(`row ${down + 1} of "${sheet.name}" has more than 16,384 cells`, "office.invalid-cell")
-    const style = boldHeader && down === 0 ? ' s="1"' : ""
-    const cells = values.flatMap((value, across) => {
+    const header = (boldHeader || sheet.header === true) && down === 0
+    const cells = values.flatMap((cell, across) => {
+      const formatted = cell !== null && typeof cell === "object"
+      const value = formatted ? ("formula" in cell ? undefined : cell.value) : cell
       if (value === null) return []
       right = Math.max(right, across + 1)
-      return [cellXml(`${columnName(across + 1)}${down + 1}`, value, style, strings)]
+      const address = `${columnName(across + 1)}${down + 1}`
+      const style = header || (formatted && cell.bold === true) ? ' s="1"' : ""
+      if (formatted && "formula" in cell) {
+        formulas.count++
+        return [formulaXml(address, cell.formula, style)]
+      }
+      return [cellXml(address, value as Exclude<CellValue, null>, style, strings)]
     })
     if (!cells.length) return []
     bottom = down + 1
@@ -144,16 +178,18 @@ const STYLES =
 
 /**
  * A new workbook with these sheets and values: strings in a shared strings part (a string that starts with `=` stays
- * text), numbers and booleans typed. No document properties, so the same input gives the same bytes.
+ * text), numbers and booleans typed, `{formula}` a formula. No document properties, so the same input gives the same
+ * bytes.
  */
 export const createXlsx = (options: CreateXlsxOptions): Uint8Array => {
   const { sheets, boldHeader = false } = options
   checkSheetNames(sheets)
   const strings = new SharedStrings()
+  const formulas = { count: 0 }
   const parts: Record<string, string> = {}
   const types: Record<string, string> = { "xl/workbook.xml": "spreadsheetml.sheet.main+xml" }
   sheets.forEach((sheet, index) => {
-    parts[`xl/worksheets/sheet${index + 1}.xml`] = worksheetXml(sheet, strings, boldHeader)
+    parts[`xl/worksheets/sheet${index + 1}.xml`] = worksheetXml(sheet, strings, boldHeader, formulas)
     types[`xl/worksheets/sheet${index + 1}.xml`] = "spreadsheetml.worksheet+xml"
   })
   types["xl/styles.xml"] = "spreadsheetml.styles+xml"
@@ -170,10 +206,12 @@ export const createXlsx = (options: CreateXlsxOptions): Uint8Array => {
       (sheet, index) => `<sheet name="${escapeAttribute(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
     )
     .join("")
+  // No cached results are written, so Excel and LibreOffice must compute every formula as the file opens.
+  const calculation = formulas.count ? '<calcPr calcId="191029" fullCalcOnLoad="1"/>' : ""
   return packed({
     "[Content_Types].xml": contentTypes(types),
     "_rels/.rels": relationships([["officeDocument", "xl/workbook.xml"]]),
-    "xl/workbook.xml": `<workbook xmlns="${SHEET_NS}" xmlns:r="${OFFICE_REL}"><sheets>${listed}</sheets></workbook>`,
+    "xl/workbook.xml": `<workbook xmlns="${SHEET_NS}" xmlns:r="${OFFICE_REL}"><sheets>${listed}</sheets>${calculation}</workbook>`,
     "xl/_rels/workbook.xml.rels": relationships(links),
     "xl/styles.xml": STYLES,
     ...(strings.size ? { "xl/sharedStrings.xml": strings.xml() } : {}),
@@ -184,15 +222,31 @@ export const createXlsx = (options: CreateXlsxOptions): Uint8Array => {
 export const NEW_PARAGRAPH_STYLES = ["Title", "Heading1", "Heading2", "Heading3", "Normal", "ListBullet"] as const
 export type NewParagraphStyle = (typeof NEW_PARAGRAPH_STYLES)[number]
 
-export interface NewParagraph {
+export interface NewRun {
   /** A tab is `\t`, a line break `\n`. */
   readonly text: string
+  readonly bold?: boolean
+  readonly italic?: boolean
+}
+
+export type NewParagraph = (
+  | { readonly text: string; readonly bold?: boolean; readonly italic?: boolean }
+  | { readonly runs: readonly NewRun[] }
+) & {
   /** `Normal` when absent. */
   readonly style?: NewParagraphStyle
 }
 
+export interface NewTable {
+  /** Rows of cell texts; a shorter row is filled with empty cells. */
+  readonly table: readonly (readonly string[])[]
+  /** The first row in bold, repeated at the top of each page. */
+  readonly header?: boolean
+}
+
 export interface CreateDocxOptions {
-  readonly paragraphs: readonly NewParagraph[]
+  /** The body in order: paragraphs and tables. */
+  readonly paragraphs: readonly (NewParagraph | NewTable)[]
 }
 
 const heading = (level: number, size: number, before: number) =>
@@ -226,14 +280,7 @@ const NUMBERING =
   '<w:lvlText w:val="•"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
   '</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
 
-const paragraphXml = ({ text, style = "Normal" }: NewParagraph) => {
-  if (!NEW_PARAGRAPH_STYLES.includes(style))
-    throw refuse(`${style} is not a style here; use ${NEW_PARAGRAPH_STYLES.join(", ")}`, "office.invalid-value")
-  // The list's numbering is on the paragraph too: a reader that ignores a style's numbering still sees a bullet.
-  const properties =
-    style === "Normal"
-      ? ""
-      : `<w:pPr><w:pStyle w:val="${style}"/>${style === "ListBullet" ? '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' : ""}</w:pPr>`
+const runXml = ({ text, bold, italic }: NewRun) => {
   const content = text
     .replace(/\r\n?/gu, "\n")
     .split(/(\n|\t)/u)
@@ -242,17 +289,69 @@ const paragraphXml = ({ text, style = "Normal" }: NewParagraph) => {
       piece === "\n" ? "<w:br/>" : piece === "\t" ? "<w:tab/>" : `<w:t xml:space="preserve">${escapeText(piece)}</w:t>`,
     )
     .join("")
-  return `<w:p>${properties}${content ? `<w:r>${content}</w:r>` : ""}</w:p>`
+  if (!content) return ""
+  const properties = (bold ? "<w:b/><w:bCs/>" : "") + (italic ? "<w:i/><w:iCs/>" : "")
+  return `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ""}${content}</w:r>`
+}
+
+const paragraphXml = (paragraph: NewParagraph) => {
+  const { style = "Normal" } = paragraph
+  if (!NEW_PARAGRAPH_STYLES.includes(style))
+    throw refuse(`${style} is not a style here; use ${NEW_PARAGRAPH_STYLES.join(", ")}`, "office.invalid-value")
+  // The list's numbering is on the paragraph too: a reader that ignores a style's numbering still sees a bullet.
+  const properties =
+    style === "Normal"
+      ? ""
+      : `<w:pPr><w:pStyle w:val="${style}"/>${style === "ListBullet" ? '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' : ""}</w:pPr>`
+  const runs = "runs" in paragraph ? paragraph.runs : [paragraph]
+  return `<w:p>${properties}${runs.map(runXml).join("")}</w:p>`
+}
+
+// The text width of the A4 page between its margins, in twentieths of a point.
+const TEXT_WIDTH = 11_906 - 2 * 1_417
+const BORDER = 'w:val="single" w:sz="4" w:space="0" w:color="auto"'
+
+const tableXml = ({ table, header = false }: NewTable) => {
+  const columns = table.reduce((widest, row) => Math.max(widest, row.length), 1)
+  if (columns > MAX_TABLE_COLUMNS) throw refuse("a Word table has at most 63 columns", "office.invalid-value")
+  const width = Math.floor(TEXT_WIDTH / columns)
+  const borders = ["top", "left", "bottom", "right", "insideH", "insideV"].map((side) => `<w:${side} ${BORDER}/>`)
+  const rows = (table.length ? table : [[]]).map((cells, down) => {
+    const bold = header && down === 0
+    const tcs = Array.from({ length: columns }, (_, across) => {
+      const text = cells[across] ?? ""
+      return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr><w:p>${runXml({ text, bold })}</w:p></w:tc>`
+    })
+    return `<w:tr>${bold ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${tcs.join("")}</w:tr>`
+  })
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="${width * columns}" w:type="dxa"/><w:tblBorders>${borders.join("")}</w:tblBorders>` +
+    `</w:tblPr><w:tblGrid>${`<w:gridCol w:w="${width}"/>`.repeat(columns)}</w:tblGrid>` +
+    `${rows.join("")}</w:tbl>`
+  )
+}
+
+// Word merges two tables that touch and needs a paragraph to end the body, so a table is never last or next to another.
+const bodyXml = (blocks: readonly (NewParagraph | NewTable)[]) => {
+  let previousTable = false
+  const parts = blocks.flatMap((block) => {
+    const isTable = "table" in block
+    const xml = isTable ? tableXml(block) : paragraphXml(block)
+    const between = isTable && previousTable ? ["<w:p/>"] : []
+    previousTable = isTable
+    return [...between, xml]
+  })
+  if (!parts.length || previousTable) parts.push("<w:p/>")
+  return parts.join("")
 }
 
 /**
- * A new Word document with these paragraphs, on A4 with 2.5 cm margins, and a styles part that defines Title,
- * Heading1 to Heading3, Normal and ListBullet (a bullet list). No document properties, so the same input gives the
- * same bytes.
+ * A new Word document with these paragraphs and tables, on A4 with 2.5 cm margins, and a styles part that defines
+ * Title, Heading1 to Heading3, Normal and ListBullet (a bullet list). No document properties, so the same input gives
+ * the same bytes.
  */
 export const createDocx = (options: CreateDocxOptions): Uint8Array => {
-  // The body must end with a paragraph before its section properties.
-  const body = options.paragraphs.length ? options.paragraphs.map(paragraphXml).join("") : "<w:p/>"
+  const body = bodyXml(options.paragraphs)
   const section =
     '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" ' +
     'w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>'

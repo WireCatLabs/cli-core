@@ -104,33 +104,57 @@ author, no creation time).
 import { createDocx, createXlsx } from "@wirecat/cli-core/office"
 
 const workbook = createXlsx({
-  sheets: [{ name: "Budget", rows: [["Item", "Cost"], ["Rent", 950], [null, true]] }],
-  boldHeader: true,
+  sheets: [
+    {
+      name: "Budget",
+      header: true,
+      rows: [
+        ["Item", "Cost"],
+        ["Rent", 950],
+        ["Food", 300],
+        [{ value: "Total", bold: true }, { formula: "SUM(B2:B3)" }],
+      ],
+    },
+    { name: "Notes", rows: [["=stays text"]] },
+  ],
 })
 const document = createDocx({
   paragraphs: [
     { text: "Quarterly report", style: "Title" },
     { text: "Revenue", style: "Heading1" },
-    { text: "Revenue grew 12%." },
+    { runs: [{ text: "Revenue " }, { text: "grew 12%", bold: true }, { text: " this year.", italic: true }] },
     { text: "Rent", style: "ListBullet" },
+    { table: [["Item", "Cost"], ["Rent", "950"]], header: true },
   ],
 })
 ```
 
 - **Workbook.** One worksheet per sheet, rows from A1. A string goes into the shared strings part (a repeated text
-  once), a number and a boolean are typed, `null` leaves the cell out. A string that starts with `=` stays text: there
-  is no formula. `boldHeader` puts the first row of every sheet in a bold font. A sheet name must have 1 to 31
+  once), a number and a boolean are typed, `null` leaves the cell out. A string that starts with `=` stays text, in
+  `{ value }` too: only `{ formula }` makes a formula, so text from an untrusted source never runs as one.
+  `{ value, bold }` and `{ formula, bold }` are bold cells; a sheet's `header` puts its first row in a bold font, and
+  `boldHeader` the first row of every sheet.
+- **Formulas.** `{ formula: "SUM(B2:B3)" }` is written as Excel stores it (an `=` in front is dropped), with no
+  cached result, and the workbook then sets `fullCalcOnLoad`: Excel and LibreOffice compute every formula as the file
+  opens. The formula is not checked; one Excel cannot parse is removed when it repairs the file. A function added after
+  Excel 2007 needs its stored prefix (`_xlfn.XLOOKUP`, `_xlfn.IFS`, `_xlfn.TEXTJOIN`), or Excel shows `#NAME?`. A
+  formula is 1 to 8,192 characters (`office.invalid-value`). `readXlsxCells` gives a new formula cell an empty value
+  until a spreadsheet application has saved the file. A sheet name must have 1 to 31
   characters, none of `[ ] : * ? / \`, must not start or end with `'`, and must differ from the others ignoring
   case (`office.invalid-sheet-name`). A number must be finite and a text at most 32,767 characters
   (`office.invalid-value`); the sheet holds at most 1,048,576 rows and 16,384 columns (`office.invalid-cell`).
-- **Document.** One paragraph per entry, on an A4 page. The styles part defines `Normal` (the default, Calibri 11),
+- **Document.** One paragraph or table per entry, in order, on an A4 page. A paragraph is `{ text, bold?, italic? }`
+  or `{ runs: [{ text, bold?, italic? }] }` when its parts differ; mammoth reads the runs as `strong` and `em`. A
+  table is `{ table: rows of texts, header? }`: equal columns across the page with thin borders, a shorter row filled
+  with empty cells, at most 63 columns; `header` makes the first row bold and repeats it on each page (mammoth's
+  `thead`). An empty paragraph goes between two tables, which Word would join, and after a table that ends the body. The styles part defines `Normal` (the default, Calibri 11),
   `Title`, `Heading1` to `Heading3` and `ListBullet`, under Word's own names (`heading 1`, `List Bullet`), so Word,
   LibreOffice and mammoth treat them as built in: mammoth gives `h1` to `h3` and a `ul` list. A tab is `\t`, a line
-  break `\n`. No paragraphs give one empty paragraph, which a body needs.
+  break `\n`. Nothing gives one empty paragraph, which a body needs.
 - Text with a character XML cannot store (a control character other than tab and newline) is refused.
 
-Not made: formulas, column widths, number formats (a date is a number or a text), merged cells, tables, images,
-headers and footers, numbered lists, inline bold or links.
+Not made: column widths, number formats (a date is a number or a text), fonts and colours other than bold and italic,
+merged cells, images, headers and footers, numbered lists or links.
 
 ## Limits
 

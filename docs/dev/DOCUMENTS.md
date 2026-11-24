@@ -734,10 +734,10 @@ sha256 out, so an agent has nothing to pass to `update`; an Office file is edite
 | --- | --- | --- |
 | `sheets show <path> [range]` | remote read | the stored cells of an .xlsx (value, type, formula, format), with the file's `sha256` |
 | `sheets update <path> <range> --values <json> --expected-fingerprint <sha256> [--replace]` | remote write | writes JSON rows of values from the range's first cell |
-| `sheets create <path> --values <json> [--name <name>]` | remote write | a new .xlsx with one sheet holding the rows from A1 |
+| `sheets create <path> --values <json> [--name <name>]` | remote write | a new .xlsx from rows, or several sheets; formulas and bold cells |
 | `documents show <path>` | remote read | a .docx's paragraphs by index, with style, `editable` and `reason`, and the `sha256` |
 | `documents update <path> --payload <json> --expected-fingerprint <sha256>` | remote write | replaces, inserts or deletes paragraphs |
-| `documents create <path> --payload <json>` | remote write | a new .docx from `[{text, style?}]` paragraphs |
+| `documents create <path> --payload <json>` | remote write | a new .docx from paragraphs (bold and italic runs) and tables |
 | `history <path>` | remote read | what this profile's writes and syncs replaced in the file, from the version store |
 | `restore <path> [version] [--expected-fingerprint <sha256>]` | remote write | puts a kept version back; with no version, the CLI's trash restore |
 
@@ -770,13 +770,30 @@ fingerprint, and the write asks only the command's own permission key, as `updat
 `office.file-exists`, naming the `show` and the `update` that change it), and the provider's absent-file check catches
 one that appears during the write. The path must end in `.xlsx` or `.docx` (`office.wrong-format`).
 
-`sheets create` takes `--values` as `sheets update` does (rows from A1, `null` leaves a cell empty) and `--name` for
-the sheet, `Sheet1` without it; numbers and booleans are typed, and a text stays text even when it starts with `=`.
-`documents create` takes `--payload`, a list of `{text, style?}` where the style is `Title`, `Heading1`, `Heading2`,
-`Heading3`, `Normal` (the default) or `ListBullet` (a bullet list); `\t` and `\n` become a tab and a line break. The
-answer is `path` and `sha256`, the one `update` takes next, with `sheets` (name and row count) or `paragraphs` (the
-count). The API takes several sheets and a bold header row (`boldHeader`); the commands make one sheet and no bold
-row, since cli-base's vocabulary has no flag for either.
+`sheets create` takes `--values` in one of two shapes, told apart by their first level:
+
+- rows from A1, as `sheets update` takes them, for one sheet named by `--name` (`Sheet1` without it):
+  `[["Item", "Cost"], ["Rent", 950]]`;
+- several sheets, each with its own name and rows and `header: true` for a bold first row:
+  `[{"name": "Budget", "header": true, "rows": [["Item", "Cost"], ["Rent", 950]]}, {"name": "Notes", "rows": []}]`.
+  `--name` is refused beside it.
+
+A cell is a text, a number, a boolean, `null` (empty), `{"formula": "SUM(B2:B3)", "bold"?}` or
+`{"value": "Total", "bold"?}`. A text stays text even when it starts with `=`, inside `{value}` too: a formula is only
+the explicit `{formula}`, so text from an untrusted source never becomes one. The formula is written without a result
+and the workbook asks for a full calculation on open (see [Editing Office files](../office.md#new-files)).
+
+`documents create` takes `--payload`, the body in order:
+
+- `{text, style?, bold?, italic?}`, a paragraph in one format;
+- `{runs: [{text, bold?, italic?}], style?}`, a paragraph whose parts differ;
+- `{table: [[cell, …], …], header?}`, a table of texts (a number is written as text), its first row bold and repeated
+  on each page with `header: true`.
+
+The style is `Title`, `Heading1`, `Heading2`, `Heading3`, `Normal` (the default) or `ListBullet` (a bullet list);
+`\t` and `\n` become a tab and a line break. The answer is `path` and `sha256`, the one `update` takes next, with
+`sheets` (name and row count) or `paragraphs` (the count) and `tables` when there are any. Bold is a key of the JSON,
+not a flag, since cli-base's vocabulary has none for it.
 
 `history` lists `versions.list(path)`: each entry's `version` is the sha256 of what it replaced, and `available` says
 whether the store still holds it. `restore <path> <version>` copies that version from the store and writes it with
