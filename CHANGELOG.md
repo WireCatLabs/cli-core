@@ -5,6 +5,23 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.745.0 — 24.11.2026
+
+### Fixed
+
+- `search all` and `deals list` find a CRM record whose Cyrillic name is typed in Latin: `finpoint` and `finpoynt` find
+  ФинПоинт, marked as corrected to `финпоинт`. Only a Cyrillic spelling the store holds as it is counts, so `cement`
+  does not turn into цемент. Message search reads a Latin word the same way (#3285).
+- **Memories, facts and the names a provider shows for a document's accounts are marked untrusted for a scheduled
+  agent.** In a run locked read-only with a mark, `memories list|show|search` and `facts list|show` mark each one's
+  `text`, `identities list` marks an account's `name` and its person's `name`, and `documents context` marks the same
+  in its `memories`, `facts` and `people`. A model's memory repeats the words of whoever wrote the document, so an
+  instruction planted there would reach the agent unmarked. Elsewhere the answers are unchanged. A CLI with its own
+  copies of these commands wraps them with the new `KNOWLEDGE_UNTRUSTED` and `IDENTITY_UNTRUSTED` from
+  `@wirecat/cli-core/documents/cli` ([DOCUMENTS.md](docs/dev/DOCUMENTS.md)).
+- **`memories search` in a documents CLI finds a memory added with `memories add`.** The search reads its index
+  read-only and only a writable open builds it, so a new memory stayed unfound. Adding one now indexes it.
+
 ## 0.744.0 — 24.11.2026
 
 ### Fixed
