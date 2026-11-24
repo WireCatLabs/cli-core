@@ -272,8 +272,11 @@ const syncRound = async (
   const key = mailAccountKey(account.address)
   const accountId = await store.accounts.saveAccount(key, { name: account.address })
 
-  const folders = await mailFolders(account, source)
-  const sent = await sentFolder(account, source)
+  const list = source.folders?.bind(source)
+  let listing: ReturnType<NonNullable<MailSource["folders"]>> | undefined
+  const named: Pick<MailSource, "folders"> = list ? { folders: () => (listing ??= list()) } : {}
+  const folders = await mailFolders(account, named)
+  const sent = await sentFolder(account, named)
   const own = await ownAddresses(store, key, account.addresses)
   if (folders.length < 1 || folders.length > 50) throw new Error("select 1–50 mail folders")
   const rules = account.rules ?? []
@@ -944,7 +947,10 @@ const syncRound = async (
   if (bulk.size) await store.mail.setMailboxes(accountId, [bulkBox], bulk, startedAt)
   if (!snapshot) await store.sync.setSyncState(key, "mail_folder_scope", scope)
   if (!snapshot) await store.mail.backfillSentAt(accountId, SENT_AT_BACKFILL_PER_RUN)
-  await settleOwnMail(store, key, accountId, own, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], startedAt)
+  await settleOwnMail(store, key, accountId, own, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], {
+    name: account.address,
+    now: startedAt,
+  })
   await stopIfAborted()
   const indexed = await index?.(store, key)
   const coverage = {

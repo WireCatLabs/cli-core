@@ -65,6 +65,7 @@ export const linkOwnIdentities = (context: StoreContext): number => {
     own.push({ identity: Number(row.identity), person, name: typeof row.name === "string" ? row.name : null })
     byPerson.set(person, own)
   }
+  if (byPerson.size === 0 && aliasPeople(context, owner).length === 0) return 0
   return write(context.database, () => {
     let joined = 0
     for (const [person, own] of byPerson) {

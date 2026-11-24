@@ -40,7 +40,7 @@ export const settleOwnMail = async (
   accountId: number,
   own: ReadonlySet<string>,
   mailboxes: readonly string[],
-  now: number,
+  { name, now }: { name: string; now: number },
 ): Promise<void> => {
   const before = await storedOwn(store, key)
   const found = await store.mail.markOwnMail(accountId, { addresses: [...own], mailboxes }, now)
@@ -49,5 +49,5 @@ export const settleOwnMail = async (
   if (JSON.stringify(others) !== JSON.stringify([...before].sort()))
     await store.sync.setSyncState(key, OWN_ADDRESSES, JSON.stringify(others))
   // Saving the account again is what links its own identities, now with these addresses.
-  await store.accounts.saveAccount(key, { name: key.account })
+  await store.accounts.saveAccount(key, { name })
 }
