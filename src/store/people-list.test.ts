@@ -299,6 +299,35 @@ describe("the kind of a person", () => {
     })
   })
 
+  it("calls a no-reply or notification address automated by any part of it, unless they answer in a chat", async () => {
+    const { store } = await opened()
+    await store.accounts.saveAccount(MAIL, { name: null })
+    await store.people.savePeople(MAIL, [
+      { id: "noreply-12345@bank.ru", name: "Ada Bank" },
+      { id: "service-noreply@shop.ru", name: "Bo Shop" },
+      { id: "notify@app.ru", name: "Cy App" },
+      { id: "bouncer.joe@club.ru", name: "Joe Club" },
+      { id: "lu.alerts@acme.ru", name: "Lu Park" },
+    ])
+    await store.people.savePeople(TG, [{ id: "8", name: "Lu Park" }])
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "8" },
+      { provider: "email", id: "lu.alerts@acme.ru" },
+      { method: "manual", by: "owner" },
+    )
+    await store.chats.saveChats(TG, [chat("8", "dialog", 2)])
+    await wrote(store, TG, "8", "8", 1)
+    await answered(store, TG, "8")
+
+    expect(await kinds(store)).toEqual({
+      "Ada Bank": ["automated", "no-reply"],
+      "Bo Shop": ["automated", "no-reply"],
+      "Cy App": ["automated", "notification-address"],
+      "Joe Club": ["stranger", "no-tie"],
+      "Lu Park": ["person", "chat"],
+    })
+  })
+
   it("calls a sender automated when most of their mail went to the bulk box", async () => {
     const { store, db } = await opened()
     await store.accounts.saveAccount(MAIL, { name: null })

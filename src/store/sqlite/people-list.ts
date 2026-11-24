@@ -1,5 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { isNoReplyAddress, isPersonLikeRoleAddress, isRoleAddress } from "../../domain/addresses.js"
+import {
+  isNoReplyAddress,
+  isNotificationAddress,
+  isPersonLikeRoleAddress,
+  isRoleAddress,
+} from "../../domain/addresses.js"
 import { displayName, isReadable, nameKey, noFallbacks, takeFallbacks } from "../../domain/display-names.js"
 import { spellings, variantKey } from "../../domain/name-variants.js"
 import {
@@ -301,6 +306,7 @@ const kindOf = (
   const automated: KindSignal[] = [
     ...(facts?.bot ? (["bot"] as const) : []),
     ...(emails.some(isNoReplyAddress) ? (["no-reply"] as const) : []),
+    ...(emails.some(isNotificationAddress) ? (["notification-address"] as const) : []),
     ...(mail !== undefined && mail.n >= BULK_MIN && mail.bulk * 2 > mail.n ? (["bulk-mail"] as const) : []),
     ...(facts?.neverReplied ? (["bulk-never-replied"] as const) : []),
     ...(isAutomatedName(shown) ? (["automated-name"] as const) : []),
@@ -389,7 +395,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "4"
+const KIND_RULES = "5"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
@@ -460,7 +466,7 @@ const keep = (database: CacheDatabase, worked: Worked[]): void => {
  * seconds: that pass runs outside it and is kept only when no other process wrote meanwhile, else it runs again.
  * Answers whether every stored one is current.
  */
-const storeKinds = (database: CacheDatabase): boolean => {
+export const storeKinds = (database: CacheDatabase): boolean => {
   if (isQueryOnly(database))
     return (
       rulesOf(database) === KIND_RULES &&

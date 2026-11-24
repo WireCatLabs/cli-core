@@ -627,8 +627,8 @@ describe("the same name and a shared trace", () => {
   it("proposes two people with one name in a chat they share, and never joins them", async () => {
     const store = await open()
     await store.people.savePeople(TG, [
-      { id: "1", name: "OpenWeather Team" },
-      { id: "2", name: '"openweather team"' },
+      { id: "1", name: "Olga Weber" },
+      { id: "2", name: '"weber olga"' },
     ])
     await store.chats.saveChats(TG, [
       { id: "g", title: "g", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 400 },
@@ -683,6 +683,79 @@ describe("the same name and a shared trace", () => {
     expect(await nameProposals(store)).toEqual([])
     expect(scan.skipped).toEqual(
       expect.arrayContaining([expect.objectContaining({ signal: "name", reason: "identity.common-name" })]),
+    )
+  })
+})
+
+describe("the same name on a bot, a program or a company", () => {
+  const MAIL: AccountKey = { provider: "email", account: "me@example.test" }
+  const nameProposals = async (store: MessageStore) =>
+    (await store.people.linkProposals({ limit: 50, offset: 0 })).items.filter(({ signal }) => signal === "name")
+  const newsletter = Array.from({ length: 4 }, (_, n) => ({
+    id: `author+topic${n}@newsletter.ru`,
+    name: "Ann Author",
+  }))
+
+  it("proposes no one, and drops the proposals made before the sender was known to be a program", async () => {
+    const store = await open()
+    await store.accounts.saveAccount(MAIL, { name: null })
+    await store.people.savePeople(MAIL, newsletter)
+    await store.people.scanMatches({ full: true })
+    expect(await nameProposals(store)).toHaveLength(6)
+
+    const database = await raw()
+    const account = Number(database.prepare("SELECT id FROM accounts WHERE provider = 'email'").get()?.id)
+    for (const { id } of newsletter)
+      database
+        .prepare(
+          "INSERT INTO account_identities (account_id, identity_id, created_at, updated_at, mail_signals) " +
+            "SELECT ?, id, 0, 0, '[\"bulk_never_replied\"]' FROM identities WHERE provider = 'email' " +
+            "AND external_id = ? ON CONFLICT DO UPDATE SET mail_signals = excluded.mail_signals",
+        )
+        .run(account, id)
+    expect((await store.people.list({ limit: 10, kind: "automated" })).total).toBe(4)
+
+    await store.people.scanMatches()
+    expect(await nameProposals(store)).toEqual([])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(await nameProposals(store)).toEqual([])
+    expect(scan.skipped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ signal: "name", reason: "identity.not-a-person" })]),
+    )
+  })
+
+  it("never proposes a bot or an organization, and still proposes two people of that name", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "ann@acme.ru", name: "Ann Lee" },
+      { id: "a.lee@acme.ru", name: "Ann Lee" },
+      { id: "lee.bot@acme.ru", name: "Ann Lee" },
+      { id: "info.lee@acme.ru", name: "Ann Lee" },
+    ])
+    const database = await raw()
+    database.prepare("UPDATE identities SET bot = 1 WHERE external_id = 'lee.bot@acme.ru'").run()
+    database
+      .prepare("INSERT INTO organizations (kind, name, created_at, updated_at) VALUES ('company', 'Acme', 0, 0)")
+      .run()
+    database
+      .prepare(
+        "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+          "SELECT i.id, o.id, 'manual', 'owner', 0, 0 FROM identities i, organizations o " +
+          "WHERE i.external_id = 'info.lee@acme.ru'",
+      )
+      .run()
+
+    await store.people.scanMatches({ full: true })
+
+    const found = await nameProposals(store)
+    expect(found).toHaveLength(1)
+    expect(found[0]?.persons.sort()).toEqual(
+      [
+        `person:${await uidOf(store, "email", "ann@acme.ru")}`,
+        `person:${await uidOf(store, "email", "a.lee@acme.ru")}`,
+      ].sort(),
     )
   })
 })

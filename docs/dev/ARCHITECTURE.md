@@ -629,7 +629,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   rejected pair on evidence new to the owner. A number each source holds once, such as a CRM contact's, a WhatsApp
   account's and a call's, is one person's however many people they still are, so they join as a pair would
   (`oneHolderPerSource`, BUG-774; `linkEvidence` does not call it shared either); a proposal still open for a pair
-  never stops a join, which settles it (BUG-775). `RULES` 6 makes the pass after that change full once. SEC-177: a pair with the owner's person on either side is never joined
+  never stops a join, which settles it (BUG-775). `RULES` 7 makes the next pass full once. SEC-177: a pair with the owner's person on either side is never joined
   or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
   an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address and a
   company's phone line (held by an organization, or by two people of one source list such as two CRM contacts) join and
@@ -652,10 +652,15 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   aside, so `Светлана Кузнецова` is `Svetlana Kuznetsova`) are proposed, never joined, when they share a trace
   (`name-traces.ts`): a phone or an address only these two people hold, or, between people of one source, a chat or a
   company's domain, never a free mailbox's (`FREE_MAIL`) or a role address's. A surname change is never guessed: a
-  maiden and a married name meet only through such a trace. More than six on one name is skipped as too common.
+  maiden and a married name meet only through such a trace. A bot, or a person whose kind is `automated` or
+  `organization`, is never proposed by name (`identity.not-a-person`); the pass works out the kinds a join cleared
+  first, and deletes every open `name` proposal that names such a person. More than six on one name, those aside, is
+  skipped as too common.
 - **Who is shown** (`person-ties.ts`, `people-list.ts`, `domain/person-kinds.ts`): `people.list` gives each person
   one kind and lists one kind at a time. The owner, people added by hand and task assignees are a `person`; then
-  `automated` (a bot, a no-reply address, mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
+  `automated` (a bot, a no-reply address, whose local part has a no-reply word as one of its parts or, `bounce`
+  aside, starts or ends with one; a notification address, with `notify`, `notification(s)` or `alert(s)` as one part;
+  mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
   `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
   `person` with a tie; a named one with no tie is a `stranger`;
   one with nothing to show as a name is `unsorted`. Before any of these, `test` holds what a test run left
