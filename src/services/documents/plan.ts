@@ -413,8 +413,16 @@ export const planDocuments = async <M extends SourceFile>(
   const skipped: SourceState<M>["skipped"] = []
   const again: SourceWork<M>[] = []
   let rereads = 0
+  const extractor = options.scans?.extractor
+  // OCR text from another engine or model is read again; turning OCR off keeps it.
+  const ocrStale = (known: IndexedSource<M>) =>
+    known.ocr !== undefined && extractor !== undefined && known.ocr !== extractor
   const reread = (known: IndexedSource<M> | undefined) =>
-    known !== undefined && !known.notRead && rereads < REREAD_BATCH && source.reread?.(known) === true && ++rereads > 0
+    known !== undefined &&
+    !known.notRead &&
+    rereads < REREAD_BATCH &&
+    (ocrStale(known) || source.reread?.(known) === true) &&
+    ++rereads > 0
   for (const root of roots)
     if (folders[root]?.trashed) skipped.push({ id: root, reason: "selected folder is unavailable" })
   for (const [id, file] of files) {

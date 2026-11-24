@@ -102,6 +102,7 @@ export const addDocumentCommands = <S>(program: Command, options: DocumentComman
 }
 export {
   claimDocumentAccount,
+  DOCUMENT_SCAN_SETTINGS,
   type DocumentLibraryOptions,
   type DocumentLibraryTools,
   type DocumentSourceRun,

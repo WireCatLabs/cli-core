@@ -216,9 +216,10 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
           }
           // A scan's text comes from OCR of its bytes, one more download, taken from the budget as a read is.
           const scanned = async (file: M): Promise<SourceContent<M>> => {
-            const text = (
-              await (scans as NonNullable<typeof scans>).read(await source.bytes(file.id, file), file)
-            ).slice(0, limit)
+            const reader = scans as NonNullable<typeof scans>
+            // A reader with no engine only says why; the file need not be downloaded for that.
+            const bytes = reader.extractor ? await source.bytes(file.id, file) : new Uint8Array()
+            const text = (await reader.read(bytes, file)).slice(0, limit)
             return { metadata: file, markdown: text, text, tabs: [] }
           }
           let content: SourceContent<M>
@@ -266,6 +267,13 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
             }
             if (previous?.hash === hash) result.unchanged++
             else result.saved++
+            if (ocr && readsAsPicture(content.metadata)) {
+              const stop = await savePictureOf(content.metadata)
+              if (stop) {
+                result.stopped = stop
+                break
+              }
+            }
           }
         }
         pending.jobs = pending.jobs.filter((item) => item !== job)
@@ -279,6 +287,8 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
         // Text OCR read once stays when reading it again fails, OCR was turned off or its program removed: only an
         // edit of the file makes that text old.
         if (kept?.ocr && job.file && safe.code === "validation_error" && !changedSince(kept.metadata, job.file)) {
+          // The new reading was tried: trying it on every sync would spend the page limit on a file it cannot read.
+          if (scans?.extractor && safe.details.reason !== "document.scan-later") kept.ocr = scans.extractor
           pending.jobs = pending.jobs.filter((item) => item !== job)
           progress()
           continue

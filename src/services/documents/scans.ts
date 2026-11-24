@@ -25,6 +25,24 @@ const LATER = "OCR page limit of this sync reached"
 /** A picture OCR reads: what `ocrImage` takes. Other images (TIFF, HEIC) stay by name only. */
 export const isPicture = (file: { mime: string }): boolean => PICTURES.has(file.mime)
 
+const PICTURE_BYTES = 25 * 1024 * 1024
+
+/**
+ * The CLI's skip reason with a picture it keeps for its type let through when a reader reads pictures: CLIs name
+ * every image `unsupported type: …`, as no text reader takes one.
+ */
+export const scanSkipReason = (
+  reader: ScanReader | undefined,
+  file: { mime: string; size?: number | undefined },
+  reason: string | undefined,
+): string | undefined =>
+  reason?.startsWith("unsupported type: ") &&
+  reader?.extractor !== undefined &&
+  isPicture(file) &&
+  (file.size ?? 0) <= PICTURE_BYTES
+    ? undefined
+    : reason
+
 /** Reads the text of a scan or a picture, or fails as `validation_error` with the reason the file is kept by name. */
 export interface ScanReader {
   /** The reading's name, saved with the text, so a change of engine or model reads the scans again. Unset: none. */
