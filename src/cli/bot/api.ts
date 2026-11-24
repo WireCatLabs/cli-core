@@ -4,6 +4,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { secretInput } from "../../runs/run-context.js"
 import { NO_EFFECTS, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { API_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import {
   apiFlagOf,
   apiJson,
@@ -99,6 +100,7 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       command.addOption(secretInput(new Option("--body <json>", "the request body as JSON; - reads it from stdin")))
       command.option("--body-file <path>", "the request body from a JSON file; - is stdin")
     }
+    marksUntrusted(command, API_UNTRUSTED)
     annotate(command, {
       origin: "generated",
       api_operation: operation.id,

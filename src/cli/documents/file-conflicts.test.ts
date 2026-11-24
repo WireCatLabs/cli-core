@@ -124,6 +124,14 @@ describe("mirrors conflicts", () => {
     expect(item.remote.sha256).toBe(sha("a\ntheirs\n"))
   })
 
+  it("marks each conflict's path in the list for a scheduled agent", async () => {
+    const { program, streams } = await setup({ YDISK_READ_ONLY: "1", YDISK_UNTRUSTED_MARK: MARK })
+    await program.parseAsync(["--json", "mirrors", "conflicts", "list"], { from: "user" })
+    const [item] = JSON.parse(streams.stdout.join("")).items
+    expect(item.path).toBe(`⟦untrusted:${MARK} source=path id=m1⟧plan.md⟦/untrusted:${MARK}⟧`)
+    expect(item.reason).toBe("changed on both sides in the same lines")
+  })
+
   it("refuses a final file from the app's own folders, which hold sign-ins and state", async () => {
     const { run } = await setup()
     await expect(

@@ -7,8 +7,8 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import type { Expect, FileTarget, RemoteFile } from "../../documents.js"
 import type { KeyedGuard } from "../../sends/keyed-guard.js"
-import { provide } from "../context.js"
-import type { Body } from "../envelope.js"
+import { outputFor, provide } from "../context.js"
+import { type Body, renderAnswer } from "../envelope.js"
 import { type FileMirrorWrite, fileMirrorsCommand } from "./file-mirrors.js"
 
 const FOLDER = "/Notes"
@@ -71,7 +71,10 @@ const remoteOf = (rewrite?: (text: string) => string) => {
   return { target, put, trash, read: (path: string) => readFileSync(join(dir, path), "utf8") }
 }
 
-const setup = (rewrite?: (text: string) => string) => {
+const IDENTITY = { command: "ydisk", appName: "ydisk-cli", envPrefix: "YDISK", description: "ydisk", version: "1.0.0" }
+const MARK = "0123456789abcdef"
+
+const setup = (rewrite?: (text: string) => string, env?: NodeJS.ProcessEnv) => {
   const home = mkdtempSync(join(tmpdir(), "file-mirrors-home-"))
   const state = mkdtempSync(join(tmpdir(), "file-mirrors-state-"))
   const local = mkdtempSync(join(tmpdir(), "file-mirrors-local-"))
@@ -83,10 +86,11 @@ const setup = (rewrite?: (text: string) => string) => {
   const keysOf = (write: FileMirrorWrite) =>
     write.side === "remote" ? (write.action === "delete" ? ["files.delete"] : ["files.upload"]) : []
   const program = new Command("host").option("--json").exitOverride()
-  provide(program, { streams: captureStreams(), env: { HOME: home }, tty: false })
+  const streams = captureStreams()
+  provide(program, { streams, env: { HOME: home, ...env }, tty: false, app: IDENTITY })
   program.addCommand(
     fileMirrorsCommand({
-      identity: { command: "ydisk", appName: "ydisk-cli", envPrefix: "YDISK", description: "ydisk", version: "1.0.0" },
+      identity: IDENTITY,
       service: "Yandex Disk",
       remote: "disk",
       root: {
@@ -94,7 +98,10 @@ const setup = (rewrite?: (text: string) => string) => {
         description: "the Disk folder, by its path",
         examples: ["/Notes ./notes", "/ ~/YandexDisk"],
       },
-      output: (_command, body) => bodies.push(body),
+      output: (command, body) => {
+        bodies.push(body)
+        if (env) renderAnswer(command, outputFor(command), body)
+      },
       profile: () => "personal",
       stateDir: () => state,
       keepForDays: () => 365,
@@ -125,10 +132,32 @@ const setup = (rewrite?: (text: string) => string) => {
     return bodies.at(-1) as Body & { item?: Record<string, unknown>; items?: Record<string, unknown>[] }
   }
   const add = async () => (await run("add", FOLDER, local)).item?.id as string
-  return { home, state, local, remote, writes, runs, run, add }
+  return { home, state, local, remote, writes, runs, run, add, streams }
 }
 
 describe("fileMirrorsCommand", () => {
+  it("marks the files a preview names for a scheduled agent, and leaves the mirror's own folder as it is", async () => {
+    const preview = async (env: NodeJS.ProcessEnv) => {
+      const { local, remote, run, add, streams } = setup(undefined, env)
+      remote.put("theirs.md", "theirs\n")
+      await add()
+      streams.stdout.length = 0
+      await run("preview", "--json")
+      return { local, item: JSON.parse(streams.stdout.join("")).items[0] }
+    }
+    const locked = await preview({ YDISK_READ_ONLY: "1", YDISK_UNTRUSTED_MARK: MARK })
+    expect(locked.item.plan).toEqual([
+      {
+        kind: "download",
+        path: expect.stringMatching(
+          new RegExp(`^⟦untrusted:${MARK} source=plan.path [^⟧]*⟧theirs.md⟦/untrusted:${MARK}⟧$`),
+        ),
+      },
+    ])
+    expect(locked.item.path).toBe(locked.local)
+    expect((await preview({})).item.plan).toEqual([{ kind: "download", path: "theirs.md" }])
+  })
+
   it("adds a mirror, syncs both ways inside the app's run and keeps the pair on disk as ydisk did", async () => {
     const { state, local, remote, run, add, runs } = setup()
     writeFileSync(join(local, "mine.md"), "mine\n")

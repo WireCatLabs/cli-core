@@ -10,6 +10,7 @@ import { addDocumentSyncCommands, type DocumentSyncCommands } from "./sync.js"
 import type { DocumentWords } from "./words.js"
 
 export {
+  API_UNTRUSTED,
   DOCUMENT_CONTEXT_UNTRUSTED,
   DOCUMENT_UNTRUSTED,
   IDENTITY_UNTRUSTED,
