@@ -203,7 +203,8 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   `not_found` is skipped as unavailable, and its documents leave the copy as no longer visible with their text kept.
   With a feed, the same root fails the rescan instead. On a path-addressed source a root moved on the provider
   answers `not_found` too, so its documents are no longer visible until the folder is chosen again under its new
-  path. A file kept by name only is read again only once it changes. The cost is one listing of every
+  path. A file kept by name only is read again only once it changes, or, kept as `unsupported type: …`, once a
+  newer version reads its type (`readableFile`). The cost is one listing of every
   folder per sync, so such a CLI keeps its folders selected rather than the whole account.
 - **A source that addresses files by path** reads the path from the file the sync passes: `metadata(id, known)` (the
   folder as the last pass held it, for a root or a folder that answered 404), `children(id, folder)`,

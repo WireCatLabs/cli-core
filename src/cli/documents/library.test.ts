@@ -4,8 +4,15 @@ import { join } from "node:path"
 import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
-import { documentIngestion, type FeedlessDocumentSource, type SourceFile } from "../../documents.js"
+import {
+  documentIngestion,
+  type FeedlessDocumentSource,
+  fileText,
+  readableFile,
+  type SourceFile,
+} from "../../documents.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
+import { officeFixture } from "../../testing/office-files.js"
 import { REMOTE_READ } from "../effects.js"
 import { listOf } from "../envelope.js"
 import { commandPermissions } from "../permission-keys.js"
@@ -13,7 +20,13 @@ import { createProgram, type ProgramDefinition, run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { DOCUMENT_HISTORY_SETTINGS, keepVersionsForDays } from "./history.js"
 import { documentLibraryCommands } from "./library.js"
-import { documentCommandsContract, FAKE_FOLDER, type FakeDocumentSource, fakeDocumentSource } from "./testing/index.js"
+import {
+  documentCommandsContract,
+  FAKE_FOLDER,
+  type FakeDocumentSource,
+  fakeDocumentSource,
+  fakeFile,
+} from "./testing/index.js"
 import type { DocumentWords } from "./words.js"
 
 const app = {
@@ -33,6 +46,7 @@ const definition = (
   source: FeedlessDocumentSource,
   words: DocumentWords = WORDS,
   browse?: Browse,
+  skipReason?: (file: SourceFile) => string | undefined,
 ): ProgramDefinition => {
   const configuration = settingsFor(app, { permissions: commandPermissions(), ...DOCUMENT_HISTORY_SETTINGS })
   return {
@@ -72,6 +86,7 @@ const definition = (
         maxEntries: 1_000,
         coverage: "the chosen folders",
         ...(browse ? { browse } : {}),
+        ...(skipReason ? { skipReason } : {}),
       }),
   }
 }
@@ -81,6 +96,7 @@ const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
   keyring?: KeyringStore,
   words: DocumentWords = WORDS,
   browse?: Browse,
+  skipReason?: (file: SourceFile) => string | undefined,
 ) => {
   const root = mkdtempSync(join(tmpdir(), "documents-library-"))
   const env: NodeJS.ProcessEnv = {
@@ -89,11 +105,11 @@ const setup = <S extends FeedlessDocumentSource = FakeDocumentSource>(
     BOX_CONFIG_DIR: join(root, "config"),
     BOX_CACHE_DIR: join(root, "cache"),
   }
-  const program = createProgram(definition(source, words, browse))
+  const program = createProgram(definition(source, words, browse, skipReason))
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
     const args = argv[0] === "--as" ? argv.slice(1) : ["personal", ...argv]
-    const exit = await run([...args, "--json"], definition(source, words, browse), {
+    const exit = await run([...args, "--json"], definition(source, words, browse, skipReason), {
       streams,
       tty: false,
       env,
@@ -291,6 +307,42 @@ describe("documentLibraryCommands over a source without a change feed", () => {
       expect((await cli(step)).exit).toBe(0)
     const search = await cli(["search", "quarterly"])
     expect(search.stdout).toContain("box personal folders add /Documents, then box personal sync")
+  })
+
+  it("reads a file an older version kept by name for its type once the type is readable, and no read failure again", async () => {
+    const PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    const source = fakeDocumentSource("alpha", { feed: false })
+    source.put({ ...fakeFile("deck", ["root"], PPTX), name: "deck.pptx" })
+    source.put({ ...fakeFile("damaged", ["root"], "application/vnd.oasis.opendocument.text"), name: "damaged.odt" })
+    const reads: string[] = []
+    const content = source.content
+    source.content = async (id, maxChars, file) => {
+      reads.push(id)
+      const known = source.files.get(id) as SourceFile
+      if (id === "deck") {
+        const text = await fileText(officeFixture("pptx"), known, "box")
+        return { metadata: known, markdown: text, text, tabs: [] }
+      }
+      if (id === "damaged")
+        return fileText(Uint8Array.of(1, 2, 3), known, "box").then(() => content(id, maxChars, file))
+      return content(id, maxChars, file)
+    }
+    const typed = (file: SourceFile) => (readableFile(file) ? undefined : `unsupported type: ${file.mime}`)
+    let rule = (file: SourceFile) => (file.mime === PPTX ? `unsupported type: ${file.mime}` : typed(file))
+    const { cli } = setup(source, memoryKeyring(), WORDS, undefined, (file) => rule(file))
+    await cli(["folders", "add", "root"])
+    const before = JSON.parse((await cli(["sync"])).stdout).item
+    expect(before.skipped.map((one: { id: string }) => one.id).sort()).toEqual(["damaged", "deck"])
+    expect(reads).not.toContain("deck")
+    rule = typed
+    reads.length = 0
+    const after = JSON.parse((await cli(["sync"])).stdout).item
+    expect(after.skipped.map((one: { id: string }) => one.id)).toEqual(["damaged"])
+    expect(reads).toEqual(["deck"])
+    expect(JSON.stringify(JSON.parse((await cli(["search", "slideneedle"])).stdout))).toContain('"deck"')
+    reads.length = 0
+    await cli(["sync"])
+    expect(reads).toEqual([])
   })
 })
 
