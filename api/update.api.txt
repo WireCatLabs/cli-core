@@ -1,0 +1,29 @@
+# @wirecat/cli-core "./update": the stable API, written by cli-dev api-report. Do not edit.
+AppUpdateOptions · interface · export interface AppUpdateOptions {
+AppUpdateOptions · interface · packageName: string;
+AppUpdateOptions · interface · command: string;
+AppUpdateOptions · interface · version: string;
+AppUpdateOptions · interface · entry: string;
+AppUpdateOptions · interface · statePath: (env: NodeJS.ProcessEnv) => string;
+AppUpdateOptions · interface · enabled: (env: NodeJS.ProcessEnv) => boolean;
+AppUpdateOptions · interface · offVariables: readonly string[];
+AppUpdateOptions · interface · quietWords?: readonly string[];
+AppUpdateOptions · interface · }
+NoticeOptions · interface · export interface NoticeOptions {
+NoticeOptions · interface · tty?: boolean;
+NoticeOptions · interface · environment?: UpdateEnvironment;
+NoticeOptions · interface · env?: NodeJS.ProcessEnv;
+NoticeOptions · interface · }
+UpdateEnvironment · interface · export interface UpdateEnvironment {
+UpdateEnvironment · interface · fetch?: FetchLike;
+UpdateEnvironment · interface · now?: () => number;
+UpdateEnvironment · interface · stderrIsTTY?: boolean;
+UpdateEnvironment · interface · scriptPath?: string;
+UpdateEnvironment · interface · spawn?: (argv: string[]) => number;
+UpdateEnvironment · interface · }
+appUpdate · const · export declare const appUpdate: (app: AppUpdateOptions) => {
+appUpdate · const · installer: ({ scriptPath }?: UpdateEnvironment) => Installer;
+appUpdate · const · latest: (environment?: UpdateEnvironment) => Promise<string | undefined>;
+appUpdate · const · runUpdate: (argv: string[], environment?: UpdateEnvironment) => number;
+appUpdate · const · updateNotice: (argv: readonly string[], { tty, environment, env }?: NoticeOptions) => Promise<string | undefined>;
+appUpdate · const · };

@@ -1,0 +1,491 @@
+# @wirecat/cli-core "./store": the stable API, written by cli-dev api-report. Do not edit.
+AccountGroupChange · interface · export interface AccountGroupChange {
+AccountGroupChange · interface · remove?: {
+AccountGroupChange · interface · group: string;
+AccountGroupChange · interface · drop: (entry: string) => boolean;
+AccountGroupChange · interface · };
+AccountGroupChange · interface · add?: {
+AccountGroupChange · interface · group: string;
+AccountGroupChange · interface · entry: string;
+AccountGroupChange · interface · };
+AccountGroupChange · interface · }
+AccountKey · interface · export interface AccountKey {
+AccountKey · interface · provider: Provider;
+AccountKey · interface · account: Id;
+AccountKey · interface · scope?: "personal" | "work";
+AccountKey · interface · }
+AccountMessageFilter · interface · export interface AccountMessageFilter {
+AccountMessageFilter · interface · senders?: Id[];
+AccountMessageFilter · interface · together?: boolean;
+AccountMessageFilter · interface · text?: string;
+AccountMessageFilter · interface · chatId?: Id;
+AccountMessageFilter · interface · limit: number;
+AccountMessageFilter · interface · perChat?: boolean;
+AccountMessageFilter · interface · }
+AccountsStore · interface · export interface AccountsStore extends AccountAccounts {
+AccountsStore · interface · accounts(): Promise<AccountKey[]>;
+AccountsStore · interface · storedAccounts(): Promise<StoredAccount[]>;
+AccountsStore · interface · setScope(key: AccountKey, scope: StoredAccount["scope"]): Promise<StoredAccount>;
+AccountsStore · interface · accountGroups(): Promise<AccountGroups>;
+AccountsStore · interface · saveAccountGroup(name: string, members: string[] | undefined): Promise<void>;
+AccountsStore · interface · changeAccountGroups(change: AccountGroupChange): Promise<{
+AccountsStore · interface · removed: string[];
+AccountsStore · interface · }>;
+AccountsStore · interface · renameAccountGroup(from: string, to: string): Promise<boolean>;
+AccountsStore · interface · profiles(): Promise<Profiles>;
+AccountsStore · interface · saveProfile(app: string, profile: string, key: AccountKey): Promise<void>;
+AccountsStore · interface · forgetProfile(app: string, profile: string): Promise<void>;
+AccountsStore · interface · registerProvider(entry: ProviderEntry): Promise<void>;
+AccountsStore · interface · }
+AgentLink · type · export type AgentLink = {
+AgentLink · type · outcome: "merged";
+AgentLink · type · person: string;
+AgentLink · type · merge: string;
+AgentLink · type · proposal: string;
+AgentLink · type · evidence: LinkEvidence;
+AgentLink · type · } | {
+AgentLink · type · outcome: "proposed";
+AgentLink · type · proposal: string;
+AgentLink · type · evidence: LinkEvidence;
+AgentLink · type · };
+AgentLinkInput · interface · export interface AgentLinkInput {
+AgentLinkInput · interface · identity: IdentityRef;
+AgentLinkInput · interface · with: IdentityRef;
+AgentLinkInput · interface · bot: string;
+AgentLinkInput · interface · run?: string;
+AgentLinkInput · interface · reason: string;
+AgentLinkInput · interface · apply: boolean;
+AgentLinkInput · interface · }
+AgentMerge · interface · export interface AgentMerge {
+AgentMerge · interface · proposal: string;
+AgentMerge · interface · bot: string;
+AgentMerge · interface · run: string | null;
+AgentMerge · interface · reason: string | null;
+AgentMerge · interface · evidence: LinkEvidence | null;
+AgentMerge · interface · }
+CacheDatabase · interface · export interface CacheDatabase {
+CacheDatabase · interface · exec(sql: string): void;
+CacheDatabase · interface · prepare(sql: string): CacheStatement;
+CacheDatabase · interface · close(): void;
+CacheDatabase · interface · timeLimit?: true;
+CacheDatabase · interface · }
+CacheStatement · interface · export interface CacheStatement {
+CacheStatement · interface · run(...parameters: SqlValue[]): {
+CacheStatement · interface · changes: number;
+CacheStatement · interface · };
+CacheStatement · interface · get(...parameters: SqlValue[]): Record<string, unknown> | undefined;
+CacheStatement · interface · all(...parameters: SqlValue[]): Record<string, unknown>[];
+CacheStatement · interface · }
+ChatStats · interface · export interface ChatStats {
+ChatStats · interface · chatId: Id;
+ChatStats · interface · title: string | null;
+ChatStats · interface · kind: ChatKind;
+ChatStats · interface · messages: number;
+ChatStats · interface · oldestAt: string | null;
+ChatStats · interface · newestAt: string | null;
+ChatStats · interface · lastStoredAt: string | null;
+ChatStats · interface · }
+ChatsStore · interface · export interface ChatsStore {
+ChatsStore · interface · saveChats(key: AccountKey, chats: ChatUpdate[]): Promise<void>;
+ChatsStore · interface · chats(key: AccountKey, window: {
+ChatsStore · interface · limit?: number;
+ChatsStore · interface · offset?: number;
+ChatsStore · interface · } & StoredChatFilter): Promise<Page<Chat>>;
+ChatsStore · interface · countChats(key: AccountKey, filter?: StoredChatFilter): Promise<number>;
+ChatsStore · interface · chatsWith(key: AccountKey, memberId: Id): Promise<Chat[]>;
+ChatsStore · interface · setChatScope(key: AccountKey, chatId: Id, scope: StoredAccount["scope"] | null): Promise<boolean>;
+ChatsStore · interface · chatScopes(key: AccountKey, chatIds: readonly Id[]): Promise<Map<Id, StoredAccount["scope"]>>;
+ChatsStore · interface · markChatsLeft(key: AccountKey, present: Id[]): Promise<number>;
+ChatsStore · interface · rejoinChats(key: AccountKey, present: Id[]): Promise<number>;
+ChatsStore · interface · rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>;
+ChatsStore · interface · rekeyChats(key: AccountKey, pairs: readonly {
+ChatsStore · interface · from: Id;
+ChatsStore · interface · to: Id;
+ChatsStore · interface · }[], lockMs: number): Promise<ChatRekeys>;
+ChatsStore · interface · leftChats(key: AccountKey, options?: {
+ChatsStore · interface · clear?: boolean;
+ChatsStore · interface · }): Promise<LeftChats>;
+ChatsStore · interface · chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>;
+ChatsStore · interface · chatCoverage(key: AccountKey): Promise<ChatCoverage>;
+ChatsStore · interface · chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>;
+ChatsStore · interface · chatsNewest(key: AccountKey): Promise<Pick<ChatStats, "chatId" | "title" | "messages" | "newestAt">[]>;
+ChatsStore · interface · renamedChatId(key: AccountKey, chatId: Id): Promise<Id | undefined>;
+ChatsStore · interface · historyShapes(key: AccountKey, chatIds: Id[]): Promise<Map<Id, ChatHistoryShape>>;
+ChatsStore · interface · recordHistorySkips(key: AccountKey, skips: Map<Id, HistorySkip>): Promise<void>;
+ChatsStore · interface · setHistoryIncluded(key: AccountKey, chatId: Id, included: boolean): Promise<boolean>;
+ChatsStore · interface · historySkips(key: AccountKey): Promise<StoredHistorySkip[]>;
+ChatsStore · interface · chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>;
+ChatsStore · interface · chatTitle(key: AccountKey, chatId: Id): Promise<string | null>;
+ChatsStore · interface · chatActivity(key: AccountKey, since: number, where?: Where): Promise<{
+ChatsStore · interface · chats: ChatActivity[];
+ChatsStore · interface · storedAt: string | null;
+ChatsStore · interface · }>;
+ChatsStore · interface · chatMetadata(key: AccountKey, chatId: Id): Promise<ChatMetadata | undefined>;
+ChatsStore · interface · saveChatMetadata(key: AccountKey, entry: Omit<ChatMetadata, "fetchedAt">): Promise<ChatMetadata>;
+ChatsStore · interface · replaceAutoTags(key: AccountKey, chatId: Id, algorithm: string, tags: ChannelTagMatch[]): Promise<void>;
+ChatsStore · interface · rankingDiscussionChats(account: AccountKey, chatId: string): Promise<string[]>;
+ChatsStore · interface · }
+ContextEvidenceSender · interface · export interface ContextEvidenceSender {
+ContextEvidenceSender · interface · provider: string;
+ContextEvidenceSender · interface · id: string;
+ContextEvidenceSender · interface · name: string | null;
+ContextEvidenceSender · interface · person: string | null;
+ContextEvidenceSender · interface · personName: string | null;
+ContextEvidenceSender · interface · owner: boolean;
+ContextEvidenceSender · interface · }
+ContextSource · interface · export interface ContextSource {
+ContextSource · interface · kind: (typeof CONTEXT_SOURCE_KINDS)[number];
+ContextSource · interface · accountId: number;
+ContextSource · interface · provider: string;
+ContextSource · interface · account: string;
+ContextSource · interface · }
+DamageCause · interface · export interface DamageCause {
+DamageCause · interface · cause: string;
+DamageCause · interface · check: string;
+DamageCause · interface · }
+DamagedTable · interface · export interface DamagedTable {
+DamagedTable · interface · table: string | null;
+DamagedTable · interface · problems: number;
+DamagedTable · interface · sample: string;
+DamagedTable · interface · }
+Decider · type · export type Decider = "owner" | {
+Decider · type · bot: string;
+Decider · type · model?: string;
+Decider · type · reason: string;
+Decider · type · };
+DecisionPolicy · interface · export interface DecisionPolicy {
+DecisionPolicy · interface · agentDecisions: boolean;
+DecisionPolicy · interface · ruleProposalsOwnerOnly: boolean;
+DecisionPolicy · interface · }
+DeletionScope · type · export type DeletionScope = (chat: Pick<Chat, "id" | "kind" | "providerMetadata">) => boolean;
+IdentityLinkDecision · interface · export interface IdentityLinkDecision {
+IdentityLinkDecision · interface · confirm: boolean;
+IdentityLinkDecision · interface · by: Decider;
+IdentityLinkDecision · interface · reason?: string;
+IdentityLinkDecision · interface · company?: {
+IdentityLinkDecision · interface · organization?: number;
+IdentityLinkDecision · interface · name?: string;
+IdentityLinkDecision · interface · all?: boolean;
+IdentityLinkDecision · interface · mailbox?: string;
+IdentityLinkDecision · interface · };
+IdentityLinkDecision · interface · organization?: {
+IdentityLinkDecision · interface · organization?: number;
+IdentityLinkDecision · interface · name?: string;
+IdentityLinkDecision · interface · all?: boolean;
+IdentityLinkDecision · interface · };
+IdentityLinkDecision · interface · }
+IdentityLinkFilter · interface · export interface IdentityLinkFilter {
+IdentityLinkFilter · interface · person?: string;
+IdentityLinkFilter · interface · status?: IdentityLinkRow["status"] | "all";
+IdentityLinkFilter · interface · order?: "newest" | "score";
+IdentityLinkFilter · interface · limit: number;
+IdentityLinkFilter · interface · offset: number;
+IdentityLinkFilter · interface · }
+IdentityLinkInput · interface · export interface IdentityLinkInput {
+IdentityLinkInput · interface · identity: IdentityRef;
+IdentityLinkInput · interface · with: IdentityRef;
+IdentityLinkInput · interface · signal: IdentityLinkSignal;
+IdentityLinkInput · interface · by: Author;
+IdentityLinkInput · interface · reason?: string;
+IdentityLinkInput · interface · score?: number;
+IdentityLinkInput · interface · evidence?: string[];
+IdentityLinkInput · interface · }
+IdentityLinkRow · interface · export interface IdentityLinkRow {
+IdentityLinkRow · interface · id: string;
+IdentityLinkRow · interface · status: "proposed" | "confirmed" | "rejected";
+IdentityLinkRow · interface · persons: [string, string];
+IdentityLinkRow · interface · identity: string;
+IdentityLinkRow · interface · with: string | null;
+IdentityLinkRow · interface · joins: IdentityLinkPayload["joins"];
+IdentityLinkRow · interface · signal: IdentityLinkSignal;
+IdentityLinkRow · interface · score: number | null;
+IdentityLinkRow · interface · shared: SharedMailbox | null;
+IdentityLinkRow · interface · mailbox: string | null;
+IdentityLinkRow · interface · candidates: string[];
+IdentityLinkRow · interface · reason: string | null;
+IdentityLinkRow · interface · evidence: string[];
+IdentityLinkRow · interface · proposedBy: Proposer;
+IdentityLinkRow · interface · createdAt: string;
+IdentityLinkRow · interface · }
+IdentityRef · interface · export interface IdentityRef {
+IdentityRef · interface · provider: Provider;
+IdentityRef · interface · id: Id;
+IdentityRef · interface · }
+IdentitySplitDecision · interface · export interface IdentitySplitDecision {
+IdentitySplitDecision · interface · confirm: boolean;
+IdentitySplitDecision · interface · by: Decider;
+IdentitySplitDecision · interface · reason?: string;
+IdentitySplitDecision · interface · }
+IdentitySplitFilter · interface · export interface IdentitySplitFilter {
+IdentitySplitFilter · interface · status?: IdentitySplitRow["status"] | "all";
+IdentitySplitFilter · interface · limit: number;
+IdentitySplitFilter · interface · offset: number;
+IdentitySplitFilter · interface · }
+IdentitySplitInput · type · export type IdentitySplitInput = ({
+IdentitySplitInput · type · identities: IdentityRef[];
+IdentitySplitInput · type · from?: string;
+IdentitySplitInput · type · } | {
+IdentitySplitInput · type · merge: string;
+IdentitySplitInput · type · }) & {
+IdentitySplitInput · type · by: Author;
+IdentitySplitInput · type · reason: string;
+IdentitySplitInput · type · evidence?: string[];
+IdentitySplitInput · type · };
+IdentitySplitMove · type · export type IdentitySplitMove = "unlink" | "unmerge";
+IdentitySplitRow · interface · export interface IdentitySplitRow {
+IdentitySplitRow · interface · id: string;
+IdentitySplitRow · interface · status: "proposed" | "confirmed" | "rejected" | "dropped";
+IdentitySplitRow · interface · split: IdentitySplitMove;
+IdentitySplitRow · interface · person: string;
+IdentitySplitRow · interface · identities: string[];
+IdentitySplitRow · interface · merge: string | null;
+IdentitySplitRow · interface · reason: string | null;
+IdentitySplitRow · interface · evidence: string[];
+IdentitySplitRow · interface · proposedBy: Proposer;
+IdentitySplitRow · interface · createdAt: string;
+IdentitySplitRow · interface · }
+InvalidJson · interface · export interface InvalidJson {
+InvalidJson · interface · table: string;
+InvalidJson · interface · column: string;
+InvalidJson · interface · rows: number;
+InvalidJson · interface · required: boolean;
+InvalidJson · interface · }
+JournalMark · interface · export interface JournalMark {
+JournalMark · interface · at: string;
+JournalMark · interface · command: string;
+JournalMark · interface · seen: "missing" | "replaced" | "shm-without-wal";
+JournalMark · interface · }
+LinkEvidence · interface · export interface LinkEvidence {
+LinkEvidence · interface · persons: [string, string];
+LinkEvidence · interface · strong: boolean;
+LinkEvidence · interface · facts: LinkFact[];
+LinkEvidence · interface · weak: LinkHold | null;
+LinkEvidence · interface · }
+LinkOptions · interface · export interface LinkOptions {
+LinkOptions · interface · method: string;
+LinkOptions · interface · by: string;
+LinkOptions · interface · }
+LinkedIdentity · interface · export interface LinkedIdentity extends IdentityRef {
+LinkedIdentity · interface · name: string | null;
+LinkedIdentity · interface · username: string | null;
+LinkedIdentity · interface · phone?: string | null;
+LinkedIdentity · interface · email?: string | null;
+LinkedIdentity · interface · phones?: string[];
+LinkedIdentity · interface · emails?: string[];
+LinkedIdentity · interface · isBot: boolean | null;
+LinkedIdentity · interface · accounts: Id[];
+LinkedIdentity · interface · seenIn: {
+LinkedIdentity · interface · account: Id;
+LinkedIdentity · interface · scope: StoredAccount["scope"];
+LinkedIdentity · interface · }[];
+LinkedIdentity · interface · method: string;
+LinkedIdentity · interface · linkedBy: string;
+LinkedIdentity · interface · linkedAt: string;
+LinkedIdentity · interface · }
+MatchScan · interface · export interface MatchScan {
+MatchScan · interface · full: boolean;
+MatchScan · interface · merged: {
+MatchScan · interface · into: string;
+MatchScan · interface · from: string;
+MatchScan · interface · signal: "same-email" | "same-phone";
+MatchScan · interface · }[];
+MatchScan · interface · proposed: {
+MatchScan · interface · id: string;
+MatchScan · interface · persons: [string, string];
+MatchScan · interface · signal: IdentityLinkSignal;
+MatchScan · interface · opened: boolean;
+MatchScan · interface · }[];
+MatchScan · interface · skipped: {
+MatchScan · interface · persons: string[];
+MatchScan · interface · signal: string;
+MatchScan · interface · reason: string;
+MatchScan · interface · }[];
+MatchScan · interface · }
+MessageFilter · type · export type MessageFilter = AccountMessageFilter & {
+MessageFilter · type · provider?: Provider;
+MessageFilter · type · accounts?: Id[];
+MessageFilter · type · } & ({
+MessageFilter · type · account: AccountKey;
+MessageFilter · type · } | {
+MessageFilter · type · account?: undefined;
+MessageFilter · type · chatId?: undefined;
+MessageFilter · type · });
+MessageStore · interface · export interface MessageStore extends MessageStoreCore, MessageStoreAreas {
+MessageStore · interface · }
+MessageStoreCore · interface · export interface MessageStoreCore {
+MessageStoreCore · interface · readonly accounts: AccountsStore;
+MessageStoreCore · interface · readonly chats: ChatsStore;
+MessageStoreCore · interface · readonly messages: MessagesStore;
+MessageStoreCore · interface · readonly people: PeopleStore;
+MessageStoreCore · interface · readonly tags: TagsStore;
+MessageStoreCore · interface · close(): Promise<void>;
+MessageStoreCore · interface · }
+MessagesStore · interface · export interface MessagesStore extends AccountMessages {
+MessagesStore · interface · search(query: string, options: {
+MessagesStore · interface · limit: number;
+MessagesStore · interface · account?: AccountKey;
+MessagesStore · interface · }): Promise<Page<StoredHit>>;
+MessagesStore · interface · find(filter: MessageFilter): Promise<Page<StoredHit>>;
+MessagesStore · interface · directReplies(parents: {
+MessagesStore · interface · account: AccountKey;
+MessagesStore · interface · chatId: Id;
+MessagesStore · interface · id: Id;
+MessagesStore · interface · }[], limit: number): Promise<Page<StoredHit>>;
+MessagesStore · interface · laterSharingRare(wanted: {
+MessagesStore · interface · account: AccountKey;
+MessagesStore · interface · chatId: Id;
+MessagesStore · interface · id: Id;
+MessagesStore · interface · }[], options: {
+MessagesStore · interface · rareAt: number;
+MessagesStore · interface · limit: number;
+MessagesStore · interface · }): Promise<StoredHit[][]>;
+MessagesStore · interface · chatActivityCounts(chats: readonly {
+MessagesStore · interface · account: AccountKey;
+MessagesStore · interface · chatId: Id;
+MessagesStore · interface · }[], window: {
+MessagesStore · interface · since: number;
+MessagesStore · interface · until: number;
+MessagesStore · interface · now: number;
+MessagesStore · interface · }): Promise<(ChatActivityCount | undefined)[]>;
+MessagesStore · interface · }
+PeopleStore · interface · export interface PeopleStore extends AccountPeople {
+PeopleStore · interface · people(provider: Provider, options?: {
+PeopleStore · interface · account?: Id;
+PeopleStore · interface · accounts?: Id[];
+PeopleStore · interface · }): Promise<PeopleLookup>;
+PeopleStore · interface · personOf(identity: IdentityRef): Promise<PersonRecord | undefined>;
+PeopleStore · interface · personSeenInAccounts(uid: string, accountIds: readonly number[]): Promise<boolean>;
+PeopleStore · interface · personByUid(uid: string): Promise<PersonRecord | undefined>;
+PeopleStore · interface · owner(): Promise<PersonRecord | undefined>;
+PeopleStore · interface · preparation(uid: string, options: {
+PeopleStore · interface · accounts: readonly AccountKey[];
+PeopleStore · interface · scopes: readonly StoredAccount["scope"][];
+PeopleStore · interface · limit: number;
+PeopleStore · interface · }): Promise<PersonPreparationRead>;
+PeopleStore · interface · linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>;
+PeopleStore · interface · unlinkIdentity(identity: IdentityRef, options: UnlinkOptions): Promise<PersonRecord>;
+PeopleStore · interface · rekeyIdentities(provider: Provider, pairs: readonly IdentityRekey[], options?: {
+PeopleStore · interface · lockMs?: number;
+PeopleStore · interface · by?: string;
+PeopleStore · interface · }): Promise<IdentityRekeys>;
+PeopleStore · interface · merges(uid: string): Promise<PersonMerge[]>;
+PeopleStore · interface · undoMerge(to: string, from: string, by: string): Promise<PersonRecord>;
+PeopleStore · interface · split(uid: string, identities: IdentityRef[], by: string): Promise<PersonRecord>;
+PeopleStore · interface · proposeLink(input: IdentityLinkInput): Promise<ProposedAction>;
+PeopleStore · interface · agentLink(input: AgentLinkInput): Promise<AgentLink>;
+PeopleStore · interface · linkEvidence(pairs: readonly (readonly [string, string])[]): Promise<LinkEvidence[]>;
+PeopleStore · interface · agentMerges(page: {
+PeopleStore · interface · limit: number;
+PeopleStore · interface · offset: number;
+PeopleStore · interface · }): Promise<{
+PeopleStore · interface · items: (PersonMerge & {
+PeopleStore · interface · agent: AgentMerge;
+PeopleStore · interface · })[];
+PeopleStore · interface · hasMore: boolean;
+PeopleStore · interface · }>;
+PeopleStore · interface · decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>;
+PeopleStore · interface · scanMatches(options?: {
+PeopleStore · interface · full?: boolean;
+PeopleStore · interface · }): Promise<MatchScan>;
+PeopleStore · interface · linkProposals(filter: IdentityLinkFilter): Promise<{
+PeopleStore · interface · items: IdentityLinkRow[];
+PeopleStore · interface · hasMore: boolean;
+PeopleStore · interface · }>;
+PeopleStore · interface · proposeSplit(input: IdentitySplitInput): Promise<ProposedAction>;
+PeopleStore · interface · decideSplit(id: string, decision: IdentitySplitDecision): Promise<ProposedAction>;
+PeopleStore · interface · splitProposals(filter: IdentitySplitFilter): Promise<{
+PeopleStore · interface · items: IdentitySplitRow[];
+PeopleStore · interface · hasMore: boolean;
+PeopleStore · interface · }>;
+PeopleStore · interface · doubts(page: {
+PeopleStore · interface · limit: number;
+PeopleStore · interface · offset: number;
+PeopleStore · interface · }): Promise<PersonDoubts>;
+PeopleStore · interface · keep(person: string, by: Decider): Promise<KeptPerson>;
+PeopleStore · interface · markTestData(person: string, by: Decider): Promise<TestDataPerson>;
+PeopleStore · interface · erase(person: string, by: Decider, options: {
+PeopleStore · interface · apply: boolean;
+PeopleStore · interface · }): Promise<PersonErasure>;
+PeopleStore · interface · linkToOwner(identity: IdentityRef): Promise<PersonRecord>;
+PeopleStore · interface · add(input: {
+PeopleStore · interface · name: string;
+PeopleStore · interface · }): Promise<PersonRecord>;
+PeopleStore · interface · list(options: PeopleListOptions): Promise<PeopleList>;
+PeopleStore · interface · counts(query?: string): Promise<Record<PersonKind, number>>;
+PeopleStore · interface · similar(name: string, options?: {
+PeopleStore · interface · limit?: number;
+PeopleStore · interface · }): Promise<SimilarPerson[]>;
+PeopleStore · interface · ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>;
+PeopleStore · interface · }
+PersonFacts · interface · export interface PersonFacts {
+PersonFacts · interface · id: Id;
+PersonFacts · interface · name: string | null;
+PersonFacts · interface · username?: string | null;
+PersonFacts · interface · isBot?: boolean | null;
+PersonFacts · interface · description?: string | null;
+PersonFacts · interface · email?: string | null;
+PersonFacts · interface · phone?: string | null;
+PersonFacts · interface · phones?: string[];
+PersonFacts · interface · emails?: string[];
+PersonFacts · interface · }
+PersonRecord · interface · export interface PersonRecord {
+PersonRecord · interface · uid: string;
+PersonRecord · interface · name: string | null;
+PersonRecord · interface · displayName?: string | null;
+PersonRecord · interface · identities: LinkedIdentity[];
+PersonRecord · interface · mergedInto?: string;
+PersonRecord · interface · }
+Proposer · type · export type Proposer = {
+Proposer · type · type: "person";
+Proposer · type · id: string;
+Proposer · type · } | {
+Proposer · type · type: "bot";
+Proposer · type · id: string;
+Proposer · type · name: string;
+Proposer · type · kind: "agent" | "rule";
+Proposer · type · verified?: false;
+Proposer · type · } | {
+Proposer · type · type: "unknown";
+Proposer · type · };
+Range · interface · export interface Range {
+Range · interface · from: number;
+Range · interface · to: number;
+Range · interface · }
+RecoveryStep · interface · export interface RecoveryStep {
+RecoveryStep · interface · command: string;
+RecoveryStep · interface · why: string;
+RecoveryStep · interface · destructive: boolean;
+RecoveryStep · interface · }
+SqlValue · type · export type SqlValue = string | number | bigint | null | Uint8Array;
+StoreOptions · interface · export interface StoreOptions {
+StoreOptions · interface · readOnly?: boolean;
+StoreOptions · interface · path?: string;
+StoreOptions · interface · env?: NodeJS.ProcessEnv;
+StoreOptions · interface · now?: () => number;
+StoreOptions · interface · command?: string;
+StoreOptions · interface · version?: string;
+StoreOptions · interface · warn?: (line: string) => void;
+StoreOptions · interface · decisions?: DecisionPolicy;
+StoreOptions · interface · }
+StoredAccount · interface · export interface StoredAccount {
+StoredAccount · interface · id: number;
+StoredAccount · interface · provider: Provider;
+StoredAccount · interface · account: Id;
+StoredAccount · interface · name: string | null;
+StoredAccount · interface · scope: "personal" | "work";
+StoredAccount · interface · }
+StoredChatFilter · interface · export interface StoredChatFilter {
+StoredChatFilter · interface · where?: Where;
+StoredChatFilter · interface · includeLeft?: boolean;
+StoredChatFilter · interface · }
+StoredHit · interface · export interface StoredHit extends MessageHit {
+StoredHit · interface · locator: string;
+StoredHit · interface · }
+TagsStore · interface · export interface TagsStore {
+TagsStore · interface · addTags(key: AccountKey, target: AnyTagTarget, tags: string[]): Promise<string[]>;
+TagsStore · interface · removeTags(key: AccountKey, target: AnyTagTarget, tags: string[], source?: "manual" | "auto"): Promise<string[]>;
+TagsStore · interface · tags(key: AccountKey, filter?: TagFilter): Promise<StoredTag[]>;
+TagsStore · interface · }
+openCache · const · export declare const openCache: (path: string) => Promise<CacheDatabase>;
+openStore · const · export declare const openStore: (options?: StoreOptions) => Promise<MessageStore>;
+storePath · const · export declare const storePath: (env?: NodeJS.ProcessEnv) => string;

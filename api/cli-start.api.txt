@@ -1,0 +1,54 @@
+# @wirecat/cli-core "./cli/start": the stable API, written by cli-dev api-report. Do not edit.
+AppIdentity · interface · export interface AppIdentity {
+AppIdentity · interface · command: string;
+AppIdentity · interface · appName: string;
+AppIdentity · interface · envPrefix: string;
+AppIdentity · interface · description: string;
+AppIdentity · interface · version: string;
+AppIdentity · interface · issues?: string;
+AppIdentity · interface · locale?: string;
+AppIdentity · interface · contentLanguages?: readonly string[];
+AppIdentity · interface · messenger?: boolean;
+AppIdentity · interface · sends?: true;
+AppIdentity · interface · requestMs?: number;
+AppIdentity · interface · errors?: AppErrors;
+AppIdentity · interface · }
+CliEntry · interface · export interface CliEntry {
+CliEntry · interface · app: AppIdentity;
+CliEntry · interface · run: (entry: EntryContext) => Promise<number | undefined>;
+CliEntry · interface · fail: (error: unknown, entry: EntryContext) => number;
+CliEntry · interface · interactive?: (args: readonly string[], tty: boolean) => boolean;
+CliEntry · interface · reasons?: readonly ErrorReason[];
+CliEntry · interface · sqlite?: boolean;
+CliEntry · interface · io?: Partial<EntryIo>;
+CliEntry · interface · }
+EntryContext · interface · export interface EntryContext {
+EntryContext · interface · args: string[];
+EntryContext · interface · env: NodeJS.ProcessEnv;
+EntryContext · interface · tty: boolean;
+EntryContext · interface · signal: AbortSignal;
+EntryContext · interface · atStart: (command: Command) => Promise<void>;
+EntryContext · interface · ask: (question: string, command?: Command) => Promise<boolean>;
+EntryContext · interface · openBrowser: (url: string, browser?: string, command?: Command) => Promise<void>;
+EntryContext · interface · outputClosed: () => boolean;
+EntryContext · interface · setExitCode: (code: number) => void;
+EntryContext · interface · }
+EntryIo · interface · export interface EntryIo {
+EntryIo · interface · argv: readonly string[];
+EntryIo · interface · env: NodeJS.ProcessEnv;
+EntryIo · interface · platform: NodeJS.Platform;
+EntryIo · interface · stdin: NodeJS.ReadableStream & {
+EntryIo · interface · isTTY?: boolean;
+EntryIo · interface · };
+EntryIo · interface · stdout: NodeJS.WritableStream & {
+EntryIo · interface · isTTY?: boolean;
+EntryIo · interface · };
+EntryIo · interface · stderr: NodeJS.WritableStream & {
+EntryIo · interface · isTTY?: boolean;
+EntryIo · interface · };
+EntryIo · interface · signals: Pick<NodeJS.Process, "on" | "off">;
+EntryIo · interface · setExitCode: (code: number) => void;
+EntryIo · interface · spawn: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
+EntryIo · interface · }
+openBrowser · const · export declare const openBrowser: (url: string, browser?: string, io?: Pick<EntryIo, "platform" | "spawn">) => Promise<void>;
+startCli · const · export declare const startCli: (entry: CliEntry) => Promise<void>;

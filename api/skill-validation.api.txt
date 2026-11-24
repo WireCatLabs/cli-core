@@ -1,0 +1,9 @@
+# @wirecat/cli-core "./skill-validation": the stable API, written by cli-dev api-report. Do not edit.
+SkillValidation · interface · export interface SkillValidation {
+SkillValidation · interface · folder?: string;
+SkillValidation · interface · file?: string;
+SkillValidation · interface · version?: string;
+SkillValidation · interface · program?: Command;
+SkillValidation · interface · maxBytes?: number;
+SkillValidation · interface · }
+validateSkill · const · export declare const validateSkill: (content: string, options?: SkillValidation) => string[];
