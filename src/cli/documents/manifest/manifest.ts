@@ -49,6 +49,11 @@ export interface DocumentManifest {
   children?: DocumentCall & { map?: DocumentFileMap }
   /** What changed since a time, newest first or in any order: needs `"{since}"`. */
   changes?: DocumentCall & { since: "iso" | "ms" | "seconds"; time: string; overlapMs?: number; map?: DocumentFileMap }
+  /**
+   * The documents deleted since a time, for a provider whose `changes` misses them (Linear's trash leaves `updatedAt`
+   * as it was): the id of each at `id`. Read in every round of changes from the same time: needs `"{since}"`.
+   */
+  deletions?: DocumentCall & { since: "iso" | "ms" | "seconds"; time: string; id: string; overlapMs?: number }
   /** A document's text as Markdown, at `markdown` in the answer: needs `"{id}"`. */
   content?: DocumentCall & { markdown: string }
   /**
@@ -103,6 +108,15 @@ const schema = v.strictObject({
       map: v.optional(fileMap),
     }),
   ),
+  deletions: v.optional(
+    v.strictObject({
+      ...callEntries,
+      since: v.picklist(["iso", "ms", "seconds"]),
+      time: dotPath,
+      id: dotPath,
+      overlapMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
   content: v.optional(v.strictObject({ ...callEntries, markdown: dotPath })),
   reread: v.optional(v.strictObject({ missing: dotPath })),
   reads: v.optional(
@@ -110,7 +124,7 @@ const schema = v.strictObject({
   ),
 })
 
-const BUILT_IN = ["identity", "get", "children", "changes", "content"]
+const BUILT_IN = ["identity", "get", "children", "changes", "deletions", "content"]
 
 const invalid = (where: string, message: string) =>
   new CliError("configuration_error", `source manifest: ${where}: ${message}`, { reason: "manifest.invalid" })
@@ -158,6 +172,7 @@ export const parseDocumentManifest = (input: unknown, api: ServiceApiManifest): 
   check("get", manifest.get, "{id}")
   check("children", manifest.children, "{id}")
   check("changes", manifest.changes, "{since}")
+  check("deletions", manifest.deletions, "{since}")
   check("content", manifest.content, "{id}")
   for (const [name, call] of Object.entries(manifest.reads ?? {})) {
     // A hook sends a named call and a manifest call by the same name; one would hide the other.

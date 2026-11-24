@@ -90,6 +90,7 @@ the value it needs, an unknown operation names the one most likely meant) and an
 | `get` | one file by its id, and `map`: the paths of a row's id, name, parent or parents, URL, times, version, trashed, and which rows are folders | `"{id}"` |
 | `children` | a folder's children, a page at a time by the operation's `pagination` (`childrenPage`); a row its map finds `trashed` is a deletion, as in `changes` ([trashed rows](#a-trashed-row-in-a-listing)) | `"{id}"` |
 | `changes` | what changed since a time (`since`: `iso`, `ms` or `seconds`), with an overlap (`overlapMs`, ten minutes by default); a trashed row is a removal, and a row older than the since at `time` is left out | `"{since}"` |
+| `deletions` | the documents deleted since a time, for a provider whose `changes` misses them (Linear's trash leaves `updatedAt` as it was): the id of each at `id`, a row older than the since at `time` left out; read in every round of changes from the same time, with the overlap of `changes` unless its own `overlapMs` says otherwise ([a deletions feed](#a-deletions-feed)) | `"{since}"` |
 | `content` | the document's Markdown, at the path `markdown` of the answer | `"{id}"` |
 | `reread` | a saved document read again while its `providerMetadata` has no value at `missing` (see below) | |
 | `reads` | further calls by name, for the hooks | |
@@ -103,7 +104,19 @@ with only one of `startToken` and `changes`. Every request the sync makes is the
 carries a cursor, an offset or a page number between rounds. A round of `changes` reads at most 100 pages; past them
 it goes on next time from the newest row it read, which needs the call to list changes oldest first, and fails with
 `source.changes-too-many` otherwise. A call in `reads` takes a name of its own: `identity`,
-`get`, `children`, `changes` and `content` are the manifest's.
+`get`, `children`, `changes`, `deletions` and `content` are the manifest's.
+
+### A deletions feed
+
+Each round of changes, the manifest's or a hook's, also reads `deletions`, and each id it names leaves the local
+copy as `deleted` (`{ id, removed: true, gone: "deleted" }`). The change token must be a time in milliseconds, as
+the manifest's own `changes` gives it; a hook's `changes` with another token fails the round as
+`source.token-invalid`. A feed is refused when the source is built without a change feed to read it in, or without
+`warn`. The deletions are read and listed first, so a row `changes` reads in the same round is the newer word and
+wins. A provider may keep the feed to admins or a higher plan: a `permission_error` leaves the
+round as the changes make it, and the source's `warn` (the run's, `DocumentSourceRun.warn`) gets
+`source.deletions-unchecked`, which reaches the sync's `warnings` and `meta.issues` and says `sync --rescan` finds
+them. Any other error fails the round, and the next sync reads the same time again.
 
 The config also says what the `api` group and the source send with every request (`api.headers`, such as the API's
 version; a header that could hold a credential is refused) and how fast (`api.pace`, with a slower pace for one
