@@ -6,6 +6,7 @@ import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSki
 import { inScope } from "../../documents/scope.js"
 import { changedSince, planDocuments, scopeHash, type WalkStop } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
+import { isPicture as readsAsPicture } from "./scans.js"
 
 const MAX_PICTURE_BYTES = 25 * 1024 * 1024
 const SAVE_EVERY_MS = 2000
@@ -51,6 +52,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     skipReason,
     storeVersion: VERSION,
     query,
+    scans,
   } = options
   if (![max, limit, options.maxEntries].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new CliError("validation_error", "sync limits must be positive whole numbers")
@@ -212,7 +214,31 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
             result.stopped = stop
             break
           }
-          const content = await source.content(job.id, limit, job.file)
+          // A scan's text comes from OCR of its bytes, one more download, taken from the budget as a read is.
+          const scanned = async (file: M): Promise<SourceContent<M>> => {
+            const text = (
+              await (scans as NonNullable<typeof scans>).read(await source.bytes(file.id, file), file)
+            ).slice(0, limit)
+            return { metadata: file, markdown: text, text, tabs: [] }
+          }
+          let content: SourceContent<M>
+          let ocr: string | undefined
+          if (scans?.extractor && job.file && readsAsPicture(job.file)) {
+            content = await scanned(job.file)
+            ocr = scans.extractor
+          } else
+            try {
+              content = await source.content(job.id, limit, job.file)
+            } catch (error) {
+              if (!scans || !job.file || errorOf(error).details.reason !== "document.needs-ocr") throw error
+              const again = ask()
+              if (again) {
+                result.stopped = again
+                break
+              }
+              content = await scanned(job.file)
+              ocr = scans.extractor
+            }
           const listed =
             query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))
           if (!listed && !inScope(content.metadata, profile.roots, pending.folders, new Set(), query)) {
@@ -231,7 +257,13 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
               })
             })
             statePort.saveSnapshot(content)
-            state.documents[job.id] = { metadata: content.metadata, hash, reference, tabs: content.tabs.length }
+            state.documents[job.id] = {
+              metadata: content.metadata,
+              hash,
+              reference,
+              tabs: content.tabs.length,
+              ...(ocr ? { ocr } : {}),
+            }
             if (previous?.hash === hash) result.unchanged++
             else result.saved++
           }
@@ -243,6 +275,14 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
         if (safe.code === "cancelled") throw safe
         // A file the sign-in may not read is skipped as a gone one is: retried on every sync, it would hold the pass,
         // and the change cursor with it, for good.
+        const kept = job.kind === "save" ? state.documents[job.id] : undefined
+        // Text OCR read once stays when reading it again fails, OCR was turned off or its program removed: only an
+        // edit of the file makes that text old.
+        if (kept?.ocr && job.file && safe.code === "validation_error" && !changedSince(kept.metadata, job.file)) {
+          pending.jobs = pending.jobs.filter((item) => item !== job)
+          progress()
+          continue
+        }
         if (
           job.kind === "save" &&
           (safe.code === "not_found" || safe.code === "permission_error" || safe.code === "validation_error")

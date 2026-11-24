@@ -93,6 +93,8 @@ export interface IndexedSource<M extends SourceFile = SourceFile> {
   tabs: number
   notRead?: string
   picture?: "saved" | "too-large"
+  /** The OCR reading its text came from (`ScanReader.extractor`); absent for text a reader found in the file. */
+  ocr?: string
 }
 export interface SourceWork<M extends SourceFile = SourceFile> {
   id: string
