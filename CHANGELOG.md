@@ -5,6 +5,46 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.739.0 — 24.11.2026
+
+### Added
+
+- **A documents sync reads every format cli-core's readers read.** `readableFile` now takes Word 97–2003 (`.doc`),
+  RTF, HTML, OpenDocument (`.odt`, `.ods`, `.odp`), PowerPoint (`.pptx`) and EPUB beside PDF, docx, xlsx, CSV, TSV,
+  plain text and Markdown, so Yandex Disk and other CLIs built on it no longer keep them by name only. Images and
+  scans stay by name only.
+- **A documents sync lists several folders at once on a source that sets `parallelListings`** (a whole number up to
+  8). A source whose one listing takes seconds (Yandex Disk) can set it, for example to 4, so a sync of many folders
+  can take less time. Each listing takes its own request from the run's budget, and the walk files the same
+  documents, though the order they are saved in may differ. A call cut short or a failed listing loses nothing: the
+  folder stays on the saved walk and is listed again in the next sync. Unset, a sync lists one folder at a time as
+  before.
+- **`addFileEditCommands` takes `creates: false`** for a provider that names a file by an id it gives, as Google
+  Drive does. `sheets create` and `documents create` are then left out, since a path the user types can't name a
+  new file there. The edits, `history` and `restore` stay.
+- **`sheets create` makes several sheets, formulas and bold cells.** `--values` also takes
+  `[{"name": "Budget", "header": true, "rows": [...]}]` for several sheets, and a cell may be
+  `{"formula": "SUM(B2:B3)"}` or `{"value": "Total", "bold": true}`. Excel and LibreOffice compute the formulas when
+  the file opens. A text that starts with `=` still stays text, so data from elsewhere never becomes a formula. Today's
+  rows keep working. `createXlsx` takes the same cells and a sheet's `header` ([Editing Office files](docs/office.md#new-files)).
+- **`documents create` makes bold and italic text and tables.** `--payload` also takes `{"text", "bold", "italic"}`,
+  `{"runs": [{"text": "grew", "bold": true}]}` and `{"table": [["Item", "Cost"], ["Rent", "950"]], "header": true}`.
+  Today's `[{"text", "style"}]` keeps working, and `createDocx` takes the same entries.
+- **`rekeySyncedDocument`** (`@wirecat/cli-core/documents/cli`) moves a synced document to the new id a provider gave
+  the file after a replace, so the owner's tags, the notes about it and its links follow the file. A sync that ran in
+  between and filed the file anew is folded into the old document; a failure only warns. Behind it, the documents
+  ingestion's `rekey` and `renameFileNote(…, { fold: true })`
+  ([DOCUMENTS](docs/dev/DOCUMENTS.md#write-one-file-at-the-hash-read)).
+
+### Fixed
+
+- **A file an older version kept by name as `unsupported type: …` is read on the next sync** once its type is
+  readable, even when the file did not change. A file whose read failed (damaged, no text layer) is not read again.
+- **A target's own conflict keeps its words.** `guardedFileWrite` and a mirror's sync replaced every `conflict` from
+  `upload` with "changed since it was read; nothing was written", even when the target had done something and said
+  so. A conflict with a reason other than `mirror.remote-changed`, such as the new `upload.replace-interrupted`, now
+  reaches the caller unchanged.
+
 ## 0.738.0 — 24.11.2026
 
 ### Added
