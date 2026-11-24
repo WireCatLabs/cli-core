@@ -7,6 +7,7 @@ import type {
   SourceChange,
   SourceFile,
 } from "../../../documents.js"
+import { parseDuration } from "../../../domain/duration.js"
 import type { ApiCommandInput } from "../../bot/api.js"
 import type { ServiceApiCall } from "../../service-api-call.js"
 import {
@@ -28,7 +29,7 @@ export interface DocumentSlots {
 
 /** A source of a `files` CLI: a change feed when the manifest or a hook gives one. */
 export type ManifestDocumentSource<M extends SourceFile = SourceFile> = FeedlessDocumentSource<M> &
-  Partial<Pick<DocumentSource<M>, "startToken" | "changes">>
+  Partial<Pick<DocumentSource<M>, "startToken" | "changes" | "rescanEveryMs">>
 
 /** What a hook builds on: the manifest's own calls, and the source the manifest alone describes. */
 export interface DocumentManifestTools<M extends SourceFile = SourceFile> {
@@ -327,6 +328,15 @@ export const documentSourceFromManifest = <M extends SourceFile = SourceFile>(
     throw new CliError("configuration_error", "source manifest: a change feed needs both startToken and changes", {
       reason: "manifest.invalid",
     })
+  if (manifest.rescanEvery) {
+    if (!source.changes)
+      throw new CliError(
+        "configuration_error",
+        "source manifest: rescanEvery needs a change feed; a source without one walks in full on every sync",
+        { reason: "manifest.invalid" },
+      )
+    source.rescanEveryMs ??= parseDuration(manifest.rescanEvery, "source manifest: rescanEvery")
+  }
   const { deletions } = manifest
   if (deletions) {
     const changesOf = source.changes

@@ -675,3 +675,101 @@ describe("a sync of a source that lists folders in parallel", () => {
     expect(new Set(tree.listed).size).toBe(tree.listed.length)
   })
 })
+
+describe("a source that asks for a full walk every so often", () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const START = Date.parse("2026-11-01T00:00:00Z")
+  const setUp = (rescanEveryMs?: number) => {
+    const tree = treeSync(pageTree(3, 2, 2))
+    let clock = START
+    const options: SyncOptions<SourceFile> = {
+      ...tree.options,
+      source: { ...(tree.options.source as DocumentSource), ...(rescanEveryMs ? { rescanEveryMs } : {}) },
+      now: () => clock,
+    }
+    return {
+      tree,
+      options,
+      at: (ms: number) => {
+        clock = ms
+      },
+      /** A page back from the trash: the provider names it in no change and no deletion. */
+      restore: () => tree.add(page("back", "root")),
+    }
+  }
+
+  it("walks in full once the time has passed, over several calls, and brings back what the feed missed", async () => {
+    const { tree, options, at, restore } = setUp(7 * DAY)
+    await untilComplete(() => syncDocuments(options))
+    expect(tree.state().fullWalkAt).toBe(new Date(START).toISOString())
+    restore()
+    at(START + 6 * DAY)
+    expect(await syncDocuments(options)).not.toHaveProperty("rescan")
+    expect(tree.state().documents.back).toBeUndefined()
+
+    at(START + 7 * DAY)
+    const small = { ...options, maxEntries: 4 }
+    const first = await syncDocuments(small)
+    expect(first).toMatchObject({
+      complete: false,
+      rescan: { every_ms: 7 * DAY, last_full_walk: new Date(START).toISOString() },
+    })
+    expect(first.rescan?.why).toContain("7 days or more ago")
+    tree.listed.length = 0
+    const second = await syncDocuments(small)
+    expect(second).not.toHaveProperty("rescan")
+    expect(second.walk?.entries).toBeGreaterThan(first.walk?.entries ?? 0)
+    at(START + 7 * DAY + 60_000)
+    const rest = await untilComplete(() => syncDocuments(small))
+    expect(rest.some((run) => run.rescan)).toBe(false)
+    expect(new Set(tree.listed).size).toBe(tree.listed.length)
+    expect(tree.state().documents.back).toBeDefined()
+    expect(tree.state().fullWalkAt).toBe(new Date(START + 7 * DAY + 60_000).toISOString())
+
+    tree.listed.length = 0
+    at(START + 8 * DAY)
+    expect(await syncDocuments(options)).not.toHaveProperty("rescan")
+  })
+
+  it("walks in full on the first plain sync of a profile synced before the time was recorded", async () => {
+    const { tree, options, at, restore } = setUp(7 * DAY)
+    await untilComplete(() => syncDocuments(options))
+    delete tree.state().fullWalkAt
+    restore()
+    at(START + DAY)
+    const runs = await untilComplete(() => syncDocuments(options))
+    expect(runs[0]?.rescan).toMatchObject({ last_full_walk: null })
+    expect(runs[0]?.rescan?.why).toContain("no full walk")
+    expect(tree.state().documents.back).toBeDefined()
+  })
+
+  it("walks in full when the recorded walk is later than now, and refuses a period that is not positive", async () => {
+    const { tree, options, at } = setUp(7 * DAY)
+    await untilComplete(() => syncDocuments(options))
+    at(START - DAY)
+    expect((await untilComplete(() => syncDocuments(options)))[0]).toHaveProperty("rescan")
+    expect(tree.state().fullWalkAt).toBe(new Date(START - DAY).toISOString())
+    const broken = { ...options, source: { ...(options.source as DocumentSource), rescanEveryMs: 0 } }
+    await expect(syncDocuments(broken)).rejects.toThrow(/rescanEveryMs must be a positive whole number/)
+  })
+
+  it("leaves a source without the setting to its feed, however long ago it walked", async () => {
+    const { tree, options, at, restore } = setUp()
+    await untilComplete(() => syncDocuments(options))
+    restore()
+    at(START + 365 * DAY)
+    tree.listed.length = 0
+    expect(await syncDocuments(options)).not.toHaveProperty("rescan")
+    expect(tree.state().documents.back).toBeUndefined()
+    expect(tree.state().cursor).toBe("start+")
+  })
+
+  it("does not count --rescan as due, and records the walk it finishes", async () => {
+    const { tree, options, at } = setUp(7 * DAY)
+    await untilComplete(() => syncDocuments(options))
+    at(START + 30 * DAY)
+    const runs = await untilComplete(() => syncDocuments({ ...options, rescan: true }))
+    expect(runs.some((run) => run.rescan)).toBe(false)
+    expect(tree.state().fullWalkAt).toBe(new Date(START + 30 * DAY).toISOString())
+  })
+})

@@ -118,6 +118,22 @@ round as the changes make it, and the source's `warn` (the run's, `DocumentSourc
 `source.deletions-unchecked`, which reaches the sync's `warnings` and `meta.issues` and says `sync --rescan` finds
 them. Any other error fails the round, and the next sync reads the same time again.
 
+### A full walk every so often
+
+Some edits reach neither feed: on Linear, restoring a document from the trash leaves `updatedAt` as it was and writes
+no audit entry, so the restored document stays out of the copy. A source whose feed misses edits like this sets
+`rescanEvery` in its manifest (a duration with a unit, such as `"7d"` or `"12h"`, as cli-core's other durations are
+written), or `rescanEveryMs` on a source built in code. A plain `sync` then starts a full walk, exactly as `--rescan`
+does, once that long has passed since the last full walk ended. The walk goes on over the next plain syncs until it
+ends, as a `--rescan` does, and is not started again in between. The sync that starts it says so in its answer:
+`rescan: { why, every_ms, last_full_walk }`. The state records the end of each full walk in `fullWalkAt` (a first
+sync, a `--rescan`, a changed scope or one started this way). A profile synced before `fullWalkAt` existed has none,
+so its first plain sync after the upgrade walks in full: that brings back what was restored before. The manifest
+refuses `rescanEvery` without a change feed, as a source without one walks in full on every sync anyway. A CLI that
+validates its state file with a strict schema must keep `fullWalkAt`: without it every plain sync of such a source
+walks in full. A `fullWalkAt` later than now (a clock set back) counts as due. Left out,
+only `--rescan` walks again. A source with a complete feed (Drive) leaves it out.
+
 The config also says what the `api` group and the source send with every request (`api.headers`, such as the API's
 version; a header that could hold a credential is refused) and how fast (`api.pace`, with a slower pace for one
 operation in `api.pace.operations`).

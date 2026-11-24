@@ -400,4 +400,17 @@ describe("parseDocumentManifest", () => {
     const { content: _content, ...noContent } = MANIFEST
     expect(() => documentSourceFromManifest(noContent, { api, call: pagesApi().call })).toThrow(/no content/)
   })
+
+  it("reads rescanEvery as a duration with a unit, and refuses it without a change feed", () => {
+    expect(
+      documentSourceFromManifest({ ...MANIFEST, rescanEvery: "7d" }, { api, call: pagesApi().call }),
+    ).toMatchObject({ rescanEveryMs: 7 * 24 * 60 * 60 * 1000 })
+    expect(documentSourceFromManifest(MANIFEST, { api, call: pagesApi().call })).not.toHaveProperty("rescanEveryMs")
+    for (const every of ["P7D", "0d", "7", "7 days"])
+      expect(refused({ rescanEvery: every })).toThrow(/rescanEvery: a duration with a unit, such as 7d/)
+    const { changes: _changes, ...noChanges } = MANIFEST
+    expect(() =>
+      documentSourceFromManifest({ ...noChanges, rescanEvery: "7d" }, { api, call: pagesApi().call }),
+    ).toThrow(/rescanEvery needs a change feed/)
+  })
 })
