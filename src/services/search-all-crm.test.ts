@@ -216,6 +216,14 @@ it("lists a name one letter off the one that matched after it, as a correction, 
   expect((await find("ТП")).items.every(({ match }) => match === undefined)).toBe(true)
 })
 
+it("finds a Latin name typed in Cyrillic, and says what it read it as", async () => {
+  const { refs, find } = await synced()
+  const found = await find("феррара")
+  expect(found.items.map(({ ref }) => ref)).toEqual([refs.d6])
+  expect(found.items[0]).toMatchObject({ match: "corrected", corrections: [{ from: "феррара", to: ["ferrara"] }] })
+  expect((await find("ферраро")).items.map(({ ref }) => ref)).toEqual([refs.d7])
+})
+
 it("refuses a filter by stage, naming the list that filters by it, instead of finding nothing", async () => {
   const { find } = await synced()
   await expect(find("stage:won")).rejects.toMatchObject({
