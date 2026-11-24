@@ -99,8 +99,9 @@ const TEXT_LIMITS = {
 } as const
 type TextField = keyof typeof TEXT_LIMITS
 
+// A reply's `since` is optional: an agent that cannot date a message must not lose the whole digest over it.
 const REQUIRED: Record<ItemType, readonly (keyof ReportItem)[]> = {
-  reply: ["who", "topic", "action", "since"],
+  reply: ["who", "topic", "action"],
   question: ["who", "topic", "action"],
   task: ["topic"],
   fact: ["topic", "detail"],
