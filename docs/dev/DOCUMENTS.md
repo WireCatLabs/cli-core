@@ -248,7 +248,9 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   entries bound can be passed by the rest of a batch.
 <a id="scans-and-pictures"></a>
 - **Scans and pictures are read by OCR** in `documentLibraryCommands`, chosen by the profile's `read_scans`:
-  `local` (the default: the `tesseract` program on this computer, Russian and English), `anthropic` or `openai` (the
+  `local` (the default: the `tesseract` program on this computer, Russian and English, with `--psm 1` so it turns a
+  page lying on its side; without its `osd` data it reads pages as they lie and the sync's `warnings` say
+  `document.scan-unturned` with the install hint), `anthropic` or `openai` (the
   model `ai set` chose, only at `https://api.anthropic.com` or `https://api.openai.com`, and only with pictures
   allowed, `ai set --images`), or `off`. A CLI adds `DOCUMENT_SCAN_SETTINGS` to `settingsFor` so its config file
   takes the key; without it every profile reads locally. Local reading never falls back to a model, and nothing is
@@ -261,7 +263,8 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   hint, and is read on the first sync after that is fixed. A rate limit or an unreachable model leaves the file for
   the next sync too. A file OCR finds no text in stays by name, its reason naming the engine or model that read it,
   until it changes or another engine or model reads it. A picture OCR cannot read still gets its picture vector
-  when the profile has `picture_search`, and a picture OCR reads gets both its text and its vector. The engine's name (`ocr:v1:tesseract@5.3.0:rus+eng`,
+  when the profile has `picture_search`, and a picture OCR reads gets both its text and its vector. The engine's name (`ocr:v2:tesseract@5.3.0:rus+eng`,
+  `v1` without `osd`,
   `ocr:v1:openai/gpt-5`) is saved with the text, so another engine or model reads those files again, 50 a sync.
   Text OCR read once stays when a later reading fails or `read_scans` is `off`; only an edit of the file makes it old.
 - **Not resumable:** one call of a source's `children()` (without `childrenPage`), one page of `childrenPage`, or one

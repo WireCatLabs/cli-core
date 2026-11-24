@@ -551,6 +551,8 @@ const libraryOf = <M extends SourceFile>(
             ...(keyring ? { keyring } : {}),
             ...(signal ? { signal } : {}),
           })
+          if (scans?.warning)
+            warnings.push({ code: "configuration_error", reason: "document.scan-unturned", message: scans.warning })
           const skipReason = options.skipReason ?? (() => undefined)
           return files().locked((assertHeld) =>
             withStore(true, async (store) => {

@@ -9,10 +9,16 @@ const LANGUAGES = ["rus", "eng"]
 const PAGE_MS = 120_000
 const PROBE_MS = 10_000
 const PROBE_BYTES = 64 * 1024
+/** The data `--psm 1` turns a page with: a page on its side read without it gave 85% wrong characters, with it 3%. */
+const ORIENTATION = "osd"
 
 export const TESSERACT_HINT =
   "reading scans on this computer needs the tesseract program with its Russian and English data " +
   "(apt install tesseract-ocr tesseract-ocr-rus, brew install tesseract tesseract-lang); scans are read on the next sync"
+
+export const ORIENTATION_HINT =
+  "tesseract reads a page turned on its side only with its osd data (apt install tesseract-ocr-osd; " +
+  "brew install tesseract ships it); scans are read without turning pages until then"
 
 interface Ran {
   code: number | null
@@ -56,12 +62,13 @@ const run = (
 
 /**
  * The OCR of the `tesseract` program on this computer, or why there is none. Nothing leaves the computer and
- * nothing is downloaded: the program and its language data are the owner's own install.
+ * nothing is downloaded: the program and its language data are the owner's own install. Without the `osd` data it still
+ * reads, with a warning, as pages on their side are then lost.
  */
 export const tesseractPipeline = async (
   env: NodeJS.ProcessEnv,
   signal?: AbortSignal,
-): Promise<{ pipeline: OcrPipeline } | { missing: string }> => {
+): Promise<{ pipeline: OcrPipeline; warning?: string } | { missing: string }> => {
   let version: Ran
   let listed: Ran
   try {
@@ -75,12 +82,16 @@ export const tesseractPipeline = async (
   const languages = LANGUAGES.filter((language) => installed.has(language))
   if (version.code !== 0 || !number || !languages.length) return { missing: TESSERACT_HINT }
   const chosen = languages.join("+")
+  const turns = installed.has(ORIENTATION)
   return {
+    ...(turns ? {} : { warning: ORIENTATION_HINT }),
     pipeline: {
-      // The version and the languages name the reading, so installing Russian data later reads the scans again.
-      extractor: `ocr:v1:tesseract@${number}:${chosen}`,
+      // The version, the languages and the page turning name the reading, so installing Russian or osd data later
+      // reads the scans again; v2 is the reading with `--psm 1`.
+      extractor: `ocr:${turns ? "v2" : "v1"}:tesseract@${number}:${chosen}`,
       transcribe: async (image: ModelImage) => {
-        const read = await run(["stdin", "stdout", "-l", chosen], env, PAGE_MS, {
+        const args = ["stdin", "stdout", "-l", chosen, ...(turns ? ["--psm", "1"] : [])]
+        const read = await run(args, env, PAGE_MS, {
           input: Buffer.from(image.data, "base64"),
           signal,
         }).catch((error: unknown) => {

@@ -3,8 +3,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 /**
- * A stand-in for the tesseract program on PATH: its version, a failure and a picture with no text (`empty`) are files a
- * test changes between runs.
+ * A stand-in for the tesseract program on PATH: its version, a failure, a picture with no text (`empty`) and missing osd
+ * data (`no-osd`) are files a test changes between runs.
  */
 export const fakeTesseract = () => {
   const bin = mkdtempSync(join(tmpdir(), "fake-tesseract-"))
@@ -17,7 +17,7 @@ export const fakeTesseract = () => {
       `dir="${bin}"`,
       'case "$1" in',
       '  --version) echo "tesseract $(/bin/cat "$dir/version")" ;;',
-      "  --list-langs) printf 'List of available languages (2):\\neng\\nrus\\n' ;;",
+      "  --list-langs) printf 'List of available languages:\\neng\\nrus\\n'; [ -f \"$dir/no-osd\" ] || echo osd ;;",
       '  *) [ -f "$dir/fail" ] && exit 1; /bin/cat > /dev/null; echo "$@" >> "$dir/calls"',
       '     [ -f "$dir/empty" ] || echo "scanneedle words" ;;',
       "esac",

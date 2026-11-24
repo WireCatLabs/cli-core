@@ -251,6 +251,11 @@ const OTHERS: Entry[] = [
     "OCR could not read the scan or picture; a sync tries again once the file changes",
   ),
   validation("document.scan-later", "OCR stopped at its page limit or a busy model; the next sync goes on"),
+  [
+    "document.scan-unturned",
+    "configuration_error",
+    "tesseract has no osd data, so a page on its side is read as it lies; install it to read scans again",
+  ],
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["document.version-missing", "not_found", "the local copy holds no such version of the document"],
   ["document.not-found", "not_found", "no listed document has that reference"],
