@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.744.0 — 24.11.2026
+
+### Fixed
+
+- **`people` and `organizations` `create` and `update` offer only the flags the CRM's write takes.** A CRM CLI made
+  from a manifest offered `--owner`, `--position`, `--email`, `--phone` and `--field` on every contact and company
+  write, though the manifest may write none of them: Attio's people take no owner, so `--owner` was first refused by
+  `crm.assign-others` and then by the writer. `CrmWriteCapabilities.fields` names the fields each kind takes, and
+  `crmManifestWriteCapabilities` fills it. A writer that leaves it out keeps every flag.
+
 ## 0.743.0 — 24.11.2026
 
 ### Added
