@@ -616,6 +616,7 @@ export {
   oauthSessionCommand,
 } from "./oauth-session.js"
 export { pagingOf, positiveCount, window, withPaging } from "./paging.js"
+export { notLocalPaths } from "./path-options.js"
 export {
   type CommandPermissions,
   type ConditionalKey,

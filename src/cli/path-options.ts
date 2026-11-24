@@ -20,6 +20,7 @@ const mark = <T extends Command>(marks: WeakMap<Command, Set<string>>, command: 
  * Inputs of `command`, and of the commands under it, whose name or placeholder reads like a path but that name no file
  * here: a path on the remote side, a chat folder's title, a command path. By an argument's name or an option's
  * attribute name (`outputDir`).
+ * @experimental
  */
 export const notLocalPaths = <T extends Command>(command: T, ...names: string[]): T => mark(NOT_LOCAL, command, names)
 
