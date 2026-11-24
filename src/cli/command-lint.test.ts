@@ -253,7 +253,7 @@ it("a documents host's history and change log pass the command lint with no over
 
 // A tracker CLI (linear) mounts these; the shared program above is a messenger's and never does.
 /**
- * cli-base CLI_BASE_PR registers `sprints` on its 1.0 line, and cli-core still pins 0.132: until it moves, only a
+ * cli-base #717 registers `sprints` on its 1.0 line, and cli-core still pins 0.132: until it moves, only a
  * tracker host mounts the word, so only its lint carries it in the baseline.
  */
 const trackerBaseline = () => {
