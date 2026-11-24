@@ -1,16 +1,8 @@
 import { execFileSync } from "node:child_process"
+import { CHANGELOG_HEADINGS } from "@wirecat/cli-base/release"
 
-// cli-base's CHANGELOG_HEADINGS, in its order (fragments are collected in it); imported once cli-core takes a cli-base
-// that has all seven.
-export const HEADINGS = [
-  "Added",
-  "Changed — may break callers",
-  "Changed — experimental",
-  "Deprecated",
-  "Fixed",
-  "Security",
-  "Removed",
-]
+// In cli-base's order, which fragments are collected in.
+export const HEADINGS: readonly string[] = CHANGELOG_HEADINGS
 const UNRELEASED = "Unreleased"
 const VERSION_HEADING = /^## (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?) — (\d{2})\.(\d{2})\.(\d{4})$/
 const CONFLICT_MARKER = /^(<{7}|\|{7}|={7}|>{7})( |$)/
