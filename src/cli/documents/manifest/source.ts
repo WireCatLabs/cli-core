@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Pagination } from "@wirecat/cli-base/codegen"
 import type {
   DocumentSource,
@@ -16,6 +16,7 @@ import {
   type ServiceApiManifest,
   withValue,
 } from "../../service-api-manifest.js"
+import type { DocumentWarning } from "../library.js"
 import { type DocumentCall, type DocumentFileMap, type DocumentManifest, parseDocumentManifest } from "./manifest.js"
 
 /** What a slot in a call is filled with; one left without a value is left out of the request. */
@@ -32,7 +33,7 @@ export type ManifestDocumentSource<M extends SourceFile = SourceFile> = Feedless
 /** What a hook builds on: the manifest's own calls, and the source the manifest alone describes. */
 export interface DocumentManifestTools<M extends SourceFile = SourceFile> {
   manifest: DocumentManifest
-  /** Sends one named call of `reads`, or `identity`, `get`, `children`, `changes`, `content`. */
+  /** Sends one named call of `reads`, or `identity`, `get`, `children`, `changes`, `deletions`, `content`. */
   read(name: string, slots?: DocumentSlots, body?: unknown): Promise<unknown>
   /** One row of an answer as a file, by `get.map` (or the named call's own map). */
   file(row: unknown, from?: "get" | "children" | "changes"): M
@@ -43,6 +44,8 @@ export interface DocumentManifestSourceOptions<M extends SourceFile = SourceFile
   api: ServiceApiManifest
   call: ServiceApiCall
   now?: () => number
+  /** The run's `warn`: a refused `deletions` feed is said there, and the round goes on without it. */
+  warn?: (warning: DocumentWarning) => void
   /** The methods the manifest cannot describe, or that the provider does otherwise; each wins over the manifest's. */
   hooks?: (tools: DocumentManifestTools<M>) => Partial<ManifestDocumentSource<M>>
 }
@@ -121,6 +124,7 @@ export const documentSourceFromManifest = <M extends SourceFile = SourceFile>(
     get: manifest.get,
     children: manifest.children,
     changes: manifest.changes,
+    deletions: manifest.deletions,
     content: manifest.content,
   }
   const callOf = (name: string) => {
@@ -323,5 +327,71 @@ export const documentSourceFromManifest = <M extends SourceFile = SourceFile>(
     throw new CliError("configuration_error", "source manifest: a change feed needs both startToken and changes", {
       reason: "manifest.invalid",
     })
+  const { deletions } = manifest
+  if (deletions) {
+    const changesOf = source.changes
+    if (!changesOf)
+      throw new CliError("configuration_error", "source manifest: deletions needs a change feed to read them in", {
+        reason: "manifest.invalid",
+      })
+    const warn = options.warn
+    // A refused feed with no one told would answer a sync that never checked deletions as a whole one.
+    if (!warn)
+      throw new CliError("configuration_error", "source manifest: deletions needs the run's warn", {
+        reason: "manifest.invalid",
+      })
+    const overlap = deletions.overlapMs ?? changes?.overlapMs ?? OVERLAP_MS
+    const deletedSince = async (sinceMs: number): Promise<SourceChange<M>[]> => {
+      const since = SINCE[deletions.since](sinceMs)
+      const items: SourceChange<M>[] = []
+      let cursor: string | undefined
+      for (let pages = 0; pages < MOST_PAGES; pages++) {
+        let listed: Awaited<ReturnType<typeof page>>
+        try {
+          listed = await page(deletions, { since }, cursor)
+        } catch (error) {
+          // The provider may keep this feed to admins or a higher plan; the changes still hold, and a full walk finds
+          // the trash.
+          if (!isCliError(error) || error.code !== "permission_error") throw error
+          warn({
+            code: "permission_error",
+            reason: "source.deletions-unchecked",
+            message:
+              `${manifest.provider} refused its list of deleted documents to this sign-in, so documents deleted ` +
+              "since the last sync were not checked; sync --rescan finds them",
+          })
+          return items
+        }
+        for (const row of listed.rows) {
+          const deleted = Date.parse(time(at(row, deletions.time)) ?? "")
+          if (Number.isFinite(deleted) && deleted < sinceMs) continue
+          const id = text(at(row, deletions.id))
+          if (!id)
+            throw new CliError("invalid_response", `a ${manifest.provider} deletion has no id at ${deletions.id}`, {
+              reason: "source.no-id",
+            })
+          items.push({ id, removed: true, gone: "deleted" })
+        }
+        if (!listed.next) return items
+        cursor = listed.next
+      }
+      throw new CliError(
+        "invalid_response",
+        `more than ${MOST_PAGES} pages of ${manifest.provider} deletions since one sync; run sync --rescan`,
+        { reason: "source.changes-too-many" },
+      )
+    }
+    source.changes = async (token) => {
+      const from = Number(token)
+      if (!Number.isSafeInteger(from))
+        throw new CliError("validation_error", `not a change token of ${manifest.provider}: ${token}`, {
+          reason: "source.token-invalid",
+        })
+      const deleted = await deletedSince(from - overlap)
+      // Read after the deletions and listed after them, a row of the changes is the newer word and wins.
+      const round = await changesOf.call(source, token)
+      return { ...round, items: [...deleted, ...round.items] }
+    }
+  }
   return source
 }

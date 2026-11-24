@@ -36,6 +36,13 @@ const api = {
       items: "results",
     }),
     operation("get-markdown"),
+    operation("list-deleted", "read", {
+      style: "cursor",
+      cursor: { in: "body", name: "after" },
+      next: "next_cursor",
+      hasMore: "has_more",
+      items: "results",
+    }),
     operation("delete-item", "delete"),
   ],
 } as unknown as ServiceApiManifest
@@ -67,6 +74,13 @@ const pagesApi = () => {
   }
   const rows = new Map<string, Row>()
   const denied = new Map<string, 403 | 404>()
+  const deletions: { entity: { id: string }; at: string }[] = []
+  const feed: { refuse?: CliError; refuseAfter?: number; everyTime?: boolean } = {}
+  // As Linear's trash: the row is gone from every listing and its edit time stays, only the log names it.
+  const erase = (id: string) => {
+    rows.delete(id)
+    deletions.push({ entity: { id }, at: tick() })
+  }
   const put = (row: Omit<Row, "edited">) => rows.set(row.id, { ...row, edited: tick() })
   put({ id: "root", title: "Root", parent: null, kind: "folder" })
   put({ id: "nested", title: "Nested", parent: "root", kind: "folder" })
@@ -109,14 +123,22 @@ const pagesApi = () => {
           [...rows.values()].filter((row) => Date.parse(row.edited) >= Date.parse(String(body.since))),
           body.start,
         )
+      case "list-deleted":
+        if (feed.refuse && Number(body.after ?? 0) >= (feed.refuseAfter ?? 0)) throw feed.refuse
+        return paged(
+          deletions.filter((one) => feed.everyTime || Date.parse(one.at) >= Date.parse(String(body.since))) as never,
+          body.after,
+        )
       case "get-markdown":
         return { markdown: `# ${one(input.path.id).title}\n\n${one(input.path.id).text ?? ""}` }
       default:
         throw new Error(`no fake for ${id}`)
     }
   }
-  return { rows, denied, put, call, now: () => clock }
+  return { rows, denied, feed, put, erase, call, now: () => clock }
 }
+
+const DELETIONS = { operation: "list-deleted", body: { since: "{since}" }, since: "iso", time: "at", id: "entity.id" }
 
 const sourceOver = (fake: ReturnType<typeof pagesApi>) =>
   documentSourceFromManifest(MANIFEST, { api, call: fake.call, now: fake.now })
@@ -258,6 +280,99 @@ describe("a documents source from a manifest", () => {
   })
 })
 
+describe("a source's deletions feed", () => {
+  const withDeletions = (fake: ReturnType<typeof pagesApi>, options: Record<string, unknown> = {}) => {
+    const warnings: { reason: string; message: string }[] = []
+    const source = documentSourceFromManifest(
+      { ...MANIFEST, deletions: DELETIONS },
+      { api, call: fake.call, now: fake.now, warn: (one) => warnings.push(one), ...options },
+    )
+    return { source, warnings, changes: source.changes as NonNullable<typeof source.changes> }
+  }
+
+  it("removes a document the changes never name as deleted, and a later change of it wins", async () => {
+    const fake = pagesApi()
+    const { source, changes } = withDeletions(fake)
+    const token = await (source.startToken as () => Promise<string>)()
+    fake.erase("a")
+    fake.erase("b")
+    for (let n = 0; n < 3; n++) fake.erase(`old${n}`)
+    fake.put({ id: "b", title: "Beta again", parent: "root", kind: "page" })
+    const round = await changes(token)
+    expect(round.items.filter((item) => item.id === "a")).toEqual([{ id: "a", removed: true, gone: "deleted" }])
+    expect(round.items.map((item) => item.id)).toEqual(expect.arrayContaining(["old0", "old1", "old2"]))
+    expect(round.items.filter((item) => item.id === "b").at(-1)).toMatchObject({ removed: false })
+  })
+
+  it("leaves out a deletion older than the round, though the provider lists it", async () => {
+    const fake = pagesApi()
+    const { changes } = withDeletions(fake)
+    fake.feed.everyTime = true
+    fake.erase("a")
+    const token = String(fake.now() + 60_000)
+    expect((await changes(token)).items.map((item) => item.id)).not.toContain("a")
+  })
+
+  it("answers the round when the provider refuses the feed, and says deletions were not checked", async () => {
+    const fake = pagesApi()
+    const { source, changes, warnings } = withDeletions(fake)
+    const token = await (source.startToken as () => Promise<string>)()
+    fake.erase("a")
+    fake.put({ id: "d", title: "Delta", parent: "root", kind: "page" })
+    fake.feed.refuse = new CliError("permission_error", "admins only")
+    const round = await changes(token)
+    expect(round.items.map((item) => item.id)).toEqual(["d"])
+    expect(warnings).toEqual([
+      {
+        code: "permission_error",
+        reason: "source.deletions-unchecked",
+        message: expect.stringContaining("sync --rescan finds them"),
+      },
+    ])
+  })
+
+  it("keeps the deletions read before a refusal on a later page", async () => {
+    const fake = pagesApi()
+    const { source, changes, warnings } = withDeletions(fake)
+    const token = await (source.startToken as () => Promise<string>)()
+    for (const id of ["a", "b", "c"]) fake.erase(id)
+    fake.feed.refuse = new CliError("permission_error", "admins only")
+    fake.feed.refuseAfter = 2
+    expect((await changes(token)).items.map((item) => item.id)).toEqual(["a", "b"])
+    expect(warnings.map((one) => one.reason)).toEqual(["source.deletions-unchecked"])
+  })
+
+  it("fails the round on any other error, so its token stays and the next round reads them", async () => {
+    const fake = pagesApi()
+    const { source, changes, warnings } = withDeletions(fake)
+    const token = await (source.startToken as () => Promise<string>)()
+    fake.feed.refuse = new CliError("network_error", "offline")
+    await expect(changes(token)).rejects.toThrow("offline")
+    expect(warnings).toEqual([])
+  })
+
+  it("reads deletions for a change feed a hook gives", async () => {
+    const fake = pagesApi()
+    const { source, changes } = withDeletions(fake, {
+      hooks: () => ({ startToken: async () => String(fake.now()), changes: async () => ({ items: [], cursor: "9" }) }),
+    })
+    const token = await (source.startToken as () => Promise<string>)()
+    fake.erase("c")
+    expect(await changes(token)).toEqual({ items: [{ id: "c", removed: true, gone: "deleted" }], cursor: "9" })
+  })
+
+  it("refuses a feed with no change feed or no warn to read it in, and a token that is not a time", async () => {
+    const { changes: _changes, ...noChanges } = MANIFEST
+    expect(() =>
+      documentSourceFromManifest({ ...noChanges, deletions: DELETIONS }, { api, call: pagesApi().call }),
+    ).toThrow(/deletions needs a change feed/)
+    expect(() =>
+      documentSourceFromManifest({ ...MANIFEST, deletions: DELETIONS }, { api, call: pagesApi().call }),
+    ).toThrow(/deletions needs the run's warn/)
+    await expect(withDeletions(pagesApi()).changes("later")).rejects.toThrow(/not a change token/)
+  })
+})
+
 describe("parseDocumentManifest", () => {
   const refused = (patch: Record<string, unknown>) => () => parseDocumentManifest({ ...MANIFEST, ...patch }, api)
 
@@ -272,6 +387,7 @@ describe("parseDocumentManifest", () => {
       /delete-item is a delete, and a source only reads/,
     )
     expect(refused({ get: { ...MANIFEST.get, path: {} } })).toThrow(/get: no "\{id\}"/)
+    expect(refused({ deletions: { ...DELETIONS, body: {} } })).toThrow(/deletions: no "\{since\}"/)
     expect(refused({ reads: { children: { operation: "list-children" } } })).toThrow(
       /reads\.children: children is the manifest's own call/,
     )

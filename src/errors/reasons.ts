@@ -96,6 +96,7 @@ const PROVIDER_API: Entry[] = [
     "invalid_response",
     "more changed since one sync than a round reads, and the provider does not list changes oldest first",
   ],
+  ["source.deletions-unchecked", "permission_error", "the provider refused its deletions; sync --rescan finds them"],
   ["verify.no-id", "provider_error", "the answer to the sign-in check holds no account id where auth.verify says"],
   ["provider.usage-limit", "rate_limited", "the account's usage limit at the provider is reached; wait, do not retry"],
   ["access.denied", "permission_error", "the provider refused this account access to the item"],
