@@ -111,10 +111,12 @@ export const crmFilesContract = (make: () => CrmFilesFixture | Promise<CrmFilesF
           `a file's text holds ${word}`,
         )
         for (const saved of filesOf(state)) {
-          assert.equal(statSync(saved).mode & 0o777, 0o600, `${saved} is the OS user's alone`)
+          if (process.platform !== "win32")
+            assert.equal(statSync(saved).mode & 0o777, 0o600, `${saved} is the OS user's alone`)
           without(token, saved, readFileSync(saved, "latin1"))
         }
-        assert.equal(statSync(join(state, "crm", "files")).mode & 0o777, 0o700)
+        // Windows has no POSIX modes: a saved file reads 0666 there whatever the code sets.
+        if (process.platform !== "win32") assert.equal(statSync(join(state, "crm", "files")).mode & 0o777, 0o700)
         const hits = await store.crmFiles.find({ words: [word] })
         assert.ok(hits.items.length > 0, "search finds the text")
         if (found.assignee !== null && run.user !== null) {
