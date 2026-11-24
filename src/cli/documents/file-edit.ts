@@ -393,27 +393,28 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     })
   })
 
-  examples(
-    annotate(sheets.command("create"), { effects: REMOTE_WRITE, offline: false })
-      .summary("create a new workbook from rows of values")
-      .description(
-        `create a new .xlsx on ${place} with one sheet holding these rows from A1. Numbers and booleans are typed, a ` +
-          "text stays text, even one that starts with =. A file already there is refused: change it with sheets update",
-      )
-      .argument("<path>", `the new .xlsx file on ${place}`)
-      .option("--values <json>", "the rows as JSON; null leaves a cell empty")
-      .option("--name <name>", "the sheet's name; Sheet1 without it"),
-    [`${prefix} ${group} sheets create /budget.xlsx --values '[["Item", "Cost"], ["Rent", 950]]' --name Budget`],
-  ).action(async function (this: Command, input: string, args: { values?: string; name?: string }) {
-    if (args.values === undefined)
-      throw new CliError("validation_error", `give the rows with --values: ${VALUES_SHAPE}`, { param: "--values" })
-    const rows = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
-    const name = args.name ?? "Sheet1"
-    await createNew(this, "sheets", input, ".xlsx", {
-      bytes: createXlsx({ sheets: [{ name, rows }] }),
-      answer: { sheets: [{ name, rows: rows.length }] },
+  if (helpers.creates !== false)
+    examples(
+      annotate(sheets.command("create"), { effects: REMOTE_WRITE, offline: false })
+        .summary("create a new workbook from rows of values")
+        .description(
+          `create a new .xlsx on ${place} with one sheet holding these rows from A1. Numbers and booleans are typed, a ` +
+            "text stays text, even one that starts with =. A file already there is refused: change it with sheets update",
+        )
+        .argument("<path>", `the new .xlsx file on ${place}`)
+        .option("--values <json>", "the rows as JSON; null leaves a cell empty")
+        .option("--name <name>", "the sheet's name; Sheet1 without it"),
+      [`${prefix} ${group} sheets create /budget.xlsx --values '[["Item", "Cost"], ["Rent", 950]]' --name Budget`],
+    ).action(async function (this: Command, input: string, args: { values?: string; name?: string }) {
+      if (args.values === undefined)
+        throw new CliError("validation_error", `give the rows with --values: ${VALUES_SHAPE}`, { param: "--values" })
+      const rows = jsonOf(args.values, "--values", VALUES, VALUES_SHAPE)
+      const name = args.name ?? "Sheet1"
+      await createNew(this, "sheets", input, ".xlsx", {
+        bytes: createXlsx({ sheets: [{ name, rows }] }),
+        answer: { sheets: [{ name, rows: rows.length }] },
+      })
     })
-  })
 
   const documents = annotate(files.command("documents"), { effects: REMOTE_READ }).description(
     `the paragraphs of a Word document (.docx) on ${place}, read and changed in place`,
@@ -475,30 +476,31 @@ const addFileEditCommandsDefinition = (files: Command, helpers: FileEditCommands
     })
   })
 
-  examples(
-    annotate(documents.command("create"), { effects: REMOTE_WRITE, offline: false })
-      .summary("create a new Word document from paragraphs")
-      .description(
-        `create a new .docx on ${place} with these paragraphs, each in a style: ${NEW_PARAGRAPH_STYLES.join(", ")} ` +
-          "(Normal without one; ListBullet is a bullet list). A file already there is refused: change it with " +
-          "documents update",
-      )
-      .argument("<path>", `the new .docx file on ${place}`)
-      .option("--payload <json>", "the paragraphs as JSON: [{text, style?}]"),
-    [
-      `${prefix} ${group} documents create /report.docx --payload '[{"text": "Report", "style": "Title"}, {"text": "Revenue grew 12%."}]'`,
-    ],
-  ).action(async function (this: Command, input: string, args: { payload?: string }) {
-    if (args.payload === undefined)
-      throw new CliError("validation_error", `give the paragraphs with --payload: ${NEW_PARAGRAPHS_SHAPE}`, {
-        param: "--payload",
+  if (helpers.creates !== false)
+    examples(
+      annotate(documents.command("create"), { effects: REMOTE_WRITE, offline: false })
+        .summary("create a new Word document from paragraphs")
+        .description(
+          `create a new .docx on ${place} with these paragraphs, each in a style: ${NEW_PARAGRAPH_STYLES.join(", ")} ` +
+            "(Normal without one; ListBullet is a bullet list). A file already there is refused: change it with " +
+            "documents update",
+        )
+        .argument("<path>", `the new .docx file on ${place}`)
+        .option("--payload <json>", "the paragraphs as JSON: [{text, style?}]"),
+      [
+        `${prefix} ${group} documents create /report.docx --payload '[{"text": "Report", "style": "Title"}, {"text": "Revenue grew 12%."}]'`,
+      ],
+    ).action(async function (this: Command, input: string, args: { payload?: string }) {
+      if (args.payload === undefined)
+        throw new CliError("validation_error", `give the paragraphs with --payload: ${NEW_PARAGRAPHS_SHAPE}`, {
+          param: "--payload",
+        })
+      const paragraphs = jsonOf(args.payload, "--payload", NEW_PARAGRAPHS, NEW_PARAGRAPHS_SHAPE)
+      await createNew(this, "documents", input, ".docx", {
+        bytes: createDocx({ paragraphs }),
+        answer: { paragraphs: paragraphs.length },
       })
-    const paragraphs = jsonOf(args.payload, "--payload", NEW_PARAGRAPHS, NEW_PARAGRAPHS_SHAPE)
-    await createNew(this, "documents", input, ".docx", {
-      bytes: createDocx({ paragraphs }),
-      answer: { paragraphs: paragraphs.length },
     })
-  })
 
   examples(
     annotate(files.command("history"), { effects: REMOTE_READ, offline: false })

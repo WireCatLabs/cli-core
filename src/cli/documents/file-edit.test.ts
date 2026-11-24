@@ -36,7 +36,7 @@ const tracked = () => {
 }
 
 /** A provider in memory with no conditional upload: `upload` checks `expect` itself, as a real target does. */
-const harness = (start: Record<string, Uint8Array | string> = {}) => {
+const harness = (start: Record<string, Uint8Array | string> = {}, creates?: boolean) => {
   const files = new Map<string, Uint8Array>(
     Object.entries({ "/budget.xlsx": budget, "/letter.docx": letter, ...start }).map(([path, bytes]) => [
       path,
@@ -88,6 +88,7 @@ const harness = (start: Record<string, Uint8Array | string> = {}) => {
       trashed.push(input)
       return { path: input, restored: "trash" }
     },
+    ...(creates === undefined ? {} : { creates }),
   })
   const run = (...argv: string[]) => group.parseAsync(argv, { from: "user" })
   const item = <T = Record<string, unknown>>() => (answers.at(-1) as { item: T }).item
@@ -306,6 +307,14 @@ describe("files sheets create and documents create", () => {
     ).rejects.toMatchObject({ details: { param: "--payload" } })
     expect(disk.asked).toEqual([])
     expect(disk.uploads).toEqual([])
+  })
+
+  it("are left out where a provider names files by its own ids, and the edits stay", () => {
+    const drive = harness({}, false)
+    expect(drive.command("sheets", "create")).toBeUndefined()
+    expect(drive.command("documents", "create")).toBeUndefined()
+    expect(drive.command("sheets", "update")).toBeDefined()
+    expect(drive.command("documents", "update")).toBeDefined()
   })
 })
 
