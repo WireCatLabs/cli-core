@@ -1,23 +1,19 @@
-import { existsSync } from "node:fs"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { withoutPhone } from "../../services/people.js"
-import { storePath } from "../../store/path.js"
-import { openStore } from "../../store/store.js"
 import { accountRemoveCommand } from "../account-remove.js"
 import { accountRenameCommand } from "../account-rename.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
-import { queryTerms, withQuery } from "../list-query.js"
-import { NONE_NAMED } from "../settings.js"
+import { withQuery } from "../list-query.js"
 import { ACCOUNT_PROFILES_QUERY } from "./account-profile-query.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
-import { recalledAccount } from "./accounts.js"
 import { photoHelp, readProfilePhoto } from "./admin-commands.js"
-import { accountAnswer, renderItem, wholeList } from "./chat-answers.js"
+import { accountAnswer, renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { hideNever } from "./lacks.js"
 import { privacyCommand } from "./records-command.js"
+import { listProfiles } from "./session-commands.js"
 
 export const accountCommand = (messenger: Messenger): Command => {
   const tool = `${messenger.app.command} personal`
@@ -34,45 +30,7 @@ export const accountCommand = (messenger: Messenger): Command => {
             "is left out (`bot list` has it), one that is a bot too says `bot: true`; asks the messenger nothing",
         )
         .action(async function (this: Command, words: string[]) {
-          const terms = queryTerms(words, ACCOUNT_PROFILES_QUERY, "account list")
-          const context = messengerContext(this, messenger, { needsProfile: false })
-          const { app, provider } = messenger
-          const current = context.settings.sources.profile === NONE_NAMED ? undefined : context.settings.profile
-          const { profilesHere, accountProfiles = profilesHere, botProfiles = [] } = context.settings
-          const isAccount = (profile: string) =>
-            accountProfiles.includes(profile) || messenger.profileState?.(profile, context.env) === "signed-in"
-          const profiles = [
-            ...new Set([...(current === undefined ? [] : [current]), ...profilesHere.filter(isAccount)]),
-          ]
-            .filter((profile) => terms.get("profile") === undefined || profile === terms.get("profile"))
-            .filter(
-              (profile) =>
-                terms.get("current") === undefined ||
-                (profile === current) === (terms.get("current")?.toLowerCase() === "true"),
-            )
-            .sort()
-          const store = existsSync(storePath(context.env))
-            ? await openStore({ env: context.env }).catch(() => undefined)
-            : undefined
-          try {
-            const items = []
-            for (const profile of profiles) {
-              const key = recalledAccount(app, provider, profile, context.env)
-              items.push({
-                profile,
-                current: profile === current,
-                account: key?.account ?? null,
-                name: key && store ? await store.accounts.accountName(key) : null,
-                ...(messenger.profileState
-                  ? { signed_in: messenger.profileState(profile, context.env) !== "signed-out" }
-                  : {}),
-                ...(botProfiles.includes(profile) ? { bot: true } : {}),
-              })
-            }
-            renderAnswer(this, context, wholeList("account list", items))
-          } finally {
-            await store?.close()
-          }
+          await listProfiles(this, messenger, words, "account list")
         }),
     )
     .addCommand(

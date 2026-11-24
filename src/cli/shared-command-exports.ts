@@ -63,6 +63,7 @@ import { searchCommand as searchCommandDefinition } from "./messenger/search-com
 import { searchesCommand as searchesCommandDefinition } from "./messenger/searches-command.js"
 import { serveCommand as serveCommandDefinition } from "./messenger/serve-command.js"
 import { serverCommand as serverCommandDefinition } from "./messenger/server-command.js"
+import { messengerSessionCommands as messengerSessionCommandsDefinition } from "./messenger/session-commands.js"
 import { statsCommand as statsCommandDefinition } from "./messenger/stats-command.js"
 import { addStoreMaintenanceCommands as addStoreMaintenanceCommandsDefinition } from "./messenger/store-maintenance-command.js"
 import { tagsCommand as tagsCommandDefinition } from "./messenger/tags-command.js"
@@ -103,6 +104,7 @@ export const addMeetingPreparationCommand = sharedCommand(addMeetingPreparationC
 export const addMeetingProjectCandidatesCommand = sharedCommand(addMeetingProjectCandidatesCommandDefinition)
 export const addMeetingSeriesInventoryCommand = sharedCommand(addMeetingSeriesInventoryCommandDefinition)
 export const accountCommand = sharedCommand(accountCommandDefinition)
+export const messengerSessionCommands = sharedCommand(messengerSessionCommandsDefinition)
 export const storeCommand = sharedCommand(storeCommandDefinition)
 export const attachmentsCommand = sharedCommand(attachmentsCommandDefinition)
 export const chatsCommand = sharedCommand(chatsCommandDefinition)

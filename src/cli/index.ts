@@ -770,6 +770,7 @@ export {
   mcpCommand,
   mentionsCommand,
   messagesCommand,
+  messengerSessionCommands,
   metadataCommand,
   modelCatalogueCommand,
   modelsCommand,
