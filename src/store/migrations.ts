@@ -249,7 +249,7 @@ const migrateLocked = (
       }
       if (rebuild && saved) {
         afterRebuild(database, rebuild, saved, migration.version)
-        notes.push(...saved.notes)
+        for (const note of saved.notes) notes.push(note)
       }
       migration.after?.(database, now, { rebuilt: rebuild?.tables.map(({ name }) => name) ?? [], from: file.version })
       database
