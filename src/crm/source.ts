@@ -33,6 +33,11 @@ export interface CrmPage<T> {
   nextCursor?: string
   /** On the last page: the cursor the next run reads changes after; `null` when the CRM keeps none. */
   cursor?: string | null
+  /**
+   * On the last page of activities: the round listed every one the CRM holds, whatever `since` asked (Attio's notes
+   * take no time filter), so one stored that it did not list was deleted.
+   */
+  listedAll?: boolean
 }
 
 /** `reset`: the cursor is dead, and the CRM must be listed in full again. */

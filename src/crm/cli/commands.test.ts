@@ -27,6 +27,7 @@ import { dealContext } from "../../services/deal-context.js"
 import { openCache } from "../../store/open.js"
 import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
+import type { CrmCallContext } from "../source.js"
 import {
   exampleDeal,
   exampleLead,
@@ -1125,7 +1126,7 @@ describe("CRM activities", () => {
     source.put("deal", exampleDeal("d1"))
     await turnOn(path)
     const synced = await cli("sync")
-    expect(synced.item.activities).toEqual({ saved: 2, out_of_scope: 1, state: "complete" })
+    expect(synced.item.activities).toEqual({ saved: 2, out_of_scope: 1, removed: 0, state: "complete" })
     expect(asked).toEqual([NOW - 90 * 24 * HOUR])
 
     const ref = (await cli("deals", "list", "status:open")).items.find(
@@ -1146,6 +1147,72 @@ describe("CRM activities", () => {
     await cli("sync")
     expect(asked.at(-1)).toBe(NOW)
   })
+  describe("deleted in the CRM", () => {
+    const listing = async () => {
+      const harness = await setup({}, { now: () => NOW })
+      const page: { items: CrmActivity[]; removed?: string[]; listedAll?: boolean; gap?: true } = { items: [] }
+      Object.assign(harness.source, {
+        activities: async (_since: number, _page: string | undefined, context?: CrmCallContext) => {
+          if (page.gap) context?.gap({ kind: "activities", scope: "task:read", message: "tasks were not read" })
+          const { gap: _, ...answer } = page
+          return { ...answer, hasMore: false, cursor: String(NOW) }
+        },
+      })
+      harness.source.put("deal", exampleDeal("d1"))
+      await turnOn(harness.path)
+      const subjects = async () => {
+        const ref = (await harness.cli("deals", "list", "status:open")).items[0]?.ref as string
+        return ((await harness.cli("deals", "show", ref)).item.activities as { subject: string }[]).map(
+          ({ subject }) => subject,
+        )
+      }
+      return { ...harness, page, subjects }
+    }
+    const on = [{ kind: "deal" as const, externalId: "d1" }]
+
+    it("go when the CRM names them, or when a list of every one leaves them out", async () => {
+      const { cli, page, subjects } = await listing()
+      page.items = ["a1", "a2", "a3"].map((id) => activity(id, on))
+      await cli("sync")
+      page.items = []
+      page.removed = ["a1"]
+      expect((await cli("sync")).item.activities).toMatchObject({ removed: 1 })
+      expect((await subjects()).sort()).toEqual(["Example call a2", "Example call a3"])
+      page.items = [activity("a3", on)]
+      page.removed = undefined
+      page.listedAll = true
+      expect((await cli("sync")).item.activities).toMatchObject({ removed: 1 })
+      expect(await subjects()).toEqual(["Example call a3"])
+    })
+
+    it("stay when the list was not whole: a list refused, or no listedAll", async () => {
+      const { cli, page, subjects } = await listing()
+      page.items = ["a1", "a2"].map((id) => activity(id, on))
+      await cli("sync")
+      page.items = [activity("a2", on)]
+      await cli("sync")
+      page.listedAll = true
+      page.gap = true
+      await cli("sync")
+      expect(await subjects()).toHaveLength(2)
+    })
+
+    it("are held when most would go, until sync --rescan", async () => {
+      const { cli, page, subjects } = await listing()
+      page.items = Array.from({ length: 12 }, (_, at) => activity(`a${at}`, on))
+      await cli("sync")
+      page.items = [activity("a0", on)]
+      page.listedAll = true
+      const held = await cli("sync")
+      expect(held.item.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ reason: "crm.activities-unlisted-held" })]),
+      )
+      expect(await subjects()).toHaveLength(12)
+      expect((await cli("sync", "--rescan")).item.activities).toMatchObject({ removed: 11 })
+      expect(await subjects()).toEqual(["Example call a0"])
+    })
+  })
+
   it("search all finds a deal by the words of its activities", async () => {
     const { cli, path, source } = await withActivities([
       activity("m1", [{ kind: "deal", externalId: "d1" }], {

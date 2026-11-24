@@ -653,6 +653,7 @@ const OTHERS: Entry[] = [
   ),
   validation("crm.pending-dropped", "relationships waited too long for an end that never came; they were dropped"),
   validation("crm.activities-failed", "the activities and tasks could not be read; the deals and leads were synced"),
+  validation("crm.activities-unlisted-held", "a full list would mark most activities deleted; held until --rescan"),
   validation(
     "crm.stage-history-failed",
     "the CRM's stage history could not be read; stage tasks wait for the next sync",
