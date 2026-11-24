@@ -57,6 +57,11 @@ export interface DocumentManifest {
   /** A document's text as Markdown, at `markdown` in the answer: needs `"{id}"`. */
   content?: DocumentCall & { markdown: string }
   /**
+   * How often a plain sync walks the chosen folders in full, as `--rescan` does, for a provider whose changes and
+   * deletions miss an edit (Linear's restore from the trash): a duration such as `7d` or `12h`. Needs a change feed.
+   */
+  rescanEvery?: string
+  /**
    * A saved document read again though it did not change: one whose `providerMetadata` has no value at `missing`
    * (a field the source learned to read later, such as authors).
    */
@@ -118,6 +123,7 @@ const schema = v.strictObject({
     }),
   ),
   content: v.optional(v.strictObject({ ...callEntries, markdown: dotPath })),
+  rescanEvery: v.optional(v.pipe(v.string(), v.regex(/^[1-9]\d*(ms|s|m|h|d)$/, "a duration with a unit, such as 7d"))),
   reread: v.optional(v.strictObject({ missing: dotPath })),
   reads: v.optional(
     v.record(v.pipe(v.string(), v.regex(/^[a-z][A-Za-z0-9]*$/, "a camelCase name")), v.strictObject(callEntries)),

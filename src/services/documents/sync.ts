@@ -2,7 +2,14 @@ import { createHash } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { deadlineMargin } from "../../background/budget.js"
 import { catalogFiles } from "../../documents/catalog.js"
-import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSkip } from "../../documents/model.js"
+import {
+  feedOf,
+  type IndexedSource,
+  type PictureWriter,
+  type SourceContent,
+  type SourceFile,
+  type SourceSkip,
+} from "../../documents/model.js"
 import { inScope } from "../../documents/scope.js"
 import { changedSince, planDocuments, scopeHash, type WalkStop } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
@@ -15,6 +22,8 @@ const SETTLE_MS = 10_000
 const DAY_MS = 24 * 60 * 60 * 1000
 export const KEEP_VERSIONS_FOR_DAYS = 365
 const isPicture = (file: SourceFile) => file.mime.startsWith("image/") && file.canDownload
+const describe = (ms: number) =>
+  ms % DAY_MS === 0 ? `${ms / DAY_MS} days` : ms % 3_600_000 === 0 ? `${ms / 3_600_000} hours` : `${ms} ms`
 const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
 export interface SyncResult {
   saved: number
@@ -34,6 +43,8 @@ export interface SyncResult {
   stopped?: WalkStop
   /** A folder walk still under way; the next sync goes on from where this one stopped. */
   walk?: { folders_left: number; entries: number; listed: number }
+  /** This call started a full walk on its own: the source's `rescanEveryMs` had passed since the last one. */
+  rescan?: { why: string; every_ms: number; last_full_walk: string | null }
 }
 export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M>): Promise<SyncResult> => {
   const {
@@ -45,7 +56,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     textLimit: limit,
     max,
     signal,
-    rescan = false,
+    rescan: asked = false,
     pictures = false,
     assertHeld,
     errorOf,
@@ -92,6 +103,27 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       throw new CliError("configuration_error", "sync state belongs to another source account")
     if (options.profile !== undefined) await index.registerProfile?.(options.profile, principal)
     const currentScope = scopeHash(profile.roots, query, options.isDocument !== undefined)
+    // Only a source whose feed misses something asks for it, and only between walks: the walk it starts drops the
+    // cursor, so the calls that go on with that walk are not due again.
+    const every = source ? feedOf(source)?.rescanEveryMs : undefined
+    const lastWalk = state.fullWalkAt ? Date.parse(state.fullWalkAt) : Number.NaN
+    const due =
+      !asked &&
+      every !== undefined &&
+      state.cursor !== undefined &&
+      state.scope === currentScope &&
+      !(now() - lastWalk < every)
+    if (due)
+      result.rescan = {
+        why:
+          state.fullWalkAt === undefined
+            ? "no full walk of the chosen folders is recorded; the source's changes miss some edits, such as a restore"
+            : `the last full walk finished more than ${describe(every)} ago; the source's changes miss some edits, ` +
+              "such as a restore",
+        every_ms: every,
+        last_full_walk: state.fullWalkAt ?? null,
+      }
+    const rescan = asked || due
     if (state.pending && (state.pending.scope !== currentScope || rescan)) {
       // Work the new plan cannot see: a file saved to the index before its state was.
       for (const job of state.pending.jobs)
@@ -333,6 +365,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     result.pending = pending.jobs.length
     result.complete = !pending.jobs.length
     if (!pending.jobs.length) {
+      if (!state.cursor || state.scope !== pending.scope) state.fullWalkAt = new Date(now()).toISOString()
       state.cursor = pending.cursor
       state.scope = pending.scope
       state.folders = pending.folders

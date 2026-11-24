@@ -82,6 +82,12 @@ export interface FeedlessDocumentSource<M extends SourceFile = SourceFile> {
 export interface DocumentSource<M extends SourceFile = SourceFile> extends FeedlessDocumentSource<M> {
   startToken(): Promise<string>
   changes(token: string): Promise<{ items: SourceChange<M>[]; cursor: string }>
+  /**
+   * For a feed that misses some edits (Linear's restore from the trash leaves `updatedAt` as it was): a plain sync
+   * walks the chosen folders in full, as `--rescan` does, once this long has passed since the last full walk ended.
+   * Left out, only `--rescan` walks again.
+   */
+  rescanEveryMs?: number
 }
 /** The feed of a source that has one. */
 export const feedOf = <M extends SourceFile>(source: FeedlessDocumentSource<M>) =>
@@ -129,6 +135,8 @@ export interface SourceState<M extends SourceFile = SourceFile> {
   }
   matched?: string[]
   lastSync?: string
+  /** When the last full walk of the chosen folders ended: a first sync, a rescan or a changed scope. */
+  fullWalkAt?: string
 }
 export interface PictureWriter {
   save(reference: string, bytes: Uint8Array): Promise<"saved" | "unchanged">
