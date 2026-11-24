@@ -62,8 +62,10 @@ Activity writes are opt-in: `capabilities.activities` names `comment`, `task` or
 `createActivity(draft, options)` and, for a task, `completeActivity(externalId, options)`, each answering the whole
 `CrmActivity` as the CRM holds it after the write. They mount `activities create <comment|task>` and
 `activities close <task>` (`createCrmActivity`, `completeCrmActivity`), even in a CLI without `activities: true`.
-`--subject` names the records it is on, repeated for more: `deal:<id>` and `lead:<id>` as the copy's references, as
-`deals update` takes them, and `person:<id>` and `organization:<id>` by the CRM's id, as `people update` takes them.
+`--subject` names the records it is on, repeated for more. Every `kind:<n>` is the copy's reference, as `deals show`
+gives it and `show` reads it: `deal:<id>`, `lead:<id>`, `person:<id>`, `organization:<id>`. A contact or company by the
+CRM's id, as `people list` prints it, is `person:crm:<id>`; an id that cannot be a reference (Attio's UUIDs) needs no
+`crm:`. A reference that stands for more than one CRM record is refused (`crm.record-ambiguous`).
 The keys are `activities.create` and `activities.close`, allowed by default, and `crm.assign-others` for a task's
 `--owner` other than the sign-in's user; `CrmWrites.alsoChecks` is not asked, since an activity is no `CrmKind`. The
 answer is stored by `saveActivities`, as a sync would, only with the account's `activities` setting on and on a record

@@ -1260,6 +1260,34 @@ describe("CRM activity writes", () => {
     expect(crmAlsoChecks()(["activities", "close"])).toEqual([])
   })
 
+  it("reads person:<n> and organization:<n> as the copy's references deals show gives, and crm:<id> as the CRM's", async () => {
+    const { cli, ref, source } = await synced()
+    const shown = (await cli("deals", "show", ref)).item as {
+      organization: { ref: string }
+      people: { ref: string }[]
+    }
+    const made = await cli(
+      "activities",
+      "create",
+      "comment",
+      "--subject",
+      shown.organization.ref,
+      "--subject",
+      shown.people[0]?.ref as string,
+      "--text",
+      "Example",
+    )
+    expect((made.item.activity as { on: unknown[] }).on).toEqual([
+      expect.objectContaining({ kind: "organization", external_id: "c1" }),
+      expect.objectContaining({ kind: "person", external_id: "p1" }),
+    ])
+    const byCrm = await cli("activities", "create", "comment", "--subject", "organization:crm:c1", "--text", "Example")
+    expect((byCrm.item.activity as { on: unknown[] }).on).toEqual([
+      expect.objectContaining({ kind: "organization", external_id: "c1" }),
+    ])
+    expect(source.activityWrites).toHaveLength(2)
+  })
+
   it("refuses what the kind does not take, or a record it cannot name, before anything is sent", async () => {
     const { cli, ref, source } = await synced()
     const refused = [
@@ -1270,6 +1298,7 @@ describe("CRM activity writes", () => {
       ["comment", "--text", "Example"],
       ["comment", "--subject", "12", "--text", "Example"],
       ["comment", "--subject", "deal:999999", "--text", "Example"],
+      ["comment", "--subject", "person:999999", "--text", "Example"],
     ]
     for (const args of refused)
       await expect(cli("activities", "create", ...args)).rejects.toMatchObject({

@@ -787,7 +787,12 @@ const activityInvalid = (message: string, param?: string) =>
 const activityUnsupported = (what: string) =>
   new CliError("validation_error", `this CRM does not take ${what}`, { reason: "crm.write-unsupported", sent: false })
 
-/** `deal:12` and `lead:4` by the copy, as `deals list` shows them; a contact or company by the CRM's id. */
+/**
+ * Every `kind:<n>` is the copy's reference, as `deals list` and `deals show` give it and `show` reads it: a contact's
+ * or company's CRM id under the same form was a different record wherever the CRM numbers its records, so a note went
+ * on someone else's company. `person:crm:<id>` names one by the CRM's id; an id no reference can be (Attio's UUIDs)
+ * needs no `crm:`.
+ */
 const activityTargetOf = async (context: CrmWriteContext, given: string): Promise<CrmActivityTarget> => {
   const at = given.indexOf(":")
   const kind = given.slice(0, at)
@@ -796,11 +801,35 @@ const activityTargetOf = async (context: CrmWriteContext, given: string): Promis
     const copy = await copyOf(context, kind, given.trim())
     return { kind, externalId: copy.externalId as string, ref: copy.ref, title: copy.title }
   }
-  if ((kind === "person" || kind === "organization") && RECORD_ID.test(id))
-    return { kind, externalId: id, ref: null, title: null }
+  if (kind === "person" || kind === "organization") {
+    const crmId = id.startsWith("crm:") ? id.slice(4) : /^\d+$/.test(id) ? undefined : id
+    if (crmId !== undefined && RECORD_ID.test(crmId)) return { kind, externalId: crmId, ref: null, title: null }
+    if (crmId === undefined) {
+      const ids = await context.store.crm.externalIdsOf(context.account, given)
+      if (ids.length > 1)
+        throw new CliError(
+          "validation_error",
+          `${given} is ${ids.length} records of the CRM; name one as ${kind}:crm:<id>`,
+          {
+            reason: "crm.record-ambiguous",
+            param: "--subject",
+            candidates: ids.map((one) => ({ id: `${kind}:crm:${one}` })),
+            sent: false,
+          },
+        )
+      if (ids[0]) return { kind, externalId: ids[0], ref: given, title: null }
+      throw new CliError(
+        "not_found",
+        `the copy holds no ${given}; a ${kind} by the CRM's id, as ${kind === "person" ? "people" : "organizations"} ` +
+          `list prints it, is ${kind}:crm:<id>`,
+        { param: "--subject", sent: false },
+      )
+    }
+  }
   throw new CliError(
     "validation_error",
-    `--subject takes deal:<id> or lead:<id> as a list shows it, or person:<id> or organization:<id> by the CRM's id; got ${given}`,
+    `--subject takes deal:<id>, lead:<id>, person:<id> or organization:<id> as the copy's lists and deals show give ` +
+      `them, or person:crm:<id> or organization:crm:<id> by the CRM's id; got ${given}`,
     { reason: "ref.malformed", param: "--subject" },
   )
 }
