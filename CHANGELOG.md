@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.742.0 — 24.11.2026
+
+### Fixed
+
+- **`runScopeCases` gives a recorded command 15 s to end against the answering fake**, in place of 2 s. The case
+  checks that the command ends inside core's run, not how fast; a whole sync on a loaded machine took over 2 s, so a
+  CLI's local `bin/release` failed on it while CI passed. The silent case keeps its 2 s after `--timeout`.
+
 ## 0.741.0 — 24.11.2026
 
 ### Fixed
