@@ -25,6 +25,12 @@ export interface GuardedFileWriteResult {
   replaced?: { sha256: string }
 }
 
+/** The reason of a conflict a target raised for itself, which callers pass on as it is; undefined for the usual one. */
+export const ownConflict = (error: { details?: { reason?: unknown } }) => {
+  const reason = error.details?.reason
+  return typeof reason === "string" && reason !== "mirror.remote-changed" ? reason : undefined
+}
+
 export const remoteChanged = (path: string, why: string, reread: string) =>
   new CliError("conflict", `${path} ${why}; nothing was written. Read it again: ${reread}`, {
     reason: "mirror.remote-changed",
@@ -52,7 +58,8 @@ export const guardedFileWrite = async (write: GuardedFileWrite): Promise<Guarded
   try {
     file = await target.upload(path, from, kept === undefined ? { absent: true } : { sha256: kept }, signal)
   } catch (error) {
-    if (isCliError(error) && error.code === "conflict")
+    // A target's conflict with its own reason says what it did, which "nothing was written" would hide.
+    if (isCliError(error) && error.code === "conflict" && ownConflict(error) === undefined)
       throw remoteChanged(path, kept === undefined ? "appeared since it was read" : "changed since it was read", reread)
     throw error
   }

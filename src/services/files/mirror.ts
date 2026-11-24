@@ -23,6 +23,7 @@ import {
   skippedName,
 } from "../documents/push.js"
 import { excludedBy } from "./exclusions.js"
+import { ownConflict } from "./guarded-write.js"
 import { listRemote } from "./listing.js"
 import {
   ancestors,
@@ -936,9 +937,7 @@ export const syncFileMirror = async (options: FileMirrorOptions): Promise<FileMi
         if (failure.code === "conflict")
           conflict(
             step,
-            failure.details?.reason === "upload.mismatch"
-              ? failure.message
-              : `the ${options.remote} file changed during the sync`,
+            ownConflict(failure) !== undefined ? failure.message : `the ${options.remote} file changed during the sync`,
           )
         else result.errors.push({ path: step.path, code: failure.code, message: failure.message })
         // Not retried: the next listing shows whether it landed, and adopts it when it did.

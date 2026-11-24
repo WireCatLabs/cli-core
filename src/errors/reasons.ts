@@ -4,9 +4,7 @@ import type { ErrorReason } from "@wirecat/cli-base/standards"
 import { defineReasons } from "@wirecat/cli-base/standards"
 import { CHAT_SENDING_ASK_DETAILS } from "../models/chat-sending.js"
 
-type Entry = [reason: string, code: ErrorReason["code"], message: string]
-
-const validation = (reason: string, message: string): Entry => [reason, "validation_error", message]
+import { type Entry, SFTP, validation } from "./sftp-reasons.js"
 
 /** The query reasons only message search raises; the shared ones are cli-base's `QUERY_REASONS`. */
 const QUERY: Entry[] = [
@@ -107,21 +105,6 @@ const PROVIDER_API: Entry[] = [
   ["file.denied", "permission_error", "the file cannot be opened: permission denied"],
   validation("file.too-large", "the file is larger than the limit set for this read"),
   validation("file.not-plain-text", "the file's text is extracted on a read; writing it back would replace the file"),
-]
-
-/** The read-only SFTP client (`./sftp`). */
-const SFTP: Entry[] = [
-  ["sftp.host-key-missing", "configuration_error", "no host key is pinned for the SFTP server"],
-  ["sftp.host-key-mismatch", "authentication_error", "the SFTP server's host key is not the pinned one"],
-  ["sftp.auth-missing", "configuration_error", "an SFTP connection needs a password or a private key"],
-  ["sftp.key-invalid", "configuration_error", "the SFTP private key or its passphrase cannot be read"],
-  ["sftp.library-missing", "configuration_error", "SFTP needs the ssh2 package in the CLI's dependencies"],
-  ["sftp.timeout", "timeout", "the SFTP server did not answer in time"],
-  validation("sftp.too-large", "the file is larger than the read's byte limit"),
-  validation("sftp.closed", "the SFTP connection was closed before the operation"),
-  validation("sftp.file-changed", "the file changed on the server while a stream read it; read it again"),
-  ["ssh.forward-refused", "permission_error", "the SSH server does not allow forwarding to that address"],
-  ["ssh.forward-failed", "network_error", "the SSH server could not reach the address behind it"],
 ]
 
 /** The read-only SQL reader (`./sql`). */
@@ -328,6 +311,7 @@ const OTHERS: Entry[] = [
   ["mirror.remote-changed", "conflict", "the remote file changed since the listing; the next sync settles it"],
   ["mirror.local-changed", "conflict", "the local file changed since the conflict was found; nothing was written"],
   ["mirror.no-conflict", "not_found", "the path has no recorded conflict; the last sync settled it or never saw one"],
+  ["upload.replace-interrupted", "conflict", "another file took the path during a replace; the new content is kept"],
   ["upload.mismatch", "conflict", "the uploaded file reads back with other content; the local file changed meanwhile"],
   ["download.mismatch", "invalid_response", "the downloaded file has other content than the listing said"],
   ["catalog.unavailable", "configuration_error", "the store has no shared catalog for this account"],

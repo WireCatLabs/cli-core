@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { walkQuery } from "@wirecat/cli-base/query"
 import type { SourceContent, SourceFile, SourceRemoval } from "../../documents/model.js"
 import type { CatalogInput, CatalogQuery, MessageStore } from "../../store/index.js"
@@ -113,6 +113,23 @@ export const documentIngestion = <M extends SourceFile>(
       await store.catalog.upsert(selected.id, [options.catalogInput(content.metadata)])
       await options.observed?.(principal, content.metadata, note.id)
       return note.ref
+    },
+    /**
+     * Moves a synced document to the new id its source gave the file, as a replace through a temporary file does, so
+     * its tags, the notes about it and its links stay with it. False when the file was never synced.
+     */
+    rekey: async (principal: string, from: string, to: string) => {
+      const selected = await folder(principal, false)
+      if (!selected) return false
+      try {
+        const [was, now] = [options.externalId(from), options.externalId(to)]
+        const note = await store.notes.renameFileNote(selected.id, was, now, { fold: true })
+        await stale(note.ref)
+        return true
+      } catch (error) {
+        if (isCliError(error) && error.code === "not_found") return false
+        throw error
+      }
     },
     remove: async (principal: string, id: string, reason?: SourceRemoval) => {
       const selected = await folder(principal, false)

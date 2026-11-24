@@ -827,6 +827,21 @@ describe("syncFileMirror, crash and resume", () => {
     expect(context.versions.has(hashes("sneaked in").sha256)).toBe(true)
   })
 
+  it("keeps the words of a conflict the target names with its own reason", async () => {
+    const context = setup({ "a.bin": "a" }, { "a.bin": "a" })
+    await context.sync()
+    put(context.root, "a.bin", "local")
+    const own = "another file took a.bin; the new content is kept at .a.bin.tmp"
+    const target: FileTarget = {
+      ...context.disk.target,
+      upload: async () => {
+        throw new CliError("conflict", own, { reason: "upload.replace-interrupted" })
+      },
+    }
+    const result = await context.sync(undefined, { target })
+    expect(result.conflicts).toEqual([expect.objectContaining({ path: "a.bin", reason: own })])
+  })
+
   it("leaves a local file saved after the listing alone", async () => {
     const context = setup({ "a.md": "a" }, { "a.md": "a" })
     await context.sync()

@@ -2,7 +2,10 @@
 export interface RemoteFile {
   /** Relative to the listed folder, with `/` separators. */
   path: string
-  /** Stays the same across a move or an overwrite, so a remote rename is found by it. */
+  /**
+   * Stays the same across a move, so a remote rename is found by it. A replace may give a new one (Yandex Disk's
+   * replace through a temporary file); the mirror records what the upload returns.
+   */
   id: string
   size: number
   /** The plain sha256 of the content. A file without one (still being processed) is left for the next run. */
