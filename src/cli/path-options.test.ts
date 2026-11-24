@@ -13,6 +13,7 @@ import { fileConflictsCommand } from "./documents/file-conflicts.js"
 import { addFileEditCommands } from "./documents/file-edit.js"
 import { fileMirrorsCommand } from "./documents/file-mirrors.js"
 import { addDocumentHistoryCommands } from "./documents/history.js"
+import { addDocumentCatalogCommands } from "./documents/index.js"
 import {
   inStoreBackups,
   isLocalPathArgument,
@@ -206,6 +207,14 @@ describe("every input named like a path is declared", () => {
       run: refuse,
       id: (input) => input,
     })
+    const catalog = new Command("disk")
+    addDocumentCatalogCommands(catalog, {
+      words: { app: "disk", remote: "disk", provider: "Disk", source: "disk" },
+      output: () => undefined,
+      run: refuse,
+      id: (input) => input,
+      roots: () => [],
+    })
     const tracker = new Command("tracker")
     addTrackerCommands(tracker, { app: disk, open: refuse, writes: TRACKER_WRITES })
     const never = (): never => {
@@ -215,6 +224,7 @@ describe("every input named like a path is declared", () => {
       createProgram(sharedProgram),
       files,
       history,
+      catalog,
       tracker,
       fileMirrorsCommand({
         identity: disk,
@@ -263,7 +273,7 @@ describe("every input named like a path is declared", () => {
   it("the remote paths of the files commands are not taken for local ones", () => {
     const remote = trees()
       .flatMap(all)
-      .filter((command) => ["sheets", "documents"].includes(command.parent?.name() ?? ""))
+      .filter((command) => ["sheets", "documents", "catalog"].includes(command.parent?.name() ?? ""))
       .flatMap((command) => command.registeredArguments.filter((argument) => isLocalPathArgument(command, argument)))
 
     expect(remote).toEqual([])
