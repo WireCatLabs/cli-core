@@ -1,9 +1,9 @@
-import { index, integer, sql, sqliteTable, text, uniqueIndex } from "../drizzle/core.js"
+import { check, index, integer, sql, sqliteTable, text, uniqueIndex } from "../drizzle/core.js"
 
 export const links = sqliteTable(
   "links",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     fromType: text("from_type").notNull(),
     fromId: integer("from_id").notNull(),
     toType: text("to_type"),
@@ -42,5 +42,6 @@ export const links = sqliteTable(
       .where(sql`kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL`),
     index("links_by_from_type_from_id").on(table.fromType, table.fromId),
     index("links_by_to_type_to_id").on(table.toType, table.toId),
+    check("links_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )

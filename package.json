@@ -27,8 +27,8 @@
       "./update"
     ],
     "store": {
-      "speaks": 72,
-      "minCompatible": 56
+      "speaks": 73,
+      "minCompatible": 73
     }
   },
   "engines": {

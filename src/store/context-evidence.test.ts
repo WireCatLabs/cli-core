@@ -362,10 +362,12 @@ it("projects existing import provenance without hydrating unrelated front matter
   })
   expect(page).toMatchObject({ items: [{ at, timeKind: "source-modified", url: front.sourceUrl }] })
   expect(page.readBytes).toBeLessThan(1024)
-  for (const metadata of ["not-json", JSON.stringify({ ...front, modifiedAt: "invalid", sourceUrl: 42 })]) {
-    f.db.prepare("UPDATE documents SET front_matter=? WHERE id=?").run(metadata, Number(f.doc.id))
-    expect(await f.reader.read({ ...f.request, source: f.sources.document, before: 10000 })).toMatchObject({
-      items: [{ at: 5000, timeKind: "stored-update", url: null }],
-    })
-  }
+  expect(() =>
+    f.db.prepare("UPDATE documents SET front_matter=? WHERE id=?").run("not-json", Number(f.doc.id)),
+  ).toThrow(/CHECK constraint failed/)
+  const invalid = JSON.stringify({ ...front, modifiedAt: "invalid", sourceUrl: 42 })
+  f.db.prepare("UPDATE documents SET front_matter=? WHERE id=?").run(invalid, Number(f.doc.id))
+  expect(await f.reader.read({ ...f.request, source: f.sources.document, before: 10000 })).toMatchObject({
+    items: [{ at: 5000, timeKind: "stored-update", url: null }],
+  })
 })

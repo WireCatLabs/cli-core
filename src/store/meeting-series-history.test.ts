@@ -87,12 +87,12 @@ describe("exact series history", () => {
     const { store, db, save, input } = await fixture()
     const saved = await save("first", 1000)
     db.prepare("UPDATE meetings SET metadata=?, description=? WHERE id=?").run(
-      "x".repeat(20000),
+      JSON.stringify("x".repeat(20000)),
       "x".repeat(20000),
       saved.meeting.id,
     )
     db.prepare("UPDATE meeting_series SET metadata=?, description=? WHERE id=?").run(
-      "x".repeat(20000),
+      JSON.stringify("x".repeat(20000)),
       "x".repeat(20000),
       saved.series?.id ?? 0,
     )

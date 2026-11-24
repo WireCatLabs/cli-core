@@ -19,6 +19,8 @@ export interface RollbackCopyOptions {
   store: string
   freeBytes?: (dir: string) => number
   warn?: (line: string) => void
+  /** The owner chose to migrate even when no copy can be written (`store migrate --without-rollback-copy`). */
+  withoutCopy?: boolean
 }
 
 export interface RollbackCopy {
@@ -86,12 +88,18 @@ const attach = (database: CacheDatabase, path: string) => database.prepare(`ATTA
 
 /**
  * Outside the migration's transaction (SQLite cannot attach inside one), committed on its own, so a migration that
- * fails leaves it whole. Never blocks the migration: no room, or any failure, is a warning and no copy.
+ * fails leaves it whole. No room, or any failure, refuses the migration: after it, older tools cannot open the store
+ * at all. Unless the owner said `withoutCopy`; then it is a warning and no copy.
  */
 export const takeRollbackCopy = (
   database: CacheDatabase,
   { from, to, tables, at }: { from: number; to: number; tables: string[]; at: number },
-  { store, freeBytes = freeBytesOf, warn = (line) => process.stderr.write(`${line}\n`) }: RollbackCopyOptions,
+  {
+    store,
+    freeBytes = freeBytesOf,
+    warn = (line) => process.stderr.write(`${line}\n`),
+    withoutCopy = false,
+  }: RollbackCopyOptions,
 ): RollbackCopy | undefined => {
   const dir = join(dirname(store), "backups")
   const present = [...new Set([...BOOKKEEPING, ...tables])].filter((table) => tableIn(database, "main", table))
@@ -102,10 +110,9 @@ export const takeRollbackCopy = (
     const needed = tableBytes(database, present)
     const free = freeBytes(dir)
     if (free < needed + HEADROOM) {
-      warn(
-        `not enough free disk space for a rollback copy before schema ${to} (about ${megabytes(needed + HEADROOM)} ` +
-          `needed, ${megabytes(free)} free in ${dir}) — migrating without one; ${afterwards}`,
-      )
+      const short = `not enough free disk space for a rollback copy before schema ${to} (about ${megabytes(needed + HEADROOM)} needed, ${megabytes(free)} free in ${dir})`
+      if (!withoutCopy) throw noCopy(short, from)
+      warn(`${short} — migrating without one; ${afterwards}`)
       return undefined
     }
     path = join(dir, `${parse(store).name}-rollback-schema-${from}-${stampOf(at)}.db`)
@@ -140,12 +147,23 @@ export const takeRollbackCopy = (
     }
   } catch (error) {
     if (path) rmSync(path, { force: true })
-    warn(
-      `the rollback copy before schema ${to} could not be written (${error instanceof Error ? error.message : String(error)}) — migrating without one; ${afterwards}`,
-    )
+    if (error instanceof CliError && error.details?.reason === NO_COPY) throw error
+    const failed = `the rollback copy before schema ${to} could not be written (${error instanceof Error ? error.message : String(error)})`
+    if (!withoutCopy) throw noCopy(failed, from)
+    warn(`${failed} — migrating without one; ${afterwards}`)
     return undefined
   }
 }
+
+const NO_COPY = "store.no-rollback-copy"
+
+const noCopy = (why: string, from: number) =>
+  new CliError(
+    "configuration_error",
+    `${why}, so the store stays at schema ${from} and nothing was changed. Free the space and open it again, or ` +
+      "run `store migrate --without-rollback-copy` to migrate with no way back to the tools that speak it",
+    { reason: NO_COPY },
+  )
 
 /** Inside the migration's transaction: a migration that fails never records its copy, so cleanup never takes it. */
 export const recordRollbackCopy = (database: CacheDatabase, copy: RollbackCopy, at: number): void => {
@@ -302,6 +320,26 @@ const restoreRows = (database: CacheDatabase, table: string) => {
   database.exec(`INSERT INTO main.${quote(table)} (${into}) SELECT ${from} FROM ${SCHEMA}.${quote(table)}`)
 }
 
+/**
+ * Dropping an AUTOINCREMENT table drops its counter. Kept, so a later upgrade starts above the ids handed out before
+ * the rollback, which references outside the store may still name.
+ */
+const countersOf = (database: CacheDatabase): { name: string; seq: number }[] =>
+  tableIn(database, "main", "sqlite_sequence")
+    ? database
+        .prepare("SELECT name, max(seq) AS seq FROM main.sqlite_sequence GROUP BY name")
+        .all()
+        .map((row) => ({ name: String(row.name), seq: Number(row.seq) }))
+    : []
+
+const keepCounters = (database: CacheDatabase, counters: { name: string; seq: number }[]) => {
+  if (counters.length === 0) return
+  if (!tableIn(database, "main", "sqlite_sequence")) return
+  const kept = database.prepare("SELECT 1 FROM main.sqlite_sequence WHERE name = ?")
+  const insert = database.prepare("INSERT INTO main.sqlite_sequence (name, seq) VALUES (?, ?)")
+  for (const { name, seq } of counters) if (!kept.get(name)) insert.run(name, seq)
+}
+
 export interface RollbackResult extends RollbackCopyMeta {
   /** The schema the store was at before the rollback. */
   was: number
@@ -333,7 +371,9 @@ export const rollBack = (database: CacheDatabase, path: string): RollbackResult 
       database.exec("BEGIN IMMEDIATE")
       try {
         const named = new Set(meta.tables)
+        const counters = countersOf(database)
         const rebuilt = rewind(database, saved, named)
+        keepCounters(database, counters)
         database.prepare("DELETE FROM main.schema_migrations WHERE version > ?").run(meta.from)
         database.prepare("DELETE FROM main.store_settings WHERE key = ?").run(`${KEY}${basename(path)}`)
         database.exec("COMMIT")

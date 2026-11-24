@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { type RankingInput, type RankingTarget, rankingOptions } from "../domain/rankings-options.js"
 import type { QueryExecution, ResolvedPredicate } from "../search/lucene/resolved.js"
+import { withoutVersion73 } from "../testing/older-store.js"
 import { migrate } from "./migrations.js"
 import { openSqlite, type StoreContext } from "./sqlite/open.js"
 import { rankQuery } from "./sqlite/rankings.js"
@@ -116,6 +117,7 @@ describe("stored rankings", () => {
   })
   it("splits a message's reactions by emoji, most first, only when ranking messages by reactions", async () => {
     const context = await open()
+    withoutVersion73(context.database, ["messages"])
     const stored = (pk: number, reactions: string) =>
       context.database.prepare("UPDATE messages SET reactions=? WHERE id=?").run(reactions, pk)
     put(context, 1, 1, { views: 3 })

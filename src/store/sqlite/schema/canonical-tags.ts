@@ -1,7 +1,7 @@
 import { integer, sqliteTable, text } from "../drizzle/core.js"
 
 export const canonicalTags = sqliteTable("canonical_tags", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
   kind: text("kind").notNull().default("tag"),
   createdAt: integer("created_at").notNull(),

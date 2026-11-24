@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs"
+import { autoIncrements, checksOf } from "../checks.mjs"
 
 const model = JSON.parse(readFileSync(process.argv[2], "utf8"))
 const HAND_WRITTEN = new Set(["search_terms", "search_term_trigrams", "schema_migrations"])
@@ -139,7 +140,7 @@ for (const t of model) {
   const keyed = new Set((t.keys ?? []).filter((k) => k.startsWith("PRIMARY KEY")).flatMap((k) => parseKey(k).cols))
   const lines = cols.map((c) => {
     let s = `${camel(c.name)}: ${c.type === "blob" ? `blob("${c.name}", { mode: "buffer" })` : `${c.type}("${c.name}")`}`
-    if (c.pk) s += ".primaryKey()"
+    if (c.pk) s += c.name === "id" && autoIncrements(t) ? ".primaryKey({ autoIncrement: true })" : ".primaryKey()"
     else if (c.notnull || keyed.has(c.name)) s += ".notNull()"
     if (c.unique) s += ".unique()"
     const d = DEFAULTS[`${t.name}.${c.name}`]
@@ -152,11 +153,12 @@ for (const t of model) {
     }
     return `    ${s},`
   })
-  const constraints = [...(t.keys ?? []), ...t.fkIndexes].map((k) => keyCode(t.name, k))
+  const keys = [...(t.keys ?? []), ...t.fkIndexes].map((k) => keyCode(t.name, k))
+  const constraints = [...keys, ...checksOf(t).map(({ name, sql }) => `check("${name}", sql\`${sql}\`)`)]
   const body = `{\n${lines.join("\n")}\n  }`
   out.push(
     constraints.length
-      ? `export const ${camel(t.name)} = sqliteTable(\n  "${t.name}",\n  ${body},\n  (table) => [\n${constraints.map((c) => `    ${c},`).join("\n")}\n  ],\n)\n`
+      ? `export const ${camel(t.name)} = sqliteTable(\n  "${t.name}",\n  ${body},\n  ${keys.length ? "(table)" : "()"} => [\n${constraints.map((c) => `    ${c},`).join("\n")}\n  ],\n)\n`
       : `export const ${camel(t.name)} = sqliteTable("${t.name}", ${body.replace(/\n {4}/g, "\n  ").replace(/\n {2}\}$/, "\n}")})\n`,
   )
 }
@@ -164,6 +166,7 @@ for (const t of model) {
 const header = `import {
   type AnySQLiteColumn,
   blob,
+  check,
   desc,
   index,
   integer,

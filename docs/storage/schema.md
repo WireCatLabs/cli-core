@@ -18,6 +18,8 @@ checks every table and column of a new store against this page.
 - Booleans without `is_`. Times are epoch milliseconds, integers: they sort and range without a format to agree on.
 - One search index per corpus: messages, emails, attachments, documents, notes, memories, meetings.
 - Every foreign key and every polymorphic pair is indexed; listed under each table as *Indexes*.
+- Every base table with an integer `id` key is `AUTOINCREMENT` (store version 73): an id is never handed out twice, so an old reference never names another row.
+- `CHECK` constraints hold only rules that never change: a JSON column holds valid JSON, a pointer pair is whole or empty, an amount is not negative. Evolving rules stay in triggers.
 
 ## Sources
 
@@ -41,6 +43,8 @@ Every integration the owner connects: a messenger account, a mailbox, Zoom, a no
 | `organization_id` | integer |  | → `organizations.id` | the organization a work account belongs to |
 
 *Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (organization_id)`
+
+*Checks:* `CHECK ("settings" IS NULL OR json_valid("settings"))`
 
 ### `sync_cursors`
 
@@ -100,6 +104,8 @@ Every update a bot account received through the Bot API, kept as it came, so it 
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, received_at DESC)`
 
+*Checks:* `CHECK ("payload" IS NULL OR json_valid("payload"))`
+
 ### `syncs`
 
 One run of an integration's sync: what it did and how it ended.
@@ -118,6 +124,8 @@ One run of an integration's sync: what it did and how it ended.
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `INDEX (account_id)`
+
+*Checks:* `CHECK ("counts" IS NULL OR json_valid("counts"))`
 
 ## People, organizations and bots
 
@@ -163,6 +171,8 @@ A real person, whatever accounts they write from: their identities point here. `
 
 *Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `identity_links`
 
 | Column | Type | Constraints | References | Meaning |
@@ -207,6 +217,8 @@ Each profile a person was seen with, a row when it differs from the one before; 
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (identity_id, created_at)`
+
+*Checks:* `CHECK ("marks" IS NULL OR json_valid("marks"))`
 
 ### `account_identities`
 
@@ -267,6 +279,8 @@ A company, team, family or community the owner deals with. Projects, work accoun
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `places`
 
 A street address as a record of its own: a confirmed `place` mention; later mentions of it start linked.
@@ -317,6 +331,8 @@ An AI agent or a script that works here: it registers itself, owns projects and 
 
 *Keys and indexes:* `INDEX (owner_person_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ## Chats and messages
 
 What messengers bring.
@@ -355,6 +371,8 @@ A chat, group or channel of one account, with what the messenger last said about
 | `title_folded` | text |  |  | `fold(title)`, which `tags list name:` compares; filled on open when NULL |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, last_message_at DESC)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (parent_chat_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
 ### `chat_members`
 
@@ -436,6 +454,8 @@ A group's size once a day: the messenger's own count and how many members one re
 | `delivery` | integer |  |  | own message: 1 delivered, 2 read; null when no receipt came; only rises |
 
 *Keys and indexes:* `UNIQUE (chat_id, external_id)`, `INDEX (chat_id, sent_at DESC)`, `INDEX (chat_id, sent_at DESC) WHERE starred = 1`, `INDEX (chat_id, reply_to_external_id) WHERE reply_to_external_id IS NOT NULL AND deleted_at IS NULL`, `INDEX (account_id, external_id)`, `INDEX (id) WHERE normalized_text IS NULL AND deleted_at IS NULL`, `INDEX (sender_identity_id)`, `INDEX (thread_root_id)`
+
+*Checks:* `CHECK ("reply_to" IS NULL OR json_valid("reply_to"))`, `CHECK ("forward" IS NULL OR json_valid("forward"))`, `CHECK ("reactions" IS NULL OR json_valid("reactions"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK ("mentions" IS NULL OR json_valid("mentions"))`
 
 ### `message_revisions`
 
@@ -560,6 +580,8 @@ Each voter's newest vote in a poll, where the messenger sends votes one by one (
 
 *Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
 
+*Checks:* `CHECK ("answers" IS NULL OR json_valid("answers"))`
+
 ### `link_revisions`
 
 One row per change of a relationship link (the kinds of `RELATIONS`: `member-of`, `related-to`, `reports-to`, `customer-of`, `partner-of`). Triggers on `links` write it in the changing statement's transaction, so a hard delete keeps its trail; a change of `updated_at` alone writes none. Links of any other kind never write one. No foreign key: the link may be gone.
@@ -576,6 +598,8 @@ One row per change of a relationship link (the kinds of `RELATIONS`: `member-of`
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (link_id, created_at)`
+
+*Checks:* `CHECK ("before" IS NULL OR json_valid("before"))`
 
 ### `chat_revisions`
 
@@ -706,6 +730,8 @@ A conversation by mail.
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (id) WHERE subject IS NOT NULL AND subject_folded IS NULL`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `emails`
 
 One email.
@@ -741,6 +767,8 @@ One email.
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
 
+*Checks:* `CHECK ("references" IS NULL OR json_valid("references"))`, `CHECK ("headers" IS NULL OR json_valid("headers"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `mail_rules`
 
 A mail rule of one account: conditions an email must match, and what to do with it (store in full, as an envelope, skip, tag).
@@ -759,6 +787,8 @@ A mail rule of one account: conditions an email must match, and what to do with 
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (account_id, conditions)`
+
+*Checks:* `CHECK ("conditions" IS NULL OR json_valid("conditions"))`, `CHECK ("actions" IS NULL OR json_valid("actions"))`
 
 ### `email_recipients`
 
@@ -888,6 +918,8 @@ A file of a message, an email or a meeting, with its extracted text.
 
 *Keys and indexes:* `UNIQUE (attachable_type, attachable_id, position)`, `INDEX (name_folded)`, `INDEX (id) WHERE local_path IS NOT NULL AND local_path_folded IS NULL`
 
+*Checks:* `CHECK ("provider_ref" IS NULL OR json_valid("provider_ref"))`, `CHECK ("contact" IS NULL OR json_valid("contact"))`
+
 ### `attachment_words`
 
 Full-text index.
@@ -990,6 +1022,8 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
 
+*Checks:* `CHECK ("front_matter" IS NULL OR json_valid("front_matter"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `files`
 
 One item in one place, the source record of a document: a file under a local or Obsidian folder, a Drive file or folder. A folder is a row of its own (`kind` folder), so a subtree is a prefix of `path_folded` and a folder has a row for its own facts. `documents` stays the entity every `document:<id>` names.
@@ -1019,6 +1053,8 @@ One item in one place, the source record of a document: a file under a local or 
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, path_folded)`, `INDEX (id) WHERE path_folded IS NULL`, `INDEX (parent_id)`, `INDEX (document_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `document_revisions`
 
 Earlier versions of a document, each kept before a sync or an import replaced or removed it.
@@ -1035,6 +1071,8 @@ Earlier versions of a document, each kept before a sync or an import replaced or
 | `reason` | text |  |  | what replaced it: edited, deleted, unavailable (no longer visible to the account) or unsynced (left the synced folders). NULL before store version 72 means edited |
 
 *Keys and indexes:* `INDEX (document_id)`
+
+*Checks:* `CHECK ("front_matter" IS NULL OR json_valid("front_matter"))`
 
 ### `document_changes`
 
@@ -1108,6 +1146,8 @@ Short text about something: a person, a chat, an event, a document, a task. Comm
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (notable_type, notable_id)`, `INDEX (author_type, author_id)`
+
+*Checks:* `CHECK (("author_type" IS NULL) = ("author_id" IS NULL))`
 
 ### `note_revisions`
 
@@ -1184,6 +1224,8 @@ What an agent concluded: a summary, a daily digest, a preference. Derived and fa
 | `project_id` | integer |  | → `projects.id` | the project it belongs to, as a fact's |
 
 *Keys and indexes:* `INDEX (subject_type, subject_id)`, `INDEX (author_type, author_id)`, `INDEX (supersedes_id)`, `INDEX (project_id)`
+
+*Checks:* `CHECK (("subject_type" IS NULL) = ("subject_id" IS NULL))`
 
 ### `memory_words`
 
@@ -1306,6 +1348,8 @@ One calendar's copy of an event, a series or one occurrence of a series: the sou
 | `series_external_id` | text |  |  | on an occurrence: its series' `external_id`, so it finds a series stored after it (version 35) |
 
 *Keys and indexes:* `UNIQUE (calendar_id, external_id)`, `UNIQUE (series_entry_id, original_starts_at)`, `INDEX (calendar_id, starts_at)`, `INDEX (ical_uid) WHERE ical_uid IS NOT NULL`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (calendar_id, series_external_id) WHERE series_external_id IS NOT NULL`, `INDEX (event_id)`, `INDEX (event_series_id)`, `INDEX (event_type, event_id)`, `INDEX (organizer_identity_id)`
+
+*Checks:* `CHECK ("recurrence" IS NULL OR json_valid("recurrence"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
 ### `calendar_entry_revisions`
 
@@ -1436,6 +1480,8 @@ A provider's recurring or scheduled meeting.
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (event_series_id)`, `INDEX (host_identity_id)`
 
+*Checks:* `CHECK ("recurrence" IS NULL OR json_valid("recurrence"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `meetings`
 
 One occurrence: it happened once, at one time.
@@ -1468,6 +1514,8 @@ One occurrence: it happened once, at one time.
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (id) WHERE join_url IS NOT NULL AND join_key IS NULL`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `meeting_participants`
 
 One person in one meeting, as that meeting saw them; the name and email stay with this meeting.
@@ -1497,6 +1545,8 @@ names, and an absent stable identity key is rejected rather than guessed from a 
 
 *Keys and indexes:* `UNIQUE (meeting_id, identity_id)`, `INDEX (identity_id)`
 
+*Checks:* `CHECK ("sessions" IS NULL OR json_valid("sessions"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `meeting_transcripts`
 
 One transcript of a meeting: Zoom's, a bot's, or a corrected version, which supersedes the old one.
@@ -1518,6 +1568,8 @@ One transcript of a meeting: Zoom's, a bot's, or a corrected version, which supe
 
 *Keys and indexes:* `INDEX (meeting_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `meeting_transcript_rows`
 
 One row of a transcript (a WebVTT cue): who spoke, when, and what they said.
@@ -1537,6 +1589,8 @@ One row of a transcript (a WebVTT cue): who spoke, when, and what they said.
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `UNIQUE (meeting_transcript_id, position)`, `INDEX (speaker_participant_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
 ### `meeting_chat_messages`
 
@@ -1558,6 +1612,8 @@ The in-meeting chat.
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (meeting_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (meeting_id)`, `INDEX (sender_participant_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
 ### `meeting_summaries`
 
@@ -1581,6 +1637,8 @@ A summary of a meeting, from the provider's AI, a bot, the owner or an LLM run h
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (meeting_id, source)`
+
+*Checks:* `CHECK ("sections" IS NULL OR json_valid("sections"))`, `CHECK ("next_steps" IS NULL OR json_valid("next_steps"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
 ### `meeting_words`
 
@@ -1659,6 +1717,8 @@ A place for tasks, with the short key their ids start with (`MEET-12`).
 
 *Keys and indexes:* `INDEX (name_folded)`, `INDEX (id) WHERE name_folded IS NULL`, `INDEX (organization_id)`, `INDEX (account_id)`, `INDEX (owner_type, owner_id)`
 
+*Checks:* `CHECK (("owner_type" IS NULL) = ("owner_id" IS NULL))`
+
 ### `tasks`
 
 A task or ticket, for people and agents alike. Everything it concerns — people, messages, emails, documents, meetings — is a `links` row; its tags are taggings; its comments are notes.
@@ -1716,6 +1776,8 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 
 *Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (provider, external_id) WHERE external_id IS NOT NULL`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`, `INDEX (close_suggested_by_type, close_suggested_by_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("closed_by_type" IS NULL) = ("closed_by_id" IS NULL))`, `CHECK (("close_suggested_by_type" IS NULL) = ("close_suggested_by_id" IS NULL))`
+
 ### `task_key_counters`
 
 The last number given out per key prefix of a task found in a message (`Q`, `REQ`, `M`, `PR`).
@@ -1757,6 +1819,8 @@ The history of a task: created, status changed, assigned, due date moved.
 
 *Keys and indexes:* `INDEX (task_id)`, `INDEX (actor_type, actor_id)`
 
+*Checks:* `CHECK ("changes" IS NULL OR json_valid("changes"))`, `CHECK (("actor_type" IS NULL) = ("actor_id" IS NULL))`
+
 ### `task_pairs`
 
 Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--into` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.
@@ -1779,6 +1843,8 @@ Two tasks that may be one job, and what was decided about them: the review list 
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (task_id, other_id)`, `INDEX (decision, created_at)`, `INDEX (other_id)`, `INDEX (decided_by_type, decided_by_id)`
+
+*Checks:* `CHECK ("levels" IS NULL OR json_valid("levels"))`, `CHECK ("reasons" IS NULL OR json_valid("reasons"))`, `CHECK (("decided_by_type" IS NULL) = ("decided_by_id" IS NULL))`
 
 ### `task_words`
 
@@ -1830,6 +1896,8 @@ Replaced by `facts` (a decision is a fact of type `decision`) in store version 2
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (supersedes_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`
+
 ### `facts`
 
 What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise; money is `payments` and `invoices`, and triggers refuse a `payment` fact. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.
@@ -1858,6 +1926,8 @@ What happened, as its evidence shows: a fact, a statement, a question, a decisio
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (subject_type, subject_id)`, `INDEX (supersedes_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("subject_type" IS NULL) = ("subject_id" IS NULL))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`
 
 ### `fact_removals`
 
@@ -1914,6 +1984,8 @@ An invoice the owner issued or received. Its lines are `invoice_lines` and its t
 
 *Keys and indexes:* `INDEX (issuer_type, issuer_id)`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (contract_id)`, `INDEX (subscription_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("issuer_type" IS NULL) = ("issuer_id" IS NULL))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`, `CHECK ("total" IS NULL OR "total" >= 0)`
+
 ### `invoice_lines`
 
 One line of an invoice, in its currency.
@@ -1932,6 +2004,8 @@ One line of an invoice, in its currency.
 | `catalog_item_id` | integer |  | → `catalog_items.id` | the item it bills, when known; its price is copied |
 
 *Keys and indexes:* `UNIQUE (invoice_id, position)`, `INDEX (catalog_item_id)`
+
+*Checks:* `CHECK ("amount" IS NULL OR "amount" >= 0)`, `CHECK ("unit_price" IS NULL OR "unit_price" >= 0)`
 
 ### `payments`
 
@@ -1965,6 +2039,8 @@ Money that moved to or from the owner. A refund is a payment the other way with 
 | `subscription_id` | integer |  | → `subscriptions.id` | the subscription it pays, with or without an invoice |
 
 *Keys and indexes:* `INDEX (payer_type, payer_id)`, `INDEX (payee_type, payee_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (refund_of)`, `INDEX (subscription_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("payer_type" IS NULL) = ("payer_id" IS NULL))`, `CHECK (("payee_type" IS NULL) = ("payee_id" IS NULL))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`
 
 ### `payment_allocations`
 
@@ -2022,6 +2098,8 @@ An order the owner placed with a shop or a supplier, or took from a client: for 
 | `direction` | text | not null |  | purchase (the owner buys), sale (the owner sells: he is the supplier) |
 
 *Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (contract_id)`, `INDEX (deal_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("supplier_type" IS NULL) = ("supplier_id" IS NULL))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`, `CHECK ("total" IS NULL OR "total" >= 0)`
 
 ## Deals
 
@@ -2096,6 +2174,8 @@ A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in 
 
 *Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (author_type, author_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK ("amount" IS NULL OR "amount" >= 0)`
+
 ### `leads`
 
 A lead (`lead:<id>`): a first contact in a lead pipeline, before it is a deal. People on it are `links` as on a deal.
@@ -2126,6 +2206,8 @@ A lead (`lead:<id>`): a first contact in a lead pipeline, before it is a deal. P
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (deal_id)`, `INDEX (author_type, author_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK ("amount" IS NULL OR "amount" >= 0)`
 
 ### `pipeline_stage_changes`
 
@@ -2164,6 +2246,8 @@ A CRM account's own fields on its deals, leads, contacts or companies, as its sy
 | `deleted_at` | integer |  |  | the CRM no longer lists it; values under its code may still stand |
 
 *Keys and indexes:* `UNIQUE (account_id, kind, code)`
+
+*Checks:* `CHECK ("options" IS NULL OR json_valid("options"))`
 
 ### `crm_files`
 
@@ -2236,6 +2320,8 @@ What the owner or a supplier sells: a product or a service, with its price. Writ
 
 *Keys and indexes:* `UNIQUE (supplier_type, supplier_id, sku) WHERE supplier_id IS NOT NULL AND sku IS NOT NULL AND deleted_at IS NULL`, `UNIQUE (sku) WHERE supplier_id IS NULL AND sku IS NOT NULL AND deleted_at IS NULL`, `INDEX (name_folded)`, `INDEX (author_type, author_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("supplier_type" IS NULL) = ("supplier_id" IS NULL))`, `CHECK ("unit_price" IS NULL OR "unit_price" >= 0)`
+
 ### `order_lines`
 
 One line of an order, in its currency. An order with lines totals their sum; lines change only while the order is proposed (by its author) or by the owner.
@@ -2254,6 +2340,8 @@ One line of an order, in its currency. An order with lines totals their sum; lin
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (order_id, position)`, `INDEX (catalog_item_id)`
+
+*Checks:* `CHECK ("amount" IS NULL OR "amount" >= 0)`, `CHECK ("unit_price" IS NULL OR "unit_price" >= 0)`
 
 ### `contracts`
 
@@ -2291,6 +2379,8 @@ A contract the owner works under. Its parties are relationships with a role and 
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (deal_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`, `CHECK ("value" IS NULL OR "value" >= 0)`
 
 ### `subscriptions`
 
@@ -2330,6 +2420,8 @@ A subscription the owner bills (receivable) or pays (payable): one supplier, one
 
 *Keys and indexes:* `INDEX (supplier_type, supplier_id)`, `INDEX (customer_type, customer_id)`, `INDEX (catalog_item_id)`, `INDEX (contract_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`
+
 ### `subscription_prices`
 
 A subscription's price from a day on, never overwritten: a correction is a rejection and a new row. The current price is the confirmed row with the latest `effective_from` up to today.
@@ -2353,6 +2445,8 @@ A subscription's price from a day on, never overwritten: a correction is a rejec
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (subscription_id, effective_from) WHERE review <> 'rejected'`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`, `CHECK ("amount" IS NULL OR "amount" >= 0)`
 
 ### `financial_accounts`
 
@@ -2382,6 +2476,8 @@ A bank account, card, cash box or wallet (`wallet:<id>`), in one currency: a mul
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (name_folded)`, `INDEX (holder_type, holder_id)`, `INDEX (author_type, author_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("holder_type" IS NULL) = ("holder_id" IS NULL))`
 
 ### `financial_transactions`
 
@@ -2417,6 +2513,8 @@ What a statement says moved on a financial account (`transaction:<id>`). A payme
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (financial_account_id, booked_date)`, `UNIQUE (payment_id) WHERE payment_id IS NOT NULL AND deleted_at IS NULL`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK (("counterparty_type" IS NULL) = ("counterparty_id" IS NULL))`, `CHECK (("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL))`
 
 ### `transaction_splits`
 
@@ -2549,6 +2647,8 @@ What a source said about one of its records (a payment row of a sheet, a deal of
 
 *Keys and indexes:* `UNIQUE (account_id, type, external_id)`, `INDEX (account_id, batch_id)`, `INDEX (entity_type, entity_id)`
 
+*Checks:* `CHECK ("fields" IS NULL OR json_valid("fields"))`, `CHECK (("entity_type" IS NULL) = ("entity_id" IS NULL))`
+
 ### `record_relations`
 
 A record's reference to another record of the same account. A target not yet imported stays unresolved until it arrives.
@@ -2599,6 +2699,8 @@ Something an agent wants done outside the store — reply, send, delete, ban, mu
 
 *Keys and indexes:* `INDEX (status, created_at)`, `INDEX (account_id)`, `INDEX (target_type, target_id)`, `INDEX (proposed_by_type, proposed_by_id)`, `INDEX (decided_by_type, decided_by_id)`
 
+*Checks:* `CHECK ("payload" IS NULL OR json_valid("payload"))`, `CHECK ("result" IS NULL OR json_valid("result"))`, `CHECK (("target_type" IS NULL) = ("target_id" IS NULL))`, `CHECK (("decided_by_type" IS NULL) = ("decided_by_id" IS NULL))`
+
 ### `agent_actions`
 
 Every tool an agent called through the CLIs or MCP: who, which tool, at what access tier, on what. The audit trail of what agents did.
@@ -2619,6 +2721,8 @@ Every tool an agent called through the CLIs or MCP: who, which tool, at what acc
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (started_at DESC)`, `INDEX (actor_type, actor_id)`, `INDEX (target_type, target_id)`
+
+*Checks:* `CHECK (("target_type" IS NULL) = ("target_id" IS NULL))`
 
 ## Tags, links and saved searches
 
@@ -2681,6 +2785,8 @@ Every connection between two things that no column holds. Kinds: `blocked-by` (a
 
 *Keys and indexes:* `INDEX (target_folded) WHERE to_id IS NULL`, `UNIQUE (kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)) WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL`, `INDEX (from_type, from_id)`, `INDEX (to_type, to_id)`
 
+*Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
 ### `searches`
 
 Every run of `search messages` and `stats messages show`, with the parameters as the caller gave them — never a message or a result. A row with a name is a saved search; an identical unnamed run counts on its row.
@@ -2701,6 +2807,8 @@ Every run of `search messages` and `stats messages show`, with the parameters as
 
 *Keys and indexes:* `UNIQUE (command, params) WHERE name IS NULL`, `INDEX (last_run_at DESC)`
 
+*Checks:* `CHECK ("params" IS NULL OR json_valid("params"))`
+
 ### `taggings`
 
 One tag on one thing.
@@ -2718,7 +2826,9 @@ One tag on one thing.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-*Keys and indexes:* `UNIQUE (tag_id, taggable_type, taggable_id)`, `UNIQUE (taggable_type, taggable_id) WHERE main = 1`, `INDEX (author_type, author_id)`
+*Keys and indexes:* `UNIQUE (tag_id, taggable_type, taggable_id)`, `UNIQUE (taggable_type, taggable_id) WHERE main = 1`, `INDEX (taggable_type, taggable_id)`, `INDEX (author_type, author_id)`
+
+*Checks:* `CHECK (("author_type" IS NULL) = ("author_id" IS NULL))`
 
 ### `tag_redirects`
 
@@ -2753,6 +2863,8 @@ Immutable text-free receipts for owner-reviewed tag consolidation. IDs, hashes a
 | `request_fingerprint` | text | not null |  |  |
 
 *Keys and indexes:* `INDEX (source_id)`, `INDEX (survivor_id)`, `INDEX (actor_type, actor_id)`
+
+*Checks:* `CHECK ("source_member_ids" IS NULL OR json_valid("source_member_ids"))`, `CHECK ("survivor_member_ids" IS NULL OR json_valid("survivor_member_ids"))`, `CHECK ("counts" IS NULL OR json_valid("counts"))`
 
 ### `entity_link_events`
 
@@ -2793,6 +2905,8 @@ The owner's review list: a source record with two or more equally good entities,
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (linkable_type, linkable_id, entity_type)`, `INDEX (status, created_at)`
+
+*Checks:* `CHECK ("candidates" IS NULL OR json_valid("candidates"))`
 
 ## Chunks, embeddings and search state
 
@@ -3055,6 +3169,8 @@ One team, user, workflow state, label, project, issue or comment of an issue tra
 
 *Keys and indexes:* `UNIQUE (account_id, kind, external_id)`, `INDEX (account_id, kind, parent_id)`
 
+*Checks:* `CHECK ("data" IS NULL OR json_valid("data"))`
+
 ### `tracker_item_words`
 
 Word index over a tracker item's title and text, rowid = `tracker_items.id`.
@@ -3105,6 +3221,8 @@ A user of a content source who writes posts. Joined to a person by exact e-mail 
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
 
+*Checks:* `CHECK ("data" IS NULL OR json_valid("data"))`
+
 ### `content_terms`
 
 A tag or category of a content source, kept with its own id for writes; a post is tagged with the shared tag of its slug or name.
@@ -3125,6 +3243,8 @@ A tag or category of a content source, kept with its own id for writes; a post i
 | `synced_at` | integer | not null |  |  |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (tag_id)`
+
+*Checks:* `CHECK ("data" IS NULL OR json_valid("data"))`
 
 ### `content_posts`
 
@@ -3153,6 +3273,8 @@ A post or page of a blog, or a social post, as last synced or written, with its 
 | `synced_at` | integer | not null |  |  |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, status)`, `INDEX (account_id, published_at)`
+
+*Checks:* `CHECK ("data" IS NULL OR json_valid("data"))`
 
 ### `content_post_revisions`
 
@@ -3189,6 +3311,8 @@ One reading of a post's numbers; each reading is a new row, never an overwrite.
 | `raw` | text |  |  | JSON: the source's own numbers |
 
 *Keys and indexes:* `INDEX (post_id, at)`
+
+*Checks:* `CHECK ("raw" IS NULL OR json_valid("raw"))`
 
 ### `content_post_words`
 

@@ -21,6 +21,7 @@ export {
   type AnySQLiteColumn,
   alias,
   blob,
+  check,
   index,
   integer,
   primaryKey,

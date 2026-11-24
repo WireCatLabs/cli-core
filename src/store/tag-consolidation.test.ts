@@ -90,7 +90,7 @@ it("fingerprints all inspected provenance even when counts and vocabulary stay u
   const { store, database, source, options } = await fixture()
   database
     .prepare(
-      "INSERT INTO taggings(tag_id,taggable_type,taggable_id,source,author_id,created_at,updated_at) VALUES(?,'document',700,'manual',11,1,2)",
+      "INSERT INTO taggings(tag_id,taggable_type,taggable_id,source,author_type,author_id,created_at,updated_at) VALUES(?,'document',700,'manual','person',11,1,2)",
     )
     .run(Number(source.id))
   const input = await options()

@@ -501,7 +501,7 @@ describe("a cited source deleted", () => {
     f.clock.at = 2_000
     await f.store.notes.removeNote(note.ref)
     const other = await f.store.notes.addNote({ text: "Shopping list: milk" })
-    expect(other.ref).toBe(note.ref)
+    expect(other.ref).not.toBe(note.ref)
     const row = f.db.prepare("SELECT to_type, to_id, metadata FROM links WHERE id = ?").get(link)
     expect(row).toMatchObject({ to_type: null, to_id: null })
     expect(JSON.parse(String(row?.metadata))).toEqual({

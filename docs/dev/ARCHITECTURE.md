@@ -740,6 +740,9 @@ it by editing that line in a PR of its own, merged before the migration.
    full-text triggers. Choose a change drizzle-kit can express as `ALTER TABLE … ADD` — a new column is
    nullable or has a default — or a new table. The test "never rebuild a base table"
    (`src/store/sqlite/manifest.test.ts:14-19`, `:46`) refuses the rest.
+   A breaking version (its `minCompatible` is its own number, as 73 is) may keep drizzle-kit's copies: the runner
+   turns foreign keys off before `BEGIN`, refuses a table with a column the copy would lose, puts back every trigger
+   and index of the copied tables and checks their foreign keys before `COMMIT` (`src/store/sqlite/rebuild.ts`).
 4. **Triggers, FTS5 tables and data fills go in a custom migration**, since `schema.ts` holds neither
    triggers nor FTS: `pnpm db:generate --custom --name version-<n>-<what>`, then write the SQL into
    the empty file. Put `--> statement-breakpoint` between statements — the bundle splits on nothing
