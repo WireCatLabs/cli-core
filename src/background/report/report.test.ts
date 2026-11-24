@@ -267,7 +267,7 @@ describe("links, task groups, sync health and the footer", () => {
     expect(JSON.parse(again?.document ?? "")).toEqual(document)
   })
 
-  it("still reads a document written before accounts and scope, and refuses a health entry with neither hours nor reason", async () => {
+  it("still reads a document written before accounts and scope, and leaves out a health entry with neither hours nor reason", async () => {
     const old = await prepareReport(
       digest(SECTIONS, { health: [{ source: "MAX", stale_hours: 50 }], scope: undefined, tasks: undefined }),
       options,
@@ -275,7 +275,8 @@ describe("links, task groups, sync health and the footer", () => {
     expect(old?.text).toContain("🛠 MAX не обновлялся 2 дня")
     expect(old?.text).not.toContain("Просмотрено")
     const broken = await prepareReport(digest(SECTIONS, { health: [{ source: "MAX" }] }), options)
-    expect(broken?.run.invalid).toBe("health[0].stale_hours")
+    expect(broken?.invalid).toBe(false)
+    expect(broken?.run.dropped).toEqual(["health[0].stale_hours"])
   })
 })
 
@@ -444,27 +445,64 @@ describe("an answer as a report", () => {
 
   it("keeps a command's store text as it is: a CRM title with an underscore neither empties nor cuts it", async () => {
     const crm = [{ kind: "crm", items: [{ type: "fact", topic: "follow_up", detail: "order_42 website" }] }]
-    expect(await prepareReport(digest(crm), options)).toMatchObject({ invalid: true })
+    expect((await prepareReport(digest(crm), options))?.run.dropped).toEqual(["sections[0].items[0].topic"])
     const kept = await prepareReport(digest(crm), { ...options, trusted: true })
     expect(kept?.text).toContain("follow_up: order_42 website")
     expect(kept?.run).toEqual({ language: "ru", leaks: 0 })
   })
 
   it.each([
-    ["sections[0].items[0].type", [{ kind: "today", items: [{ type: "joke", topic: "x" }] }]],
-    [
-      "sections[0].items[0].since",
-      [{ kind: "today", items: [{ type: "reply", who: "a", topic: "b", action: "c", since: "вчера" }] }],
-    ],
-    ["sections[0].kind", [{ kind: "health", items: [] }]],
-  ])("refuses a document that fails at %s, and shows one line instead", async (path, sections) => {
-    const prepared = await prepareReport(digest(sections), options)
+    ["date", digest(SECTIONS, { date: "6 ноября" })],
+    ["sections", digest(SECTIONS, { sections: { today: [] } })],
+    ["kind", digest(SECTIONS, { kind: "evening-digest" })],
+    ["json", '{ "format": "wirecat.report/1", '],
+  ])("refuses a document whose own field %s fails, and shows one line instead", async (path, answer) => {
+    const prepared = await prepareReport(answer, options)
     expect(prepared).toMatchObject({
       invalid: true,
       text: "Сводка не собралась: ошибка формата. Подробности в WireCat.",
       run: { invalid: path, reasons: ["delivery.report-invalid"] },
     })
     expect((await prepareReport("{ not json", { ...options, language: "en" }))?.text).toMatch(/^The report could/)
+  })
+
+  it.each([
+    ["sections[0].items[0].type", { type: "joke", topic: "x" }],
+    ["sections[0].items[0].since", { type: "reply", who: "a", topic: "b", action: "c", since: "вчера" }],
+    ["sections[0].items[0].who", { type: "reply", topic: "b", action: "c" }],
+    ["sections[0].items[0].amount", { type: "money", who: "a", topic: "b", amount: { value: "много" } }],
+    ["sections[0].items[0]", "ответить Анне"],
+  ])("leaves out an item that fails at %s, shows the rest and says how many were left out", async (path, bad) => {
+    const good = { type: "task", topic: "Договор с подрядчиком" }
+    const prepared = await prepareReport(digest([{ kind: "today", items: [bad, good] }]), options)
+    expect(prepared?.invalid).toBe(false)
+    expect(prepared?.run).toMatchObject({ dropped: [path], reasons: ["report.items-dropped"] })
+    expect(prepared?.text).toContain("Договор с подрядчиком")
+    expect(prepared?.text.endsWith("⚠️ Не показано из-за ошибки формата: 1. Подробности в WireCat.")).toBe(true)
+    expect(prepared?.telegram.at(-1)).toContain("Не показано из-за ошибки формата: 1")
+    expect(prepared?.email).toMatch(/<p>⚠️ Не показано из-за ошибки формата: 1\. Подробности в WireCat\.<\/p>\n<\/div>$/)
+    expect(JSON.parse(prepared?.document ?? "{}").sections[0].items).toHaveLength(1)
+  })
+
+  it("leaves out a section of an unknown kind with its items, and keeps the others", async () => {
+    const sections = [{ kind: "health", items: [{ type: "fact", topic: "a", detail: "b" }] }, ...SECTIONS]
+    const prepared = await prepareReport(digest(sections), { ...options, language: "en" })
+    expect(prepared?.run.dropped).toEqual(["sections[0].kind"])
+    expect(prepared?.text).toContain("Left out for a format error: 1. Details in WireCat.")
+    expect(prepared?.text).toContain("Анна Котова")
+  })
+
+  it("reads a time without an offset as local time, as an agent writes a meeting's hour", async () => {
+    const meeting = { type: "meeting", topic: "Созвон с подрядчиком", time: "2026-11-06T18:00:00" }
+    const prepared = await prepareReport(digest([{ kind: "meetings", items: [meeting] }]), options)
+    expect(prepared?.run).not.toHaveProperty("dropped")
+    expect(prepared?.text).toContain("Созвон с подрядчиком")
+  })
+
+  it("counts no leaks from an item it left out", async () => {
+    const bad = { type: "reply", who: "`msg:telegram/1`", topic: "b", action: "c", since: "вчера" }
+    const prepared = await prepareReport(digest([{ kind: "today", items: [bad] }]), options)
+    expect(prepared?.run.leaks).toBe(0)
   })
 
   it("keeps a digest whose reply has no time, and shows that reply without how long it waits", async () => {

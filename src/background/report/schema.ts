@@ -133,7 +133,8 @@ export const withoutLeaks = (text: string): { text: string; leaks: number } => {
 class Invalid extends Error {}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
+// No offset is the machine's local time, as `Date.parse` reads it: agents write a meeting's "10:00" that way.
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -226,10 +227,25 @@ const cut = (text: string, limit: number) => (text.length <= limit ? text : `${t
 
 /**
  * Checks a parsed document and keeps what the renderers may show. Any agent string loses what `withoutLeaks` finds
- * and is cut to its limit; a required field left empty by that makes the document invalid, as a missing one does.
+ * and is cut to its limit; a required field left empty by that fails its item, as a missing one does. A section,
+ * item or health entry that fails is left out and named in `dropped`: one undated reply must not cost the whole
+ * digest. Only the document's own fields (format, kind, date, the sections list, tasks, scope) refuse it.
  */
-const checked = (document: unknown, trusted: boolean): { report: Report; leaks: number } => {
+const checked = (document: unknown, trusted: boolean): { report: Report; leaks: number; dropped: string[] } => {
   let leaks = 0
+  const dropped: string[] = []
+  const kept = <T, R>(list: readonly T[], at: (index: number) => string, check: (one: T, at: string) => R): R[] =>
+    list.flatMap((one, index) => {
+      const before = leaks
+      try {
+        return [check(one, at(index))]
+      } catch (error) {
+        if (!(error instanceof Invalid)) throw error
+        leaks = before
+        dropped.push(error.message)
+        return []
+      }
+    })
   const text = (value: unknown, field: TextField, at: string): string | null => {
     if (value === undefined || value === null) return null
     if (typeof value !== "string") throw new Invalid(at)
@@ -245,44 +261,50 @@ const checked = (document: unknown, trusted: boolean): { report: Report; leaks: 
   if (typeof document.date !== "string" || !DATE.test(document.date) || Number.isNaN(Date.parse(document.date)))
     throw new Invalid("date")
   if (!Array.isArray(document.sections)) throw new Invalid("sections")
-  const sections = document.sections.map((section, s): ReportSection => {
-    const at = `sections[${s}]`
-    if (!isObject(section) || !Array.isArray(section.items)) throw new Invalid(at)
-    return {
-      kind: oneOf(SECTION_KINDS, section.kind, `${at}.kind`),
-      more: section.more === undefined || section.more === null ? 0 : whole(section.more, `${at}.more`),
-      items: section.items.map((item, i): ReportItem => {
-        const where = `${at}.items[${i}]`
-        if (!isObject(item)) throw new Invalid(where)
-        const type = oneOf(ITEM_TYPES, item.type, `${where}.type`)
-        const checkedItem: ReportItem = {
-          type,
-          who: text(item.who, "who", `${where}.who`),
-          topic: text(item.topic, "topic", `${where}.topic`),
-          action: text(item.action, "action", `${where}.action`),
-          detail: text(item.detail, "detail", `${where}.detail`),
-          quote: text(item.quote, "quote", `${where}.quote`),
-          since: momentOf(item.since, `${where}.since`),
-          due: momentOf(item.due, `${where}.due`),
-          time: momentOf(item.time, `${where}.time`),
-          amount: amountOf(item.amount, `${where}.amount`),
-          count: item.count === undefined || item.count === null ? null : whole(item.count, `${where}.count`),
-          priority:
-            item.priority === undefined || item.priority === null
-              ? "normal"
-              : oneOf(["high", "normal"], item.priority, `${where}.priority`),
-          channel:
-            item.channel === undefined || item.channel === null
-              ? null
-              : oneOf(CHANNEL_KINDS, item.channel, `${where}.channel`),
-          refs: refsOf(item.refs, `${where}.refs`),
-        }
-        const missing = REQUIRED[type].find((field) => checkedItem[field] === null)
-        if (missing) throw new Invalid(`${where}.${missing}`)
-        return checkedItem
-      }),
-    }
-  })
+  const sections = kept(
+    document.sections,
+    (s) => `sections[${s}]`,
+    (section, at): ReportSection => {
+      if (!isObject(section) || !Array.isArray(section.items)) throw new Invalid(at)
+      return {
+        kind: oneOf(SECTION_KINDS, section.kind, `${at}.kind`),
+        more: section.more === undefined || section.more === null ? 0 : whole(section.more, `${at}.more`),
+        items: kept(
+          section.items,
+          (i) => `${at}.items[${i}]`,
+          (item, where): ReportItem => {
+            if (!isObject(item)) throw new Invalid(where)
+            const type = oneOf(ITEM_TYPES, item.type, `${where}.type`)
+            const checkedItem: ReportItem = {
+              type,
+              who: text(item.who, "who", `${where}.who`),
+              topic: text(item.topic, "topic", `${where}.topic`),
+              action: text(item.action, "action", `${where}.action`),
+              detail: text(item.detail, "detail", `${where}.detail`),
+              quote: text(item.quote, "quote", `${where}.quote`),
+              since: momentOf(item.since, `${where}.since`),
+              due: momentOf(item.due, `${where}.due`),
+              time: momentOf(item.time, `${where}.time`),
+              amount: amountOf(item.amount, `${where}.amount`),
+              count: item.count === undefined || item.count === null ? null : whole(item.count, `${where}.count`),
+              priority:
+                item.priority === undefined || item.priority === null
+                  ? "normal"
+                  : oneOf(["high", "normal"], item.priority, `${where}.priority`),
+              channel:
+                item.channel === undefined || item.channel === null
+                  ? null
+                  : oneOf(CHANNEL_KINDS, item.channel, `${where}.channel`),
+              refs: refsOf(item.refs, `${where}.refs`),
+            }
+            const missing = REQUIRED[type].find((field) => checkedItem[field] === null)
+            if (missing) throw new Invalid(`${where}.${missing}`)
+            return checkedItem
+          },
+        ),
+      }
+    },
+  )
   const health = (document.health === undefined || document.health === null ? [] : document.health) as unknown
   if (!Array.isArray(health)) throw new Invalid("health")
   return {
@@ -291,31 +313,35 @@ const checked = (document: unknown, trusted: boolean): { report: Report; leaks: 
       date: document.date,
       summary: text(document.summary, "summary", "summary"),
       sections,
-      health: health.map((entry, h): HealthEntry => {
-        const at = `health[${h}]`
-        if (!isObject(entry)) throw new Invalid(at)
-        const reason =
-          entry.reason === undefined || entry.reason === null
-            ? null
-            : oneOf(HEALTH_REASONS, entry.reason, `${at}.reason`)
-        // A named reason is the problem itself; the hours are only how stale an account without one is.
-        const hours = entry.stale_hours ?? (reason === null ? undefined : 0)
-        if (typeof hours !== "number" || !(hours >= 0)) throw new Invalid(`${at}.stale_hours`)
-        const source = text(entry.source, "source", `${at}.source`)
-        if (source === null) throw new Invalid(`${at}.source`)
-        return {
-          source,
-          account: text(entry.account, "account", `${at}.account`),
-          reason,
-          since: momentOf(entry.since, `${at}.since`),
-          staleHours: hours,
-          refs: refsOf(entry.refs, `${at}.refs`),
-        }
-      }),
+      health: kept(
+        health,
+        (h) => `health[${h}]`,
+        (entry, at): HealthEntry => {
+          if (!isObject(entry)) throw new Invalid(at)
+          const reason =
+            entry.reason === undefined || entry.reason === null
+              ? null
+              : oneOf(HEALTH_REASONS, entry.reason, `${at}.reason`)
+          // A named reason is the problem itself; the hours are only how stale an account without one is.
+          const hours = entry.stale_hours ?? (reason === null ? undefined : 0)
+          if (typeof hours !== "number" || !(hours >= 0)) throw new Invalid(`${at}.stale_hours`)
+          const source = text(entry.source, "source", `${at}.source`)
+          if (source === null) throw new Invalid(`${at}.source`)
+          return {
+            source,
+            account: text(entry.account, "account", `${at}.account`),
+            reason,
+            since: momentOf(entry.since, `${at}.since`),
+            staleHours: hours,
+            refs: refsOf(entry.refs, `${at}.refs`),
+          }
+        },
+      ),
       scope: scopeOf(document.scope),
       tasks: tasksOf(document.tasks),
     },
     leaks,
+    dropped,
   }
 }
 
@@ -362,12 +388,12 @@ export const isReportAnswer = (answer: string): boolean => {
   }
 }
 
-export type ParsedReport = { report: Report; leaks: number } | { invalid: string }
+export type ParsedReport = { report: Report; leaks: number; dropped: string[] } | { invalid: string }
 
 /**
  * A run's answer as a report: one JSON object, bare or as the only fenced `json` block. Text that is neither is not a
- * report (`undefined`) and keeps the Markdown path; a JSON answer that fails the check is `invalid`, with the path
- * of the first field that failed, and is never shown. `trusted` is a document a command built from the store: its
+ * report (`undefined`) and keeps the Markdown path; a JSON answer whose own fields fail the check is `invalid`, with
+ * the path of the first field that failed, and is never shown; a part that fails is left out and named in `dropped`. `trusted` is a document a command built from the store: its
  * strings are the owner's data, such as a CRM title `follow_up`, and lose nothing to the leak patterns.
  */
 export const parseReport = (answer: string, trusted = false): ParsedReport | undefined => {

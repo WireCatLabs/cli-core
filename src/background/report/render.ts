@@ -18,6 +18,7 @@ const LIMITS = { parse: 65_536, memory: 4_000_000, milliseconds: 1_000 }
 
 export const REPORT_REASONS = {
   invalid: "delivery.report-invalid",
+  dropped: "report.items-dropped",
   templateFailed: "report.template-failed",
   templateTags: "report.template-tags",
 } as const
@@ -344,6 +345,8 @@ export interface ReportRun {
   leaks: number
   /** The path of the first field that failed the check; nothing was shown. */
   invalid?: string
+  /** The sections, items and health entries left out because they failed the check; the rest was shown. */
+  dropped?: string[]
   reasons?: string[]
 }
 
@@ -368,6 +371,28 @@ export interface PreparedReport {
 const INVALID_LINES: Record<string, string> = {
   ru: "Сводка не собралась: ошибка формата. Подробности в WireCat.",
   en: "The report could not be built: format error. Details in WireCat.",
+}
+
+const DROPPED_LINES: Record<string, (count: number) => string> = {
+  ru: (count) => `⚠️ Не показано из-за ошибки формата: ${count}. Подробности в WireCat.`,
+  en: (count) => `⚠️ Left out for a format error: ${count}. Details in WireCat.`,
+}
+
+/** The line after a report that lost parts to the check, so a short digest is never read as a whole one. */
+const withDropped = (
+  rendered: { telegram: string[]; email: string; text: string; terminal: string },
+  line: string | undefined,
+) => {
+  if (!line) return rendered
+  const last = rendered.telegram.at(-1) ?? ""
+  const note = escapeHtml(line)
+  const joined = last ? `${last}\n\n${note}` : note
+  const telegram = fits(joined) ? [...rendered.telegram.slice(0, -1), joined] : [...rendered.telegram, note]
+  const paragraph = `<p>${note}</p>`
+  const email = rendered.email.trimEnd().endsWith("</div>")
+    ? rendered.email.replace(/<\/div>\s*$/, `${paragraph}\n</div>`)
+    : `${rendered.email}${paragraph}`
+  return { telegram, email, text: `${rendered.text}\n\n${line}`, terminal: `${rendered.terminal}\n\n${line}` }
 }
 
 /**
@@ -432,21 +457,30 @@ export const prepareReport = async (
   const text = await renderReport(web, "text", templateOf(templates, "text"))
   const terminal = await renderReport(viewFor("app"), "text", templateOf(templates, "text"))
   const renderings = [telegram, email, text, terminal]
-  const reasons = [
+  const reasons: string[] = [
     ...(lookupFailed || renderings.some((one) => one.templateFailed) ? [REPORT_REASONS.templateFailed] : []),
     ...(renderings.some((one) => one.templateTags > 0) ? [REPORT_REASONS.templateTags] : []),
   ]
   const title = text.text.split("\n")[0] ?? ""
+  const { dropped } = parsed
+  if (dropped.length) reasons.push(REPORT_REASONS.dropped)
+  const lineOf = DROPPED_LINES[shipped] ?? (DROPPED_LINES[DEFAULT_LANGUAGE] as (count: number) => string)
+  const shown = withDropped(
+    { telegram: telegram.parts, email: email.text, text: text.text, terminal: terminal.text },
+    dropped.length ? lineOf(dropped.length) : undefined,
+  )
   return {
-    telegram: telegram.parts,
-    email: email.text,
-    text: text.text,
-    terminal: terminal.text,
+    ...shown,
     document: `${JSON.stringify(reportDocument(parsed.report), null, 2)}\n`,
     subject: title,
     notice: [title, parsed.report.summary].filter(Boolean).join("\n"),
     invalid: false,
-    run: { language: shipped, leaks: parsed.leaks, ...(reasons.length ? { reasons } : {}) },
+    run: {
+      language: shipped,
+      leaks: parsed.leaks,
+      ...(dropped.length ? { dropped } : {}),
+      ...(reasons.length ? { reasons } : {}),
+    },
   }
 }
 
