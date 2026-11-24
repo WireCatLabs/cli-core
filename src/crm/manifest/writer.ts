@@ -62,6 +62,9 @@ const capabilitiesOf = (manifest: CrmManifest): CrmWriteCapabilities | undefined
     verbs: CRM_VERBS.filter((verb) => written.some(({ kind, one }) => takes(kind, one, verb))),
     // No slot sends the operation id, so a repeated write would be made again.
     idempotent: false,
+    fields: Object.fromEntries(
+      written.map(({ kind, one }) => [kind, [...Object.keys(one.fields), ...(one.custom ? ["custom"] : [])]]),
+    ),
   }
 }
 

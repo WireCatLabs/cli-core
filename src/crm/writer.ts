@@ -25,6 +25,11 @@ export interface CrmWriteCapabilities {
    * Left out, the CLI gets neither, and the writer needs no `createActivity` or `completeActivity`.
    */
   activities?: readonly CrmActivityWrite[]
+  /**
+   * The fields a write of each kind takes, in `CrmWriteFields`' names and `custom` for the account's own: the commands
+   * offer no flag for another. Left out for a kind, every flag is offered.
+   */
+  fields?: { readonly [K in CrmKind]?: readonly string[] }
 }
 
 /**
