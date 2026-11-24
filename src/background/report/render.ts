@@ -471,7 +471,7 @@ export const prepareReport = async (
   )
   return {
     ...shown,
-    document: `${JSON.stringify(reportDocument(parsed.report), null, 2)}\n`,
+    document: `${JSON.stringify({ ...reportDocument(parsed.report), ...(dropped.length ? { dropped } : {}) }, null, 2)}\n`,
     subject: title,
     notice: [title, parsed.report.summary].filter(Boolean).join("\n"),
     invalid: false,

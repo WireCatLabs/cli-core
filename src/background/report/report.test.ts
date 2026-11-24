@@ -261,6 +261,7 @@ describe("links, task groups, sync health and the footer", () => {
     expect(prepared?.notice).toBe("☀️ Сводка на пятницу, 6 ноября\nТри ответа ждут вас, один платёж просрочен.")
     const document = JSON.parse(prepared?.document ?? "")
     expect(document).not.toHaveProperty("internal")
+    expect(document).not.toHaveProperty("dropped")
     expect(document.sections[1].items[0]).not.toHaveProperty("links")
     expect(document.tasks.new_since).toBe("2026-11-05T08:30:00+03:00")
     const again = await prepareReport(JSON.stringify(document), options)
@@ -481,6 +482,7 @@ describe("an answer as a report", () => {
     expect(prepared?.text.endsWith("⚠️ Не показано из-за ошибки формата: 1. Подробности в WireCat.")).toBe(true)
     expect(prepared?.telegram.at(-1)).toContain("Не показано из-за ошибки формата: 1")
     expect(prepared?.email).toMatch(/<p>⚠️ Не показано из-за ошибки формата: 1\. Подробности в WireCat\.<\/p>\n<\/div>$/)
+    expect(JSON.parse(prepared?.document ?? "{}")).toMatchObject({ dropped: [path] })
     expect(JSON.parse(prepared?.document ?? "{}").sections[0].items).toHaveLength(1)
   })
 
