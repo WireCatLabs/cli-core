@@ -36,6 +36,8 @@ export interface RunScopeOptions {
 export const neverAnswers = ((): Promise<Response> => new Promise<Response>(() => {})) as typeof fetch
 
 const GRACE_MS = 2000
+// Only that the command ends, not how fast: a whole sync on a loaded machine took 2.2–11 s.
+const ANSWERED_MS = 15_000
 
 interface Remote {
   path: string
@@ -120,7 +122,7 @@ export const runScopeCases = (options: RunScopeOptions): RunScopeCase[] => {
     name: `${path} runs in a recorded run named after it`,
     run: async () => {
       const ran = await within(
-        GRACE_MS,
+        ANSWERED_MS,
         `${path} did not end against the answering fake`,
         (async () => cli(["--record", ...machine(words)], options.answering()))(),
       )
