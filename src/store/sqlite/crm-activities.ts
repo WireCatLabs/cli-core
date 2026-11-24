@@ -5,11 +5,12 @@ import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { type CopyViewer, viewerSql } from "./copy-viewer.js"
+import { ACTIVITY_RECORD, dropCrmActivityChunks, rechunkCrmActivities } from "./crm-activity-chunks.js"
 import { crmAccountPrefix, crmIdentityId, SOURCE, TABLES, textOf } from "./crm-rows.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
-export const ACTIVITY_RECORD = "crm.activity"
+export { ACTIVITY_RECORD }
 
 /**
  * Marks deleted the activities on nothing but these contacts or companies: their subject and body leave the copy with
@@ -24,14 +25,17 @@ export const forgetActivitiesOn = (
 ): number => {
   const removed = "rr.target_type = ? AND rr.target_external_id IN (SELECT value FROM json_each(?))"
   const ids = JSON.stringify(externalIds)
-  return database
+  const forgotten = database
     .prepare(
       "UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL " +
         `AND EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' AND ${removed}) ` +
         "AND NOT EXISTS (SELECT 1 FROM record_relations rr WHERE rr.record_id = records.id AND rr.role = 'on' " +
-        `AND NOT (${removed}))`,
+        `AND NOT (${removed})) RETURNING id`,
     )
-    .run(at, accountId, ACTIVITY_RECORD, kind, ids, kind, ids).changes
+    .all(at, accountId, ACTIVITY_RECORD, kind, ids, kind, ids)
+    .map(({ id }) => Number(id))
+  dropCrmActivityChunks(database, forgotten)
+  return forgotten.length
 }
 
 /** A CRM's text field holds what people typed or pasted, a whole e-mail thread too. */
@@ -173,7 +177,10 @@ export const crmActivitiesOver = (context: StoreContext) => {
           .get(accountId, ACTIVITY_RECORD, activity.externalId)
         if (on.length === 0) {
           // It left every kept deal: one stored before goes with it.
-          if (held) database.prepare("UPDATE records SET deleted_at = ? WHERE id = ?").run(at, Number(held.id))
+          if (held) {
+            database.prepare("UPDATE records SET deleted_at = ? WHERE id = ?").run(at, Number(held.id))
+            dropCrmActivityChunks(database, [Number(held.id)])
+          }
           outOfScope += 1
           continue
         }
@@ -217,6 +224,7 @@ export const crmActivitiesOver = (context: StoreContext) => {
                 "VALUES (?, 'on', ?, ?, ?)",
             )
             .run(id, one.kind, one.externalId, at)
+        rechunkCrmActivities(database, [id], at)
         saved += 1
       }
       return { saved, outOfScope }

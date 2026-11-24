@@ -27,6 +27,7 @@ import {
   forgetActivitiesOn,
   type StoredActivity,
 } from "./crm-activities.js"
+import { type CrmActivityChunks, crmActivityChunksOver } from "./crm-activity-chunks.js"
 import { type CrmReads, crmReadsOver } from "./crm-changes.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import {
@@ -215,6 +216,8 @@ export interface CrmCopies extends CrmReads {
   saveActivities(key: AccountKey, activities: readonly CrmActivity[]): Promise<CrmActivitiesSaved>
   /** One deal's or lead's activities, open ones first. */
   activitiesOf(key: AccountKey, kind: DealKind, externalId: string, limit: number): Promise<StoredActivity[]>
+  /** The activities' pieces searched by meaning, as `embedCrmActivities` and `search all` read them. */
+  readonly activityChunks: CrmActivityChunks
   /**
    * Marks deleted every stored deal or lead of the kind assigned to a user outside `userIds`; one with no assignee
    * stays. Reads only the store. Answers how many; `dryRun` only counts them.
@@ -250,6 +253,7 @@ export interface CrmCopies extends CrmReads {
 type Row = Record<string, unknown>
 
 export type { CrmActivitiesSaved, StoredActivity } from "./crm-activities.js"
+export type { CrmActivityChunks, CrmActivityNearest } from "./crm-activity-chunks.js"
 export type { CrmContactsRemoved } from "./crm-contacts.js"
 export { type CrmSkipped, crmIdentityId, crmRowsOver, type ItemWriter } from "./crm-rows.js"
 
@@ -1012,6 +1016,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     activitiesOn: async (key) => crmActivitiesOn(database, key),
     saveActivities: async (key, activities) => activityStore.save(key, activities),
     activitiesOf: async (key, kind, externalId, limit) => activityStore.of(key, kind, externalId, limit),
+    activityChunks: crmActivityChunksOver(context),
     ...crmReadsOver(context),
     removeOutOfScope: async (key, kind, userIds, { dryRun } = {}) =>
       write(database, () => {

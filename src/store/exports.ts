@@ -59,6 +59,7 @@ export {
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export { type CopyViewer, seenBy } from "./sqlite/copy-viewer.js"
 export type { CounterTarget } from "./sqlite/counters.js"
+export type { CrmActivityChunks, CrmActivityNearest } from "./sqlite/crm.js"
 export {
   type CrmFileHit,
   type CrmFileRow,
