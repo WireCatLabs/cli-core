@@ -1,6 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
 import {
-  type CrmActivity,
   type CrmDepartment,
   type CrmField,
   type CrmItem,
@@ -21,12 +20,7 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
-import {
-  type CrmActivitiesSaved,
-  crmActivitiesOver,
-  forgetActivitiesOn,
-  type StoredActivity,
-} from "./crm-activities.js"
+import { type CrmActivityWrites, crmActivitiesOver, forgetActivitiesOn, type StoredActivity } from "./crm-activities.js"
 import { type CrmActivityChunks, crmActivityChunksOver } from "./crm-activity-chunks.js"
 import { type CrmReads, crmReadsOver } from "./crm-changes.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
@@ -141,7 +135,7 @@ const PENDING_MOST = 5000
  * nothing is ever matched by name (WC-DATA-6). Rows the CRM no longer has are marked deleted, never removed
  * (WC-DATA-7). Every write is one transaction per call.
  */
-export interface CrmCopies extends CrmReads {
+export interface CrmCopies extends CrmReads, CrmActivityWrites {
   /** One kind's pipelines and their stages, by the CRM's ids. A stage the CRM dropped stays: deals may stand in it. */
   savePipelines(key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): Promise<CrmSaved>
   /** Deals or leads; one whose stage is not stored, or whose fields the store refuses, is skipped and named. */
@@ -212,8 +206,6 @@ export interface CrmCopies extends CrmReads {
   expireStageEntries(key: AccountKey): Promise<number>
   /** Whether the owner turned on reading activities and tasks (`activities` setting). */
   activitiesOn(key: AccountKey): Promise<boolean>
-  /** Activities and tasks, each on the kept deals and leads it names; one on none of them is not stored. */
-  saveActivities(key: AccountKey, activities: readonly CrmActivity[]): Promise<CrmActivitiesSaved>
   /** One deal's or lead's activities, open ones first. */
   activitiesOf(key: AccountKey, kind: DealKind, externalId: string, limit: number): Promise<StoredActivity[]>
   /** The activities' pieces searched by meaning, as `embedCrmActivities` and `search all` read them. */
@@ -1014,7 +1006,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     handleStageEntries: async (ids) => stageEntryStore.handled(ids),
     expireStageEntries: async (key) => stageEntryStore.expire(key),
     activitiesOn: async (key) => crmActivitiesOn(database, key),
-    saveActivities: async (key, activities) => activityStore.save(key, activities),
+    ...activityStore.writes,
     activitiesOf: async (key, kind, externalId, limit) => activityStore.of(key, kind, externalId, limit),
     activityChunks: crmActivityChunksOver(context),
     ...crmReadsOver(context),

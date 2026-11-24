@@ -122,6 +122,19 @@ export const activityTexts = (database: StoreContext["database"], kind: DealKind
   return found
 }
 
+export interface CrmActivityWrites {
+  /** Activities and tasks, each on the kept deals and leads it names; one on none of them is not stored. */
+  saveActivities(key: AccountKey, activities: readonly CrmActivity[]): Promise<CrmActivitiesSaved>
+  /** Marks deleted the stored activities the CRM says it deleted; answers how many. */
+  removeActivities(key: AccountKey, externalIds: readonly string[]): Promise<number>
+  /** The stored ones a list of every activity did not name, marked deleted; `dryRun` only counts them. */
+  removeUnlistedActivities(
+    key: AccountKey,
+    seen: readonly string[],
+    options?: { dryRun?: boolean },
+  ): Promise<{ stored: number; unlisted: number }>
+}
+
 export interface CrmActivitiesSaved {
   saved: number
   /** On no deal, lead, contact or company this copy keeps, so not stored. */
@@ -229,6 +242,36 @@ export const crmActivitiesOver = (context: StoreContext) => {
       }
       return { saved, outOfScope }
     })
+
+  const remove = (key: AccountKey, externalIds: readonly string[]): number =>
+    write(database, () => {
+      const forgotten = database
+        .prepare(
+          "UPDATE records SET deleted_at = ? WHERE account_id = ? AND type = ? AND deleted_at IS NULL " +
+            "AND external_id IN (SELECT value FROM json_each(?)) RETURNING id",
+        )
+        .all(now(), accountPk(context, key), ACTIVITY_RECORD, JSON.stringify(externalIds))
+        .map(({ id }) => Number(id))
+      dropCrmActivityChunks(database, forgotten)
+      return forgotten.length
+    })
+
+  const removeUnlisted = (
+    key: AccountKey,
+    seen: readonly string[],
+    { dryRun = false }: { dryRun?: boolean } = {},
+  ): { stored: number; unlisted: number } => {
+    const accountId = accountPk(context, key)
+    const live = "account_id = ? AND type = ? AND deleted_at IS NULL"
+    const stored = Number(
+      database.prepare(`SELECT count(*) AS n FROM records WHERE ${live}`).get(accountId, ACTIVITY_RECORD)?.n ?? 0,
+    )
+    const ids = database
+      .prepare(`SELECT external_id FROM records WHERE ${live} AND external_id NOT IN (SELECT value FROM json_each(?))`)
+      .all(accountId, ACTIVITY_RECORD, JSON.stringify(seen))
+      .map(({ external_id }) => String(external_id))
+    return { stored, unlisted: dryRun || ids.length === 0 ? ids.length : remove(key, ids) }
+  }
 
   /** The activities on one deal or lead: open ones first by due time, then the rest, newest first. */
   const of = (key: AccountKey, kind: DealKind, externalId: string, limit: number): StoredActivity[] => {
@@ -416,7 +459,12 @@ export const crmActivitiesOver = (context: StoreContext) => {
     )
   }
 
-  return { save, of, list, count }
+  const writes: CrmActivityWrites = {
+    saveActivities: async (key, activities) => save(key, activities),
+    removeActivities: async (key, externalIds) => remove(key, externalIds),
+    removeUnlistedActivities: async (key, seen, options) => removeUnlisted(key, seen, options),
+  }
+  return { save, writes, of, list, count }
 }
 
 /** An activity a viewer may read: on one of its deals or leads, or on contacts alone and assigned to it. */

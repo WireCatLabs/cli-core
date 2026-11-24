@@ -125,6 +125,12 @@ These read the copy only, under the offline rule above: a limited profile sees t
 leads (and those on contacts alone that are assigned to it), and the contacts linked to its deals or assigned to it.
 A hidden deal is never named in an activity's `on`.
 
+The sync marks deleted the activities a page's `removed` names. A source that lists every activity on each run,
+whatever `since` asked (Attio's notes and tasks take no time filter), sets `listedAll` on its last page. Then an
+activity stored before and not listed is marked deleted, but only when the run read the round from its first page and
+no list was refused (`context.gap`). A list that would mark more than half of ten or more stored activities is held
+with `crm.activities-unlisted-held` until `sync --rescan`. The answer counts both in `activities.removed`.
+
 - `activities list` is mounted with `addCrmCommands(program, { activities: true })`, for a CLI whose adapter has
   `activities`. It answers `crm_activity`: open ones first (overdue, then by due time, then undated), then the rest,
   newest first, `status:open` unless a status or `overdue:true` is given. With the account's `activities` setting off

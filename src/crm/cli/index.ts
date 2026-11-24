@@ -216,7 +216,7 @@ const crmSync = v.strictObject({
   contacts_removed: v.optional(crmContactsRemoved),
   stage_tasks: count,
   activities: v.optional(
-    v.strictObject({ saved: count, out_of_scope: count, state: v.picklist(["partial", "complete"]) }),
+    v.strictObject({ saved: count, out_of_scope: count, removed: count, state: v.picklist(["partial", "complete"]) }),
   ),
   synced: v.array(
     v.strictObject({

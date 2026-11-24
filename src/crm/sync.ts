@@ -122,6 +122,7 @@ export interface CrmSyncIssue {
     | "crm.not-reported"
     | "crm.pending-dropped"
     | "crm.activities-failed"
+    | "crm.activities-unlisted-held"
     | "crm.stage-history-failed"
   message: string
   externalId?: string
@@ -178,7 +179,13 @@ export interface CrmSyncReport {
     steps: number
   }
   /** With the `activities` setting on: what this run read of the activities and tasks on kept deals and leads. */
-  activities?: { saved: number; outOfScope: number; state: "partial" | "complete" }
+  activities?: {
+    saved: number
+    outOfScope: number
+    /** Ones the CRM said it deleted, or a full list no longer named, now marked deleted. */
+    removed: number
+    state: "partial" | "complete"
+  }
   hint?: string
   /**
    * On the first sync of an account no saved group lists: how to add it to a work group. Not `next`, which in an answer
@@ -333,17 +340,39 @@ const activityCursor = (value: string | undefined): ActivityCursor | undefined =
   }
 }
 
+/** As the id pass of a kind does, a list that would mark most of the stored activities deleted is held. */
+const removeUnlistedActivities = async (run: Run, options: CrmSyncOptions, seen: string[]) => {
+  const { store, account, source } = run
+  const { stored, unlisted } = await store.crm.removeUnlistedActivities(account, seen, { dryRun: true })
+  if (unlisted === 0) return
+  if (!options.rescan && (seen.length === 0 || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
+    run.report.issues.push({
+      kind: "deal",
+      reason: "crm.activities-unlisted-held",
+      message:
+        `${source.provider} listed ${seen.length} activities, so ${unlisted} of the ${stored} stored would be marked ` +
+        "deleted; nothing was — check the sign-in's rights, then run sync --rescan to let it through",
+    })
+    return
+  }
+  const done = await store.crm.removeUnlistedActivities(account, seen)
+  if (run.report.activities) run.report.activities.removed += done.unlisted
+}
+
 /**
  * Activities and tasks changed since the last read, after every deal and lead of the run is stored: each is kept only
  * on the deals and leads this copy holds. Pages go on from where a stopped run left them.
  */
-const readActivities = async (run: Run): Promise<BudgetStop | null> => {
+const readActivities = async (run: Run, options: CrmSyncOptions): Promise<BudgetStop | null> => {
   const { source, store, account } = run
   if (!source.activities || !(await store.crm.activitiesOn(account))) return null
-  const read = { saved: 0, outOfScope: 0, state: "partial" as "partial" | "complete" }
+  const read = { saved: 0, outOfScope: 0, removed: 0, state: "partial" as "partial" | "complete" }
   run.report.activities = read
   const saved = activityCursor((await store.sync.syncState(account, ACTIVITIES))?.value)
   const cursor: ActivityCursor = saved ?? { since: run.now - ACTIVITY_DAYS * DAY, newest: 0 }
+  // Only a round read whole in this run, with no list refused, may show what was deleted: a resumed one lost its start.
+  const seen = cursor.page === undefined ? new Set<string>() : undefined
+  const gaps = run.gaps.length
   for (;;) {
     const why = run.budget.take()
     if (why) return why
@@ -359,6 +388,8 @@ const readActivities = async (run: Run): Promise<BudgetStop | null> => {
     const done = await store.crm.saveActivities(account, page.items)
     read.saved += done.saved
     read.outOfScope += done.outOfScope
+    if (page.removed?.length) read.removed += await store.crm.removeActivities(account, page.removed)
+    for (const one of page.items) seen?.add(one.externalId)
     cursor.newest = Math.max(cursor.newest, ...page.items.map((one) => one.updatedAt))
     run.moved()
     if (page.hasMore && page.nextCursor !== undefined) {
@@ -367,6 +398,7 @@ const readActivities = async (run: Run): Promise<BudgetStop | null> => {
       if (run.signal?.aborted) return "cancelled"
       continue
     }
+    if (page.listedAll && seen && run.gaps.length === gaps) await removeUnlistedActivities(run, options, [...seen])
     const next = page.cursor != null ? Number(page.cursor) : cursor.newest || cursor.since
     await store.sync.setSyncState(account, ACTIVITIES, JSON.stringify({ since: next, newest: 0 }))
     read.state = "complete"
@@ -807,7 +839,7 @@ export const syncCrm = async (
   const rowsStopped = stopped
   if (!stopped && kinds.some(isItemKind)) {
     try {
-      stopped = await stopping(() => readActivities(run))
+      stopped = await stopping(() => readActivities(run, options))
     } catch (error) {
       if (options.signal?.aborted) stopped = "cancelled"
       else
