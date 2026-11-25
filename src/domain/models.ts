@@ -1,3 +1,4 @@
+import type { MailType, MailTypeOf } from "../mail/mail-types.js"
 import type { Upload } from "./attachments.js"
 import type { CounterObservation, CounterObservations } from "./counters.js"
 
@@ -477,6 +478,10 @@ export interface MailFields {
   thread: string
   read: boolean | null
   flagged: boolean | null
+  /** What the email is, apart from its sender. @experimental */
+  mailType?: MailType
+  /** How it reached the owner. @experimental */
+  reach?: MailTypeOf["reach"]
   /** How much the sender's mail looks like spam, a scam or a robot, and why; absent when the sender is not scored. */
   senderScore?: { score: number; signals: string[]; demoted?: true }
 }

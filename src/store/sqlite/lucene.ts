@@ -6,6 +6,7 @@ import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../sear
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, outOfTime, QUERY_LIMITS, searchError, sqliteLimit, tooWideTerm } from "../../search/lucene/types.js"
 import { type SqlValue, TIME_LIMIT_FUNCTION, TimeLimitReached } from "../driver.js"
+import { typeCondition, typesCurrent } from "./email-types.js"
 import { emailHitsByPk } from "./emails.js"
 import { placeHits } from "./hit-places.js"
 import {
@@ -136,6 +137,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       elsewhere,
     }
   }
+  let current: boolean | undefined
   const fields: FieldScope = {
     database,
     execution,
@@ -152,6 +154,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     expand: (count) => {
       expansions += count
       return expansions
+    },
+    mailTypes: (filter) => {
+      current ??= typesCurrent(database)
+      return typeCondition(database, filter, current, check)
     },
   }
   const createLeaf = (node: ResolvedPredicate): Leaf => {

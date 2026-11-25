@@ -24,7 +24,11 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 `bcc:` (человек, как в `from:`), `subject:` (слова темы) и `mailbox:` (папка или ярлык по id или имени;
 `label:` — то же самое), `is:unread`, `is:read` и `is:starred` (письмо не прочитано, прочитано, помечено
 флагом — как их показал почтовый ящик при импорте; письмо, для которого импорт этого не узнал, не находит
-ни `is:read`, ни `is:unread`). `is:starred` находит и сообщения, которые владелец отметил звёздочкой
+ни `is:read`, ни `is:unread`), `type:` (тип письма, одно из слов [Mail types](../dev/GLOSSARY.md#mail-types):
+`type:order OR type:bill`) и `reach:` (как письмо дошло: `direct`, `group`, `broadcast`). Тип хранится лениво: поиск
+с `type:` или `reach:` сначала определяет и сохраняет тип писем, у которых его ещё нет, пачками по 5 000 (первый такой
+поиск после обновления на 100 000 писем — секунды); хранилище, открытое только для чтения, определяет их в памяти на
+время поиска. `is:starred` находит и сообщения, которые владелец отметил звёздочкой
 (`messages star`), где у мессенджера есть звёзды. Профиль действует и для MCP-инструментов `search_*` (`source` у каждого).
 Поле, которого у вида нет, в `search all` пропускает этот вид, и ответ называет причину в `skipped`. `bot search messages`
 читает тот же язык в копиях ботов; строгий поиск общего архива выбирает bot accounts через `in:bots`.
@@ -454,6 +458,8 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase, wildcard |
 | `list` | kw | the List-Id of a mailing list, lower case; a domain matches every list under it; mail only | `list:github.com` | term, phrase |
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
+| `type` | enum | auto_reply, security, calendar, travel, event_ticket, order, shipping, bill, social_notification, discussion_list, newsletter, promotion, system_alert, account_notice, personal, other | `type:order OR type:bill` | term, phrase |
+| `reach` | enum | direct, group, broadcast | `reach:direct` | term, phrase |
 | `chat` | kw | account-scoped: an id or chat: reference as is; with * or ? a pattern over title, @username (up to 50); else a title | `chat:*fixture*` | term, phrase, wildcard |
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `source` | enum | internal, file | `source:internal` | term, phrase |
@@ -907,7 +913,7 @@ Low-level `searchStore` и `MessagesService.search` без language сохран
 фразы, `from:` `to:` `cc:` `subject:` `body:` (слово или фраза), `is:unread|read|starred` и `date:`
 (на день шире с каждой стороны: сервер считает дни в своём поясе). Верхний OR — отдельный поиск на
 ветку; вызов — одна ветка в одной папке, не больше 3, 100 новейших писем на вызов. Остальное
-(`has:`, `list:`, `mailbox:`, отрицания, шаблоны, `from:me`) — только локально; запрос без того, что
+(`has:`, `list:`, `mailbox:`, `type:`, `reach:`, отрицания, шаблоны, `from:me`) — только локально; запрос без того, что
 сервер читает, его не спрашивает (`no_words`). IMAP ищет подстроку без форм слов, поэтому сервер
 может не найти другую форму слова; строгий проход убирает лишние находки, но не возвращает
 пропущенные. Gmail получает `X-GM-RAW` по All Mail, другие серверы — `UID SEARCH` по INBOX, Sent и

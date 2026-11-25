@@ -192,7 +192,21 @@ const passes = (filter: TypeFilter, type: string, reach: string) =>
  * The SQL of a filter by type and reach over `e`. Types are worked out and kept first; a query-only open that finds
  * some not worked out works those out in memory, so a filtered list is never short.
  */
-export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: string[]; params: string[] } => {
+export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: string[]; params: string[] } =>
+  filter.types === undefined && filter.reaches === undefined
+    ? { sql: [], params: [] }
+    : typeCondition(database, filter, storeMailTypes(database))
+
+/**
+ * The same filter, without writing: inside a read, the mail not typed yet is worked out in memory. `check` runs
+ * between batches, so a search's time limit still stops it.
+ */
+export const typeCondition = (
+  database: CacheDatabase,
+  filter: TypeFilter,
+  current = typesCurrent(database),
+  check: () => void = () => {},
+): { sql: string[]; params: string[] } => {
   if (filter.types === undefined && filter.reaches === undefined) return { sql: [], params: [] }
   const stored = [
     ...(filter.types === undefined ? [] : ["e.mail_type IN (SELECT value FROM json_each(?))"]),
@@ -202,7 +216,7 @@ export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: s
     ...(filter.types === undefined ? [] : [JSON.stringify(filter.types)]),
     ...(filter.reaches === undefined ? [] : [JSON.stringify(filter.reaches)]),
   ]
-  if (storeMailTypes(database)) return { sql: [stored], params }
+  if (current) return { sql: [stored], params }
   const pending = read(database, () => {
     const ids = database
       .prepare("SELECT id FROM emails WHERE mail_type IS NULL")
@@ -210,9 +224,11 @@ export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: s
       .map((row) => Number(row.id))
     const kept: number[] = []
     const senders = new Map<string, number>()
-    for (let at = 0; at < ids.length; at += BATCH)
+    for (let at = 0; at < ids.length; at += BATCH) {
+      check()
       for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH), senders))
         if (passes(filter, typed.type, typed.reach)) kept.push(id)
+    }
     return kept
   })
   return {

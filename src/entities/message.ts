@@ -117,6 +117,10 @@ export const message = v.strictObject({
       thread: reference,
       read: v.nullable(v.boolean()),
       flagged: v.nullable(v.boolean()),
+      /** What the email is, apart from its sender: one of the mail types. @experimental */
+      mail_type: v.optional(text),
+      /** How it reached the owner: direct, group or broadcast. @experimental */
+      reach: v.optional(text),
       /** How much the sender's mail looks like spam, a scam or a robot (memo's score), and why; absent when unscored. */
       sender_score: v.optional(
         v.strictObject({ score: v.number(), signals: v.array(text), demoted: v.optional(v.literal(true)) }),

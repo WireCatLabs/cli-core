@@ -100,6 +100,8 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
           thread: hit.email.thread,
           read: hit.email.read,
           flagged: hit.email.flagged,
+          mail_type: hit.email.mailType,
+          reach: hit.email.reach,
           sender_score: hit.email.senderScore,
         }
       : undefined,

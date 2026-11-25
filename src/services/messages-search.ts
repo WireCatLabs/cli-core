@@ -32,7 +32,7 @@ import type { SearchFound, SearchQuery } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
 const PERSON_FIELDS = new Set(["from", "to", "cc", "bcc"])
-const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is", "list"])
+const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is", "list", "type", "reach"])
 
 import {
   type Predicate,

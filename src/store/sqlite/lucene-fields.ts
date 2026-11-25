@@ -12,6 +12,7 @@ import { inSource } from "../../search/query.js"
 import { START_LETTERS, STEM_SEPARATOR, type Stemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
+import type { TypeFilter } from "./email-types.js"
 import { linkMatch } from "./mention-links.js"
 import { valueMatch } from "./phone-countries.js"
 import { canonicalTagNamed } from "./tags.js"
@@ -167,6 +168,8 @@ export interface FieldScope {
   everywhere: (node: ResolvedPredicate, fragment: Fragment, start?: string) => Fragment
   /** Counts the patterns' expanded words against the query's budget. */
   expand: (count: number) => number
+  /** The emails that pass a filter by type and reach, as SQL over `e`; never writes. */
+  mailTypes: (filter: TypeFilter) => { sql: string[]; params: string[] }
 }
 
 /** A leaf's condition; a whole `Leaf` is a pattern already expanded by an earlier leaf, taken as it was. */
@@ -739,6 +742,16 @@ const list: FieldCompiler = ({ value }, { mail }) => {
   )
 }
 
+// Mail not typed yet is worked out in memory here: a search never writes, and the fill runs before it.
+const mailType =
+  (key: keyof TypeFilter): FieldCompiler =>
+  ({ value }, scope) => {
+    if (!scope.mail) return always(bound("0"))
+    const filter = { [key]: [value.toLowerCase()] } as TypeFilter
+    const { sql, params } = scope.mailTypes(filter)
+    return always(bound(`m.id IN (SELECT e.id FROM emails e WHERE ${sql.join(" AND ")})`, ...params))
+  }
+
 const is: FieldCompiler = ({ value }, { mail }) => {
   const state = value.toLowerCase()
   return always(
@@ -850,5 +863,7 @@ export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   label: mailbox,
   list,
   is,
+  type: mailType("types"),
+  reach: mailType("reaches"),
   subject,
 }
