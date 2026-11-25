@@ -191,8 +191,11 @@ code says what the shop is, the bank's category says what the payment was. Resea
 - **The sender's view is a summary of its mails.** A shop that sends receipts and promotions appears under Bots and
   under Subscriptions; `reach` is worked out per mail too.
 - **Rules in a fixed order:** one mail, then a list or a subject pattern, then the address, then the domain, then the
-  header classifier. The owner's rule beats a rule's guess; within a level the newest wins. A domain rule is refused
-  for a free-mail domain and the address is offered instead, as HEY does.
+  header classifier. The owner's rule beats a rule's guess; within a level the newest wins. A domain rule on a free-mail
+  domain (`gmail.com`) is allowed, since the owner sometimes needs it (owner, 2026-11-25), but it is never made by
+  accident: a correction of one mail or address never widens to a free-mail domain on its own, the domain scope is
+  not offered first for such a domain, and setting it shows how many addresses and mails it touches before it
+  applies. HEY refuses such rules outright.
 - **A correction asks its scope:** this mail, this address, this domain or this list, and whether to apply it to past
   mail (Outlook's "Move" and "Always move").
 - **Screening first-time senders**, as HEY does, only for people the owner has never written to. Later step.
@@ -251,4 +254,6 @@ updates without a package release. Both wait on the owner (open questions 4 and 
 5. ~~The full split of bots.~~ Decided (owner, 2026-11-25): a bot is its own entity with its own table and `bot:`
    reference; the person-anchored form of #3339 is replaced.
 6. **Paid product.** Will WireCat ever be sold? If so, non-commercial lists (Stop Forum Spam, DuckDuckGo Tracker
-   Radar, abuse.ch for commercial use) are out now.
+   Radar, abuse.ch for commercial use) are out now. Answer (owner, 2026-11-25): WireCat stays free and paid services
+   are built around it, so non-commercial lists may be used by WireCat but never by a paid service. Each such list is
+   marked in the data pack, and its own terms are checked for how they define commercial use.
