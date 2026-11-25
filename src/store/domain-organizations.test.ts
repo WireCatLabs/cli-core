@@ -174,3 +174,31 @@ it("changes nothing when it runs again", async () => {
   expect(rows()).toEqual(before)
   expect(db.prepare("SELECT count(*) AS n FROM persons WHERE kind IS NULL").get()?.n).toBe(0)
 })
+
+it("gives an organization the sector of its domain from the Wikidata list, and none for free mail", async () => {
+  const { store, db } = await opened()
+  await store.people.savePeople(MAIL, [
+    { id: "noreply@mail.hsbc.com", name: "HSBC" },
+    { id: "info@studio.ru", name: "Studio" },
+    { id: "boss@mail.ru", name: "Boss" },
+  ])
+  await sorted(store)
+  const club = await store.knowledge.addOrganization({ kind: "company", name: "Club" })
+  const freeMail = db.prepare("SELECT id FROM identities WHERE external_id = 'boss@mail.ru'").get()?.id
+  db.prepare(
+    "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+      "VALUES (?, ?, 'owner', 'owner', 0, 0)",
+  ).run(Number(freeMail), Number(club.id))
+
+  await resort(store, db)
+
+  const sectors = (await store.knowledge.organizations()).map(({ name, sector }) => ({ name, sector }))
+  expect(sectors).toEqual([
+    { name: "Club", sector: null },
+    { name: "HSBC", sector: "bank" },
+    { name: "Studio", sector: null },
+  ])
+  const before = db.prepare("SELECT * FROM organizations").all()
+  await resort(store, db)
+  expect(db.prepare("SELECT * FROM organizations").all()).toEqual(before)
+})
