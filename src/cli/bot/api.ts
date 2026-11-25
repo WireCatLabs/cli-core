@@ -131,7 +131,9 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       for (const parameter of operation.parameters) {
         const raw = options[apiOptionKey(parameter.name)]
         if (raw === undefined) continue
-        if (parameter.required && isBlank(raw))
+        // A body field may be empty on purpose (Telegram's setWebhook url removes the hook); GraphQL's are checked as
+        // variables.
+        if (parameter.required && parameter.in !== "body" && isBlank(raw))
           throw new CliError("validation_error", `--${apiFlagOf(parameter.name)} of ${operation.command} is empty`, {
             sent: false,
           })
