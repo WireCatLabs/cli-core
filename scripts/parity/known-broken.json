@@ -6,97 +6,13 @@
     "reason": "#3258 no longer offers schedule exec over MCP; src/mcp.test.ts still pins it among the offered schedule commands"
   },
   {
-    "repo": "mail-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "cli-memo",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "tg-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "max-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "whatsapp-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
     "repo": "drive-cli",
     "pr": 3338,
     "until": "2026-12-02",
     "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
   },
   {
-    "repo": "attio-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
     "repo": "gcal-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "zoom-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "amo-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "asterisk-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "beeline-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "hubspot-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "linear-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "notion-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
-    "repo": "slack-cli",
     "pr": 3338,
     "until": "2026-12-02",
     "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
@@ -121,8 +37,8 @@
   },
   {
     "repo": "cli-template",
-    "pr": 3338,
+    "pr": 3365,
     "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list as the template own commands until it adopts the next release"
   }
 ]
