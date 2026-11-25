@@ -73,6 +73,7 @@ import {
 } from "./messenger/tasks-command.js"
 import { topicsCommand as topicsCommandDefinition } from "./messenger/topics-command.js"
 import { watchCommand as watchCommandDefinition } from "./messenger/watch-command.js"
+import { oauthSessionCommand as oauthSessionCommandDefinition } from "./oauth-session.js"
 import { runsCommand as runsCommandDefinition } from "./runs/command.js"
 import { scheduleCommandFor as scheduleCommandForDefinition } from "./schedule/schedule-command.js"
 import { serviceApiCommand as serviceApiCommandDefinition } from "./service-api.js"
@@ -101,6 +102,8 @@ export const botMcpCommand = sharedCommand(botMcpCommandDefinition)
 /** @experimental */
 export const botMessagesCommand = sharedCommand(botMessagesCommandDefinition)
 export const commandsCommand = sharedCommand(commandsCommandDefinition)
+/** @experimental */
+export const oauthSessionCommand = sharedCommand(oauthSessionCommandDefinition)
 export const configCommand = sharedCommand(configCommandDefinition)
 export const setupCommand = sharedCommand(setupCommandDefinition)
 export const guideCommand = sharedCommand(guideCommandDefinition)

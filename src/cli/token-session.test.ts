@@ -11,6 +11,8 @@ import { run } from "./program.js"
 import { hostsFetch } from "./service-api-call.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
+
+import { hasSharedContract } from "./shared-contracts.js"
 import { manifestVerify, type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
 
 const app = { command: "pages", appName: "pages-cli", envPrefix: "PAGES", description: "synthetic", version: "1.0.0" }
@@ -285,4 +287,14 @@ it("shows its guide before the question at a terminal and in the help, never bef
   expect(drawn.err).toContain("\u001b]8;;https://pages.example/tokens\u0007the tokens page\u001b]8;;\u0007")
   expect((await signIn(["personal", "session", "start", "--json"], false)).err).not.toContain("pages.example")
   expect((await signIn(["personal", "session", "start", "--help"], false)).out).toContain(plain)
+})
+
+it("is cli-core's own session group", () => {
+  const session = tokenSessionCommand({
+    app,
+    service: "Pages",
+    resolveSettings: settingsFor(app).resolveSettings,
+    verify: async () => ({ id: "w", account: {} }),
+  })
+  expect(session.commands.every(hasSharedContract) && hasSharedContract(session)).toBe(true)
 })

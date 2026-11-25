@@ -615,7 +615,6 @@ export {
   type OAuthSignedIn,
   oauthFlowOf,
   oauthPreset,
-  oauthSessionCommand,
 } from "./oauth-session.js"
 export { pagingOf, positiveCount, window, withPaging } from "./paging.js"
 export { notLocalPaths } from "./path-options.js"
@@ -778,6 +777,7 @@ export {
   metadataCommand,
   modelCatalogueCommand,
   modelsCommand,
+  oauthSessionCommand,
   pinCommand,
   pollsCommand,
   projectsCommand,

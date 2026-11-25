@@ -7,16 +7,12 @@ import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { type Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { driveSessionCodec, zoomTokenCodec } from "../oauth/storage.js"
-import {
-  type OAuthSessionOptions,
-  type OAuthSignedIn,
-  oauthFlowOf,
-  oauthPreset,
-  oauthSessionCommand,
-} from "./oauth-session.js"
+import { type OAuthSessionOptions, type OAuthSignedIn, oauthFlowOf, oauthPreset } from "./oauth-session.js"
 import { run } from "./program.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
+import { oauthSessionCommand } from "./shared-command-exports.js"
+import { assertSharedContracts, hasSharedContract } from "./shared-contracts.js"
 
 const app = { command: "crm", appName: "crm-cli", envPrefix: "CRM", description: "synthetic", version: "1.0.0" }
 const manifest: ServiceApiManifest = {
@@ -403,4 +399,23 @@ describe("oauthSessionCommand for a CLI that kept its own sign-ins", () => {
       { profile: "work", signed_in: null, state: "unknown" },
     ])
   })
+})
+
+it("is cli-core's own session group, which a CLI changes only through its options", () => {
+  const session = oauthSessionCommand({
+    app,
+    resolveSettings: settingsFor(app).resolveSettings,
+    providerId: "crm",
+    service: "Crm",
+    startOptions: [new Option("--grant <scopes>", "more to ask")],
+    preset: () => {
+      throw new Error("not reached")
+    },
+    verify: async () => ({ id: "w", account: {} }),
+  })
+  const start = session.commands.find((command) => command.name() === "start") as Command
+  expect(hasSharedContract(session) && hasSharedContract(start)).toBe(true)
+  expect(() => assertSharedContracts(session)).not.toThrow()
+  start.option("--later <value>", "added after the factory")
+  expect(() => assertSharedContracts(session)).toThrow("shared contract changed")
 })

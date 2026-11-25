@@ -10,6 +10,7 @@ import { plainSetupText } from "../setup/plain.js"
 import { drawsHyperlinks, hyperlink } from "../terminal/hyperlink.js"
 import { readSecret } from "../terminal/prompt.js"
 import { baseContext, environmentOf, outputFor, secretInputOf } from "./context.js"
+import { honoursDryRun } from "./dry-run-guard.js"
 import { refuseOffline } from "./early-refusal.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, logsInOrOut, REMOTE_READ, refuseUnderReadOnly } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
@@ -19,6 +20,7 @@ import { ProfileTokenStore, type TokenStorage } from "./profile-token.js"
 import { serviceApiCall } from "./service-api-call.js"
 import { type ServiceApiManifest, siteValue } from "./service-api-manifest.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
+import { sharedCommand } from "./shared-contracts.js"
 
 export interface TokenSessionOptions {
   app: AppIdentity
@@ -140,7 +142,7 @@ export const storageOf = (raw: string): TokenStorage => {
  * `session start | status | end | list` for a service signed in with one token (WC-ACCT-12): the token is asked hidden
  * or read from stdin, checked with the service, and only then kept in the keyring or a private file.
  */
-export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
+const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command => {
   const { app, service } = options
   const word = options.token ?? (options.login ? "password" : "API token")
   const contextOf = (command: Command) => {
@@ -312,6 +314,11 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
     .addCommand(end)
     .addCommand(list)
 }
+
+/** cli-core's own command (WC-CMD-34): a CLI changes it only through its options. */
+export const tokenSessionCommand: (options: TokenSessionOptions) => Command = honoursDryRun(
+  sharedCommand(tokenSessionCommandDefinition),
+)
 
 const SITE = "site"
 

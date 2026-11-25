@@ -23,6 +23,7 @@ AccountRemoveOptions · interface · export interface AccountRemoveOptions {
 AccountRemoveOptions · interface · provider?: Provider;
 AccountRemoveOptions · interface · resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings;
 AccountRemoveOptions · interface · ownerHome?: string;
+AccountRemoveOptions · interface · effects?: Effects;
 AccountRemoveOptions · interface · }
 AccountSecrets · interface · export interface AccountSecrets {
 AccountSecrets · interface · credentials: CredentialsOptions;
