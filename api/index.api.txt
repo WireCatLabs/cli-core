@@ -402,7 +402,7 @@ MailFields · interface · thread: string;
 MailFields · interface · read: boolean | null;
 MailFields · interface · flagged: boolean | null;
 MailFields · interface · mailType?: MailType;
-MailFields · interface · reach?: Reach;
+MailFields · interface · reach?: MailTypeOf["reach"];
 MailFields · interface · senderScore?: {
 MailFields · interface · score: number;
 MailFields · interface · signals: string[];
