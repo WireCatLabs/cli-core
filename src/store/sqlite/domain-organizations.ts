@@ -1,8 +1,7 @@
-import { disposableEmailBlocklistSet } from "disposable-email-domains-js"
 import { getDomainWithoutSuffix } from "tldts"
 import { isReadable } from "../../domain/display-names.js"
 import { isCompanyName } from "../../domain/person-kinds.js"
-import { FREE_MAIL, registrableOf } from "../../mail/score.js"
+import { FREE_MAIL, isDisposableDomain, registrableOf } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
 import { actorOfOrigin } from "./actors.js"
@@ -42,18 +41,11 @@ export const BY_DOMAIN = "domain"
 /** A rejected `proposed_actions` row of this kind keeps a rule from making an organization for its domain again. */
 export const REFUSED_DOMAIN = "organization-domain"
 
-let disposable: Set<string> | undefined
-// `isDisposableEmailDomain` builds the whole set on every call: about 0.5 ms an address.
-const isDisposable = (domain: string): boolean => {
-  disposable ??= disposableEmailBlocklistSet()
-  return disposable.has(domain)
-}
-
 /** The registrable domain whose organization an address joins; none for free, throwaway and platform mail. */
 export const companyDomainOf = (address: string): string | undefined => {
   if (!address.includes("@")) return undefined
   const domain = registrableOf(address)
-  return domain.includes(".") && !FREE_MAIL.has(domain) && !SENDING_PLATFORMS.has(domain) && !isDisposable(domain)
+  return domain.includes(".") && !FREE_MAIL.has(domain) && !SENDING_PLATFORMS.has(domain) && !isDisposableDomain(domain)
     ? domain
     : undefined
 }
