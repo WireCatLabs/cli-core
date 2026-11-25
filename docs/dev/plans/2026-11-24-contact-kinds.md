@@ -143,14 +143,15 @@ is automatic and never goes to merge review. Three exceptions:
 ### Domain lists
 
 A domain list can also give an organization its purpose: bank, shop, airline, news, government. This becomes a
-`category` on the organization, and a filter on the Bots and Organizations tabs.
+`sector` on the organization (`category` already means client, supplier or partner), and a filter on the Bots and
+Organizations tabs.
 
 Only lists downloaded whole and matched on the owner's computer qualify. A lookup per sender (a DNS blocklist, a
 category API) tells a third party who writes to the owner. Checked on 2026-11-24:
 
 | Source | Gives | Licence | Use |
 |---|---|---|---|
-| [Wikidata](https://www.wikidata.org/wiki/Wikidata:Database_download) | Banks, airlines, companies, media, government with their official website ([P856](https://www.wikidata.org/wiki/Property:P856)): about 4,000 banks and 2,800 airlines with a website | CC0 | Extract `domain → category` from the dump at release; only the preferred website with no end date |
+| [Wikidata](https://www.wikidata.org/wiki/Wikidata:Database_download) | Banks, airlines, companies, media, government with their official website ([P856](https://www.wikidata.org/wiki/Property:P856)): about 4,000 banks and 2,800 airlines with a website | CC0 | Extract `domain → category` from the dump at release; the best-ranked home page (bare domain or `www`) with no end date |
 | [UT1 lists](https://github.com/olbat/ut1-blacklists) | `bank`, `financial`, `shopping`, `press`, `social_networks`, `webmail` domain lists | CC BY-SA 4.0 | Ship as a separate file with credit, never merged into our data, so share-alike stays on that file |
 | [disposable-email-domains](https://github.com/disposable-email-domains/disposable-email-domains) | Throwaway mail domains | CC0 | With `FREE_MAIL`: never an organization |
 | [Public Suffix List](https://publicsuffix.org/list/) | Registrable domains | MPL 2.0 | Grouping under an organization |
@@ -189,7 +190,9 @@ after the headers and the address, and it is matched on both the `From` domain a
 4. The owner's choice: move an identity to a person or a bot, for its whole history. Built in #3339 as
    `PeopleStore.moveToBot` and `moveToPerson`; memo has no command for it yet.
 5. Organizations from domains, with the three exceptions above (built in #3347: `From` domain only, no `List-Id`
-   grouping yet), then their `category` from the domain lists.
+   grouping yet), then their sector from the domain lists (built in #3350 from Wikidata only, as `sector` in the
+   organization's metadata: `category` already means client, supplier or partner; UT1 not shipped; DKIM signing
+   domain not matched yet; a sector is never cleared). #3349 made the throwaway-domain check one prebuilt set.
 6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
 7. Desktop: four tabs and their filters; this closes
    [desktop#319](https://github.com/WireCatLabs/wirecat-desktop/issues/319) (bot filter) and touches
