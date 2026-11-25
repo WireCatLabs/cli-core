@@ -5,6 +5,36 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.752.0 — 25.11.2026
+
+### Added
+
+- **A mail source names the IMAP Sent folder.** `MailSource.folders()` may answer `sent`: the folder the server marks
+  `\Sent` (RFC 6154), else one by a common name when the server marks none. `mailFolders` then reads `INBOX` and that
+  folder for `mode: "imap"`, and `MailAccount.addresses` takes the owner's other addresses on the mailbox, such as
+  aliases ([MAIL.md](docs/dev/MAIL.md#syncmailsource-store-options)).
+
+### Fixed
+
+- **Mail the owner sent from an alias is outgoing, and the alias is the owner's.** Mail in Sent or under Gmail's `Sent`
+  label, and mail from one of the owner's addresses, counted as incoming when its From was not the account's address,
+  so the people the owner wrote to from an alias had no mail tie and showed as strangers. Now it is outgoing, mail stored
+  earlier is marked too, the senders of Sent mail are kept under `mail_own_addresses`, and their identities join the
+  owner when the account's own identity is the owner's. An IMAP adapter that answers `sent` gets the same for its Sent
+  folder.
+- **`people.list` finds no-reply and notification senders by any part of the address.** `noreply-12345@`,
+  `service-noreply@` and `bank.no-reply@` are no-reply addresses now, and `notify@`, `alerts@` or `bank-notifications@`
+  make a sender `automated` (signal `notification-address`), so banks and service alerts no longer show under
+  strangers. `bounce` counts only as a whole part (`bounce-8812@`), so `bouncer.joe@` stays a person. Someone the owner
+  answers in a private chat stays a `person`. Every stored kind is worked out again on the next list.
+- **The people scan never proposes a bot, an automated sender or an organization as the same person by name.** One
+  newsletter that sends from many `+tag` addresses under one name no longer fills the review with pairs. The next scan
+  deletes the open `name` proposals that name such a sender, and is a full pass once.
+- **`messages sync <chat> --full-history --background` reads the chat in full.** The background job was started
+  without `--full-history`, so a group above `history_group_members_max` ended at once with `fetched: 0` and
+  `limited: "group_too_large"`, and its log asked for the flag that was given. The job now gets the flag, and
+  `store jobs retry` keeps it (tg-cli [#916](https://github.com/WireCatLabs/tg-cli/issues/916)).
+
 ## 0.751.0 — 25.11.2026
 
 ### Fixed
