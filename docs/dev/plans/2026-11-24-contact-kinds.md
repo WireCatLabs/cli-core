@@ -1,6 +1,6 @@
 # Plan: who sent it and how it reached you
 
-Status: draft for review. Steps 1 to 4 are built, step 3 in a first form (below); the rest is not. It answers the RFC in
+Status: draft for review. Steps 1 to 5 are built, step 3 in a first form (below); the rest is not. It answers the RFC in
 [#3314](https://github.com/WireCatLabs/cli-core/issues/3314) and replaces its proposal.
 
 ## The problem
@@ -188,7 +188,8 @@ after the headers and the address, and it is matched on both the `From` domain a
    index; the full split is open (question 5).
 4. The owner's choice: move an identity to a person or a bot, for its whole history. Built in #3339 as
    `PeopleStore.moveToBot` and `moveToPerson`; memo has no command for it yet.
-5. Organizations from domains, with the three exceptions above, then their `category` from the domain lists.
+5. Organizations from domains, with the three exceptions above (built in #3347: `From` domain only, no `List-Id`
+   grouping yet), then their `category` from the domain lists.
 6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
 7. Desktop: four tabs and their filters; this closes
    [desktop#319](https://github.com/WireCatLabs/wirecat-desktop/issues/319) (bot filter) and touches
