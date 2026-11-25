@@ -1,6 +1,6 @@
 # Plan: who sent it and how it reached you
 
-Status: draft for review. Nothing here is built. It answers the RFC in
+Status: draft for review. The bug fixes (step 1) are built; the rest is not. It answers the RFC in
 [#3314](https://github.com/WireCatLabs/cli-core/issues/3314) and replaces its proposal.
 
 ## The problem
@@ -34,34 +34,52 @@ The four bugs have their own issues and are fixed before this plan:
 [#3321](https://github.com/WireCatLabs/cli-core/issues/3321) (the owner's aliases),
 [#3322](https://github.com/WireCatLabs/cli-core/issues/3322) (IMAP Sent folder).
 
-## The model: three answers instead of one kind
+## The model: bots apart from people, then two answers
 
-Each sender (a person in the store) gets three answers, each from its own signals.
+**Who writes is an entity, not a field.** An identity (an address, a messenger account) belongs to one of three:
+
+| Entity | Table | What it is |
+|---|---|---|
+| Person | `persons` (as today) | A human. |
+| Bot | `bots` (new) | A program: no-reply and alert addresses, 2FA codes, receipts, a messenger bot, a company's marketing mail. |
+| Organization | `organizations` (as today) | A company. Its shared mailboxes (`info@`, `support@`) and its bots belong to it. |
+
+Why a separate entity: as long as a bot is a person with a mark, every list, every merge scan and every tie check
+has to remember to skip it, and each one that forgets is a bug (#3320 was one). A bot in its own table cannot be
+proposed as "the same person", cannot be a task's assignee and never counts as someone the owner knows.
+
+A bot has a name, its identities and an optional organization. It has no ties, no tasks and no merge review: two
+bots of one organization are grouped under it, not merged.
+
+**Moving between entities.** A rule can be wrong, so an identity can move from a person to a bot and back. Its
+messages stay where they are (they point at the identity), the move is logged, and the owner's choice always wins
+over the rules.
+
+**Two answers on every person and bot:**
 
 | Field | Values | Meaning |
 |---|---|---|
-| `sender` | `human` · `bot` · `organization` | Who writes. `bot`: a program writes (no-reply, alerts, 2FA codes, a messenger bot). `organization`: a shared mailbox people answer (`info@`, `support@`). |
 | `reach` | `direct` · `group` · `broadcast` | How their messages reached the owner, the widest the owner gets most. `direct`: to the owner, or a small group. `group`: a large chat or a discussion list where everyone can write. `broadcast`: one sender to many readers who cannot answer in place: a newsletter, a channel, marketing mail. |
-| `tie` | yes · no | The owner knows them: the ties `person-ties.ts` already works out. |
+| `tie` | yes · no | The owner knows them: the ties `person-ties.ts` already works out. Always no for a bot. |
 
 Data quality is not a kind. These become marks on the row: `owner`, `incomplete` (no name, or a deleted account),
 `test`.
 
-Why `bot` and not `automated`: a bot is a program. A newsletter author is usually a human who writes to many people.
-So "newsletter" is a `reach`, not a `sender`. Both cases now have a place: a 2FA code is `bot` + `direct`, a
-newsletter is `human` (or `bot`) + `broadcast`.
+**A newsletter a human writes stays a person** with reach `broadcast` (open question 1). The owner can answer
+the author, and the author may be someone the owner also writes to directly. A company's newsletter sent through a
+mailing service is a bot.
 
 ### What the screen shows
 
 | Tab | Who | Filters inside |
 |---|---|---|
-| **People** | `human`, reach `direct` or `group` | Known (tie) · Not known (no tie, today's Strangers) |
-| **Subscriptions** | reach `broadcast`, any sender | Newsletters · Channels · Marketing |
-| **Bots** | `bot`, reach `direct` | Alerts and codes · Receipts · Messenger bots |
+| **People** | persons, reach `direct` or `group` | Known (tie) · Not known (no tie, today's Strangers) |
+| **Subscriptions** | persons and bots with reach `broadcast` | Newsletters · Channels · Marketing |
+| **Bots** | bots, reach `direct` | Alerts and codes · Receipts · Messenger bots |
 | **Organizations** | the `organizations` table | Its people, shared mailboxes and bots, grouped under it |
 
-`incomplete` rows are a filter on every tab ("Show incomplete"), off by default. Today's `kind` stays as a value
-worked out from the three fields, so memo and Desktop keep working until they move.
+`incomplete` rows are a filter on every tab ("Show incomplete"), off by default. Today's `kind` stays on
+`people.list` while memo and Desktop move: a bot is listed as `automated`, worked out from the new tables.
 
 ## How a sender is sorted
 
@@ -70,14 +88,17 @@ and future, the way a mail client's "always put this sender in…" does.
 
 Signals, strongest first:
 
-1. **The owner chose.** A kind the owner set by hand.
+The signals decide the entity (person, bot or an organization's shared mailbox) and the reach.
+
+1. **The owner chose.** "This is a person" or "this is a bot", set by hand.
 2. **The platform says so.** Telegram `user.bot`, `user.support`, `user.deleted`
    ([constructor/user](https://core.telegram.org/constructor/user)); Slack `is_bot`, `profile.bot_id`
    ([user object](https://docs.slack.dev/reference/objects/user-object)); Discord `bot`, `system`
    ([user](https://docs.discord.com/developers/resources/user)). Stored today as `identities.bot`.
 3. **The owner wrote to them.** Mail from any of the owner's addresses
    ([#3321](https://github.com/WireCatLabs/cli-core/issues/3321)), a one-to-one chat the owner wrote in. This makes
-   a `tie` and `direct` reach, and stops `bot` from header guesses (not from the platform flag).
+   a `tie` and `direct` reach, and keeps the identity a person against header guesses (not against the platform
+   flag).
 4. **Mail headers that mark a program.** `Auto-Submitted` other than `no`
    ([RFC 3834](https://www.rfc-editor.org/rfc/rfc3834)), an empty return path, `MAILER-DAEMON` → `bot`.
 5. **Mail headers that mark a list.** `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
@@ -104,7 +125,7 @@ Signals, strongest first:
 
 ### Grouping under an organization
 
-A `bot` or `organization` sender joins the organization of its registrable domain, worked out with the
+A bot or a shared mailbox joins the organization of its registrable domain, worked out with the
 [Public Suffix List](https://publicsuffix.org/list/) (`mail.bank.example` and `bank.example` are one domain). This
 is automatic and never goes to merge review. Three exceptions:
 
@@ -112,7 +133,7 @@ is automatic and never goes to merge review. Three exceptions:
 - **Sending platforms** (newsletter hosts and mail services that send for many customers): group by `List-Id`, or by
   display name within the platform, never by the platform's domain. Otherwise every newsletter on one host becomes
   one sender.
-- **`human` senders** at a company domain are linked to the organization as members (`member-of`), not merged.
+- **People** at a company domain are linked to the organization as members (`member-of`), not merged.
 
 ### Domain lists
 
@@ -138,7 +159,7 @@ Not used:
   ([Spamhaus terms](https://www.spamhaus.org/organization/dnsblusage/), [SURBL policy](https://www.surbl.org/usage-policy)).
 - **Tranco and other top-site lists:** popularity, not purpose.
 
-A domain names the organization, not the sender. A person at `bank.example` is a `human` member of the bank, not a
+A domain names the organization, not the sender. A person at `bank.example` is a member of the bank, not a
 bot. Mail sent through a sending platform never takes the platform's category. So the domain is the last signal,
 after the headers and the address, and it is matched on both the `From` domain and the DKIM signing domain.
 
@@ -150,15 +171,17 @@ after the headers and the address, and it is matched on both the `From` domain a
 
 ## Order of work
 
-1. The four bugs: #3319, #3320, #3321, #3322.
-2. Store: `sender`, `reach` and the marks on `persons`, worked out like `kind` today (lazily, cleared by triggers).
-   `kind` stays, worked out from them. A migration number from [COORDINATION.md](../COORDINATION.md).
-3. Mail sync reads `Auto-Submitted`, `List-Unsubscribe-Post` and `Feedback-ID` (today
-   [`mail/headers.ts`](../../../src/mail/headers.ts) reads `LIST-ID`, `LIST-UNSUBSCRIBE`, `PRECEDENCE`) and records
-   where the owner was on each message.
-4. Organizations from domains, with the three exceptions above, then their `category` from the domain lists.
-5. The owner's choice: a command that sets a sender's kind for its whole history.
-6. memo: `people list` filters `sender:`, `reach:`, `tie:`.
+1. The four bugs: #3319, #3320, #3321, #3322 (#3319, #3320, #3322 merged; #3321 waits on mail-cli).
+2. Signals with no store change: mail sync reads `Auto-Submitted`, `List-Unsubscribe-Post` and `Feedback-ID` into the
+   stored headers (today [`mail/headers.ts`](../../../src/mail/headers.ts) reads `LIST-ID`, `LIST-UNSUBSCRIBE`,
+   `PRECEDENCE`), trusted only under a passed DKIM signature of the `From` domain; `reach` is worked out from
+   `email_recipients` for the page a list returns. Strong program signals already feed today's `automated`.
+3. Store: the `bots` table, `identities` pointing at a person or a bot, the move log, and `reach` and the marks kept
+   like `kind` today (lazily, cleared by triggers). Identities that today make a person `automated` move to bots.
+   The migration takes the next free number after the 1.0 store (73, cli-core#3288).
+4. The owner's choice: move an identity to a person or a bot, for its whole history.
+5. Organizations from domains, with the three exceptions above, then their `category` from the domain lists.
+6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
 7. Desktop: four tabs and their filters; this closes
    [desktop#319](https://github.com/WireCatLabs/wirecat-desktop/issues/319) (bot filter) and touches
    [desktop#320](https://github.com/WireCatLabs/wirecat-desktop/issues/320) (filters). The public page
@@ -166,11 +189,12 @@ after the headers and the address, and it is matched on both the `From` domain a
 
 ## Open questions
 
-1. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
+1. **A newsletter a human writes.** A person with reach `broadcast` (this plan), or a bot like a company's newsletter?
+2. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
    tabs right, or should Bots sit inside Organizations?
-2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
+3. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
    reach `direct`, or two senders split by address?
-3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
-   one Subscription?
-4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
+4. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
+   one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
+5. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
    a `models`-style command the owner runs?
