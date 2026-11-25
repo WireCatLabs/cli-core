@@ -23,7 +23,7 @@ import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { holdingAuthorOf, moveToBot, moveToPerson, putBack } from "./sender-bots.js"
 import { LIST_ID } from "./sender-signals.js"
-import { read, write } from "./transaction.js"
+import { letWaitersIn, read, write } from "./transaction.js"
 
 /** One sorting rule. @experimental */
 export interface SortRule {
@@ -341,14 +341,11 @@ const moveSender = (context: StoreContext, address: string, rule: SortRule) => {
   }
 }
 
-/** Each move takes about 10 ms: 100 per write keeps another writer's 5 s wait for the lock far away. */
-const SETTLE_CHUNK = 100
-
 /**
- * A waiting writer polls the lock every 100 ms at most (SQLite's busy handler): back-to-back writes never let it in,
- * and it gives up after 5 s however short each write is. A pause longer than its poll does.
+ * Senders per write. A move to a bot takes about 10 ms, so 100 keep one write near 1 s, far from another writer's 5 s
+ * wait; putting one back is cheaper, but a write's commit costs the same.
  */
-const letOthersIn = () => new Promise((resolve) => setTimeout(resolve, 150))
+const SETTLE_CHUNK = 100
 
 /** Whether the sender is still where the rule put it: else the owner moved it since, and that stands. */
 const stillAfter = (database: CacheDatabase, identity: number, after: string | null): boolean => {
@@ -401,8 +398,8 @@ const putBackChunk = (context: StoreContext): boolean => {
 }
 
 /** Each removed rule's senders put back a write at a time; a stopped run resumes on the next change of rules. */
-const putBackInChunks = async (context: StoreContext) => {
-  while (write(context.database, () => putBackChunk(context))) await letOthersIn()
+const putBackInChunks = (context: StoreContext) => {
+  while (write(context.database, () => putBackChunk(context))) letWaitersIn()
 }
 
 const clearTypes = (database: CacheDatabase, ids: readonly number[]) =>
@@ -577,9 +574,9 @@ const applyRule = (context: StoreContext, rule: SortRule): number[] => {
 }
 
 /** Settles senders a write at a time; a sender already settled is skipped, so a stopped run resumes on the next. */
-const settleInChunks = async (context: StoreContext, identities: readonly number[]) => {
+const settleInChunks = (context: StoreContext, identities: readonly number[]) => {
   for (let at = 0; at < identities.length; at += SETTLE_CHUNK) {
-    if (at > 0) await letOthersIn()
+    if (at > 0) letWaitersIn()
     write(context.database, () => settleSenders(context, identities.slice(at, at + SETTLE_CHUNK)))
   }
 }
@@ -689,7 +686,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         const made = ruleById(database, id)
         return { applied: true, preview, rule: made, identities: applyRule(context, made) }
       })
-      await settleInChunks(context, identities)
+      settleInChunks(context, identities)
       return result
     },
     remove: async (id, by) => {
@@ -700,7 +697,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         if (rule.removedAt !== null) return rule
         return takeOut(context, rule, false)
       })
-      await putBackInChunks(context)
+      putBackInChunks(context)
       return removed
     },
     undo: async (by) => {
@@ -723,8 +720,8 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         const back = ruleById(database, rule.id)
         return { identities: applyRule(context, back), undone: { undid: "remove" as const, rule: back } }
       })
-      await putBackInChunks(context)
-      await settleInChunks(context, identities)
+      putBackInChunks(context)
+      settleInChunks(context, identities)
       return undone
     },
     reset: async (sender, by) => {
@@ -746,7 +743,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
           .all(JSON.stringify(addresses), JSON.stringify(mails))
           .map((row) => takeOut(context, ruleOf(row), false))
       })
-      await putBackInChunks(context)
+      putBackInChunks(context)
       return removed
     },
   }
