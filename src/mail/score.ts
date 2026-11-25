@@ -1,4 +1,4 @@
-import { isDisposableEmailDomain } from "disposable-email-domains-js"
+import { disposableEmailBlocklistSet } from "disposable-email-domains-js"
 import { getDomain } from "tldts"
 import type { Listed } from "./source.js"
 
@@ -84,6 +84,14 @@ export const FREE_MAIL = new Set([
   "rambler.ru",
   "zoho.com",
 ])
+
+let disposable: Set<string> | undefined
+// `isDisposableEmailDomain` builds its set of about 9,000 domains on every call.
+/** A throwaway mail domain (CC0 list); `domain` is lower case, as `registrableOf` gives it. */
+export const isDisposableDomain = (domain: string): boolean => {
+  disposable ??= disposableEmailBlocklistSet()
+  return disposable.has(domain)
+}
 
 /** A brand and the first labels of the domains it really sends from. */
 const BRANDS: Record<string, string[]> = {
@@ -192,7 +200,7 @@ export const scoreGroup = (
   // Gmail's stamp without a dkim= verdict means the mail carried no signature: that counts as not passed.
   const stamped = items.filter((item) => item.headers?.auth !== undefined)
   if (stamped.length && most(stamped, (item) => item.headers?.auth?.dkim !== "pass")) signals.push("dkim_not_passed")
-  if (domain !== undefined && isDisposableEmailDomain(domain)) signals.push("disposable_domain")
+  if (domain !== undefined && isDisposableDomain(domain)) signals.push("disposable_domain")
   if (context.bulk >= 0.8 && !context.replied) signals.push("bulk_never_replied")
   if (context.replied) signals.push("replied")
   const kept =

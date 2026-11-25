@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { headersOf, mailHeadersOf } from "./headers.js"
 import { domainsToAge, probeMail } from "./probe.js"
-import { FREE_MAIL, scoreGroup, spoofedBrand, youngAt } from "./score.js"
+import { FREE_MAIL, isDisposableDomain, scoreGroup, spoofedBrand, youngAt } from "./score.js"
 import type { Listed } from "./source.js"
 
 const head = (lines: string[]) => `${lines.join("\r\n")}\r\n`
@@ -135,6 +135,11 @@ describe("scoreGroup", () => {
     expect(scoreGroup(fresh, { replied: false, bulk: 1, ages }).signals).toEqual(["young_domain", "bulk_never_replied"])
     const throwaway = [email(2, ["From: someone@mailinator.com"])]
     expect(scoreGroup(throwaway, { replied: false, bulk: 0, ages }).signals).toEqual(["disposable_domain"])
+  })
+
+  it("knows a throwaway domain from the shipped list and leaves mailbox providers and companies alone", () => {
+    expect(["mailinator.com", "guerrillamail.com"].map(isDisposableDomain)).toEqual([true, true])
+    expect(["gmail.com", "shop.example"].map(isDisposableDomain)).toEqual([false, false])
   })
 
   it("adds mail never opened and a DKIM check most of the mail did not pass, and ignores unknowns", () => {
