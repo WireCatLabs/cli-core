@@ -70,6 +70,7 @@ const setup = (
   keyring: KeyringStore = memoryKeyring(),
   more: Partial<OAuthSessionOptions> = {},
   browser: (url: string) => Promise<unknown> = visit,
+  own = { fetch: true },
 ) => {
   const root = mkdtempSync(join(tmpdir(), "oauth-session-"))
   roots.push(root)
@@ -128,7 +129,7 @@ const setup = (
         tty: false,
         env,
         keyring,
-        fetch: service,
+        ...(own.fetch ? { fetch: service } : {}),
         stdin,
         openBrowser: async (url: string, _command?: Command) => {
           opened.push(url)
@@ -224,6 +225,28 @@ describe("oauthSessionCommand", () => {
 
     expect((await cli(["personal", "session", "end", "--json"])).json.item).toMatchObject({ ended: true })
     expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
+  })
+
+  it("signs in when the sign-in and the token share one host and no fetch is given", async () => {
+    const loopback = globalThis.fetch
+    const { cli, tokenCalls } = setup(memoryKeyring(), {}, (url) => loopback(callbackOf(url)), { fetch: false })
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      tokenCalls.push(new URLSearchParams(String(init?.body)))
+      expect(new URL(String(url)).hostname).toBe("app.crm.test")
+      return Response.json({
+        access_token: "synthetic-access",
+        refresh_token: "synthetic-refresh",
+        expires_in: 3600,
+        scope: "record_permission:read",
+      })
+    })
+    try {
+      const started = await cli(["personal", "session", "start", "--json"])
+      expect(started.error).toBeUndefined()
+      expect(tokenCalls).toHaveLength(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it("keeps the sign-in as it was when another account is refused", async () => {
