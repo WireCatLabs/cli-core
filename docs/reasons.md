@@ -269,6 +269,22 @@ headings.
 | `mail-findings.not-stored` | `not_found` | a mail finding cites an email the store does not hold |  |
 | `mail-findings.partial` | `validation_error` | a cited email is not stored whole yet; cite it once it is |  |
 | `mail-findings.stale` | `validation_error` | mail findings cite mail that changed since it was read; stage a new batch |  |
+| `mail-sort.apply-to` | `validation_error` | a sorting rule says whether it sorts past mail too: applyTo all or new |  |
+| `mail-sort.confirm` | `validation_error` | a free-mail domain rule needs the confirm of a dry run whose counts still hold; run the dry run again |  |
+| `mail-sort.email` | `not_found` | no incoming email has that id |  |
+| `mail-sort.free-mail-program` | `validation_error` | only the owner sets a sorting rule on a free-mail or throwaway domain |  |
+| `mail-sort.mail-type` | `validation_error` | the mail type is not one of the known types |  |
+| `mail-sort.no-action` | `validation_error` | a sorting rule sets a mail type, a sender or an organization |  |
+| `mail-sort.not-found` | `not_found` | no mail sorting rule has that id; the rules list names them |  |
+| `mail-sort.organization` | `validation_error` | the organization named is not in the store |  |
+| `mail-sort.over-addresses` | `validation_error` | only a domain rule can beat the address rules |  |
+| `mail-sort.owner-only` | `validation_error` | only the owner moves or files senders, undoes and resets; a program removes its own rules |  |
+| `mail-sort.scope` | `validation_error` | a sorting rule's scope is mail, list, subject, address or domain |  |
+| `mail-sort.sender` | `validation_error` | a sorting rule makes a sender a bot or a person |  |
+| `mail-sort.sender-new` | `validation_error` | a sender moves with its whole history, so an address rule that moves one applies to all |  |
+| `mail-sort.sender-ref` | `validation_error` | the sender is named by an address, a person: ref or a sender-bot: ref |  |
+| `mail-sort.sender-scope` | `validation_error` | a sorting rule moves or files a sender at address or domain scope only |  |
+| `mail-sort.value` | `validation_error` | the value names no mail, list, subject, address or domain of that scope |  |
 | `mail.attachments-unread` | `provider_unavailable` | the email could not be read again, so its skipped attachments have no text |  |
 | `mail.cursor-ahead` | `validation_error` | an acknowledge cursor is past the newest stored email |  |
 | `mail.holder-not-yours` | `permission_error` | a run moves only the mark of the holder its schedule names |  |

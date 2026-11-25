@@ -1,7 +1,10 @@
 import type { Sector } from "../../domain/organization-sectors.js"
 import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import { listIdOf } from "../../mail/headers.js"
 import { MAIL_TYPES, type MailType, type MailTypeOf, mailTypeOf, schemaTypesOf } from "../../mail/mail-types.js"
+import { sortRuleFor } from "../../mail/sort-rules.js"
 import { type CacheDatabase, isQueryOnly } from "../driver.js"
+import { typeRulesOf } from "./mail-sorting.js"
 import { LIST_ID, LIST_SENDERS, REACHES, type Reach, senderKey } from "./sender-signals.js"
 import { read, writeBatch } from "./transaction.js"
 
@@ -15,7 +18,8 @@ const RULES_KEY = "mail.type_rules"
 const BATCH = 5_000
 
 const INPUTS =
-  "SELECT e.id, e.from_address, e.subject, e.headers, e.body_html, " +
+  "SELECT e.id, e.from_address, e.subject, e.headers, e.body_html, e.outgoing, " +
+  "coalesce(e.received_at, e.sent_at) AS at, " +
   `${LIST_ID} AS list, ` +
   "CASE WHEN json_extract(e.metadata, '$.rule') IS NOT NULL THEN NULL ELSE " +
   "(SELECT count(*) FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) END AS recipients, " +
@@ -54,6 +58,7 @@ export const typesOf = (
   const found = new Map<number, MailTypeOf>()
   if (ids.length === 0) return found
   const rows = database.prepare(INPUTS).all(JSON.stringify(ids))
+  const rules = typeRulesOf(database)
   const lists = [
     ...new Set(rows.flatMap((row) => (typeof row.list === "string" && !senders.has(row.list) ? [row.list] : []))),
   ]
@@ -65,20 +70,32 @@ export const typesOf = (
   }
   for (const row of rows) {
     const headers = parsed(row.headers)
+    const from = typeof row.from_address === "string" ? row.from_address.toLowerCase() : null
+    const typed = mailTypeOf({
+      from,
+      subject: typeof row.subject === "string" ? row.subject : null,
+      headers: typeof row.list === "string" ? { ...headers, "list-id": row.list } : headers,
+      recipients: row.recipients == null ? null : Number(row.recipients),
+      parts: JSON.parse(String(row.parts ?? "[]")) as string[],
+      schemaTypes: schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
+      listSenders: typeof row.list === "string" ? (senders.get(row.list) ?? 0) : 0,
+      ownerWrote: Number(row.owner_wrote) === 1,
+      bot: Number(row.bot) === 1,
+      sector: typeof row.sector === "string" ? (row.sector as Sector) : null,
+    })
+    const rule =
+      Number(row.outgoing) === 1
+        ? undefined
+        : sortRuleFor(rules, {
+            id: Number(row.id),
+            from,
+            subject: typeof row.subject === "string" ? row.subject : null,
+            list: typeof row.list === "string" ? (listIdOf(row.list) ?? null) : null,
+            at: row.at == null ? null : Number(row.at),
+          })
     found.set(
       Number(row.id),
-      mailTypeOf({
-        from: typeof row.from_address === "string" ? row.from_address.toLowerCase() : null,
-        subject: typeof row.subject === "string" ? row.subject : null,
-        headers: typeof row.list === "string" ? { ...headers, "list-id": row.list } : headers,
-        recipients: row.recipients == null ? null : Number(row.recipients),
-        parts: JSON.parse(String(row.parts ?? "[]")) as string[],
-        schemaTypes: schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
-        listSenders: typeof row.list === "string" ? (senders.get(row.list) ?? 0) : 0,
-        ownerWrote: Number(row.owner_wrote) === 1,
-        bot: Number(row.bot) === 1,
-        sector: typeof row.sector === "string" ? (row.sector as Sector) : null,
-      }),
+      rule?.mailType == null ? typed : { ...typed, type: rule.mailType, signal: `rule:${rule.id}` },
     )
   }
   return found
@@ -92,8 +109,15 @@ const rulesOf = (database: CacheDatabase): string | undefined => {
 const anyLeft = (database: CacheDatabase): boolean =>
   database.prepare("SELECT 1 FROM emails WHERE mail_type IS NULL LIMIT 1").get() !== undefined
 
+const UNCHECKED = "SELECT id FROM emails WHERE mail_type IS NOT NULL AND sort_checked IS NULL"
+
+/** A type a build before version 77 kept, while a sorting rule exists that it never read. */
+const anyUnchecked = (database: CacheDatabase): boolean =>
+  typeRulesOf(database).size > 0 && database.prepare(`${UNCHECKED} LIMIT 1`).get() !== undefined
+
 /** Whether every email's stored type is current. */
-export const typesCurrent = (database: CacheDatabase): boolean => rulesOf(database) === TYPE_RULES && !anyLeft(database)
+export const typesCurrent = (database: CacheDatabase): boolean =>
+  rulesOf(database) === TYPE_RULES && !anyLeft(database) && !anyUnchecked(database)
 
 /**
  * Works out and keeps the type of every email whose stored one the triggers cleared, or every email after the rules
@@ -115,7 +139,15 @@ export const storeMailTypes = (database: CacheDatabase): boolean => {
         )
         .run(RULES_KEY, TYPE_RULES, Date.now())
     })
-  const keep = database.prepare("UPDATE emails SET mail_type = ?, reach = ?, type_signal = ? WHERE id = ?")
+  if (anyUnchecked(database)) {
+    const clear = database.prepare(
+      `UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE id IN (${UNCHECKED} LIMIT ?)`,
+    )
+    while (writeBatch(database, () => clear.run(BATCH).changes) === BATCH);
+  }
+  const keep = database.prepare(
+    "UPDATE emails SET mail_type = ?, reach = ?, type_signal = ?, sort_checked = 1 WHERE id = ?",
+  )
   const senders = new Map<string, number>()
   for (;;) {
     const more = writeBatch(database, () => {

@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-148 tables, 28 full-text indexes.
+150 tables, 28 full-text indexes.
 
 ## Conventions
 
@@ -812,8 +812,9 @@ One email.
 | `mail_type` | text |  |  | what the email is (`order`, `newsletter`, `personal`, …, docs/dev/GLOSSARY.md); null until worked out, and nulled by triggers on its inputs |
 | `reach` | text |  |  | `direct`, `group` or `broadcast`: how it reached the owner; kept with `mail_type` |
 | `type_signal` | text |  |  | what decided `mail_type`, such as `list-id`; kept with it |
+| `sort_checked` | integer |  |  | 1: `mail_type` was worked out with the sorting rules; a build before version 77 leaves it null |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (mail_type)`, `INDEX (id) WHERE mail_type IS NULL`, `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (mail_type)`, `INDEX (id) WHERE mail_type IS NULL`, `INDEX (id) WHERE mail_type IS NOT NULL AND sort_checked IS NULL`, `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
 
 *Checks:* `CHECK ("references" IS NULL OR json_valid("references"))`, `CHECK ("headers" IS NULL OR json_valid("headers"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 
@@ -837,6 +838,47 @@ A mail rule of one account: conditions an email must match, and what to do with 
 *Keys and indexes:* `UNIQUE (account_id, conditions)`
 
 *Checks:* `CHECK ("conditions" IS NULL OR json_valid("conditions"))`, `CHECK ("actions" IS NULL OR json_valid("actions"))`
+
+### `mail_sort_rules`
+
+A sorting rule over mail, the owner's or the program's: what one mail, a List-Id, a subject pattern, an address or a registrable domain is. The first scope that matches wins in that order, then the header classifier; within a scope the owner's rule beats the program's and the newest wins. Not `mail_rules`, which decides how one account's sync stores mail.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `scope` | text | not null |  | `mail`, `list`, `subject`, `address` or `domain` |
+| `value` | text | not null |  | the email's id, the List-Id, the folded subject pattern, the lower-case address or the registrable domain |
+| `mail_type` | text |  |  | the type it gives each mail it matches; null leaves the type to the classifier |
+| `sender` | text |  |  | `bot` or `person`: what the sender becomes, for its whole history; the owner's only |
+| `organization_id` | integer |  |  | the organization the sender's addresses are filed under; no foreign key, a gone one files nothing |
+| `over_addresses` | integer | not null |  | 1: this domain rule beats the address rules at its domain |
+| `past` | integer | not null |  | 1: past mail too; 0: only mail dated from `created_at` on |
+| `author` | text | not null |  | `owner` or `program` |
+| `decided_by` | text |  |  | the bot that made a program's rule |
+| `reason` | text |  |  | why, in the owner's or the program's words |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `removed_at` | integer |  |  | removed; kept so the removal can be undone |
+| `undone_at` | integer |  |  | its add was undone; the next undo goes further back |
+
+*Keys and indexes:* `INDEX (scope, value)`
+
+### `mail_sort_effects`
+
+What a sorting rule did to one sender identity beyond its mail types: the sender moved to a bot or a person, or its address filed under an organization. A removal of the rule puts back `before`. A trigger drops an identity's rows with it.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `rule_id` | integer | not null |  | the `mail_sort_rules` row |
+| `identity_id` | integer | not null |  | no foreign key, as the bot tables: an older build purging an account does not know this table |
+| `action` | text | not null |  | `sender` or `organization` |
+| `before` | text |  |  | `person:<id>` or `sender-bot:<id>` it was held by; for `organization`, `held` when it already was |
+| `after` | text |  |  | where the rule put it; equal to `before` when the rule left it, as for past senders |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `undone_at` | integer |  |  | put back when the rule was removed |
+
+*Keys and indexes:* `INDEX (rule_id)`, `INDEX (identity_id)`
 
 ### `email_recipients`
 

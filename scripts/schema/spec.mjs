@@ -9,6 +9,7 @@ import { decisionRequestTables } from "./decision-requests.mjs"
 import { annotationTransferTable, documentHistoryTables, documentRemoval } from "./document-transfers.mjs"
 import { enrichmentTables } from "./enrichments.mjs"
 import { financeTables } from "./finance.mjs"
+import { mailSortingTables } from "./mail-sorting.mjs"
 import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
 import { senderBotTables } from "./sender-bots.mjs"
@@ -675,6 +676,9 @@ const NEW = {
           note: "`direct`, `group` or `broadcast`: how it reached the owner; kept with `mail_type`",
         }),
         c("type_signal", "text", { note: "what decided `mail_type`, such as `list-id`; kept with it" }),
+        c("sort_checked", "integer", {
+          note: "1: `mail_type` was worked out with the sorting rules; a build before version 77 leaves it null",
+        }),
       ],
       keys: [
         "UNIQUE (account_id, external_id)",
@@ -682,6 +686,7 @@ const NEW = {
         "INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL",
         "INDEX (mail_type)",
         "INDEX (id) WHERE mail_type IS NULL",
+        "INDEX (id) WHERE mail_type IS NOT NULL AND sort_checked IS NULL",
         `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`,
       ],
     },
@@ -704,6 +709,7 @@ const NEW = {
       ],
       keys: ["UNIQUE (account_id, conditions)"],
     },
+    ...mailSortingTables,
     {
       name: "email_recipients",
       doc: "One address on an email.",

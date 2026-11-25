@@ -78,6 +78,7 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
 | bot | a program that writes to the owner: a no-reply or alert address, a messenger's bot, a service's mail; an entity apart from people, with a name, identities and an optional organization, and no ties, tasks or merge review (`sender-bot:<id>`, the `sender_bots` table). Not an agent: `bot:<id>` and the `bots` table are agents that work here | automated person, sender (for a bot) | `people list kind:automated` still lists people a name or a bulk mailbox marks; memo's `{ bot }` author and `bot list` mean agents and a messenger's bot account |
 | mail type | what one email is, apart from who sent it: one of the words in [Mail types](#mail-types), worked out per email from what the store keeps of it (`emails.mail_type`, key `mailType`). A sender's view is a summary of its mail, so a shop that sends receipts and sales counts under `order` and under `promotion` | category, kind (a person's `kind` is another thing), label | none |
+| sorting rule | the owner's or the program's word on what mail is, by one of five scopes tried in this order: one mail, a List-Id or a subject pattern, an address, a registrable domain; then the header classifier. It sets a mail type, makes the sender a bot or a person for its whole history, or files the sender under an organization (`mail_sort_rules`, `store.mail.sorting`). An email it typed has `typeSignal` `rule:<id>`. Not a mail rule: `mail_rules` decide how one account's sync stores mail | filter, mail rule, label rule | none |
 | reach | how a message reached the owner: `direct` (to the owner or a few people), `group` (a large group or a discussion list), `broadcast` (one sender to many readers who cannot answer in place). Worked out per email (`emails.reach`) and per sender (`people list`) | audience, scope | none |
 | contact | one person as one source knows them: a mail correspondent, a Telegram user, a Drive owner, a calendar attendee; an `identities` row | user | none found beyond the above |
 | entity | the thing the owner means — a person, an event, a document; it carries no provider id ([WC-DATA-2](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)) | record, object | none |
@@ -125,6 +126,11 @@ email itself carries (a part, schema.org markup, list headers), never by an addr
 | `account_notice` | a service's notice about the owner's account: terms, activity, a ticket update | notification, update |
 | `personal` | a person writing, to the owner or to a few people | primary, direct |
 | `other` | a program's mail no rule above names | unknown |
+
+A sorting rule decides before these: the first scope that has a rule wins (one mail; a List-Id or a subject pattern; an
+address; a domain), and within a scope the owner's rule beats the program's and the newest wins. A domain rule may say
+it beats the address rules. Addresses match whole and domains on a label boundary: `ann@` never matches `joann@`. A
+domain rule on a free-mail or throwaway domain (`gmail.com`) is the owner's only and is set only after a dry run.
 
 ## Output keys
 
