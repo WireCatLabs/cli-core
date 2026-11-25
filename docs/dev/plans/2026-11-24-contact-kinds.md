@@ -67,6 +67,9 @@ over the rules.
 | `reach` | `direct` · `group` · `broadcast` | How their messages reached the owner, the widest the owner gets most. `direct`: to the owner, or a small group. `group`: a large chat or a discussion list where everyone can write. `broadcast`: one sender to many readers who cannot answer in place: a newsletter, a channel, marketing mail. |
 | `tie` | yes · no | The owner knows them: the ties `person-ties.ts` already works out. Always no for a bot. |
 
+`reach` also weighs search: a `direct` hit ranks above a `broadcast` one in `search all`, and `broadcast` mail never
+feeds `tie`. For that it is worked out per message, not only per sender (review on #3323).
+
 Data quality is not a kind. These become marks on the row: `owner`, `incomplete` (no name, or a deleted account),
 `test`.
 
@@ -202,7 +205,10 @@ after the headers and the address, and it is matched on both the `From` domain a
 ## Open questions
 
 1. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
-   tabs right, or should Bots sit inside Organizations?
+   tabs right, or should Bots sit inside Organizations? Proposed in review: three tabs (People, Bots, Organizations),
+   with Subscriptions a filter, since a subscription is a way of delivery, not a sender, and one bot (a shop) sends
+   both receipts and promotions, so a tab per sender splits its mail badly. People then needs the same filter, or
+   newsletter authors fill it again.
 2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
    reach `direct`, or two senders split by address?
 3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
