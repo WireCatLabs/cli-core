@@ -27,7 +27,7 @@
       "./update"
     ],
     "store": {
-      "speaks": 75,
+      "speaks": 76,
       "minCompatible": 73
     }
   },

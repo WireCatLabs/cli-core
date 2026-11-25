@@ -3,6 +3,17 @@ import { VERSION_72_TABLES as VERSION_72 } from "./version-72-tables.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  76:
+    "DROP TRIGGER mail_type_email_au; DROP TRIGGER mail_type_outgoing_au; DROP TRIGGER mail_type_list_ai; " +
+    "DROP TRIGGER mail_type_recipient_ai; DROP TRIGGER mail_type_recipient_ad; " +
+    "DROP TRIGGER mail_type_recipient_au; DROP TRIGGER mail_type_attachment_ai; " +
+    "DROP TRIGGER mail_type_attachment_ad; DROP TRIGGER mail_type_attachment_au; " +
+    "DROP TRIGGER mail_type_bot_ai; DROP TRIGGER mail_type_bot_ad; " +
+    "DROP TRIGGER mail_type_organization_ai; DROP TRIGGER mail_type_organization_ad; " +
+    "DROP TRIGGER mail_type_sector_au; " +
+    "DROP INDEX emails_by_mail_type; DROP INDEX emails_type_to_work_out; " +
+    "ALTER TABLE emails DROP COLUMN mail_type; ALTER TABLE emails DROP COLUMN reach; " +
+    "ALTER TABLE emails DROP COLUMN type_signal;",
   75:
     "DROP TRIGGER person_kind_sender_bot_origin_au; DROP TRIGGER sender_bot_identity_link_bi; " +
     "DROP TRIGGER sender_bot_identity_link_au; " +
@@ -325,8 +336,13 @@ export const withoutVersion73 = (database: CacheDatabase, only?: string[]): void
 
 /** Makes a store look as if it stopped before `version`, so the next open replays every migration from there. */
 export const rollBackTo = (database: CacheDatabase, version: number): void => {
+  const undo = Object.entries(UNDO)
+    .reverse()
+    .filter(([from]) => Number(from) >= version)
+  // Newest first: version 73's copies keep every index, and one on a later column would outlive the column.
+  for (const [from, sql] of undo) if (Number(from) > 73) database.exec(sql)
   if (version <= 73 && database.prepare("SELECT 1 FROM schema_migrations WHERE version = 73").get())
     withoutVersion73(database)
-  for (const [from, sql] of Object.entries(UNDO).reverse()) if (Number(from) >= version) database.exec(sql)
+  for (const [from, sql] of undo) if (Number(from) <= 73) database.exec(sql)
   database.prepare("DELETE FROM schema_migrations WHERE version >= ?").run(version)
 }

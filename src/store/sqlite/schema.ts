@@ -860,11 +860,16 @@ export const emails = sqliteTable(
     deletedAt: integer("deleted_at"),
     // No constraint: older stores add the column without a rebuild; removing a rule clears it.
     mailRuleId: integer("mail_rule_id"),
+    mailType: text("mail_type"),
+    reach: text("reach"),
+    typeSignal: text("type_signal"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("emails_by_time").on(table.accountId, desc(table.sentAt)),
     index("emails_by_mail_rule_id").on(table.mailRuleId).where(sql`mail_rule_id IS NOT NULL`),
+    index("emails_by_mail_type").on(table.mailType),
+    index("emails_type_to_work_out").on(table.id).where(sql`mail_type IS NULL`),
     index("emails_by_list_id").on(
       sql`coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId'))`,
     ),

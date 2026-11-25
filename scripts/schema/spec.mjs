@@ -668,11 +668,20 @@ const NEW = {
         c("mail_rule_id", "integer", {
           note: "the `mail_rules` row that decided how this email is stored; no constraint, removing the rule clears it",
         }),
+        c("mail_type", "text", {
+          note: "what the email is (`order`, `newsletter`, `personal`, …, docs/dev/GLOSSARY.md); null until worked out, and nulled by triggers on its inputs",
+        }),
+        c("reach", "text", {
+          note: "`direct`, `group` or `broadcast`: how it reached the owner; kept with `mail_type`",
+        }),
+        c("type_signal", "text", { note: "what decided `mail_type`, such as `list-id`; kept with it" }),
       ],
       keys: [
         "UNIQUE (account_id, external_id)",
         "INDEX (account_id, sent_at DESC)",
         "INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL",
+        "INDEX (mail_type)",
+        "INDEX (id) WHERE mail_type IS NULL",
         `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`,
       ],
     },

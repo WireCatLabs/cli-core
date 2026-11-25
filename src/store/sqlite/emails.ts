@@ -2,6 +2,7 @@ import type { Chunk } from "../../conversations/chunks.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { MailFields, MailPerson, Message } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
+import type { MailType } from "../../mail/mail-types.js"
 import type { Attachment, Metadata } from "../../meetings/index.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
@@ -36,6 +37,7 @@ import {
   recountEmailThread as recount,
   setEmailFlags,
 } from "./email-state.js"
+import { type MailTypeStore, mailTypeStore, type TypeFilter, typeWhere, withTypes } from "./email-types.js"
 import { EMAIL_ENRICHMENT, enrichmentText } from "./enrichments.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
@@ -44,6 +46,7 @@ import { nearestMailPieces } from "./mail-nearest.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
+import type { Reach } from "./sender-signals.js"
 import { stemmerCache } from "./stems.js"
 import { type SyncStateSave, writeState } from "./sync.js"
 import { type ThreadFilter, threadRows } from "./thread-columns.js"
@@ -164,6 +167,12 @@ export interface Email {
   headers: Metadata
   metadata: Metadata
   mailRuleId: number | null
+  /** What it is, apart from who sent it (docs/dev/GLOSSARY.md, "mail type"). @experimental */
+  mailType: MailType | null
+  /** How it reached the owner. @experimental */
+  reach: Reach | null
+  /** What decided `mailType`, such as `list-id`. @experimental */
+  typeSignal: string | null
   recipients: EmailRecipient[]
   mailboxes: Mailbox[]
   attachments: EmailAttachment[]
@@ -240,7 +249,7 @@ export interface MailFilter {
   offset?: number
 }
 
-export interface EmailFilter extends MailFilter {
+export interface EmailFilter extends MailFilter, TypeFilter {
   threadExternalId?: string
   /** An address in From, To, Cc, Bcc or Reply-To. */
   participant?: string
@@ -293,7 +302,7 @@ export interface SenderScore {
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
-export interface MailStore extends PartialMailStore, MailActivityStore {
+export interface MailStore extends PartialMailStore, MailActivityStore, MailTypeStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
   /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
   saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
@@ -429,6 +438,9 @@ const emailOf = (database: CacheDatabase, row: Row): Email => ({
   headers: fromJson(row.headers),
   metadata: fromJson(row.metadata),
   mailRuleId: int(row.mail_rule_id),
+  mailType: str(row.mail_type) as MailType | null,
+  reach: str(row.reach) as Reach | null,
+  typeSignal: str(row.type_signal),
   recipients: database
     .prepare("SELECT * FROM email_recipients WHERE email_id = ? ORDER BY position")
     .all(Number(row.id))
@@ -673,7 +685,7 @@ const saveThread = (database: CacheDatabase, orm: Orm, input: ThreadSave): numbe
   return threadId
 }
 
-const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
+const emailWhere = (database: CacheDatabase, filter: EmailFilter): [string, SqlValue[]] => {
   const where = ["(? OR e.deleted_at IS NULL)"]
   const params: SqlValue[] = [filter.includeDeleted ? 1 : 0]
   const add = (sql: string, ...values: SqlValue[]) => {
@@ -708,6 +720,9 @@ const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
     )
   if (filter.externalIds !== undefined)
     add("e.external_id IN (SELECT value FROM json_each(?))", JSON.stringify(filter.externalIds))
+  const typed = typeWhere(database, filter)
+  for (const sql of typed.sql) add(sql)
+  for (const value of typed.params) params.push(value)
   return [where.join(" AND "), params]
 }
 
@@ -854,21 +869,22 @@ export const mailStoreOver = (
     const row = database
       .prepare("SELECT * FROM emails WHERE account_id = ? AND external_id = ?")
       .get(accountId, externalId)
-    return row ? emailOf(database, row) : null
+    return row ? (withTypes(database, [emailOf(database, row)])[0] as Email) : null
   },
   async emails(filter = {}) {
     const [limit, offset] = page(filter)
-    const [where, params] = emailWhere(filter)
-    return database
+    const [where, params] = emailWhere(database, filter)
+    const emails = database
       .prepare(
         `SELECT e.* FROM emails e WHERE ${where}
           ORDER BY coalesce(e.sent_at, e.received_at) DESC, e.id DESC LIMIT ? OFFSET ?`,
       )
       .all(...params, limit, offset)
       .map((row) => emailOf(database, row))
+    return withTypes(database, emails)
   },
   async emailRefs(filter = {}) {
-    const [where, params] = emailWhere(filter)
+    const [where, params] = emailWhere(database, filter)
     return database
       .prepare(
         `SELECT e.external_id, e.deleted_at IS NOT NULL AS deleted,
@@ -885,8 +901,9 @@ export const mailStoreOver = (
   },
   ...partialMail(database),
   ...mailActivity(database),
+  ...mailTypeStore(database),
   async emailFacts(filter = {}) {
-    const [where, params] = emailWhere(filter)
+    const [where, params] = emailWhere(database, filter)
     return database
       .prepare(
         `SELECT e.external_id, e.from_address, e.from_name, e.subject, coalesce(e.received_at, e.sent_at) AS at, e.size,
@@ -1061,7 +1078,7 @@ export const mailStoreOver = (
     if (match === null) return []
     const [limit, offset] = page(filter)
     drainEmailIndex(database, stemmerFor)
-    const [where, params] = emailWhere({ ...filter, includeDeleted: false })
+    const [where, params] = emailWhere(database, { ...filter, includeDeleted: false })
     return database
       .prepare(
         `SELECT e.* FROM email_words w JOIN emails e ON e.id = w.rowid
