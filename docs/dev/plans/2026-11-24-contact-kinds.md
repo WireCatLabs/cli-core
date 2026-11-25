@@ -51,10 +51,16 @@ proposed as "the same person", cannot be a task's assignee and never counts as s
 A bot has a name, its identities and an optional organization. It has no ties, no tasks and no merge review: two
 bots of one organization are grouped under it, not merged.
 
-**Built so far (#3339, store version 74).** A bot is a `sender_bots` row anchored on one person, and its identities
-stay on that person, so ingest, merges and `person:` references keep working. A bot is always listed as
-`automated`. This is the plan's separation in a first form: lists still tell bots apart by kind. The full form gives
-a bot its own reference (`bot:`) and moves its identities off the person; memo and Desktop change with it.
+**Built so far (#3339, store version 74, and #3356, store version 75).** A bot is its own entity with the ref
+`sender-bot:<id>` (`bot:` already names AI agents in the store; open question 7). It holds its identities in
+`sender_bot_identities`, so an identity belongs to one person or one bot. It has a name, identities and an optional
+organization (the domain rule of #3347 files it there), no ties, tasks or merge review, and never appears in
+`people.list`, its counts, similar people or ties. Messages and mail still point at the identity. The person row a
+bot emptied stays hidden, so a move back gives its uid back. `people.listBots` and `people.showBot` read bots;
+`moveToBot` and `moveToPerson` move a person, a bot or one identity with its whole history, logged in
+`sender_bot_moves`, and the owner's choice wins. `minCompatible` stays 73: triggers keep cli-core 1.0.0 builds from
+linking a bot's identity to a person. Not built: memo `bots` commands, the Desktop view, a bot sender's `ref` in mail
+fields, and mention, tracker and author lookups for bot identities.
 
 **Moving between entities.** A rule can be wrong, so an identity can move from a person to a bot and back. Its
 messages stay where they are (they point at the identity), the move is logged, and the owner's choice always wins
@@ -222,8 +228,7 @@ updates without a package release. Decided by the owner, open questions 4 and 6.
    in #3334.
 3. Store: the `bots` table, `identities` pointing at a person or a bot, the move log, and `reach` and the marks kept
    like `kind` today (lazily, cleared by triggers). Identities that today make a person `automated` move to bots.
-   Built in #3339 as `sender_bots` anchored on a person (store version 74), with the move log and the List-Id
-   index; the full split is open (question 5).
+   Built in #3339 (store version 74) and split fully in #3356 (store version 75).
 4. The owner's choice: move an identity to a person or a bot, for its whole history. Built in #3339 as
    `PeopleStore.moveToBot` and `moveToPerson`; memo has no command for it yet.
 5. Organizations from domains, with the three exceptions above (built in #3347: `From` domain only, no `List-Id`
@@ -260,3 +265,5 @@ updates without a package release. Decided by the owner, open questions 4 and 6.
    Radar, abuse.ch for commercial use) are out now. Answer (owner, 2026-11-25): WireCat stays free and paid services
    are built around it, so non-commercial lists may be used by WireCat but never by a paid service. Each such list is
    marked in the data pack, and its own terms are checked for how they define commercial use.
+7. **A bot's ref.** `sender-bot:<id>` as built, or `bot:<id>` after the AI agents' `bot:` ref is renamed in a major
+   release?
