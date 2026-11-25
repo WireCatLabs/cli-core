@@ -177,6 +177,32 @@ A domain names the organization, not the sender. A person at `bank.example` is a
 bot. Mail sent through a sending platform never takes the platform's category. So the domain is the last signal,
 after the headers and the address, and it is matched on both the `From` domain and the DKIM signing domain.
 
+### Mail categories
+
+Every mail gets a type of its own; the sender gets a sector. A card payment works the same way: the shop's merchant
+code says what the shop is, the bank's category says what the payment was. Research:
+[mail products](2026-11-25-contact-kinds-mail-products.md), [domain sources](2026-11-25-contact-kinds-domain-sources.md).
+
+- **Type, per mail**, first match wins: bounce or auto-reply, security (codes, sign-in alerts), calendar, travel,
+  ticket, order, shipping, bill, account notice, social notification, discussion list, newsletter, promotion, system
+  alert, personal, other. Signals are already in the mail: `Auto-Submitted`, `List-Id`, `List-Unsubscribe-Post`,
+  `Feedback-ID`, schema.org markup (Order, ParcelDelivery, FlightReservation, Invoice), a calendar or report part,
+  and whether the owner wrote to the sender. Zero's header classifier (MIT, 82 lines) is the model to port.
+- **The sender's view is a summary of its mails.** A shop that sends receipts and promotions appears under Bots and
+  under Subscriptions; `reach` is worked out per mail too.
+- **Rules in a fixed order:** one mail, then a list or a subject pattern, then the address, then the domain, then the
+  header classifier. The owner's rule beats a rule's guess; within a level the newest wins. A domain rule is refused
+  for a free-mail domain and the address is offered instead, as HEY does.
+- **A correction asks its scope:** this mail, this address, this domain or this list, and whether to apply it to past
+  mail (Outlook's "Move" and "Always move").
+- **Screening first-time senders**, as HEY does, only for people the owner has never written to. Later step.
+
+The domain lists above grow from the catalogue: UT1 (about 100 categories), the OpenStreetMap brand index, FDIC
+banks, the GLEIF bank codes joined to Wikidata, a free-mail list. Spam lists say "bad", never a sector, and many are
+non-commercial or work only as a lookup per sender, which this plan rules out. Distribution: a small core in the
+package, a versioned data pack from a WireCat release fetched by a command for larger and share-alike lists, so data
+updates without a package release. Both wait on the owner (open questions 4 and 6).
+
 ## Out of scope
 
 - **AI classification.** Sorting by a model is planned as a separate command with its own plan. This plan keeps the
@@ -216,10 +242,13 @@ after the headers and the address, and it is matched on both the `From` domain a
    newsletter authors fill it again. Answer (owner, 2026-11-25): tabs are views over per-mail categories, so four
    tabs stay and a shop's mail splits by category, not by sender.
 2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
-   reach `direct`, or two senders split by address?
+   reach `direct`, or two senders split by address? Answer (owner, 2026-11-25): one person, `reach` per mail. A person
+   rarely writes from a newsletter address, so rules work by address first and by domain second.
 3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
    one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
 4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
    a `models`-style command the owner runs?
 5. ~~The full split of bots.~~ Decided (owner, 2026-11-25): a bot is its own entity with its own table and `bot:`
    reference; the person-anchored form of #3339 is replaced.
+6. **Paid product.** Will WireCat ever be sold? If so, non-commercial lists (Stop Forum Spam, DuckDuckGo Tracker
+   Radar, abuse.ch for commercial use) are out now.
