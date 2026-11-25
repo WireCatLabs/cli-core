@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core",
-  "version": "1.0.0-rc.0",
+  "version": "1.0.0",
   "description": "The messenger-neutral half of a messaging CLI: domain model, message locators, rendering, name resolution, the SQLite seam, the command skeleton and shared read commands, the send guard, run records and the message store",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
@@ -354,7 +354,7 @@
     "@types/pngjs": "6.0.5",
     "@types/ssh2": "1.15.5",
     "@vitest/coverage-v8": "^5.0.5",
-    "@wirecat/cli-base": "1.0.0-rc.0",
+    "@wirecat/cli-base": "1.0.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
     "ajv": "8.17.1",
     "commander": "15.0.0",
