@@ -17,7 +17,13 @@ import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { type Period, questionPeriod } from "../search/question-period.js"
-import { planQuestion, questionLookup, questionText } from "../search/question-plan.js"
+import {
+  isFunctionWord,
+  words as plainWords,
+  planQuestion,
+  questionLookup,
+  questionText,
+} from "../search/question-plan.js"
 import type {
   AccountKey,
   BusinessKind,
@@ -272,6 +278,13 @@ export const titleWords = (
         })(),
   )
   return { words, anyWord: clauses.length > 1 && clauses.every(({ occur }) => occur === "should") }
+}
+
+/** A question finds by any of its words, so «что», «кто» or "the" would match nearly every record. */
+const contentWords = (found: { words: string[]; anyWord: boolean }, discover: boolean) => {
+  if (!discover) return found
+  const content = found.words.filter((word) => !plainWords(word).every(isFunctionWord))
+  return content.length ? { ...found, words: content } : found
 }
 
 /** The single words of an all-words query, when it has two to eight of them; none for OR, fields or phrases. */
@@ -661,7 +674,7 @@ export const searchAll = async (
           )
           accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "crm") {
-          const { words, anyWord } = titleWords(request.text)
+          const { words, anyWord } = contentWords(titleWords(request.text), discover)
           const chosen = scope?.crm
           // memo's, tg's and the MCP's search all pass no viewers: each copy's own rule decides, as a CRM CLI's does.
           const viewers = request.crmViewers ?? (await copyViewers(store))
@@ -767,9 +780,12 @@ export const searchAll = async (
           // accounts do not account for.
           const read = scope?.tracker ?? (await trackerAccounts(store))
           if (!read.length) continue
-          const { words, anyWord } = titleWords(
-            request.text,
-            "issues, projects and comments are found by the words and meaning of their title and text only",
+          const { words, anyWord } = contentWords(
+            titleWords(
+              request.text,
+              "issues, projects and comments are found by the words and meaning of their title and text only",
+            ),
+            discover,
           )
           // Two sign-ins to one workspace hold each item twice, and the copies fold into one hit: read deep enough
           // that the folded list still fills the page.
@@ -839,7 +855,7 @@ export const searchAll = async (
           }
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {
-          const { words, anyWord } = titleWords(request.text, BUSINESS_WORDS_ONLY)
+          const { words, anyWord } = contentWords(titleWords(request.text, BUSINESS_WORDS_ONLY), discover)
           const found = await searchBusiness(store, {
             words,
             anyWord: anyWord || discover,

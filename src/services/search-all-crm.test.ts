@@ -59,6 +59,15 @@ it("needs every word unless the query joins them with OR", async () => {
   expect(any.items).toHaveLength(3)
 })
 
+it("leaves a question's function words out, so «что» finds no deal that only says «что»", async () => {
+  const { store } = await withDeals()
+  const filler = await store.deals.add({ by: "owner", title: "Что мы обещали", stage: "КП" })
+  const found = await searchAll(store, ME, { text: "что с логотипом?", limit: 10, only: ["crm"] })
+  expect(found.items.map(({ title }) => title)).toEqual(["Логотип"])
+  const asked = await searchAll(store, ME, { text: "что мы обещали?", limit: 10, only: ["crm"] })
+  expect(asked.items.map(({ ref }) => ref)).toEqual([filler.ref])
+})
+
 it("skips deals with the reason when the query names a field a title does not have", async () => {
   const { store } = await withDeals()
   const found = await searchAll(store, ME, { text: "from:anna клиник", limit: 10, only: ["crm"] })
