@@ -141,6 +141,7 @@ it("keeps the owner's separations: a removed membership, an erased organization,
   await sorted(store)
   const lena = await uidOf(store, "email", "lena@studio.ru")
   const [relation] = (await store.knowledge.relations(null, `person:${lena}`)).filter((one) => one.kind === "member-of")
+  expect(relation).toMatchObject({ derived: "mail-domain" })
 
   await store.knowledge.removeRelation(null, String(relation?.id), "owner")
   const bank = Number(db.prepare("SELECT id FROM organizations WHERE name = 'Bank'").get()?.id)

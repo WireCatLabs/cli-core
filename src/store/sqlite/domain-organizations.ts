@@ -208,8 +208,9 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
   }
   const removed = removedMemberships(database)
   const member = database.prepare(
-    "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, author, evidence, created_at, " +
-      `updated_at) SELECT 'person', ?, 'organization', ?, ${linkKind("member-of")}, 'owner', 1, 'rule', ?, ?, ? ` +
+    "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, author, evidence, metadata, " +
+      `created_at, updated_at) SELECT 'person', ?, 'organization', ?, ${linkKind("member-of")}, 'owner', 1, 'rule', ?, ` +
+      `'{"derived":"mail-domain"}', ?, ? ` +
       "WHERE NOT EXISTS (SELECT 1 FROM links WHERE from_type = 'person' AND from_id = ? AND to_type = 'organization' " +
       `AND to_id = ? AND kind = ${linkKind("member-of")})`,
   )
