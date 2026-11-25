@@ -135,7 +135,8 @@ const nameOf = (value: string): string | undefined => {
   return name ? decodeWords(name) : undefined
 }
 
-const listIdOf = (raw: string | undefined): string | undefined =>
+/** A List-Id as the store keeps it: the part inside angle brackets, lower case. */
+export const listIdOf = (raw: string | undefined): string | undefined =>
   raw === undefined ? undefined : (/<([^>]+)>/.exec(raw)?.[1] ?? raw).trim().toLowerCase() || undefined
 
 /** The header fields of one email, from its header text. */

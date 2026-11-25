@@ -2170,5 +2170,25 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER mail_type_organization_ad AFTER DELETE ON organization_identities BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id = OLD.identity_id;\nEND;",
       "CREATE TRIGGER mail_type_sector_au AFTER UPDATE OF metadata, deleted_at ON organizations\nWHEN json_extract(OLD.metadata, '$.sector') IS NOT json_extract(NEW.metadata, '$.sector') OR OLD.deleted_at IS NOT NEW.deleted_at BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id IN (SELECT identity_id FROM organization_identities WHERE organization_id = NEW.id);\nEND;"
     ]
+  },
+  {
+    "name": "20261125205013_version-77-mail-sort-rules",
+    "statements": [
+      "CREATE TABLE `mail_sort_effects` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT,\n\t`rule_id` integer NOT NULL,\n\t`identity_id` integer NOT NULL,\n\t`action` text NOT NULL,\n\t`before` text,\n\t`after` text,\n\t`created_at` integer NOT NULL,\n\t`undone_at` integer\n);",
+      "CREATE TABLE `mail_sort_rules` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT,\n\t`scope` text NOT NULL,\n\t`value` text NOT NULL,\n\t`mail_type` text,\n\t`sender` text,\n\t`organization_id` integer,\n\t`over_addresses` integer NOT NULL,\n\t`past` integer NOT NULL,\n\t`author` text NOT NULL,\n\t`decided_by` text,\n\t`reason` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`removed_at` integer,\n\t`undone_at` integer\n);",
+      "ALTER TABLE `emails` ADD `sort_checked` integer;",
+      "CREATE INDEX `emails_sort_to_check` ON `emails` (`id`) WHERE mail_type IS NOT NULL AND sort_checked IS NULL;",
+      "CREATE INDEX `mail_sort_effects_by_rule_id` ON `mail_sort_effects` (`rule_id`);",
+      "CREATE INDEX `mail_sort_effects_by_identity_id` ON `mail_sort_effects` (`identity_id`);",
+      "CREATE INDEX `mail_sort_rules_by_scope_value` ON `mail_sort_rules` (`scope`,`value`);"
+    ]
+  },
+  {
+    "name": "20261125205014_version-77-mail-sort-triggers",
+    "statements": [
+      "UPDATE emails SET sort_checked = 1 WHERE mail_type IS NOT NULL;",
+      "CREATE TRIGGER mail_sort_checked_au AFTER UPDATE OF mail_type ON emails\nWHEN NEW.mail_type IS NULL AND NEW.sort_checked IS NOT NULL BEGIN\n  UPDATE emails SET sort_checked = NULL WHERE id = NEW.id;\nEND;",
+      "CREATE TRIGGER mail_sort_effects_identity_ad AFTER DELETE ON identities BEGIN\n  DELETE FROM mail_sort_effects WHERE identity_id = OLD.id;\nEND;"
+    ]
   }
 ]

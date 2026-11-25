@@ -863,6 +863,7 @@ export const emails = sqliteTable(
     mailType: text("mail_type"),
     reach: text("reach"),
     typeSignal: text("type_signal"),
+    sortChecked: integer("sort_checked"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
@@ -870,6 +871,7 @@ export const emails = sqliteTable(
     index("emails_by_mail_rule_id").on(table.mailRuleId).where(sql`mail_rule_id IS NOT NULL`),
     index("emails_by_mail_type").on(table.mailType),
     index("emails_type_to_work_out").on(table.id).where(sql`mail_type IS NULL`),
+    index("emails_sort_to_check").on(table.id).where(sql`mail_type IS NOT NULL AND sort_checked IS NULL`),
     index("emails_by_list_id").on(
       sql`coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId'))`,
     ),
@@ -903,6 +905,8 @@ export const mailRules = sqliteTable(
     check("mail_rules_actions_json", sql`"actions" IS NULL OR json_valid("actions")`),
   ],
 )
+
+export { mailSortEffects, mailSortRules } from "./schema/mail-sorting.js"
 
 export const emailRecipients = sqliteTable(
   "email_recipients",

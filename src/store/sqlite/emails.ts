@@ -44,6 +44,7 @@ import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
 import { nearestMailPieces } from "./mail-nearest.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
+import { type MailSorting, mailSortingOver, settleThreads } from "./mail-sorting.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
 import type { Reach } from "./sender-signals.js"
@@ -392,6 +393,8 @@ export interface MailStore extends PartialMailStore, MailActivityStore, MailType
   ): Promise<EmailVectorHit[]>
   /** The account's mail rules, and which rule decided each email. */
   readonly rules: MailRulesStore
+  /** Sorting rules by mail, list, subject, address and domain, apart from the storage `rules`. @experimental */
+  readonly sorting: MailSorting
 }
 
 const ROLES = [
@@ -847,13 +850,19 @@ export const mailStoreOver = (
   stemmerFor: (stemmers: Stemmers) => Stemmer = stemmerCache(),
 ): MailStore => ({
   rules: mailRulesOver(database),
+  sorting: mailSortingOver({ database, orm, now }),
   async saveThread(input) {
-    const id = write(database, () => saveThread(database, orm, input))
+    const id = write(database, () => {
+      const saved = saveThread(database, orm, input)
+      settleThreads({ database, orm, now }, [saved])
+      return saved
+    })
     return threadDetails(database, id) as ThreadDetails
   },
   async saveThreads(inputs, states = []) {
     const ids = write(database, () => {
       const saved = inputs.map((input) => saveThread(database, orm, input))
+      settleThreads({ database, orm, now }, saved)
       for (const { accountId, name, value } of states) writeState({ orm, now }, accountId, name, value)
       return saved
     })

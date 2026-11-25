@@ -3,6 +3,10 @@ import { VERSION_72_TABLES as VERSION_72 } from "./version-72-tables.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  77:
+    "DROP TRIGGER mail_sort_checked_au; DROP TRIGGER mail_sort_effects_identity_ad; " +
+    "DROP INDEX emails_sort_to_check; ALTER TABLE emails DROP COLUMN sort_checked; " +
+    "DROP TABLE mail_sort_effects; DROP TABLE mail_sort_rules;",
   76:
     "DROP TRIGGER mail_type_email_au; DROP TRIGGER mail_type_outgoing_au; DROP TRIGGER mail_type_list_ai; " +
     "DROP TRIGGER mail_type_recipient_ai; DROP TRIGGER mail_type_recipient_ad; " +

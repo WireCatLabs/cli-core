@@ -274,6 +274,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261125111118_version-75-bot-identities-moved", version: 75, minCompatible: 73 },
   { name: "20261125183530_version-76-mail-types", version: 76, minCompatible: 73 },
   { name: "20261125183555_version-76-mail-type-triggers", version: 76, minCompatible: 73 },
+  { name: "20261125205013_version-77-mail-sort-rules", version: 77, minCompatible: 73 },
+  { name: "20261125205014_version-77-mail-sort-triggers", version: 77, minCompatible: 73 },
 ]
 
 export const generatedMigrations = (
