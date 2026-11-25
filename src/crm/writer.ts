@@ -175,14 +175,24 @@ const VERB_OF: Record<string, CrmVerb> = {
 /**
  * Every key a CRM write command may check beyond its own path, for `commandPermissions({ alsoChecks })`, so its
  * `--dry-run` names each: a stage implies the move key and a won or lost one the close key, an owner other than the
- * sign-in's `crm.assign-others`, and `also` the CLI's own (the same `CrmWrites.alsoChecks` the real run checks).
+ * sign-in's `crm.assign-others`, and `also` the CLI's own (the same `CrmWrites.alsoChecks` the real run checks), and
+ * `activities` those of an activity write (`CrmWrites.activityChecks`).
  */
 export const crmAlsoChecks =
-  (also?: (kind: CrmKind, verb: CrmVerb) => readonly PermissionKey[]) =>
+  (
+    also?: (kind: CrmKind, verb: CrmVerb) => readonly PermissionKey[],
+    activities?: (write: CrmActivityWrite | "close") => readonly PermissionKey[],
+  ) =>
   (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
     const [noun, command] = path
+    if (noun === "activities" && command === "close" && path.length === 2) return activities?.("close") ?? []
     if (noun === "activities" && command === "create" && path.length === 2)
-      return [{ key: CRM_ASSIGN_OTHERS_KEY, when: "--owner other than the sign-in's user" }]
+      return [
+        { key: CRM_ASSIGN_OTHERS_KEY, when: "--owner other than the sign-in's user" },
+        ...(["comment", "task"] as const).flatMap((write) =>
+          (activities?.(write) ?? []).map((key) => ({ key, when: `a ${write}` })),
+        ),
+      ]
     const kind = noun === undefined ? undefined : PLURALS[noun]
     const verb = command === undefined ? undefined : VERB_OF[command]
     if (path.length !== 2 || kind === undefined || verb === undefined) return []

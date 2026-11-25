@@ -25,7 +25,9 @@ export {
 export { crmManifestProblems } from "./manifest/paths.js"
 export { type CrmManifestSource, type CrmManifestSourceOptions, crmSourceFromManifest } from "./manifest/source.js"
 export {
+  type CrmManifestActivities,
   type CrmManifestWritesOptions,
+  crmManifestActivityKeys,
   crmManifestWriteCapabilities,
   crmManifestWriteKeys,
   crmManifestWrites,

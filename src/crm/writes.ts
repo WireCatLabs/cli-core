@@ -51,6 +51,8 @@ export interface CrmWrites extends ProfileWrites {
    * `crmAlsoChecks` so `--dry-run` names them.
    */
   alsoChecks?: (kind: CrmKind, verb: CrmVerb) => readonly PermissionKey[]
+  /** The same for an activity write, a comment, a task or a task marked done; pass it to `crmAlsoChecks` too. */
+  activityChecks?: (write: CrmActivityWrite | "close") => readonly PermissionKey[]
 }
 
 export interface CrmWriteContext {
@@ -838,9 +840,13 @@ const activityKeys = async (
   context: CrmWriteContext,
   key: PermissionKey,
   owner: string | undefined,
+  write: CrmActivityWrite | "close",
 ): Promise<{ key: PermissionKey; extra: PermissionKey[] }> => ({
   key,
-  extra: owner !== undefined && owner !== (await selfOf(context)) ? [CRM_ASSIGN_OTHERS_KEY] : [],
+  extra: [
+    ...(owner !== undefined && owner !== (await selfOf(context)) ? [CRM_ASSIGN_OTHERS_KEY] : []),
+    ...(context.writes.activityChecks?.(write) ?? []),
+  ],
 })
 
 /** The CRM's answer into the store, as a sync saves it; a failure names the activity, which the CRM has written. */
@@ -914,8 +920,11 @@ export const createCrmActivity = async (
     on: targets.map(({ kind, externalId }) => ({ kind, externalId })),
   }
   const operationId = operationOf(context, options.operationId)
-  const activity = await written(context, await activityKeys(context, "activities.create", owner), operationId, () =>
-    create(draft, { operationId }),
+  const activity = await written(
+    context,
+    await activityKeys(context, "activities.create", owner, kind),
+    operationId,
+    () => create(draft, { operationId }),
   )
   const stored = await keptActivity(context, activity, operationId)
   return { operationId, activity, stored, on: await answeredTargets(context, activity, targets) }
@@ -935,8 +944,11 @@ export const completeCrmActivity = async (
       reason: "ref.malformed",
     })
   const operationId = operationOf(context, options.operationId)
-  const activity = await written(context, await activityKeys(context, "activities.close", undefined), operationId, () =>
-    complete(externalId, { operationId }),
+  const activity = await written(
+    context,
+    await activityKeys(context, "activities.close", undefined, "close"),
+    operationId,
+    () => complete(externalId, { operationId }),
   )
   const stored = await keptActivity(context, activity, operationId)
   return { operationId, activity, stored, on: await answeredTargets(context, activity, []) }
