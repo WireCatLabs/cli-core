@@ -162,6 +162,12 @@ export const apiPlainJson = (value: unknown): unknown =>
     ) ?? "null",
   )
 
+/**
+ * An empty or all-space text in a required argument or parameter: the service may read it as no id at all, and an empty
+ * path segment can reach another endpoint, so it is refused before anything is sent.
+ */
+export const isBlank = (value: unknown): boolean => typeof value === "string" && value.trim() === ""
+
 /** A JSON object with no lossless number at its top: what a GraphQL body of variables must be. */
 const isVariables = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) && !isLosslessNumber(value)
@@ -194,7 +200,7 @@ export const graphqlVariables = (
       sent: false,
     })
   const missing = Object.entries(binding.variables)
-    .filter(([name, type]) => type.endsWith("!") && variables[name] == null)
+    .filter(([name, type]) => type.endsWith("!") && (variables[name] == null || isBlank(variables[name])))
     .map(([name]) => `--${apiFlagOf(name)}`)
   if (missing.length > 0)
     throw new CliError("validation_error", `${operation.command} needs ${missing.join(", ")}`, { sent: false })

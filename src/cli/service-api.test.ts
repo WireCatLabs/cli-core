@@ -712,6 +712,18 @@ describe("the shared service api group", () => {
     expect(wrong.error).toMatchObject({ code: "validation_error" })
   })
 
+  it("**an empty required parameter is refused before anything is sent**, by the command and by the writer", async () => {
+    const { cli, sent } = fixture({ api: "allow", "posts.delete": "allow" })
+    for (const id of ["", "  "]) {
+      const refused = await cli("work", "api", "delete-post", "--id", id, "--yes", "--json")
+      expect(refused.code).toBe(2)
+      expect(refused.error).toMatchObject({ code: "validation_error", message: expect.stringContaining("--id") })
+    }
+    const written = await cli("work", "write", "update-post", "--id", " ", "--json")
+    expect(written.error).toMatchObject({ code: "validation_error", message: expect.stringContaining("id") })
+    expect(sent).toEqual([])
+  })
+
   it("**a read whose query flag deletes goes through the guard**, as an upload link that overwrites", async () => {
     const { cli, bare } = fixture({ "documents.delete": "deny" })
     const refused = await cli("work", "api", "upload-link", "--path", "/a.txt", "--overwrite", "true", "--json")

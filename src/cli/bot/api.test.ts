@@ -130,6 +130,19 @@ describe("the shared native API command", () => {
     expect(denied.calls).toEqual([])
   })
 
+  it("refuses an empty required query parameter unsent, and leaves an empty required body field to the service", async () => {
+    const offset: ManifestOperation = {
+      ...http,
+      parameters: [{ name: "offset", in: "query", required: true, schema: { type: "string" } }],
+    }
+    const blank = await call(["bot", "api", "get-updates", "--offset", " ", "--json"], [offset])
+    expect(blank.code).toBe(2)
+    expect(blank.err).toContain("--offset")
+    expect(blank.calls).toEqual([])
+    // Telegram documents setWebhook's required url as empty to remove the hook.
+    expect((await call(["bot", "api", "send-photo", "--chat-id", "", "--json"])).calls).toHaveLength(1)
+  })
+
   it("does not offer sensitive field flags", async () => {
     const result = await call(["bot", "api", "send-photo", "--secret-token", "private-value", "--json"])
     expect(result.code).not.toBe(0)

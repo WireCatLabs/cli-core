@@ -19,6 +19,7 @@ import {
   checkApiBody,
   checkApiParameter,
   graphqlVariables,
+  isBlank,
   parseApiJson,
   readApiBody,
   readApiBytes,
@@ -678,6 +679,8 @@ export const serviceApiWriter = (options: ServiceApiOptions): ServiceApiWrite =>
           : parameter.in === "query" || parameter.in === "path"
             ? input[parameter.in][parameter.name]
             : undefined
+      if (parameter.required && raw !== undefined && isBlank(flagText(raw)))
+        throw new CliError("validation_error", `${parameter.name} of ${operation.command} is empty`, { sent: false })
       const problem =
         raw === undefined ? undefined : checkApiParameter(parameter.name, parameter.schema, flagText(raw), schemas)
       if (problem) throw new CliError("validation_error", problem)

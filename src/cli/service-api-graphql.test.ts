@@ -221,6 +221,20 @@ it("a flag of the wrong type or an undeclared variable is refused before anythin
   expect(fake.calls).toEqual([])
 })
 
+it("an empty required argument is refused before anything is sent, from a flag or from --body", async () => {
+  const { cli, fake } = setup()
+  for (const given of [
+    ["--id", ""],
+    ["--id", " "],
+    ["--body", '{"id":""}'],
+  ]) {
+    const refused = await cli(["work", "api", "issue-delete", ...given, "--yes", "--json"])
+    expect(refused.code).toBe(2)
+    expect(refused.error).toMatchObject({ code: "validation_error", message: expect.stringContaining("--id") })
+  }
+  expect(fake.calls).toEqual([])
+})
+
 it("--all follows pageInfo.endCursor through after, one document per page", async () => {
   const { cli, fake } = setup({
     issues: ({ variables }) =>
