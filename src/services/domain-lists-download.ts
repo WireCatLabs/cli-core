@@ -5,6 +5,7 @@ import { dirname, join } from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGunzip } from "node:zlib"
 import { CliError } from "@wirecat/cli-base"
+import { hostFetch } from "@wirecat/cli-base/http"
 import {
   domainListsDirectory,
   type InstalledPack,
@@ -31,6 +32,10 @@ export interface DomainListsUpdate {
   updated: boolean
   previous: string | null
 }
+
+/** Where a release asset is served from: GitHub answers with a redirect to its asset host. */
+const RELEASE_HOSTS = ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"]
+const DOWNLOAD_MS = 10 * 60_000
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/
 const SHA256 = /^[0-9a-f]{64}$/
@@ -119,12 +124,21 @@ const fetchUpstream = async (source: PackSource, path: string, get: Fetch) => {
 export const updateDomainLists = async ({
   env,
   commercialOnly = false,
-  fetch: get = fetch,
+  fetch: given,
   manifestUrl = PACK_MANIFEST_URL,
   progress = () => {},
   bytes,
 }: DomainListsUpdateOptions): Promise<DomainListsUpdate> => {
-  const manifest = await fetchManifest(manifestUrl, get)
+  const manifest = await fetchManifest(
+    manifestUrl,
+    given ?? hostFetch({ hosts: [...RELEASE_HOSTS, new URL(manifestUrl).hostname], timeoutMs: 60_000 }),
+  )
+  const get =
+    given ??
+    hostFetch({
+      hosts: [...RELEASE_HOSTS, ...manifest.sources.map((one) => new URL(one.url).hostname)],
+      timeoutMs: DOWNLOAD_MS,
+    })
   const before = installedPack(env)
   const sources = manifest.sources.filter((one) => !commercialOnly || one.class === "commercial-ok")
   if (
