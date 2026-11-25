@@ -27,6 +27,38 @@ shape of this file.
 - **`accountRemoveCommand` takes `effects`.** A CLI whose removal reaches no service passes `LOCAL_WRITE` here,
   instead of annotating the returned command. asterisk, beeline, notion and yandex-disk annotate it today, so
   `accountRemoveCommand` stays unmarked until they pass `effects`.
+- **Mail search filters by mail type and reach.** `type:` takes one of the [mail types](docs/dev/GLOSSARY.md#mail-types)
+  and `reach:` takes `direct`, `group` or `broadcast`, in the query itself, so a page is never short:
+  `memo search mail 'type:order OR type:bill'`, `memo search mail 'invoice -type:promotion reach:direct'`. A search
+  that names either field first types the mail the store has not typed yet, 5,000 emails per write; on 100,000
+  untyped emails the first such search after an upgrade takes seconds, later ones the usual milliseconds. A store
+  opened read-only works the missing types out in memory for that search. tg and max refuse both as mail fields.
+- **Email hits show their type and reach**: `email.mail_type` and `email.reach` in `--json`, and both on the hit's
+  line in mail's text output. In the API they are `MailFields.mailType` and `MailFields.reach` (experimental).
+- **`SENDER_BOT_PREFIX` is exported from `@wirecat/cli-core/store`, and `MAIL_TYPES`, `MailType`, `REACHES` and
+  `Reach` from `@wirecat/cli-core/store/areas`** (experimental), so a CLI no longer copies them.
+
+### Changed — experimental
+
+- **A sender of a newsletter only is a bot, a human author too.** The owner's ruling of 25.11.2026, in place of the
+  earlier one that kept a human-written newsletter a person. A person all of whose mail came from a list (List-Id,
+  List-Unsubscribe, a one-click unsubscribe, a Feedback-ID, bulk `Precedence` or the bulk box), with no tie to the
+  owner, no messenger identity and no discussion list among their mail, moves to a bot with the reason
+  `newsletter-only` on the next people list; `kindSignals` names `newsletter-only`. Its mail stays typed `newsletter`:
+  a newsletter's bot is not a program for the mail types. A rule's newsletter bot goes back to a person once the owner
+  writes to it, as before, and also once a mail written to the owner alone (no list headers, at most a small group in
+  To and Cc) comes from it; the newsletter's own mail keeps reach `broadcast`. The owner's `moveToPerson` and
+  `moveToBot` and the sorting rules still win. The people list works out every kind again once after the upgrade.
+
+### Fixed
+
+- **Parity checks the CLIs that moved to cli-core 1.0 again.** They are off the known-broken list now. Five stay on it
+  until 2026-12-02 because their main is still on 0.x: drive, gcal, bitrix24, wordpress and ydisk. cli-template is
+  back on it for #3365, which made the session commands cli-core's own: its MCP snapshot still lists them, and it
+  adopts that with the next release.
+- **`oauthSessionCommand` signs in when the sign-in and the token share one host.** Zoom (`zoom.us`) and Google
+  (`oauth2.googleapis.com`) list one host for two of their addresses, and `session start` refused with
+  `configuration_error: "zoom.us" is listed twice`. Each host is now allowed once.
 
 ## 1.1.0 — 25.11.2026
 
