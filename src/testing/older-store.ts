@@ -3,6 +3,12 @@ import { VERSION_72_TABLES as VERSION_72 } from "./version-72-tables.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  74:
+    "DROP TRIGGER sender_bots_person_ad; DROP TRIGGER sender_bots_organization_ad; " +
+    "DROP TRIGGER sender_bot_moves_identity_ad; DROP TRIGGER person_kind_sender_bot_ai; " +
+    "DROP TRIGGER person_kind_sender_bot_ad; DROP TRIGGER person_kind_sender_bot_au; " +
+    "DROP TRIGGER person_kind_sender_bot_move_ai; DROP INDEX emails_by_list_id; DROP TABLE sender_bot_moves; " +
+    "DROP TABLE sender_bots;",
   72:
     "DROP TRIGGER document_changes_account_bd; DROP TABLE document_changes; " +
     "ALTER TABLE document_revisions DROP COLUMN title; ALTER TABLE document_revisions DROP COLUMN front_matter; " +

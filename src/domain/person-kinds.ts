@@ -23,6 +23,7 @@ export type KindSignal =
   | "company-name"
   | "no-tie"
   | "no-name"
+  | "owner-choice"
 
 const AUTOMATED_WORDS = new Set([
   "noreply",

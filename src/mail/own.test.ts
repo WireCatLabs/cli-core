@@ -81,6 +81,23 @@ describe("the owner's mail", () => {
     expect(await ownerHolds(store, ALIAS)).toBe(true)
   })
 
+  it("works out again the kind of someone the alias wrote to before the alias was known as the owner's", async () => {
+    const store = await sandbox()
+    const toPat = {
+      from: ["Owner Example", ALIAS] as [string, string],
+      to: [["Pat Lane", "pat@lane.ru"]] as [string, string][],
+    }
+    await sync(store, { messages: [mail(3), mail(1, toPat)] })
+    const kindOfPat = async () =>
+      (await store.people.list({ limit: 100, kind: "all" })).items.find(({ email }) => email === "pat@lane.ru")?.kind
+
+    expect(await kindOfPat()).toBe("stranger")
+    await sync(store, { messages: [mail(3), mail(1, toPat), mail(2, { ...toPat, labels: ["Sent"] })] })
+
+    expect(await ownerHolds(store, ALIAS)).toBe(true)
+    expect(await kindOfPat()).toBe("person")
+  })
+
   it("reads an IMAP account's Sent folder by the source's word and stores mail in INBOX and Sent once", async () => {
     const store = await sandbox()
     const box: FakeMailbox = {

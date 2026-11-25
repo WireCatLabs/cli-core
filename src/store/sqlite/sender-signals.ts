@@ -84,11 +84,16 @@ export const senderSignalsOf = (
 const LIST_ID = "coalesce(json_extract(e.headers, '$.\"list-id\"'), json_extract(e.metadata, '$.listId'))"
 
 /** `bob+news@x` and `bob@x` are one sender. */
+/** The senders of each of these List-Ids, through `emails_by_list_id`. */
+export const LIST_SENDERS =
+  `SELECT DISTINCT ${LIST_ID} AS list, e.from_address AS address FROM emails e ` +
+  `WHERE e.from_address IS NOT NULL AND ${LIST_ID} IN (SELECT value FROM json_each(?))`
+
 const senderKey = (address: string) => address.toLowerCase().replace(/\+[^@]*@/, "@")
 
 /**
- * The mail each of these people sent the owner, as `senderSignalsOf` reads it. Asked for a page of people only: it
- * reads every stored email's List-Id once to tell a discussion list from a newsletter.
+ * The mail each of these people sent the owner, as `senderSignalsOf` reads it. Asked for a page of people only: the
+ * senders of their List-Ids tell a discussion list from a newsletter.
  */
 export const sentMailOf = (database: CacheDatabase, people: readonly number[]): Map<number, SentMail[]> => {
   const found = new Map<number, SentMail[]>()
@@ -111,12 +116,7 @@ export const sentMailOf = (database: CacheDatabase, people: readonly number[]): 
   const lists = [...new Set(rows.flatMap((row) => (typeof row.list === "string" ? [row.list] : [])))]
   const senders = new Map<string, Set<string>>()
   if (lists.length > 0)
-    for (const row of database
-      .prepare(
-        `SELECT DISTINCT ${LIST_ID} AS list, e.from_address AS address FROM emails e ` +
-          `WHERE e.from_address IS NOT NULL AND ${LIST_ID} IN (SELECT value FROM json_each(?))`,
-      )
-      .all(JSON.stringify(lists))) {
+    for (const row of database.prepare(LIST_SENDERS).all(JSON.stringify(lists))) {
       const list = String(row.list)
       const held = senders.get(list) ?? new Set<string>()
       held.add(senderKey(String(row.address)))

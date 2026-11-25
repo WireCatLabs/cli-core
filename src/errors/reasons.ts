@@ -682,7 +682,7 @@ const OTHERS: Entry[] = [
   [
     "identity.owner-only",
     "permission_error",
-    "only the owner undoes a merge, splits a person, confirms or undoes a link, or links an identity to themselves",
+    "only the owner undoes or confirms a merge, a split or a link, links an identity to themselves, or moves a sender",
   ],
   [
     "identity.stale",
@@ -726,6 +726,10 @@ const OTHERS: Entry[] = [
   validation("identity.common-name", "more than six people have the name, so it proposes no one"),
   validation("identity.not-a-person", "a bot, a program or an organization is never proposed as a person by name"),
   validation("identity.owner", "one side is the owner's person, and only the owner joins anyone to themselves"),
+  ["sender-bot.not-found", "not_found", "no sender bot has that id; people list kind:automated lists them"],
+  validation("sender-bot.owner", "the owner's own person is never a bot"),
+  validation("sender-bot.not-a-person", "the person named is a sender bot; name a person"),
+  validation("sender-bot.assignee", "a sender bot is no one's assignee; move it to a person first"),
   validation("identity.shared-email", "more than six people share the address, so it proposes no one"),
   validation("identity-link.dedicated-review", "an identity link is staged and decided through the people review"),
   validation("identity-split.dedicated-review", "a split of a person is staged and decided through the people review"),

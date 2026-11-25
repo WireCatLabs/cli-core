@@ -59,7 +59,7 @@ describe("store version 73", () => {
   it("**never hands an id out twice**: every base table counts on past the largest id the store knows", async () => {
     const { path, database } = await fileAt72()
     const before = objects(database)
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } })
 
     expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
     const plain = database
@@ -131,10 +131,18 @@ describe("store version 73", () => {
     })
     const dir = mkdtempSync(join(tmpdir(), "version-73-"))
     const created = await openCache(join(dir, "new.db"))
-    migrate(created, { now: () => 1, rollback: { store: join(dir, "new.db"), freeBytes: plenty } })
+    migrate(created, {
+      migrations: upTo(73),
+      now: () => 1,
+      rollback: { store: join(dir, "new.db"), freeBytes: plenty },
+    })
     const copied = await openCache(join(dir, "copied.db"))
     migrate(copied, { migrations: upTo(72), now: () => 1 })
-    migrate(copied, { now: () => 1, rollback: { store: join(dir, "copied.db"), freeBytes: plenty } })
+    migrate(copied, {
+      migrations: upTo(73),
+      now: () => 1,
+      rollback: { store: join(dir, "copied.db"), freeBytes: plenty },
+    })
 
     const declared = (database: CacheDatabase) =>
       String(database.prepare("SELECT sql FROM sqlite_master WHERE name = 'accounts'").get()?.sql).split("(")[0]
@@ -149,7 +157,7 @@ describe("store version 73", () => {
   it("leaves another tool's tables, rows, counters and triggers as they were", async () => {
     const { path, database } = await fileAt72()
     const sql = database.prepare("SELECT sql FROM sqlite_master WHERE name = 'other_tool_items'").get()?.sql
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } })
 
     expect(database.prepare("SELECT sql FROM sqlite_master WHERE name = 'other_tool_items'").get()?.sql).toBe(sql)
     expect(database.prepare("SELECT id, person_id, note FROM other_tool_items ORDER BY id").all()).toEqual([
@@ -164,7 +172,7 @@ describe("store version 73", () => {
 
   it("is refused by a build that speaks 72", async () => {
     const { path, database } = await fileAt72()
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } })
     database.close()
 
     const old = await openCache(path)
@@ -179,13 +187,13 @@ describe("store version 73", () => {
     const warnings: string[] = []
     const short = { store: path, freeBytes: () => 1024, warn: (line: string) => warnings.push(line) }
 
-    expect(() => migrate(database, { now: () => 2, rollback: short })).toThrow(
+    expect(() => migrate(database, { migrations: upTo(73), now: () => 2, rollback: short })).toThrow(
       expect.objectContaining({ details: expect.objectContaining({ reason: "store.no-rollback-copy" }) }),
     )
     expect(version(database)).toEqual({ version: 72, min_compatible: 56 })
     expect(Number(database.prepare("PRAGMA foreign_keys").get()?.foreign_keys)).toBe(1)
 
-    migrate(database, { now: () => 2, rollback: { ...short, withoutCopy: true } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { ...short, withoutCopy: true } })
     expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
     expect(warnings).toEqual([expect.stringContaining("migrating without one")])
     database.close()
@@ -205,16 +213,24 @@ describe("store version 73", () => {
     const headroom = 256 * 1024 * 1024
     const enoughForTheCopyOnly = () => headroom + copy * 2
     expect(() =>
-      migrate(database, { now: () => 2, rollback: { store: path, freeBytes: enoughForTheCopyOnly } }),
+      migrate(database, {
+        migrations: upTo(73),
+        now: () => 2,
+        rollback: { store: path, freeBytes: enoughForTheCopyOnly },
+      }),
     ).toThrow(/not enough free disk space/)
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: () => headroom + copy * 3 } })
+    migrate(database, {
+      migrations: upTo(73),
+      now: () => 2,
+      rollback: { store: path, freeBytes: () => headroom + copy * 3 },
+    })
     expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
     database.close()
   })
 
   it("takes the rollback copy of every table it copies", async () => {
     const { dir, path, database } = await fileAt72()
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } })
     database.close()
     const [copy] = readdirSync(join(dir, "backups"))
     const saved = await openCache(join(dir, "backups", String(copy)))
@@ -229,7 +245,7 @@ describe("store version 73", () => {
   it("**goes back to 72 from its rollback copy**, and up to 73 again", async () => {
     const { dir, path, database } = await fileAt72()
     const rows = database.prepare("SELECT id, text FROM messages ORDER BY id").all()
-    migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } })
     database.exec(
       "INSERT INTO organizations (kind, name, scope, created_at, updated_at) VALUES ('company', 'New', 'work', 3, 3)",
     )
@@ -244,7 +260,7 @@ describe("store version 73", () => {
     expect(database.prepare("SELECT id, text FROM messages ORDER BY id").all()).toEqual(rows)
     expect(database.prepare("SELECT id FROM organizations ORDER BY id").all()).toEqual([{ id: 10 }])
 
-    migrate(database, { now: () => 4, rollback: { store: path, freeBytes: plenty } })
+    migrate(database, { migrations: upTo(73), now: () => 4, rollback: { store: path, freeBytes: plenty } })
     expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
     // Organization 3767 was handed out before the rollback; it is not handed out again.
     expect(sequence(database, "organizations")).toBe(3767 + 1000)
@@ -255,7 +271,11 @@ describe("store version 73", () => {
   it("keeps text that is not JSON as a JSON string, and says so", async () => {
     const { path, database } = await fileAt72()
     database.exec("UPDATE messages SET metadata = '{truncated' WHERE id = 40")
-    const notice = migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    const notice = migrate(database, {
+      migrations: upTo(73),
+      now: () => 2,
+      rollback: { store: path, freeBytes: plenty },
+    })
 
     expect(notice).toContain("messages.metadata held text that is not JSON in 1 row (40)")
     expect(database.prepare("SELECT metadata FROM messages WHERE id = 40").get()?.metadata).toBe('"{truncated"')
@@ -273,9 +293,9 @@ describe("store version 73", () => {
   it("refuses rows a new rule cannot repair, naming them, and changes nothing", async () => {
     const { path, database } = await fileAt72()
     database.exec("UPDATE facts SET confirmed_by_type = 'person', confirmed_by_id = NULL")
-    expect(() => migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })).toThrow(
-      /facts rows 1 break facts_confirmed_by_pair/,
-    )
+    expect(() =>
+      migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } }),
+    ).toThrow(/facts rows 1 break facts_confirmed_by_pair/)
     expect(version(database)).toEqual({ version: 72, min_compatible: 56 })
     expect(database.prepare("SELECT sql FROM sqlite_master WHERE name = 'facts'").get()?.sql).not.toContain(
       "AUTOINCREMENT",
@@ -286,9 +306,9 @@ describe("store version 73", () => {
   it("refuses a table that holds a column the copy would lose", async () => {
     const { path, database } = await fileAt72()
     database.exec("ALTER TABLE persons ADD COLUMN other_tool_flag INTEGER")
-    expect(() => migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })).toThrow(
-      /copies persons without its columns other_tool_flag/,
-    )
+    expect(() =>
+      migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } }),
+    ).toThrow(/copies persons without its columns other_tool_flag/)
     expect(version(database)).toEqual({ version: 72, min_compatible: 56 })
     database.close()
   })
@@ -299,7 +319,11 @@ describe("store version 73", () => {
     database.exec(`INSERT INTO chats (id, account_id, external_id, kind, title, created_at, updated_at)
       VALUES (2, 99, '8', 'group', 'Gone account', 0, 0), (3, 'message', '9', 'group', 'Shifted columns', 0, 0)`)
     database.exec("PRAGMA foreign_keys = ON")
-    const notice = migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })
+    const notice = migrate(database, {
+      migrations: upTo(73),
+      now: () => 2,
+      rollback: { store: path, freeBytes: plenty },
+    })
 
     expect(version(database)).toEqual({ version: 73, min_compatible: 73 })
     expect(notice).toContain("already pointed at rows that do not exist, and are kept as they were")
@@ -402,9 +426,9 @@ describe("store version 73", () => {
     mkdirSync(join(dir, "backups"), { recursive: true })
     writeFileSync(join(dir, "backups", "wirecat-rollback-schema-60-older.db"), "")
     database.exec("UPDATE facts SET confirmed_by_type = 'person', confirmed_by_id = NULL")
-    expect(() => migrate(database, { now: () => 2, rollback: { store: path, freeBytes: plenty } })).toThrow(
-      /break facts_confirmed_by_pair/,
-    )
+    expect(() =>
+      migrate(database, { migrations: upTo(73), now: () => 2, rollback: { store: path, freeBytes: plenty } }),
+    ).toThrow(/break facts_confirmed_by_pair/)
     expect(readdirSync(join(dir, "backups"))).toEqual(["wirecat-rollback-schema-60-older.db"])
     database.close()
   })
