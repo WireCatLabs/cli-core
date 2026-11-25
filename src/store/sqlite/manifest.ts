@@ -52,7 +52,8 @@ const V56_TABLES = ["links", "proposed_actions"]
 
 /**
  * Version 78 renames the agents' `bot` to `agent` in every pointer pair and ref, so `bot:` can name sender bots: a build
- * before it would read a sender bot's `bot:` as an agent and write agents as `bot` again.
+ * before it would read a sender bot's `bot:` as an agent and write agents as `bot` again. `persons` is here for the
+ * triggers that clear a person's kind when a record, an assignment or a deal link they hold changes type.
  */
 const V78_TABLES = [
   "agent_actions",
@@ -78,6 +79,7 @@ const V78_TABLES = [
   "orders",
   "payment_allocations",
   "payments",
+  "persons",
   "pipeline_stage_changes",
   "projects",
   "proposed_actions",
