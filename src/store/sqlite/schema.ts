@@ -519,6 +519,9 @@ export const messages = sqliteTable(
     index("messages_to_normalize").on(table.id).where(sql`normalized_text IS NULL AND deleted_at IS NULL`),
     index("messages_by_sender_identity_id").on(table.senderIdentityId),
     index("messages_by_thread_root_id").on(table.threadRootId),
+    index("messages_by_thread_external_id")
+      .on(table.chatId, table.threadExternalId)
+      .where(sql`thread_root_id IS NULL AND thread_external_id IS NOT NULL`),
     check("messages_reply_to_json", sql`"reply_to" IS NULL OR json_valid("reply_to")`),
     check("messages_forward_json", sql`"forward" IS NULL OR json_valid("forward")`),
     check("messages_reactions_json", sql`"reactions" IS NULL OR json_valid("reactions")`),

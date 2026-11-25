@@ -2426,6 +2426,7 @@ CREATE INDEX `messages_by_account` ON `messages` (`account_id`,`external_id`);--
 CREATE INDEX `messages_to_normalize` ON `messages` (`id`) WHERE normalized_text IS NULL AND deleted_at IS NULL;--> statement-breakpoint
 CREATE INDEX `messages_by_sender_identity_id` ON `messages` (`sender_identity_id`);--> statement-breakpoint
 CREATE INDEX `messages_by_thread_root_id` ON `messages` (`thread_root_id`);--> statement-breakpoint
+CREATE INDEX `messages_by_thread_external_id` ON `messages` (`chat_id`,`thread_external_id`) WHERE thread_root_id IS NULL AND thread_external_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `notes_by_notable_type_notable_id` ON `notes` (`notable_type`,`notable_id`);--> statement-breakpoint
 CREATE INDEX `notes_by_author_type_author_id` ON `notes` (`author_type`,`author_id`);--> statement-breakpoint
 CREATE INDEX `order_lines_by_catalog_item_id` ON `order_lines` (`catalog_item_id`);--> statement-breakpoint
