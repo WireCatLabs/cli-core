@@ -2141,5 +2141,34 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER sender_bots_emptied_ad AFTER DELETE ON sender_bot_identities\nWHEN NOT EXISTS (SELECT 1 FROM sender_bot_identities WHERE bot_id = OLD.bot_id) BEGIN\n  DELETE FROM sender_bots WHERE id = OLD.bot_id;\nEND;",
       "CREATE TRIGGER sender_bots_emptied_au AFTER UPDATE OF bot_id ON sender_bot_identities\nWHEN NOT EXISTS (SELECT 1 FROM sender_bot_identities WHERE bot_id = OLD.bot_id) BEGIN\n  DELETE FROM sender_bots WHERE id = OLD.bot_id;\nEND;"
     ]
+  },
+  {
+    "name": "20261125183530_version-76-mail-types",
+    "statements": [
+      "ALTER TABLE `emails` ADD `mail_type` text;",
+      "ALTER TABLE `emails` ADD `reach` text;",
+      "ALTER TABLE `emails` ADD `type_signal` text;",
+      "CREATE INDEX `emails_by_mail_type` ON `emails` (`mail_type`);",
+      "CREATE INDEX `emails_type_to_work_out` ON `emails` (`id`) WHERE mail_type IS NULL;"
+    ]
+  },
+  {
+    "name": "20261125183555_version-76-mail-type-triggers",
+    "statements": [
+      "CREATE TRIGGER mail_type_email_au AFTER UPDATE OF from_address, from_identity_id, subject, headers, metadata, outgoing, body_html ON emails\nWHEN OLD.from_address IS NOT NEW.from_address OR OLD.from_identity_id IS NOT NEW.from_identity_id OR OLD.subject IS NOT NEW.subject OR OLD.headers IS NOT NEW.headers OR OLD.metadata IS NOT NEW.metadata OR OLD.outgoing IS NOT NEW.outgoing OR OLD.body_html IS NOT NEW.body_html BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = NEW.id;\nEND;",
+      "CREATE TRIGGER mail_type_outgoing_au AFTER UPDATE OF outgoing ON emails\nWHEN NEW.outgoing IS 1 AND OLD.outgoing IS NOT 1 BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id IN (SELECT identity_id FROM email_recipients WHERE email_id = NEW.id AND identity_id IS NOT NULL);\nEND;",
+      "CREATE TRIGGER mail_type_list_ai AFTER INSERT ON emails\nWHEN coalesce(json_extract(NEW.headers, '$.\"list-id\"'), json_extract(NEW.metadata, '$.listId')) IS NOT NULL AND NOT EXISTS (SELECT 1 FROM emails o WHERE coalesce(json_extract(o.headers, '$.\"list-id\"'), json_extract(o.metadata, '$.listId')) = coalesce(json_extract(NEW.headers, '$.\"list-id\"'), json_extract(NEW.metadata, '$.listId')) AND o.from_address IS NEW.from_address AND o.id <> NEW.id) BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND coalesce(json_extract(headers, '$.\"list-id\"'), json_extract(metadata, '$.listId')) = coalesce(json_extract(NEW.headers, '$.\"list-id\"'), json_extract(NEW.metadata, '$.listId'));\nEND;",
+      "CREATE TRIGGER mail_type_recipient_ai AFTER INSERT ON email_recipients BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = NEW.email_id;\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND NEW.identity_id IS NOT NULL AND from_identity_id = NEW.identity_id\n    AND (SELECT outgoing FROM emails WHERE id = NEW.email_id) IS 1\n    AND NOT EXISTS (SELECT 1 FROM email_recipients r JOIN emails o ON o.id = r.email_id WHERE r.identity_id = NEW.identity_id AND o.outgoing = 1 AND r.email_id <> NEW.email_id);\nEND;",
+      "CREATE TRIGGER mail_type_recipient_ad AFTER DELETE ON email_recipients BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = OLD.email_id;\nEND;",
+      "CREATE TRIGGER mail_type_recipient_au AFTER UPDATE OF email_id, identity_id, address, role ON email_recipients\nWHEN OLD.email_id IS NOT NEW.email_id OR OLD.identity_id IS NOT NEW.identity_id OR OLD.address IS NOT NEW.address OR OLD.role IS NOT NEW.role BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id IN (OLD.email_id, NEW.email_id);\nEND;",
+      "CREATE TRIGGER mail_type_attachment_ai AFTER INSERT ON attachments\nWHEN NEW.attachable_type = 'email' AND lower(NEW.mime) IN ('text/calendar', 'application/ics', 'message/delivery-status', 'message/disposition-notification') BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = NEW.attachable_id;\nEND;",
+      "CREATE TRIGGER mail_type_attachment_ad AFTER DELETE ON attachments\nWHEN OLD.attachable_type = 'email' AND lower(OLD.mime) IN ('text/calendar', 'application/ics', 'message/delivery-status', 'message/disposition-notification') BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = OLD.attachable_id;\nEND;",
+      "CREATE TRIGGER mail_type_attachment_au AFTER UPDATE OF mime ON attachments\nWHEN NEW.attachable_type = 'email' AND OLD.mime IS NOT NEW.mime BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND id = NEW.attachable_id;\nEND;",
+      "CREATE TRIGGER mail_type_bot_ai AFTER INSERT ON sender_bot_identities BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id = NEW.identity_id;\nEND;",
+      "CREATE TRIGGER mail_type_bot_ad AFTER DELETE ON sender_bot_identities BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id = OLD.identity_id;\nEND;",
+      "CREATE TRIGGER mail_type_organization_ai AFTER INSERT ON organization_identities BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id = NEW.identity_id;\nEND;",
+      "CREATE TRIGGER mail_type_organization_ad AFTER DELETE ON organization_identities BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id = OLD.identity_id;\nEND;",
+      "CREATE TRIGGER mail_type_sector_au AFTER UPDATE OF metadata, deleted_at ON organizations\nWHEN json_extract(OLD.metadata, '$.sector') IS NOT json_extract(NEW.metadata, '$.sector') OR OLD.deleted_at IS NOT NEW.deleted_at BEGIN\n  UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL AND from_identity_id IN (SELECT identity_id FROM organization_identities WHERE organization_id = NEW.id);\nEND;"
+    ]
   }
 ]

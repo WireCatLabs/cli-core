@@ -809,8 +809,11 @@ One email.
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `mail_rule_id` | integer |  |  | the `mail_rules` row that decided how this email is stored; no constraint, removing the rule clears it |
+| `mail_type` | text |  |  | what the email is (`order`, `newsletter`, `personal`, …, docs/dev/GLOSSARY.md); null until worked out, and nulled by triggers on its inputs |
+| `reach` | text |  |  | `direct`, `group` or `broadcast`: how it reached the owner; kept with `mail_type` |
+| `type_signal` | text |  |  | what decided `mail_type`, such as `list-id`; kept with it |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (mail_type)`, `INDEX (id) WHERE mail_type IS NULL`, `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
 
 *Checks:* `CHECK ("references" IS NULL OR json_valid("references"))`, `CHECK ("headers" IS NULL OR json_valid("headers"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 

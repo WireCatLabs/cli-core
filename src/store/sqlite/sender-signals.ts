@@ -38,7 +38,8 @@ export interface SentMail {
 /** A list three people write to is a discussion; one sender, even under `+tag` addresses, is a newsletter. */
 export const DISCUSSION_SENDERS = 3
 
-const reachOfOne = (mail: SentMail): { reach: Reach; signal?: SenderSignal } => {
+/** How one email reached the owner, and the signal that says so. */
+export const reachOfOne = (mail: SentMail): { reach: Reach; signal?: SenderSignal } => {
   if (mail.discussionList) return { reach: "group", signal: "discussion-list" }
   if (mail.oneClick) return { reach: "broadcast", signal: "one-click-unsubscribe" }
   if (mail.feedbackId) return { reach: "broadcast", signal: "feedback-id" }
@@ -81,15 +82,15 @@ export const senderSignalsOf = (
   return { signals: [...signals], reach }
 }
 
-const LIST_ID = "coalesce(json_extract(e.headers, '$.\"list-id\"'), json_extract(e.metadata, '$.listId'))"
+export const LIST_ID = "coalesce(json_extract(e.headers, '$.\"list-id\"'), json_extract(e.metadata, '$.listId'))"
 
-/** `bob+news@x` and `bob@x` are one sender. */
 /** The senders of each of these List-Ids, through `emails_by_list_id`. */
 export const LIST_SENDERS =
   `SELECT DISTINCT ${LIST_ID} AS list, e.from_address AS address FROM emails e ` +
   `WHERE e.from_address IS NOT NULL AND ${LIST_ID} IN (SELECT value FROM json_each(?))`
 
-const senderKey = (address: string) => address.toLowerCase().replace(/\+[^@]*@/, "@")
+/** `bob+news@x` and `bob@x` are one sender. */
+export const senderKey = (address: string) => address.toLowerCase().replace(/\+[^@]*@/, "@")
 
 /**
  * The mail each of these people, or sender bots, sent the owner, as `senderSignalsOf` reads it. Asked for a page

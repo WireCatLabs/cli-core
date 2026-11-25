@@ -1,0 +1,310 @@
+import type { Sector } from "../../domain/organization-sectors.js"
+import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import { MAIL_TYPES, type MailType, type MailTypeOf, mailTypeOf, schemaTypesOf } from "../../mail/mail-types.js"
+import { type CacheDatabase, isQueryOnly } from "../driver.js"
+import { LIST_ID, LIST_SENDERS, REACHES, type Reach, senderKey } from "./sender-signals.js"
+import { read, writeBatch } from "./transaction.js"
+
+/** Bump when what decides a mail type changes in code: every stored one is worked out again on the next read. */
+const TYPE_RULES = "1"
+const RULES_KEY = "mail.type_rules"
+/** About a quarter of a second of work per batch: far inside another writer's 5 s wait for the lock. */
+const BATCH = 2_000
+
+const INPUTS =
+  "SELECT e.id, e.from_address, e.subject, e.headers, e.body_html, " +
+  `${LIST_ID} AS list, ` +
+  "CASE WHEN json_extract(e.metadata, '$.rule') IS NOT NULL THEN NULL ELSE " +
+  "(SELECT count(*) FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) END AS recipients, " +
+  "(SELECT json_group_array(lower(a.mime)) FROM attachments a " +
+  "WHERE a.attachable_type = 'email' AND a.attachable_id = e.id AND a.mime IS NOT NULL) AS parts, " +
+  "e.outgoing IS 1 OR EXISTS (SELECT 1 FROM email_recipients r JOIN emails o ON o.id = r.email_id " +
+  "WHERE r.identity_id = e.from_identity_id AND o.outgoing = 1) AS owner_wrote, " +
+  "EXISTS (SELECT 1 FROM sender_bot_identities b WHERE b.identity_id = e.from_identity_id) AS bot, " +
+  "(SELECT json_extract(g.metadata, '$.sector') FROM organization_identities oi " +
+  "JOIN organizations g ON g.id = oi.organization_id " +
+  "WHERE oi.identity_id = e.from_identity_id AND g.deleted_at IS NULL ORDER BY g.id LIMIT 1) AS sector " +
+  "FROM emails e WHERE e.id IN (SELECT value FROM json_each(?))"
+
+const parsed = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "string") return {}
+  try {
+    const found: unknown = JSON.parse(value)
+    return found !== null && typeof found === "object" && !Array.isArray(found)
+      ? (found as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+/** The type, reach and signal of each of these emails, worked out from the store; nothing is written. */
+export const typesOf = (database: CacheDatabase, ids: readonly number[]): Map<number, MailTypeOf> => {
+  const found = new Map<number, MailTypeOf>()
+  if (ids.length === 0) return found
+  const rows = database.prepare(INPUTS).all(JSON.stringify(ids))
+  const lists = [...new Set(rows.flatMap((row) => (typeof row.list === "string" ? [row.list] : [])))]
+  const senders = new Map<string, Set<string>>()
+  if (lists.length > 0)
+    for (const row of database.prepare(LIST_SENDERS).all(JSON.stringify(lists))) {
+      const held = senders.get(String(row.list)) ?? new Set<string>()
+      held.add(senderKey(String(row.address)))
+      senders.set(String(row.list), held)
+    }
+  for (const row of rows) {
+    const headers = parsed(row.headers)
+    found.set(
+      Number(row.id),
+      mailTypeOf({
+        from: typeof row.from_address === "string" ? row.from_address.toLowerCase() : null,
+        subject: typeof row.subject === "string" ? row.subject : null,
+        headers: typeof row.list === "string" ? { ...headers, "list-id": row.list } : headers,
+        recipients: row.recipients == null ? null : Number(row.recipients),
+        parts: JSON.parse(String(row.parts ?? "[]")) as string[],
+        schemaTypes: schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
+        listSenders: typeof row.list === "string" ? (senders.get(row.list)?.size ?? 0) : 0,
+        ownerWrote: Number(row.owner_wrote) === 1,
+        bot: Number(row.bot) === 1,
+        sector: typeof row.sector === "string" ? (row.sector as Sector) : null,
+      }),
+    )
+  }
+  return found
+}
+
+const rulesOf = (database: CacheDatabase): string | undefined => {
+  const row = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(RULES_KEY)
+  return row === undefined ? undefined : String(row.value)
+}
+
+const anyLeft = (database: CacheDatabase): boolean =>
+  database.prepare("SELECT 1 FROM emails WHERE mail_type IS NULL LIMIT 1").get() !== undefined
+
+/** Whether every email's stored type is current. */
+export const typesCurrent = (database: CacheDatabase): boolean => rulesOf(database) === TYPE_RULES && !anyLeft(database)
+
+/**
+ * Works out and keeps the type of every email whose stored one the triggers cleared, or every email after the rules
+ * changed, a batch per write so another process never waits long for the lock. A query-only open keeps nothing.
+ * Answers whether every stored type is current.
+ */
+export const storeMailTypes = (database: CacheDatabase): boolean => {
+  if (isQueryOnly(database)) return typesCurrent(database)
+  if (rulesOf(database) !== TYPE_RULES)
+    writeBatch(database, () => {
+      if (rulesOf(database) === TYPE_RULES) return
+      database.prepare("UPDATE emails SET mail_type = NULL WHERE mail_type IS NOT NULL").run()
+      database
+        .prepare(
+          "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) " +
+            "ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = excluded.at",
+        )
+        .run(RULES_KEY, TYPE_RULES, Date.now())
+    })
+  const keep = database.prepare("UPDATE emails SET mail_type = ?, reach = ?, type_signal = ? WHERE id = ?")
+  for (;;) {
+    const more = writeBatch(database, () => {
+      const ids = database
+        .prepare("SELECT id FROM emails WHERE mail_type IS NULL LIMIT ?")
+        .all(BATCH)
+        .map((row) => Number(row.id))
+      for (const [id, { type, reach, signal }] of typesOf(database, ids)) keep.run(type, reach, signal, id)
+      return ids.length === BATCH
+    })
+    if (!more) return true
+  }
+}
+
+/** Each email's stored type, or for one the store has not typed yet, the type worked out for this read. */
+export const withTypes = <T extends { id: number; mailType: MailType | null }>(
+  database: CacheDatabase,
+  emails: T[],
+): T[] => {
+  const missing = emails.filter((email) => email.mailType === null).map((email) => email.id)
+  if (missing.length === 0) return emails
+  const found = read(database, () => typesOf(database, missing))
+  return emails.map((email) => {
+    const typed = found.get(email.id)
+    return typed === undefined
+      ? email
+      : { ...email, mailType: typed.type, reach: typed.reach, typeSignal: typed.signal }
+  })
+}
+
+/** Which emails a filter by type and reach keeps. @experimental */
+export interface TypeFilter {
+  types?: readonly MailType[]
+  reaches?: readonly Reach[]
+}
+
+const passes = (filter: TypeFilter, type: string, reach: string) =>
+  (filter.types === undefined || (filter.types as readonly string[]).includes(type)) &&
+  (filter.reaches === undefined || (filter.reaches as readonly string[]).includes(reach))
+
+/**
+ * The SQL of a filter by type and reach over `e`. Types are worked out and kept first; a query-only open that finds
+ * some not worked out works those out in memory, so a filtered list is never short.
+ */
+export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: string[]; params: string[] } => {
+  if (filter.types === undefined && filter.reaches === undefined) return { sql: [], params: [] }
+  const stored = [
+    ...(filter.types === undefined ? [] : ["e.mail_type IN (SELECT value FROM json_each(?))"]),
+    ...(filter.reaches === undefined ? [] : ["e.reach IN (SELECT value FROM json_each(?))"]),
+  ].join(" AND ")
+  const params = [
+    ...(filter.types === undefined ? [] : [JSON.stringify(filter.types)]),
+    ...(filter.reaches === undefined ? [] : [JSON.stringify(filter.reaches)]),
+  ]
+  if (storeMailTypes(database)) return { sql: [stored], params }
+  const pending = read(database, () => {
+    const ids = database
+      .prepare("SELECT id FROM emails WHERE mail_type IS NULL")
+      .all()
+      .map((row) => Number(row.id))
+    const kept: number[] = []
+    for (let at = 0; at < ids.length; at += BATCH)
+      for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH)))
+        if (passes(filter, typed.type, typed.reach)) kept.push(id)
+    return kept
+  })
+  return {
+    sql: [`((${stored}) OR e.id IN (SELECT value FROM json_each(?)))`],
+    params: [...params, JSON.stringify(pending)],
+  }
+}
+
+/** One sender's mail, counted by type and reach: a shop's receipts and its sales side by side. @experimental */
+export interface SenderMailTypes {
+  /** `person:<id>`, `sender-bot:<id>`, or `null` when the store links the address to neither. */
+  ref: string | null
+  /** The addresses it sent from, lower case. */
+  addresses: string[]
+  /** The display name on its newest email. */
+  name: string | null
+  /** Its live emails the filter's account and time take in. */
+  emails: number
+  types: Partial<Record<MailType, number>>
+  reaches: Partial<Record<Reach, number>>
+  /** Its newest email, ms. */
+  lastAt: number | null
+}
+
+/** Which senders `mailSenders` lists: those with at least one email of these types and reaches. @experimental */
+export interface SenderTypesFilter extends TypeFilter {
+  accountId?: number
+  since?: number
+  until?: number
+  limit?: number
+  offset?: number
+}
+
+const SENDER_ROWS =
+  "SELECT e.id, lower(e.from_address) AS address, e.from_name AS name, e.mail_type, e.reach, " +
+  "coalesce(e.received_at, e.sent_at) AS at, b.bot_id, l.person_id " +
+  "FROM emails e LEFT JOIN sender_bot_identities b ON b.identity_id = e.from_identity_id " +
+  "LEFT JOIN identity_links l ON l.identity_id = e.from_identity_id AND b.bot_id IS NULL " +
+  "WHERE e.deleted_at IS NULL AND e.outgoing IS NOT 1 AND e.from_address IS NOT NULL"
+
+interface Tally extends SenderMailTypes {
+  matched: boolean
+}
+
+/**
+ * Every sender of incoming mail with its mail counted by type and reach, most mail first. A sender is listed when
+ * any of its emails passes `types` and `reaches`, and its counts cover all its mail: Subscriptions shows a shop by
+ * its sales and still says it also sends receipts.
+ */
+export const mailSenders = (
+  database: CacheDatabase,
+  filter: SenderTypesFilter,
+): { items: SenderMailTypes[]; total: number } => {
+  const complete = storeMailTypes(database)
+  const where: string[] = []
+  const params: number[] = []
+  const add = (sql: string, value: number | undefined) => {
+    if (value === undefined) return
+    where.push(sql)
+    params.push(value)
+  }
+  add("e.account_id = ?", filter.accountId)
+  add("coalesce(e.received_at, e.sent_at) >= ?", filter.since)
+  add("coalesce(e.received_at, e.sent_at) < ?", filter.until)
+  const rows = read(database, () => {
+    const all = database.prepare([SENDER_ROWS, ...where].join(" AND ")).all(...params)
+    if (complete) return all
+    const missing = all.filter((row) => row.mail_type == null).map((row) => Number(row.id))
+    const found = new Map<number, MailTypeOf>()
+    for (let at = 0; at < missing.length; at += BATCH)
+      for (const [id, typed] of typesOf(database, missing.slice(at, at + BATCH))) found.set(id, typed)
+    return all.map((row) => {
+      const typed = found.get(Number(row.id))
+      return typed === undefined ? row : { ...row, mail_type: typed.type, reach: typed.reach }
+    })
+  })
+  const tallies = new Map<string, Tally>()
+  for (const row of rows) {
+    const address = String(row.address)
+    const ref =
+      row.bot_id != null
+        ? `${SENDER_BOT_PREFIX}${row.bot_id}`
+        : row.person_id != null
+          ? `person:${row.person_id}`
+          : null
+    const key = ref ?? `address:${address}`
+    const at = row.at == null ? null : Number(row.at)
+    const tally = tallies.get(key) ?? {
+      ref,
+      addresses: [],
+      name: null,
+      emails: 0,
+      types: {},
+      reaches: {},
+      lastAt: null,
+      matched: false,
+    }
+    const type = String(row.mail_type) as MailType
+    const reach = String(row.reach) as Reach
+    if (!tally.addresses.includes(address)) tally.addresses.push(address)
+    if (at !== null && (tally.lastAt === null || at >= tally.lastAt)) {
+      tally.lastAt = at
+      tally.name = typeof row.name === "string" ? row.name : tally.name
+    }
+    tally.emails += 1
+    tally.types[type] = (tally.types[type] ?? 0) + 1
+    tally.reaches[reach] = (tally.reaches[reach] ?? 0) + 1
+    if (passes(filter, type, reach)) tally.matched = true
+    tallies.set(key, tally)
+  }
+  const listed = [...tallies.values()]
+    .filter((tally) => tally.matched)
+    .sort((a, b) => b.emails - a.emails || (b.lastAt ?? 0) - (a.lastAt ?? 0))
+    .map(({ matched: _, ...tally }) => ({
+      ...tally,
+      addresses: tally.addresses.sort(),
+      types: ordered(tally.types, MAIL_TYPES),
+      reaches: ordered(tally.reaches, REACHES),
+    }))
+  const offset = filter.offset ?? 0
+  return {
+    items: listed.slice(offset, filter.limit === undefined ? undefined : offset + filter.limit),
+    total: listed.length,
+  }
+}
+
+const ordered = <K extends string>(counts: Partial<Record<K, number>>, order: readonly K[]) =>
+  Object.fromEntries(order.flatMap((key) => (counts[key] === undefined ? [] : [[key, counts[key]]]))) as Partial<
+    Record<K, number>
+  >
+
+/** @experimental */
+export interface MailTypeStore {
+  /**
+   * Senders of incoming mail with their mail counted by type and reach, most mail first; a sender is listed when any of
+   * its emails passes `types` and `reaches`.
+   */
+  mailSenders(filter?: SenderTypesFilter): Promise<{ items: SenderMailTypes[]; total: number }>
+}
+
+export const mailTypeStore = (database: CacheDatabase): MailTypeStore => ({
+  mailSenders: async (filter = {}) => mailSenders(database, filter),
+})

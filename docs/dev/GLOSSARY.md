@@ -77,6 +77,8 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | organization | a company, team, family or community | entity | none |
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
 | bot | a program that writes to the owner: a no-reply or alert address, a messenger's bot, a service's mail; an entity apart from people, with a name, identities and an optional organization, and no ties, tasks or merge review (`sender-bot:<id>`, the `sender_bots` table). Not an agent: `bot:<id>` and the `bots` table are agents that work here | automated person, sender (for a bot) | `people list kind:automated` still lists people a name or a bulk mailbox marks; memo's `{ bot }` author and `bot list` mean agents and a messenger's bot account |
+| mail type | what one email is, apart from who sent it: one of the words in [Mail types](#mail-types), worked out per email from what the store keeps of it (`emails.mail_type`, key `mailType`). A sender's view is a summary of its mail, so a shop that sends receipts and sales counts under `order` and under `promotion` | category, kind (a person's `kind` is another thing), label | none |
+| reach | how a message reached the owner: `direct` (to the owner or a few people), `group` (a large group or a discussion list), `broadcast` (one sender to many readers who cannot answer in place). Worked out per email (`emails.reach`) and per sender (`people list`) | audience, scope | none |
 | contact | one person as one source knows them: a mail correspondent, a Telegram user, a Drive owner, a calendar attendee; an `identities` row | user | none found beyond the above |
 | entity | the thing the owner means — a person, an event, a document; it carries no provider id ([WC-DATA-2](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)) | record, object | none |
 | source record | one source's copy of an entity, keyed by account and `external_id`: a contact, a Zoom meeting, an email, a message | entity, item | none |
@@ -97,6 +99,31 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | source | where stored data came from: a messenger, a mailbox, a notes folder, Google Drive | — | memo `tags add` "Put labels on one source" (means one stored thing); drive "imported sources" (means documents) |
 | search hit | one result of a search | result, match, item | JSON key is `items` in some searches and `hits` in others; see below |
 | context | **open (NEED-987)**: two meanings | — | entity card: memo `context`, `projects context`, `organizations context`, drive `documents context`, tg/max `contacts context`; messages around one message: tg/max `messages context` |
+
+### Mail types
+
+The values of `mailType`, in the order they are tried: the first that matches wins. Mail from someone the owner wrote
+to is typed by what the email itself carries (a part, schema.org markup, list headers), never by an address word or a
+subject alone.
+
+| Word | One meaning | Not |
+|---|---|---|
+| `auto_reply` | a machine's answer to a mail: a bounce, a delivery or read report, an out-of-office reply | bounce (one case of it) |
+| `security` | a sign-in code, a sign-in alert, a password reset | alert (that is `system_alert`), 2FA |
+| `calendar` | an invitation, its update or its cancellation (a `text/calendar` part) | meeting, event |
+| `travel` | a flight, train, bus, hotel or car booking | trip, booking |
+| `event_ticket` | a ticket to a concert, a match, a show | ticket (a support ticket is `account_notice` or `personal`) |
+| `order` | an order confirmation or a receipt | purchase, receipt |
+| `shipping` | a parcel sent, on its way or delivered | delivery, tracking |
+| `bill` | an invoice, a statement, a payment due or made | invoice, payment |
+| `social_notification` | a social network's notice: a reply, a like, a new follower | social |
+| `discussion_list` | a mailing list whose members write to each other (a List-Id three or more addresses send to) | forum, group |
+| `newsletter` | one sender's mail to its subscribers, written to be read | digest, subscription |
+| `promotion` | marketing mail: a sale, an offer, a campaign | ad, spam |
+| `system_alert` | a program watching a system: monitoring, CI, cron | alert, notification |
+| `account_notice` | a service's notice about the owner's account: terms, activity, a ticket update | notification, update |
+| `personal` | a person writing, to the owner or to a few people | primary, direct |
+| `other` | a program's mail no rule above names | unknown |
 
 ## Output keys
 
