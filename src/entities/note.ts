@@ -7,6 +7,7 @@ const link = {
   anchor: v.nullable(text),
 }
 
+/** @experimental */
 export const note = v.strictObject({
   ref: reference,
   kind: v.optional(v.picklist(["note", "document"])),

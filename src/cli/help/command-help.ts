@@ -2,6 +2,7 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
+import { hasOwnAction, isHidden } from "../commander-internals.js"
 import { environmentOf } from "../context.js"
 import { takesProfile } from "../profile.js"
 import { commandAt } from "../steps.js"
@@ -87,6 +88,7 @@ const SAMPLES: Readonly<Record<string, string>> = {
 
 const MAX_NEXT = 3
 
+/** @experimental */
 export interface NextChoice {
   /** Command paths shown first, in this order: `messages context`. */
   pin?: readonly string[]
@@ -96,7 +98,10 @@ export interface NextChoice {
 
 const choices = new WeakMap<Command, NextChoice>()
 
-/** Overrides the "Next usually" a command's help derives from types. Kept off `annotate`, like its section. */
+/**
+ * Overrides the "Next usually" a command's help derives from types. Kept off `annotate`, like its section.
+ * @experimental
+ */
 export const nextUsually = <T extends Command>(command: T, choice: NextChoice): T => {
   choices.set(command, choice)
   return command
@@ -104,13 +109,12 @@ export const nextUsually = <T extends Command>(command: T, choice: NextChoice): 
 
 const kindOfArgument = (argument: Argument): Kind | undefined => ARGUMENT_KINDS[argument.name()]
 
-const runs = (command: Command): boolean =>
-  command.commands.length === 0 || Boolean((command as Command & { _actionHandler?: unknown })._actionHandler)
+const runs = (command: Command): boolean => command.commands.length === 0 || hasOwnAction(command)
 
 /** Every command that runs: the leaves, and a group that also runs on its own, such as `doctor`. */
 const leaves = (command: Command): Command[] =>
   command.commands
-    .filter((child) => !(child as Command & { _hidden?: boolean })._hidden)
+    .filter((child) => !isHidden(child))
     .flatMap((child) => [...(runs(child) ? [child] : []), ...leaves(child)])
 
 const rootOf = (command: Command): Command => {
@@ -214,6 +218,7 @@ const withProfile = (command: Command, example: string): string => {
     : example
 }
 
+/** @experimental */
 export interface CommandHelp {
   /** Empty when the command declares no output entity: its description already says what it does. */
   returns: string
@@ -223,7 +228,7 @@ export interface CommandHelp {
   origin: "written" | "generated"
 }
 
-/** Returns, Next usually and Example for one command, from its definition alone. */
+/** Returns, Next usually and Example for one command, from its definition alone. @experimental */
 export const commandHelp = (command: Command): CommandHelp => {
   const written = metaOf(command).examples ?? []
   return {
@@ -236,7 +241,7 @@ export const commandHelp = (command: Command): CommandHelp => {
 
 const LABEL = 15
 
-/** The lines `--help` prints after a command's options. */
+/** The lines `--help` prints after a command's options. @experimental */
 export const commandHelpText = (command: Command): string => {
   const { returns, next, examples } = commandHelp(command)
   const rows = (label: string, values: readonly string[]) =>
@@ -287,7 +292,10 @@ export const installCommandHelp = (program: Command, { profile = true }: { profi
   for (const command of leaves(program)) command.addHelpText("after", () => commandHelpText(command))
 }
 
-/** Which leaf commands still show a generated example, so the important ones get a written one. Report only. */
+/**
+ * Which leaf commands still show a generated example, so the important ones get a written one. Report only.
+ * @experimental
+ */
 export const exampleReport = (program: Command): { written: string[]; generated: string[]; text: string } => {
   const written: string[] = []
   const generated: string[] = []

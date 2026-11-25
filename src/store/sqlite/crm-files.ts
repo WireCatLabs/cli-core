@@ -48,7 +48,7 @@ export interface CrmFileSearch {
   exact?: boolean
   /** Absent: every CRM account's. */
   accounts?: AccountKey[]
-  /** Each limits its own account's rows to the files of records assigned to its user (NEED-2707 A). */
+  /** Each limits its own account's rows to the files of records assigned to its user. */
   viewers?: CopyViewer[]
   limit?: number
 }

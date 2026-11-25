@@ -283,6 +283,8 @@ export interface FeedRead {
   timezone: string | null
   events: number
   skipped: number
+  /** The UIDs of events the feed still holds but this build could not read: not read is not deleted. */
+  unread: string[]
 }
 
 /** A feed's events inside the window, its series with their overrides, and what it could not take. */
@@ -291,11 +293,13 @@ export const readFeed = (text: string, zone: string, window?: SyncWindow): FeedR
   const where = zoneOk(named) ? named : zone
   const read = readIcs(text, where, { overrides: true })
   let skipped = read.skipped.length
+  const unread = read.skipped.flatMap(({ uid }) => (uid ? [uid] : []))
   const entries: EntryInput[] = []
   for (const event of read.events) {
     const entry = feedEntry(event, where)
     if (entry.kind === "series" && unexpandable(entry.recurrence) !== null) {
       skipped++
+      unread.push(entry.externalId)
       continue
     }
     if (!window || inWindow(entry, window)) entries.push(entry)
@@ -318,6 +322,7 @@ export const readFeed = (text: string, zone: string, window?: SyncWindow): FeedR
     timezone: zoneOk(named) ? named : null,
     events: read.events.length + read.overrides.length,
     skipped,
+    unread,
   }
 }
 
@@ -418,7 +423,13 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
         validators.etag || validators.lastModified
           ? { v: 1, validators, window, events: found.events, skipped: found.skipped }
           : null
-      return { items: found.entries, hasMore: false, removed: [], cursor: next && JSON.stringify(next) }
+      return {
+        items: found.entries,
+        hasMore: false,
+        removed: [],
+        ...(found.unread.length ? { kept: found.unread } : {}),
+        cursor: next && JSON.stringify(next),
+      }
     },
   }
 

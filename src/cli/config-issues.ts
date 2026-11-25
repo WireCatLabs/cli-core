@@ -275,7 +275,7 @@ export const savedPermissionKeys = (raw: unknown): { key: string; at: string[] }
       : [],
   )
 
-/** A saved key no command checks would do nothing (BUG-137): one issue per key, wherever it is saved. */
+/** A saved key no command checks would do nothing: one issue per key, wherever it is saved. */
 export const permissionIssues = (
   saved: readonly { key: string; at: readonly string[] }[],
   known: ReadonlySet<string>,
@@ -335,7 +335,7 @@ export const withoutIssues = (raw: unknown, issues: readonly LocatedIssue[]): un
     issues.map(({ at }) => at),
   ).pruned
 
-/** The path `config unset <setting>` names: a permission key keeps its dots; a number is a list item. */
+/** The path `config unset <setting>` names: a permission key keeps its dots; a number is a list item. @experimental */
 export const settingPathOf = (setting: string): string[] =>
   setting.startsWith("permissions.") ? ["permissions", setting.slice("permissions.".length)] : setting.split(".")
 
@@ -357,7 +357,10 @@ export const withoutPath = (raw: unknown, at: readonly string[]): { config: unkn
   return { config: prune(raw, [gone]).pruned, removed: true }
 }
 
-/** `withoutPath` for a setting as `config unset` takes it: `mail.accounts.0.colour`, `permissions.messages.send`. */
+/**
+ * `withoutPath` for a setting as `config unset` takes it: `mail.accounts.0.colour`, `permissions.messages.send`.
+ * @experimental
+ */
 export const withoutSetting = (raw: unknown, setting: string) => withoutPath(raw, settingPathOf(setting))
 
 /** The public shape: where in the file is the loader's own business. */
@@ -427,6 +430,7 @@ const wholeFile = (file: string, what: string): ConfigIssue => ({ kind: "invalid
 /**
  * A config file's text, `undefined` when there is no file, or the issue when one is there and cannot be read: a
  * folder at the path, or a file this user may not read. Neither has a fix `config` could run.
+ * @experimental
  */
 export const readConfigText = (path: string): { text: string | undefined } | { issue: ConfigIssue } => {
   try {

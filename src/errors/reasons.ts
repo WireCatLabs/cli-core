@@ -5,6 +5,7 @@ import { defineReasons } from "@wirecat/cli-base/standards"
 import { CHAT_SENDING_ASK_DETAILS } from "../models/chat-sending.js"
 
 import { type Entry, SFTP, validation } from "./sftp-reasons.js"
+import { STORE, STORE_MIGRATION } from "./store-reasons.js"
 
 /** The query reasons only message search raises; the shared ones are cli-base's `QUERY_REASONS`. */
 const QUERY: Entry[] = [
@@ -431,46 +432,11 @@ const OTHERS: Entry[] = [
     "outcome_unknown",
     "a message the server found was stored without its attachments; the next sync reads it whole",
   ],
-  validation("store.refused", "the local store refused the document text"),
-  ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
-  [
-    "store.damaged",
-    "configuration_error",
-    "the store file is damaged; store recover says what is lost and recovers it",
-  ],
-  [
-    "store.journal-replaced",
-    "conflict",
-    "another program deleted or replaced the store's journal file while it was open; store recover says what to do",
-  ],
-  validation("store.file-damaged", "the named store file is damaged or not a database"),
-  ["store.unopenable", "configuration_error", "the store file cannot be opened at its path; details.path names it"],
-  [
-    "store.unreadable",
-    "configuration_error",
-    "the store file's header or schema is damaged, so it cannot be recovered",
-  ],
-  validation("store.in-use", "a process or a scheduled timer has the store open; stop it, then recover the store"),
-  [
-    "store.sqlite3-missing",
-    "configuration_error",
-    "recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command",
-  ],
-  validation("store.recovery-failed", "the recovered store did not pass its check, so the store was left as it was"),
   [
     "serve.outdated",
     "configuration_error",
     "the store or the installed version is newer than this serve; it stopped so its unit starts the installed one",
   ],
-  validation("store.recovering", "another recovery of the store is running; wait for it to finish"),
-  validation("store.changed-during-recovery", "the store was written to during the recovery, so it was left as it was"),
-  [
-    "store.vector-extension-missing",
-    "configuration_error",
-    "the install has no sqlite-vec extension for this platform; reinstall the CLI",
-  ],
-  ["store.vector-extension-failed", "configuration_error", "the sqlite-vec extension did not load; reinstall the CLI"],
-  validation("store.vector-invalid", "a vector to store had a non-finite value"),
   validation("evidence.quote-length", "a quote from the evidence is empty or over 500 characters"),
   validation("evidence.quote-not-found", "the cited source does not say the quoted words"),
   validation("evidence.row-too-large", "one evidence row is over its size limit"),
@@ -609,10 +575,13 @@ const OTHERS: Entry[] = [
   validation("crm.activity-field", "a comment's or task's field is not valid, or the kind does not take it"),
   validation("crm.owner-unknown", "owner: names no CRM user: me without a known sign-in user, or not a user id"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
-  validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
+  validation(
+    "crm.unlisted-held",
+    "a list of every id would mark most of a kind deleted, or the sign-in read only part; nothing was",
+  ),
   validation(
     "tracker.unlisted-held",
-    "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was, until --rescan",
+    "a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was",
   ),
   validation("tracker.write-unsupported", "the tracker does not take this write, or does not recognise a repeated one"),
   validation("tracker.field", "a field of an issue or a comment the tracker's write does not take as given"),
@@ -889,17 +858,20 @@ const DETAILED: Record<string, readonly string[]> = {
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...SQL, ...OFFICE, ...OTHERS].map(([reason, code, message]) => ({
-    reason,
-    code,
-    message,
-    details: DETAILED[reason] ?? [],
-  })),
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...STORE, ...STORE_MIGRATION, ...SQL, ...OFFICE, ...OTHERS].map(
+    ([reason, code, message]) => ({
+      reason,
+      code,
+      message,
+      details: DETAILED[reason] ?? [],
+    }),
+  ),
 ])
 
 /**
  * Detail keys an error from this package may carry, until each is registered on its own reason. Not `cause`:
  * that can hold a provider's or SQLite's raw text.
+ * @experimental
  */
 export const DETAILS = [
   "account",

@@ -447,6 +447,7 @@ export const guardFor = (
 /**
  * Over a background server, the server journals what it forwards, with the outcome it saw; the command
  * writes only the refusals of its own check, which never reached the server.
+ * @experimental
  */
 export const sharedJournal = (guard: SendGuard, wire: { readonly journals: boolean } | undefined): SendGuard =>
   wire

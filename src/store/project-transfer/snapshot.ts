@@ -11,12 +11,14 @@ export {
   projectAnnotationSnapshotSchema,
 } from "./snapshot-model.js"
 
+/** @experimental */
 export interface ProjectAnnotationSnapshotOptions {
   source: string
   project: string
   env?: NodeJS.ProcessEnv
   maxReadBytes?: number
 }
+/** @experimental */
 export interface ProjectAnnotationSnapshotResult {
   snapshot: ProjectAnnotationSnapshot
   fingerprint: string
@@ -24,7 +26,7 @@ export interface ProjectAnnotationSnapshotResult {
   records: number
 }
 
-/** No source maintenance, source fetching or output-file publication belongs to a snapshot read. */
+/** No source maintenance, source fetching or output-file publication belongs to a snapshot read. @experimental */
 export const snapshotProjectAnnotations = async (
   options: ProjectAnnotationSnapshotOptions,
 ): Promise<ProjectAnnotationSnapshotResult> => {

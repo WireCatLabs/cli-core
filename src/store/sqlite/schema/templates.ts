@@ -18,7 +18,7 @@ export const templates = sqliteTable(
 export const templatesHistory = sqliteTable(
   "templates_history",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     key: text("key").notNull(),
     channel: text("channel").notNull(),
     language: text("language").notNull(),

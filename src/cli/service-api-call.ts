@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ManifestOperation } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation } from "@wirecat/cli-base/codegen/runtime"
 import { type FetchLike, hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"
 import type { ApiCommandInput } from "./bot/api.js"

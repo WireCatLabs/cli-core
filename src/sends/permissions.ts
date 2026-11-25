@@ -6,7 +6,7 @@ export const LEVELS = ["deny", "readonly", "ask", "allow"] as const
 
 export type Level = (typeof LEVELS)[number]
 
-/** A command path, dotted: `messages`, `messages.delete`, `chats.members.remove`. */
+/** A command path, dotted: `messages`, `messages.delete`, `chats.members.remove`. @experimental */
 export type PermissionKey = string
 
 /** The deletions nobody gets back: the word that skips their question is `--allow-dangerous`, never `--yes`. */
@@ -19,11 +19,11 @@ const DANGEROUS = new Set([
   "chats.clear",
 ])
 
-/** Deleting has its own word for "yes": the flag a person has to mean, not a habit (max-cli `NEED-238`). */
+/** Deleting has its own word for "yes": the flag a person has to mean, not a habit. @experimental */
 export const skipFlagFor = (key: string): "--allow-dangerous" | "--yes" =>
   DANGEROUS.has(key) ? "--allow-dangerous" : "--yes"
 
-/** Only what cannot be undone asks; the tool is meant to work without questions (owner, NEED-460). */
+/** Only what cannot be undone asks; the tool is meant to work without questions (the owner's decision). */
 export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   // Owner, 2026-11-14: deleting a message does not ask; a profile that wants the question sets `ask`.
   "messages.delete": "allow",
@@ -80,7 +80,7 @@ export const authorityAllowed = (levels: Readonly<Record<PermissionKey, Level>>)
   return level === "allow" || level === "ask"
 }
 
-/** Lets an MCP server offer `bot api`, whose calls skip the send guard and the bot's recipient list (NEED-1679). */
+/** Lets an MCP server offer `bot api`, whose calls skip the send guard and the bot's recipient list. */
 export const BOT_API_KEY: PermissionKey = "bot.api"
 
 export const isBotApi = (path: readonly string[]): boolean => path[0] === "bot" && path[1] === "api"
@@ -128,7 +128,7 @@ export const RESOURCES = [
 /**
  * Layers come nearest first. A key a nearer layer sets hides that key and every key under it in the
  * farther layers, so a profile's `messages: readonly` is not undone by `messages.delete: allow` in
- * `defaults` — the nearest section wins, as it does for every other setting (NEED-573).
+ * `defaults` — the nearest section wins, as it does for every other setting.
  */
 export const layerPermissions = (layers: readonly [string, Readonly<Record<PermissionKey, Level>> | undefined][]) => {
   const levels: Record<PermissionKey, Level> = {}
@@ -285,7 +285,7 @@ const KIND_KEYS: Record<Exclude<SendKind, "chat" | "account">, PermissionKey> = 
   delete: "messages.delete",
 }
 
-/** The command path a guarded write belongs to, when the caller did not name it. */
+/** The command path a guarded write belongs to, when the caller did not name it. @experimental */
 export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
   if (kind === "chat") return CHAT_KEYS[action as ChatAction] ?? `chats.${action ?? "update"}`
   if (kind === "account") {
@@ -388,7 +388,7 @@ const NAMED_WRITE_KEYS = [
   "topics.enable",
 ]
 
-/** Every key a write is checked against that a command path may not spell out. */
+/** Every key a write is checked against that a command path may not spell out. @experimental */
 export const WRITE_KEYS: readonly PermissionKey[] = [
   ...new Set([
     ...NAMED_WRITE_KEYS,
@@ -431,6 +431,7 @@ const STORE_MAINTENANCE = new Set(["info", "check", "copies"])
 /** Commands outside `messages` that print what people wrote, so `deny messages` reaches them too. */
 const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations", "projects"])
 
+/** @experimental */
 export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => {
   if (path[0] === "bot") return readKeysForCommand(path.slice(1)).map((key) => `bot.${key}`)
   const key = keyForCommand(path)
@@ -508,10 +509,11 @@ export const RESOURCE_KEY = new RegExp(`^(${RESOURCES.join("|")})(\\.[a-z][a-z-]
  * A key of a CLI that declares its own commands (`commandPermissions`): any command path. Which paths exist is
  * checked against the program, not here. Past the first word a key may hold capitals, as Google's method ids do
  * (`api.calendar.calendarList.list`).
+ * @experimental
  */
 export const COMMAND_PATH_KEY = /^[a-z][a-z-]*(\.[a-zA-Z][a-zA-Z-]*)*$/
 
-/** Startup overrides are a nearer layer than the saved profile, and never write that profile. */
+/** Startup overrides are a nearer layer than the saved profile, and never write that profile. @experimental */
 export const permissionOverrides = (
   entries: readonly string[] = [],
   shape: RegExp = RESOURCE_KEY,
@@ -530,7 +532,10 @@ export const permissionOverrides = (
   return levels
 }
 
-/** No startup flag grants access: an override may narrow the profile's level, never lift it or a key under it. */
+/**
+ * No startup flag grants access: an override may narrow the profile's level, never lift it or a key under it.
+ * @experimental
+ */
 export const assertOverridesTighten = (
   overrides: Readonly<Record<PermissionKey, Level>>,
   profile: Readonly<Record<PermissionKey, Level>>,

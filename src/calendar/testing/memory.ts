@@ -449,14 +449,18 @@ export const memoryEventStore = (): EventStore => {
       )
       return removed.length
     },
-    async markUnseen(calendarId, seenBefore, window, now) {
+    async markUnseen(calendarId, seenBefore, window, now, { keep = [], dryRun = false } = {}) {
+      const kept = new Set(keep)
       const marked = entries.filter(
         (one) =>
           one.calendarId === calendarId &&
           one.deletedAt === null &&
           (one.seenAt === null || one.seenAt < seenBefore) &&
-          entryInWindow(one, window),
+          entryInWindow(one, window) &&
+          !kept.has(one.externalId) &&
+          (one.seriesExternalId === null || !kept.has(one.seriesExternalId)),
       )
+      if (dryRun) return marked.length
       for (const one of marked) Object.assign(one, { deletedAt: now, updatedAt: now })
       for (const eventId of new Set(marked.map(({ eventId }) => eventId)))
         if (eventId !== null) refreshEvent(eventId, now)

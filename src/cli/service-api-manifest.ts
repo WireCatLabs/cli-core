@@ -8,7 +8,7 @@ import {
   type SignInPlace,
   signInPlace,
   signInRequirements,
-} from "@wirecat/cli-base/codegen"
+} from "@wirecat/cli-base/codegen/runtime"
 import type { ApiCommandInput } from "./bot/api.js"
 import { apiJson, parseApiJson } from "./bot/api-input.js"
 
@@ -58,6 +58,7 @@ export const manifestBaseUrl = (
 /**
  * The site an owner types, as a server's free variable takes it: a host with a port or a path if any, from
  * `blog.example.com` or `https://blog.example.com/`. Only https: an `http://` address is refused, not rewritten.
+ * @experimental
  */
 export const siteValue = (raw: string): string => {
   const text = raw
@@ -152,6 +153,7 @@ const authOf = (manifest: ServiceApiManifest, operation: ManifestOperation): Sig
  * standard sign-in header, or a key in the query, never follows a redirect, even to the same host: another host would
  * get the key. The URL then holds the key, so a fetch wrapper must not log it. Without `token`, for a CLI that never
  * signs in, nothing is added.
+ * @experimental
  */
 export const signRequest = async (
   manifest: ServiceApiManifest,
@@ -171,6 +173,7 @@ export const signRequest = async (
 /**
  * A URL on the server's origin and under its path: a site at `host/blog` shares its host with `host/other`, which
  * must never get its sign-in.
+ * @experimental
  */
 export const underBase = (url: URL, baseUrl: string): boolean => {
   const base = new URL(baseUrl)
@@ -214,7 +217,10 @@ export const withValue = (
   return { ...input, fields, body: apiJson({ ...(body as Record<string, unknown>), [parameter.name]: value }) }
 }
 
-/** One page's items, and how to ask for the next: new flags, the next page's whole URL, or `undefined` at the end. */
+/**
+ * One page's items, and how to ask for the next: new flags, the next page's whole URL, or `undefined` at the end.
+ * @experimental
+ */
 export interface PageStep {
   items: readonly unknown[]
   next?: { input: ApiCommandInput } | { url: string }
@@ -224,6 +230,7 @@ export interface PageStep {
  * Reads one answer by the manifest's pagination: where its items are and what the next request is. `headers` are the
  * response's, where a page style's `pagesHeader` gives the number of pages: the page that reaches it is the last, as
  * WordPress refuses a page past the end.
+ * @experimental
  */
 export const nextPage = (
   pagination: Pagination,

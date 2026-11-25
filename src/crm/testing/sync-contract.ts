@@ -132,7 +132,7 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         assert.equal(finished.state, "complete")
         assert.deepEqual(await deals(), ["d2", "d3", "d4", "d5"])
       }),
-      test("a list that would mark most rows deleted is held as an issue until --rescan", async ({
+      test("a list that would mark most rows deleted is held as an issue, past --rescan, until --allow-deletions", async ({
         source,
         sync,
         deals,
@@ -146,7 +146,12 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         assert.equal(held.synced.find(({ kind }) => kind === "deal")?.pass, "held")
         assert.ok(held.issues.some(({ reason }) => reason === "crm.unlisted-held"))
         assert.equal((await deals()).length, 12)
-        await sync({ rescan: true })
+        now += DAY
+        const rescan = await sync({ rescan: true })
+        assert.equal(rescan.synced.find(({ kind }) => kind === "deal")?.pass, "held")
+        assert.equal((await deals()).length, 12)
+        now += DAY
+        await sync({ allowDeletions: 12 })
         assert.deepEqual(await deals(), [])
       }),
       test("stores each kind's own fields, and marks deleted one the CRM no longer lists", async ({

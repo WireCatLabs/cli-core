@@ -6,11 +6,14 @@ import * as v from "valibot"
  * and the docs render. Desktop treats the document as untrusted input, so this schema is the contract it copies
  * (`test/fixtures/setup-v1/`). Unknown keys pass everywhere but in conditions: a newer CLI may add an optional key,
  * and an older renderer ignores it.
+ * @experimental
  */
 
 export const SETUP_FORMAT = "wirecat.setup"
+/** @experimental */
 export const SETUP_VERSION = 1
 
+/** @experimental */
 export const SETUP_LIMITS = {
   bytes: 256 * 1024,
   steps: 60,
@@ -21,6 +24,7 @@ export const SETUP_LIMITS = {
 } as const
 
 // No lookahead anywhere: Desktop checks these patterns in Rust, whose regex has none.
+/** @experimental */
 export const SETUP_PATTERNS = {
   step: /^[a-z][a-z0-9-]{0,47}$/,
   input: /^[a-z][a-z0-9_-]{0,47}$/,
@@ -38,6 +42,7 @@ export const SETUP_PATTERNS = {
   href: /^https:\/\/[^\s"<>]{1,2000}$/,
 } as const
 
+/** @experimental */
 export const BLOCK_TYPES = [
   "text",
   "heading",
@@ -53,6 +58,7 @@ export const BLOCK_TYPES = [
 ] as const
 export type BlockType = (typeof BLOCK_TYPES)[number]
 
+/** @experimental */
 export const INPUT_KINDS = [
   "text",
   "number",
@@ -70,14 +76,20 @@ export type InputKind = (typeof INPUT_KINDS)[number]
 
 export const STEP_KINDS = ["form", "run", "done"] as const
 
-/** What a block is; how it is laid out is `class`. A role a renderer does not know is drawn as the default. */
+/**
+ * What a block is; how it is laid out is `class`. A role a renderer does not know is drawn as the default.
+ * @experimental
+ */
 export const BLOCK_ROLES: Partial<Record<BlockType, readonly string[]>> = {
   note: ["tip", "info", "warning", "danger", "success"],
   group: ["card", "details", "row"],
   link: ["button", "inline"],
 }
 
-/** The reserved display classes. Desktop maps each to its own design tokens; any other name is ignored. */
+/**
+ * The reserved display classes. Desktop maps each to its own design tokens; any other name is ignored.
+ * @experimental
+ */
 export const DISPLAY_CLASSES = [
   ...["w-auto", "w-1/3", "w-1/2", "w-2/3", "w-full", "w-narrow"],
   ...["h-sm", "h-md", "h-lg", "h-xl"],
@@ -91,7 +103,10 @@ export const DISPLAY_CLASSES = [
   ...["cols-2", "cols-3"],
 ] as const
 
-/** The run actions cli-core runs itself. A tool's own (`oauth`, `qr`) are reserved in the format, not built in v1. */
+/**
+ * The run actions cli-core runs itself. A tool's own (`oauth`, `qr`) are reserved in the format, not built in v1.
+ * @experimental
+ */
 export const BUILT_IN_ACTIONS = ["apply"] as const
 
 export type Condition =
@@ -376,6 +391,7 @@ const STEP = v.looseObject({
 
 const TEXTS = v.record(textId, v.pipe(v.string(), v.maxLength(4000)))
 
+/** @experimental */
 export const setupDocumentSchema = v.looseObject({
   format: v.literal(SETUP_FORMAT),
   version: v.literal(SETUP_VERSION),
@@ -398,7 +414,7 @@ export const setupDocumentSchema = v.looseObject({
   values: v.optional(v.record(v.string(), v.union([value, v.strictObject({ set: v.literal(true) })]))),
 }) as unknown as v.GenericSchema<SetupDocument>
 
-/** The document's JSON Schema (draft-07), the one Desktop checks a description against. */
+/** The document's JSON Schema (draft-07), the one Desktop checks a description against. @experimental */
 export const setupJsonSchema = (): Record<string, unknown> => {
   const schema = toJsonSchema(setupDocumentSchema, {
     errorMode: "ignore",

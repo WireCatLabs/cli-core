@@ -25,7 +25,7 @@ export interface StoredAccount {
 /** Whether a stored chat may hold a message deleted without naming its chat. */
 export type DeletionScope = (chat: Pick<Chat, "id" | "kind" | "providerMetadata">) => boolean
 
-/** How a message reached the store — `history`, `send`, `backfill`, `update`. Diagnostic. */
+/** How a message reached the store — `history`, `send`, `backfill`, `update`. Diagnostic. @experimental */
 export type IngestedVia = string
 
 export interface StoredHit extends MessageHit {
@@ -114,6 +114,7 @@ export type MessageFilter = AccountMessageFilter & {
   accounts?: Id[]
 } & ({ account: AccountKey } | { account?: undefined; chatId?: undefined })
 
+/** @experimental */
 export interface Delta {
   chats?: ChatUpdate[]
   people?: PersonFacts[]
@@ -174,7 +175,7 @@ export interface ConversationBuild {
 
 /**
  * A conversation found by meaning: the chunk that matched best, and how near it is (−1 to 1). `stale` when
- * the chunk's messages no longer read as they did when it was embedded (NEED-550 B).
+ * the chunk's messages no longer read as they did when it was embedded.
  */
 export interface ConversationHit {
   summary: ConversationSummary
@@ -265,6 +266,7 @@ export interface Range {
  * How far a chat's messages were read for tasks: every stored message sent from `from` through `through`, the one
  * with id `throughId` last. Its own point, so reading a chat, marking it read or another reader's `--new` never
  * moves it.
+ * @experimental
  */
 export interface TaskAnalysisMark {
   chatId: Id
@@ -283,5 +285,5 @@ export interface TaskAnalysisMark {
   at: string
 }
 
-/** `checked` stamps `checkedAt` with the store's clock; otherwise the mark keeps its earlier one. */
+/** `checked` stamps `checkedAt` with the store's clock; otherwise the mark keeps its earlier one. @experimental */
 export type TaskAnalysisMarkWrite = Omit<TaskAnalysisMark, "at" | "checkedAt"> & { checked: boolean }

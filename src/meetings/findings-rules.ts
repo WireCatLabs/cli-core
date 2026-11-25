@@ -4,6 +4,7 @@ import { FACT_TYPES, type Payment, validatePayment } from "./payment.js"
 import { meetingTimestamp } from "./timestamp.js"
 
 const TASK_TYPES = ["bug", "feature", "chore"] as const
+/** @experimental */
 export interface FindingEvidence {
   reference: string
   fingerprint: string
@@ -57,6 +58,7 @@ export interface FindingsInput {
   extractor: string
   findings: Finding[]
 }
+/** @experimental */
 export interface FindingOutcome {
   id: string
   fingerprint: string

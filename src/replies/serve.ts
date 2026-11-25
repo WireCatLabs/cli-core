@@ -7,14 +7,19 @@ import { outsideAudience, readReplies } from "./rules.js"
 import { readRepliesState, recordReply, writeRepliesState } from "./state.js"
 import { renderReplyTemplate, templateWarning } from "./template.js"
 
+/** @experimental */
 export const NOT_ALLOWED = "replies.send is not allow"
+/** @experimental */
 export const NO_RULES = "no rules"
+/** @experimental */
 export const ONLY_TASK = "opened a task, sent nothing"
+/** @experimental */
 export const NO_TASKS = "this serve cannot open tasks"
 
-/** `task`: the rule that opened a task for the message — beside a reply, or beside why none went. */
+/** `task`: the rule that opened a task for the message — beside a reply, or beside why none went. @experimental */
 export type Replied = { sent: string; task?: string } | { skip: string; task?: string }
 
+/** @experimental */
 export interface Replier {
   /** The profile's rules and state files, read on every message so an edit or `replies pause` applies at once. */
   rulesPath: string
@@ -41,10 +46,11 @@ const FINAL = new Set(["permission_error", "confirmation_required", "rate_limite
 
 /**
  * One arriving message through the rules, in file order, the first that matches acting: a task opens
- * for anyone (NEED-582), a reply goes only to a sender the file's audience allows and only with
+ * for anyone, a reply goes only to a sender the file's audience allows and only with
  * `replies.send` at `allow`. A send that fails is
  * tried once more with the same send id, so the messenger delivers at most one; a message whose
  * reply may have gone is kept as answered.
+ * @experimental
  */
 export const replyTo = async (deps: Replier, message: Message): Promise<Replied> => {
   const { rules, audience } = readReplies(deps.rulesPath, deps.provider)

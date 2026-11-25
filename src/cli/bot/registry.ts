@@ -9,11 +9,14 @@ export interface SeenChat extends Chat {
   lastSeenAt: string
 }
 
-/** Everything this machine keeps about its bots: seen chats, recipients, the send journal. */
+/** Everything this machine keeps about its bots: seen chats, recipients, the send journal. @experimental */
 export const botsDirectory = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "bots")
 
-/** One bot's files. The names are what max-cli has always used: a moved path would lose a recipient list, and with it the limit. */
+/**
+ * One bot's files. The names are what max-cli has always used: a moved path would lose a recipient list, and with it the limit.
+ * @experimental
+ */
 export const botFiles = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env) => {
   const directory = botsDirectory(app, env)
   return {
@@ -106,7 +109,7 @@ export class ChatRegistry {
   }
 }
 
-/** Every profile that has ever kept a registry — the bots this machine has used. */
+/** Every profile that has ever kept a registry — the bots this machine has used. @experimental */
 export const registryProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string[] => {
   const directory = botsDirectory(app, env)
   if (!existsSync(directory)) return []

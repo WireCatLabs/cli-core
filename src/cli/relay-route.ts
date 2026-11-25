@@ -1,4 +1,3 @@
-import { isAbsolute, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
@@ -8,6 +7,7 @@ import { RELAY_PROTOCOL } from "../background/relay.js"
 import type { AppIdentity } from "../ports/app.js"
 import { commandPathOf } from "./command-contract.js"
 import { isLogin, isOtherServiceCall } from "./effects.js"
+import { absoluteFrom, isLocalPathArgument, isLocalPathOption } from "./path-options.js"
 
 /** Not through serve: serve itself, its unit, and what has no messenger profile. */
 const LOCAL_ROOTS = new Set(["serve", "server", "bot"])
@@ -61,16 +61,6 @@ export const relayTarget = (
   return { lock: lock as RelayTarget["lock"], profile }
 }
 
-const PATH_NAME = /^(file|path|dir|directory|folder)s?$/
-const PATH_PLACEHOLDER = /[<[](file|path|dir|directory|folder)s?(\.\.\.)?[>\]]/
-
-const absolute = (cwd: string, value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map((one) => absolute(cwd, one))
-  if (typeof value !== "string" || value === "-" || value === "" || isAbsolute(value) || value.includes("://"))
-    return value
-  return resolve(cwd, value)
-}
-
 /**
  * A command serve runs for a client reads the client's files: a value whose placeholder names a path is made
  * absolute against the client's working directory before the action sees it.
@@ -78,13 +68,14 @@ const absolute = (cwd: string, value: unknown): unknown => {
 export const absolutePaths = (action: Command, cwd: string): void => {
   for (let at: Command | null = action; at; at = at.parent) {
     for (const option of at.options) {
-      if (!PATH_PLACEHOLDER.test(option.flags)) continue
+      if (!isLocalPathOption(at, option)) continue
       const key = option.attributeName()
       const value = at.getOptionValue(key)
-      if (value !== undefined) at.setOptionValueWithSource(key, absolute(cwd, value), at.getOptionValueSource(key))
+      if (value !== undefined) at.setOptionValueWithSource(key, absoluteFrom(cwd, value), at.getOptionValueSource(key))
     }
   }
   action.registeredArguments.forEach((argument, index) => {
-    if (PATH_NAME.test(argument.name())) action.processedArgs[index] = absolute(cwd, action.processedArgs[index])
+    if (isLocalPathArgument(action, argument))
+      action.processedArgs[index] = absoluteFrom(cwd, action.processedArgs[index])
   })
 }

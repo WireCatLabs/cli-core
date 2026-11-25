@@ -1,4 +1,4 @@
-import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import { editDistance } from "../../search/correct.js"
 import type { CrmManifest, CrmOperationCall, CrmRule } from "./manifest.js"

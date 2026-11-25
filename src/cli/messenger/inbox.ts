@@ -21,13 +21,13 @@ export const PARTIAL_NOTE =
   "the messenger did not list every chat, and did not say how many it left out; one may have more"
 
 /**
- * Two questions, one command — max-cli's `inbox` (its `NEED-171`).
+ * Two questions, one command — max-cli's `inbox`.
  *
  * **Plain `inbox` — what is unread**, as the messenger counts it. For a person.
  *
  * **`--new` — what arrived since the last check.** For a scheduled run: the point it starts from is
  * kept per chat and moved only by a run that printed, so each message shows once, and a run that
- * fails shows it again rather than never (max-cli `NEED-162`). `lastCheckAt`, the first check, stays
+ * fails shows it again rather than never. `lastCheckAt`, the first check, stays
  * put: it is where a chat never read yet starts, so a chat skipped by one run is not lost.
  * `date>2h` is a one-off look from a time of your choosing and leaves the points where they were.
  */

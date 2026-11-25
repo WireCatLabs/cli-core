@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core",
-  "version": "0.753.0",
+  "version": "1.0.0-rc.0",
   "description": "The messenger-neutral half of a messaging CLI: domain model, message locators, rendering, name resolution, the SQLite seam, the command skeleton and shared read commands, the send guard, run records and the message store",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
@@ -14,9 +14,21 @@
   },
   "type": "module",
   "wirecat": {
+    "stable": [
+      ".",
+      "./cli",
+      "./cli/start",
+      "./mcp",
+      "./sends",
+      "./skill-validation",
+      "./sqlite-runtime",
+      "./store",
+      "./testing",
+      "./update"
+    ],
     "store": {
-      "speaks": 72,
-      "minCompatible": 56
+      "speaks": 73,
+      "minCompatible": 73
     }
   },
   "engines": {
@@ -59,8 +71,12 @@
       "default": "./dist/sqlite-runtime.js"
     },
     "./store": {
-      "types": "./dist/store/index.d.ts",
-      "default": "./dist/store/index.js"
+      "types": "./dist/store/public.d.ts",
+      "default": "./dist/store/public.js"
+    },
+    "./store/areas": {
+      "types": "./dist/store/areas.d.ts",
+      "default": "./dist/store/areas.js"
     },
     "./cli": {
       "types": "./dist/cli/index.d.ts",
@@ -238,6 +254,9 @@
     "./constants": {
       "types": "./dist/constants/index.d.ts",
       "default": "./dist/constants/index.js"
+    },
+    "./internal/*": {
+      "types": "./dist/*.d.ts"
     }
   },
   "scripts": {
@@ -248,7 +267,7 @@
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate",
     "db:bundle": "node scripts/bundle-migrations.ts",
-    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check && node scripts/standard-docs.ts --check",
+    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check && node scripts/standard-docs.ts --check && node scripts/reasons-docs.ts --check",
     "standard:docs": "node scripts/standard-docs.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -269,6 +288,7 @@
     "standards:check": "node config/wirecat/check.mjs",
     "docs:images": "node docs/images/src/render.ts",
     "docs:lint": "markdownlint-cli2",
+    "reasons:docs": "node scripts/reasons-docs.ts",
     "docs:spell": "cspell lint --config cspell.json --no-progress README.md",
     "ci:quick": "pnpm typecheck && vitest run src/cli/command-lint.test.ts",
     "help:examples": "HELP_EXAMPLES_REPORT=1 vitest run scripts/help-examples.test.ts --silent=false"
@@ -334,7 +354,7 @@
     "@types/pngjs": "6.0.5",
     "@types/ssh2": "1.15.5",
     "@vitest/coverage-v8": "^5.0.5",
-    "@wirecat/cli-base": "0.132.0",
+    "@wirecat/cli-base": "1.0.0-rc.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
     "ajv": "8.17.1",
     "commander": "15.0.0",
@@ -358,8 +378,8 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.125.0 <1.0.0",
-    "commander": ">=15",
+    "@wirecat/cli-base": "^1.0.0-0",
+    "commander": "^15.0.0",
     "mysql2": "^3.24.6",
     "pg": "^8.23.1",
     "ssh2": "^1.17.0"

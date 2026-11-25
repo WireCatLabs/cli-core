@@ -15,7 +15,7 @@ export type SendOutcome = "sent" | "outcome_unknown" | "refused" | "failed" | "r
 /** Absent in the journal means a message: that is every line written before reactions were guarded. */
 export type SendKind = "message" | "reaction" | "edit" | "forward" | "pin" | "read" | "delete" | "chat" | "account"
 
-/** What a `chat` entry did. Never a title, a description or a link — only which action. */
+/** What a `chat` entry did. Never a title, a description or a link — only which action. @experimental */
 export type ChatAction =
   | "create"
   | "join"
@@ -47,7 +47,7 @@ export type ChatAction =
   | "topic-hide"
   | "topic-unhide"
 
-/** What an `account` entry changed. Never the value it changed it to — no name, number or title. */
+/** What an `account` entry changed. Never the value it changed it to — no name, number or title. @experimental */
 export type AccountAction =
   | "contact-add"
   | "contact-remove"

@@ -51,8 +51,6 @@ None open.
 - **CORE-59** · P2 · A meeting's `attached` link keeps pointing at a deleted document when Drive later stores the same
   file as a new document: only a link with no document is resolved again (`linkAttached`), so `meetings show` says
   `null`. Re-resolve links whose document is deleted. `src/store/sqlite/files.ts` (`linkAttached`).
-- **CORE-60** · P3 · `MeetingTranscriptDocumentStore.transcriptMeetings` has no caller but tests since `search all`
-  reads `documentMeetings`. Drop it at the next breaking release. `src/meetings/transcript-store.ts`.
 - **CORE-61** · P2 · A shared Google sign-in module in `./google` (`accountEmail`, `session start`/`status`/`end`):
   gcal, drive and meet each copy ~450 lines of it. `src/google/`.
 - **CORE-52** · P2 · Tasks from an external task tool, Todoist first (owner, 2026-11-09: soon, not now). Import

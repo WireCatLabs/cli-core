@@ -161,6 +161,7 @@ export const dryRun = async (
 /**
  * What a message does not say about its sender, from the store: a contact is someone with a
  * one-to-one chat, as `contacts list` counts them; `null` when the store has no bot flag.
+ * @experimental
  */
 export const senderFacts = async (store: MessageStore, account: AccountKey) => {
   const contacts = new Set(

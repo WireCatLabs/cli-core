@@ -3,7 +3,7 @@ import { index, integer, sqliteTable, text } from "../drizzle/core.js"
 export const documentChanges = sqliteTable(
   "document_changes",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id").notNull(),
     documentId: integer("document_id").notNull(),
     path: text("path").notNull(),

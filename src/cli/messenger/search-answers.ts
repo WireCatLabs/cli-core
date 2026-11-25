@@ -15,7 +15,6 @@ import { MAX_SEARCH_OFFSET } from "../../services/messages-archive-search.js"
 import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
 import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
-import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-deprecated.js"
 import type { StoredHistorySkip } from "../../store/store.js"
 import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
@@ -26,8 +25,11 @@ import { historyLimitGaps } from "./history-gaps.js"
 export const SOURCE_SEARCHED = ["messages", "notes", "events", "meetings"] as const
 export type SourceSearched = (typeof SOURCE_SEARCHED)[number]
 
+/** @experimental */
 export type MessageHitItem = InferOutput<(typeof ENTITIES)["message.hit"]>
+/** @experimental */
 export type NoteHitItem = InferOutput<(typeof ENTITIES)["note.hit"]>
+/** @experimental */
 export type HitItem = InferOutput<(typeof ENTITIES)["hit"]>
 
 const nonEmpty = <T>(list: T[]): T[] | undefined => (list.length > 0 ? list : undefined)
@@ -60,6 +62,7 @@ export const MAIL_HIT_UNTRUSTED = [
   "email.reply_addresses.name",
 ]
 
+/** @experimental */
 export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem => {
   const at = parseLocator(hit.locator)
   const around = hit.thread?.items ?? hit.context
@@ -184,6 +187,7 @@ const chatGaps = (rows: ChatCoverage[], since?: string): { next: NextStep[]; mis
 /**
  * What the archive lacked for this answer, and the step that would fill it. From a search's coverage, or from the
  * chats an answer is about (`since` is the start of the window it was asked for).
+ * @experimental
  */
 export const coverageGaps = (
   found: Pick<SearchFound, "coverage" | "refreshed"> | ChatCoverage[],
@@ -296,7 +300,7 @@ export interface Paging {
   archiveOnly?: boolean
 }
 
-/** "showing 20 of 144", for the human view under a page of hits; `+` when the total is a lower bound. */
+/** "showing 20 of 144", for the human view under a page of hits; `+` when the total is a lower bound. @experimental */
 export const shownOf = (shown: number, offset: number, total: SearchTotal | undefined): string | undefined =>
   total === undefined || shown === 0
     ? undefined
@@ -334,6 +338,7 @@ export const messagesAnswer = (
  */
 const DOCUMENT_HIT_UNTRUSTED = ["title", "excerpt"]
 
+/** @experimental */
 export const noteHitItem = (hit: FoundNote): NoteHitItem =>
   defined({ ...hit, untrusted: hit.kind === "document" ? DOCUMENT_HIT_UNTRUSTED : undefined })
 
@@ -362,6 +367,7 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   ...BUSINESS_UNTRUSTED,
 }
 
+/** @experimental */
 export const allHitItem = (item: SearchAllItem): HitItem =>
   item.kind === "meeting"
     ? {
@@ -444,10 +450,10 @@ export const notesAnswer = (
     meta: metaOf(found.accounts, found.skipped),
   })
 
-/** `search all`, CLI and MCP alike. A meeting account whose index is still being built says so. */
+/** `search all`, CLI and MCP alike. A meeting account whose index is still being built says so. @experimental */
 export const allAnswer = (
   command: string,
-  found: SearchAllFound | SearchAllIncludingMeetingsFound,
+  found: SearchAllFound,
   { limit, page, again }: Paging,
   exact = false,
   skips: StoredHistorySkip[] = [],

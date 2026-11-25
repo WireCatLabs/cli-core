@@ -21,7 +21,10 @@ export interface UpdateEnvironment {
   spawn?: (argv: string[]) => number
 }
 
-/** Words after which a line on stderr would land in a machine's answer, or would only repeat the command. */
+/**
+ * Words after which a line on stderr would land in a machine's answer, or would only repeat the command.
+ * @experimental
+ */
 export const QUIET_WORDS: readonly string[] = [
   "--help",
   "-h",
@@ -119,4 +122,5 @@ export const appUpdate = (app: AppUpdateOptions) => {
   }
 }
 
+/** @experimental */
 export type AppUpdate = ReturnType<typeof appUpdate>

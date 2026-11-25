@@ -13,6 +13,7 @@ const named = <T>(work: () => T): T => {
   }
 }
 
+/** @experimental */
 export const fieldsOf = (value: string): string[] => named(() => coreFieldsOf(value))
 
 const projectCommands = (commands: readonly CommandInfo[], fields: readonly string[]): unknown[] =>
@@ -25,6 +26,7 @@ const projectCommands = (commands: readonly CommandInfo[], fields: readonly stri
     commands: projectCommands(command.commands, fields),
   }))
 
+/** @experimental */
 export const projectFields = (value: unknown, fields: readonly string[]): unknown =>
   named(() => {
     if (

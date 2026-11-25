@@ -1,6 +1,7 @@
 import {
   type AnySQLiteColumn,
   blob,
+  check,
   desc,
   index,
   integer,
@@ -23,7 +24,7 @@ import { canonicalTags } from "./schema/canonical-tags.js"
 export const accounts = sqliteTable(
   "accounts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     provider: text("provider").notNull(),
     externalId: text("external_id").notNull(),
     name: text("name"),
@@ -37,6 +38,7 @@ export const accounts = sqliteTable(
   (table) => [
     unique().on(table.provider, table.externalId),
     index("accounts_by_organization_id").on(table.organizationId),
+    check("accounts_settings_json", sql`"settings" IS NULL OR json_valid("settings")`),
   ],
 )
 
@@ -86,7 +88,7 @@ export const fetchLeases = sqliteTable(
 export const botUpdates = sqliteTable(
   "bot_updates",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -102,13 +104,14 @@ export const botUpdates = sqliteTable(
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("bot_updates_by_account_id_received_at_desc").on(table.accountId, desc(table.receivedAt)),
+    check("bot_updates_payload_json", sql`"payload" IS NULL OR json_valid("payload")`),
   ],
 )
 
 export const syncs = sqliteTable(
   "syncs",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -121,13 +124,16 @@ export const syncs = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [index("syncs_by_account_id").on(table.accountId)],
+  (table) => [
+    index("syncs_by_account_id").on(table.accountId),
+    check("syncs_counts_json", sql`"counts" IS NULL OR json_valid("counts")`),
+  ],
 )
 
 export const persons = sqliteTable(
   "persons",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name"),
     owner: integer("owner").notNull().default(0),
     createdAt: integer("created_at").notNull(),
@@ -147,7 +153,7 @@ export const persons = sqliteTable(
 export const identities = sqliteTable(
   "identities",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     provider: text("provider").notNull(),
     externalId: text("external_id").notNull(),
     username: text("username"),
@@ -166,6 +172,7 @@ export const identities = sqliteTable(
     unique().on(table.provider, table.externalId),
     index("identities_by_email").on(table.email).where(sql`email IS NOT NULL`),
     index("identities_name_to_fold").on(table.id).where(sql`name IS NOT NULL AND name_folded IS NULL`),
+    check("identities_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
@@ -191,7 +198,7 @@ export const identityLinks = sqliteTable(
 export const identityLinkEvents = sqliteTable(
   "identity_link_events",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     identityId: integer("identity_id")
       .notNull()
       .references(() => identities.id),
@@ -214,7 +221,7 @@ export const identityLinkEvents = sqliteTable(
 export const identityRevisions = sqliteTable(
   "identity_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     identityId: integer("identity_id")
       .notNull()
       .references(() => identities.id),
@@ -224,7 +231,10 @@ export const identityRevisions = sqliteTable(
     marks: text("marks"),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [index("identity_revisions_by_identity").on(table.identityId, table.createdAt)],
+  (table) => [
+    index("identity_revisions_by_identity").on(table.identityId, table.createdAt),
+    check("identity_revisions_marks_json", sql`"marks" IS NULL OR json_valid("marks")`),
+  ],
 )
 
 export const accountIdentities = sqliteTable(
@@ -260,7 +270,7 @@ export const accountIdentities = sqliteTable(
 export const aliases = sqliteTable(
   "aliases",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     aliasableType: text("aliasable_type").notNull(),
     aliasableId: integer("aliasable_id").notNull(),
     accountId: integer("account_id").references(() => accounts.id),
@@ -283,20 +293,24 @@ export const aliases = sqliteTable(
   ],
 )
 
-export const organizations = sqliteTable("organizations", {
-  id: integer("id").primaryKey(),
-  kind: text("kind").notNull(),
-  name: text("name").notNull(),
-  scope: text("scope").notNull().default("personal"),
-  metadata: text("metadata"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-  deletedAt: integer("deleted_at"),
-})
+export const organizations = sqliteTable(
+  "organizations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    scope: text("scope").notNull().default("personal"),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  () => [check("organizations_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`)],
+)
 
 /** An address as a record of its own: a `place` mention once confirmed, found again by its folded form. */
 export const places = sqliteTable("places", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   address: text("address").notNull(),
   folded: text("folded").notNull().unique(),
   author: text("author").notNull(),
@@ -308,7 +322,7 @@ export const places = sqliteTable("places", {
 export const organizationIdentities = sqliteTable(
   "organization_identities",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     identityId: integer("identity_id")
       .notNull()
       .references(() => identities.id),
@@ -329,7 +343,7 @@ export const organizationIdentities = sqliteTable(
 export const bots = sqliteTable(
   "bots",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull().unique(),
     kind: text("kind").notNull(),
     description: text("description"),
@@ -342,13 +356,16 @@ export const bots = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [index("bots_by_owner_person_id").on(table.ownerPersonId)],
+  (table) => [
+    index("bots_by_owner_person_id").on(table.ownerPersonId),
+    check("bots_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+  ],
 )
 
 export const chats = sqliteTable(
   "chats",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -385,6 +402,7 @@ export const chats = sqliteTable(
     index("chats_by_recency").on(table.accountId, desc(table.lastMessageAt)),
     index("chats_title_to_fold").on(table.id).where(sql`title IS NOT NULL AND title_folded IS NULL`),
     index("chats_by_parent_chat_id").on(table.parentChatId),
+    check("chats_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
@@ -413,7 +431,7 @@ export const chatMembers = sqliteTable(
 export const memberStays = sqliteTable(
   "member_stays",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -455,7 +473,7 @@ export const memberCounts = sqliteTable(
 export const messages = sqliteTable(
   "messages",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -499,15 +517,23 @@ export const messages = sqliteTable(
     index("messages_by_account").on(table.accountId, table.externalId),
     // Empty once the backfill is done, so every open can ask "anything left?" without reading the table.
     index("messages_to_normalize").on(table.id).where(sql`normalized_text IS NULL AND deleted_at IS NULL`),
+    index("messages_by_chat_id_thread_external_id")
+      .on(table.chatId, table.threadExternalId)
+      .where(sql`thread_root_id IS NULL AND thread_external_id IS NOT NULL`),
     index("messages_by_sender_identity_id").on(table.senderIdentityId),
     index("messages_by_thread_root_id").on(table.threadRootId),
+    check("messages_reply_to_json", sql`"reply_to" IS NULL OR json_valid("reply_to")`),
+    check("messages_forward_json", sql`"forward" IS NULL OR json_valid("forward")`),
+    check("messages_reactions_json", sql`"reactions" IS NULL OR json_valid("reactions")`),
+    check("messages_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("messages_mentions_json", sql`"mentions" IS NULL OR json_valid("mentions")`),
   ],
 )
 
 export const messageRevisions = sqliteTable(
   "message_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     messageId: integer("message_id")
       .notNull()
       .references(() => messages.id),
@@ -527,7 +553,7 @@ export const messageRevisions = sqliteTable(
 export const messageLinks = sqliteTable(
   "message_links",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     /** The message's chat, kept here so a rebuild finds and drops an old build without reading `messages`. */
     chatId: integer("chat_id")
       .notNull()
@@ -584,7 +610,7 @@ export const messageCounterObservations = sqliteTable(
 export const messageTranscripts = sqliteTable(
   "message_transcripts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     messageId: integer("message_id").references(() => messages.id),
     chatId: integer("chat_id")
       .notNull()
@@ -614,7 +640,7 @@ export const messageStemsPending = sqliteTable("message_stems_pending", {
 export const pollVotes = sqliteTable(
   "poll_votes",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -630,6 +656,7 @@ export const pollVotes = sqliteTable(
   (table) => [
     unique().on(table.chatId, table.messageExternalId, table.identityId),
     index("poll_votes_by_identity_id").on(table.identityId),
+    check("poll_votes_answers_json", sql`"answers" IS NULL OR json_valid("answers")`),
   ],
 )
 
@@ -642,7 +669,7 @@ export { linkRevisions } from "./schema/link-revisions.js"
 export const chatRevisions = sqliteTable(
   "chat_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id").notNull(),
     accountId: integer("account_id").notNull(),
     field: text("field").notNull(),
@@ -661,7 +688,7 @@ export const chatRevisions = sqliteTable(
 
 /** The source and time the `chat_revisions` trigger records, set by the store inside its write and gone by commit. */
 export const chatRevisionSource = sqliteTable("chat_revision_source", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   source: text("source").notNull(),
   at: integer("at").notNull(),
 })
@@ -670,7 +697,7 @@ export const chatRevisionSource = sqliteTable("chat_revision_source", {
 export const chatEvents = sqliteTable(
   "chat_events",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -712,7 +739,7 @@ export const chatEventPeople = sqliteTable(
 export const messageReactions = sqliteTable(
   "message_reactions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -736,7 +763,7 @@ export const messageReactions = sqliteTable(
 export const memberObservations = sqliteTable(
   "member_observations",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
@@ -776,7 +803,7 @@ export const memberObservationMembers = sqliteTable(
 export const emailThreads = sqliteTable(
   "email_threads",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -793,13 +820,14 @@ export const emailThreads = sqliteTable(
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("email_threads_subject_to_fold").on(table.id).where(sql`subject IS NOT NULL AND subject_folded IS NULL`),
+    check("email_threads_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const emails = sqliteTable(
   "emails",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -837,13 +865,16 @@ export const emails = sqliteTable(
     index("emails_by_mail_rule_id").on(table.mailRuleId).where(sql`mail_rule_id IS NOT NULL`),
     index("emails_by_email_thread_id").on(table.emailThreadId),
     index("emails_by_from_identity_id").on(table.fromIdentityId),
+    check("emails_references_json", sql`"references" IS NULL OR json_valid("references")`),
+    check("emails_headers_json", sql`"headers" IS NULL OR json_valid("headers")`),
+    check("emails_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const mailRules = sqliteTable(
   "mail_rules",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -856,13 +887,17 @@ export const mailRules = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [unique().on(table.accountId, table.conditions)],
+  (table) => [
+    unique().on(table.accountId, table.conditions),
+    check("mail_rules_conditions_json", sql`"conditions" IS NULL OR json_valid("conditions")`),
+    check("mail_rules_actions_json", sql`"actions" IS NULL OR json_valid("actions")`),
+  ],
 )
 
 export const emailRecipients = sqliteTable(
   "email_recipients",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     emailId: integer("email_id")
       .notNull()
       .references(() => emails.id),
@@ -883,7 +918,7 @@ export const emailRecipients = sqliteTable(
 export const mailboxes = sqliteTable(
   "mailboxes",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -948,7 +983,7 @@ export const emailIndexPending = sqliteTable(
 export const attachments = sqliteTable(
   "attachments",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     attachableType: text("attachable_type").notNull(),
     attachableId: integer("attachable_id").notNull(),
     position: integer("position").notNull(),
@@ -983,6 +1018,8 @@ export const attachments = sqliteTable(
     index("attachments_local_path_to_fold")
       .on(table.id)
       .where(sql`local_path IS NOT NULL AND local_path_folded IS NULL`),
+    check("attachments_provider_ref_json", sql`"provider_ref" IS NULL OR json_valid("provider_ref")`),
+    check("attachments_contact_json", sql`"contact" IS NULL OR json_valid("contact")`),
   ],
 )
 
@@ -1000,7 +1037,7 @@ export { documentAnnotationTransfers } from "./schema/document-transfers.js"
 export const documents = sqliteTable(
   "documents",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -1033,13 +1070,17 @@ export const documents = sqliteTable(
     pinnedFileId: integer("pinned_file_id"),
     removal: text("removal"),
   },
-  (table) => [unique().on(table.accountId, table.externalId)],
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    check("documents_front_matter_json", sql`"front_matter" IS NULL OR json_valid("front_matter")`),
+    check("documents_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+  ],
 )
 
 export const files = sqliteTable(
   "files",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -1068,13 +1109,14 @@ export const files = sqliteTable(
     index("files_path_to_fold").on(table.id).where(sql`path_folded IS NULL`),
     index("files_by_parent_id").on(table.parentId),
     index("files_by_document_id").on(table.documentId),
+    check("files_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const documentRevisions = sqliteTable(
   "document_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     documentId: integer("document_id")
       .notNull()
       .references(() => documents.id),
@@ -1085,7 +1127,10 @@ export const documentRevisions = sqliteTable(
     frontMatter: text("front_matter"),
     reason: text("reason"),
   },
-  (table) => [index("document_revisions_by_document_id").on(table.documentId)],
+  (table) => [
+    index("document_revisions_by_document_id").on(table.documentId),
+    check("document_revisions_front_matter_json", sql`"front_matter" IS NULL OR json_valid("front_matter")`),
+  ],
 )
 
 export { documentChanges } from "./schema/document-changes.js"
@@ -1094,7 +1139,7 @@ export { documentIndexPending } from "./schema/document-index-pending.js"
 export const notes = sqliteTable(
   "notes",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     notableType: text("notable_type").notNull(),
     notableId: integer("notable_id").notNull(),
     title: text("title"),
@@ -1109,13 +1154,14 @@ export const notes = sqliteTable(
   (table) => [
     index("notes_by_notable_type_notable_id").on(table.notableType, table.notableId),
     index("notes_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("notes_author_pair", sql`("author_type" IS NULL) = ("author_id" IS NULL)`),
   ],
 )
 
 export const noteRevisions = sqliteTable(
   "note_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     noteId: integer("note_id")
       .notNull()
       .references(() => notes.id),
@@ -1138,7 +1184,7 @@ export const noteIndexPending = sqliteTable(
 export const memories = sqliteTable(
   "memories",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     kind: text("kind").notNull(),
     body: text("body").notNull(),
     subjectType: text("subject_type"),
@@ -1161,6 +1207,7 @@ export const memories = sqliteTable(
     index("memories_by_author_type_author_id").on(table.authorType, table.authorId),
     index("memories_by_supersedes_id").on(table.supersedesId),
     index("memories_by_project_id").on(table.projectId),
+    check("memories_subject_pair", sql`("subject_type" IS NULL) = ("subject_id" IS NULL)`),
   ],
 )
 
@@ -1176,7 +1223,7 @@ export const memoryIndexPending = sqliteTable(
 export const calendars = sqliteTable(
   "calendars",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -1197,7 +1244,7 @@ export const calendars = sqliteTable(
 export const calendarEntries = sqliteTable(
   "calendar_entries",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     calendarId: integer("calendar_id")
       .notNull()
       .references(() => calendars.id),
@@ -1253,13 +1300,15 @@ export const calendarEntries = sqliteTable(
     index("calendar_entries_by_event_series_id").on(table.eventSeriesId),
     index("calendar_entries_by_event_type_event_id").on(table.eventType, table.eventId),
     index("calendar_entries_by_organizer_identity_id").on(table.organizerIdentityId),
+    check("calendar_entries_recurrence_json", sql`"recurrence" IS NULL OR json_valid("recurrence")`),
+    check("calendar_entries_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const calendarEntryRevisions = sqliteTable(
   "calendar_entry_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     entryId: integer("entry_id")
       .notNull()
       .references(() => calendarEntries.id),
@@ -1279,7 +1328,7 @@ export const calendarEntryRevisions = sqliteTable(
 export const calendarEntryParticipants = sqliteTable(
   "calendar_entry_participants",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     entryId: integer("entry_id")
       .notNull()
       .references(() => calendarEntries.id),
@@ -1310,7 +1359,7 @@ export const eventIndexPending = sqliteTable(
 )
 
 export const eventSeries = sqliteTable("event_series", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title"),
   recurrence: text("recurrence"),
   origin: text("origin").notNull(),
@@ -1321,7 +1370,7 @@ export const eventSeries = sqliteTable("event_series", {
 export const events = sqliteTable(
   "events",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     eventSeriesId: integer("event_series_id").references(() => eventSeries.id),
     title: text("title"),
     description: text("description"),
@@ -1343,7 +1392,7 @@ export const events = sqliteTable(
 export const meetingSeries = sqliteTable(
   "meeting_series",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -1364,13 +1413,15 @@ export const meetingSeries = sqliteTable(
     unique().on(table.accountId, table.externalId),
     index("meeting_series_by_event_series_id").on(table.eventSeriesId),
     index("meeting_series_by_host_identity_id").on(table.hostIdentityId),
+    check("meeting_series_recurrence_json", sql`"recurrence" IS NULL OR json_valid("recurrence")`),
+    check("meeting_series_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const meetings = sqliteTable(
   "meetings",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -1406,13 +1457,14 @@ export const meetings = sqliteTable(
     index("meetings_by_meeting_series_id").on(table.meetingSeriesId),
     index("meetings_by_event_id").on(table.eventId),
     index("meetings_by_host_identity_id").on(table.hostIdentityId),
+    check("meetings_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const meetingParticipants = sqliteTable(
   "meeting_participants",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     meetingId: integer("meeting_id")
       .notNull()
       .references(() => meetings.id),
@@ -1434,13 +1486,15 @@ export const meetingParticipants = sqliteTable(
   (table) => [
     unique().on(table.meetingId, table.identityId),
     index("meeting_participants_by_identity_id").on(table.identityId),
+    check("meeting_participants_sessions_json", sql`"sessions" IS NULL OR json_valid("sessions")`),
+    check("meeting_participants_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const meetingTranscripts = sqliteTable(
   "meeting_transcripts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     meetingId: integer("meeting_id")
       .notNull()
       .references(() => meetings.id),
@@ -1455,13 +1509,16 @@ export const meetingTranscripts = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
   },
-  (table) => [index("meeting_transcripts_by_meeting_id").on(table.meetingId)],
+  (table) => [
+    index("meeting_transcripts_by_meeting_id").on(table.meetingId),
+    check("meeting_transcripts_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+  ],
 )
 
 export const meetingTranscriptRows = sqliteTable(
   "meeting_transcript_rows",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     meetingTranscriptId: integer("meeting_transcript_id")
       .notNull()
       .references(() => meetingTranscripts.id),
@@ -1478,13 +1535,14 @@ export const meetingTranscriptRows = sqliteTable(
   (table) => [
     unique().on(table.meetingTranscriptId, table.position),
     index("meeting_transcript_rows_by_speaker_participant_id").on(table.speakerParticipantId),
+    check("meeting_transcript_rows_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const meetingChatMessages = sqliteTable(
   "meeting_chat_messages",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     meetingId: integer("meeting_id")
       .notNull()
       .references(() => meetings.id),
@@ -1505,13 +1563,14 @@ export const meetingChatMessages = sqliteTable(
       .where(sql`external_id IS NOT NULL`),
     index("meeting_chat_messages_by_meeting_id").on(table.meetingId),
     index("meeting_chat_messages_by_sender_participant_id").on(table.senderParticipantId),
+    check("meeting_chat_messages_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
   ],
 )
 
 export const meetingSummaries = sqliteTable(
   "meeting_summaries",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     meetingId: integer("meeting_id")
       .notNull()
       .references(() => meetings.id),
@@ -1528,7 +1587,12 @@ export const meetingSummaries = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [unique().on(table.meetingId, table.source)],
+  (table) => [
+    unique().on(table.meetingId, table.source),
+    check("meeting_summaries_sections_json", sql`"sections" IS NULL OR json_valid("sections")`),
+    check("meeting_summaries_next_steps_json", sql`"next_steps" IS NULL OR json_valid("next_steps")`),
+    check("meeting_summaries_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+  ],
 )
 
 /** Keyed by type and id: transcript rows, chat messages and summaries share the queue, and their ids overlap. */
@@ -1544,7 +1608,7 @@ export const meetingIndexPending = sqliteTable(
 export const reminders = sqliteTable(
   "reminders",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     taskId: integer("task_id")
       .notNull()
       .references(() => tasks.id),
@@ -1569,7 +1633,7 @@ export const reminders = sqliteTable(
 export const projects = sqliteTable(
   "projects",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     key: text("key").notNull().unique(),
     name: text("name").notNull(),
     description: text("description"),
@@ -1592,13 +1656,14 @@ export const projects = sqliteTable(
     index("projects_by_organization_id").on(table.organizationId),
     index("projects_by_account_id").on(table.accountId),
     index("projects_by_owner_type_owner_id").on(table.ownerType, table.ownerId),
+    check("projects_owner_pair", sql`("owner_type" IS NULL) = ("owner_id" IS NULL)`),
   ],
 )
 
 export const tasks = sqliteTable(
   "tasks",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     projectId: integer("project_id")
       .notNull()
       .references(() => projects.id),
@@ -1670,6 +1735,12 @@ export const tasks = sqliteTable(
       table.closeSuggestedByType,
       table.closeSuggestedById,
     ),
+    check("tasks_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("tasks_closed_by_pair", sql`("closed_by_type" IS NULL) = ("closed_by_id" IS NULL)`),
+    check(
+      "tasks_close_suggested_by_pair",
+      sql`("close_suggested_by_type" IS NULL) = ("close_suggested_by_id" IS NULL)`,
+    ),
   ],
 )
 
@@ -1681,7 +1752,7 @@ export const taskKeyCounters = sqliteTable("task_key_counters", {
 export const taskAssignments = sqliteTable(
   "task_assignments",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     taskId: integer("task_id")
       .notNull()
       .references(() => tasks.id),
@@ -1700,7 +1771,7 @@ export const taskAssignments = sqliteTable(
 export const taskEvents = sqliteTable(
   "task_events",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     taskId: integer("task_id")
       .notNull()
       .references(() => tasks.id),
@@ -1713,13 +1784,15 @@ export const taskEvents = sqliteTable(
   (table) => [
     index("task_events_by_task_id").on(table.taskId),
     index("task_events_by_actor_type_actor_id").on(table.actorType, table.actorId),
+    check("task_events_changes_json", sql`"changes" IS NULL OR json_valid("changes")`),
+    check("task_events_actor_pair", sql`("actor_type" IS NULL) = ("actor_id" IS NULL)`),
   ],
 )
 
 export const taskPairs = sqliteTable(
   "task_pairs",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     taskId: integer("task_id").references(() => tasks.id),
     sourceLocator: text("source_locator"),
     otherId: integer("other_id")
@@ -1741,6 +1814,9 @@ export const taskPairs = sqliteTable(
     index("task_pairs_by_decision_created_at").on(table.decision, table.createdAt),
     index("task_pairs_by_other_id").on(table.otherId),
     index("task_pairs_by_decided_by_type_decided_by_id").on(table.decidedByType, table.decidedById),
+    check("task_pairs_levels_json", sql`"levels" IS NULL OR json_valid("levels")`),
+    check("task_pairs_reasons_json", sql`"reasons" IS NULL OR json_valid("reasons")`),
+    check("task_pairs_decided_by_pair", sql`("decided_by_type" IS NULL) = ("decided_by_id" IS NULL)`),
   ],
 )
 
@@ -1756,7 +1832,7 @@ export const taskIndexPending = sqliteTable(
 export const decisions = sqliteTable(
   "decisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     projectId: integer("project_id").references(() => projects.id),
     statement: text("statement").notNull(),
     status: text("status").notNull(),
@@ -1774,13 +1850,15 @@ export const decisions = sqliteTable(
     index("decisions_by_project_id").on(table.projectId),
     index("decisions_by_supersedes_id").on(table.supersedesId),
     index("decisions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("decisions_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("decisions_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
   ],
 )
 
 export const facts = sqliteTable(
   "facts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     type: text("type").notNull(),
     statement: text("statement").notNull(),
     status: text("status").notNull(),
@@ -1807,6 +1885,9 @@ export const facts = sqliteTable(
     index("facts_by_supersedes_id").on(table.supersedesId),
     index("facts_by_author_type_author_id").on(table.authorType, table.authorId),
     index("facts_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("facts_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("facts_subject_pair", sql`("subject_type" IS NULL) = ("subject_id" IS NULL)`),
+    check("facts_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
   ],
 )
 
@@ -1814,7 +1895,7 @@ export const facts = sqliteTable(
 export const factRemovals = sqliteTable(
   "fact_removals",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     factId: integer("fact_id").notNull(),
     subject: text("subject"),
     removedBy: text("removed_by").notNull(),
@@ -1829,7 +1910,7 @@ export const factRemovals = sqliteTable(
 export const invoices = sqliteTable(
   "invoices",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     direction: text("direction").notNull(),
     number: text("number"),
     issuerType: text("issuer_type"),
@@ -1865,13 +1946,17 @@ export const invoices = sqliteTable(
     index("invoices_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
     index("invoices_by_contract_id").on(table.contractId),
     index("invoices_by_subscription_id").on(table.subscriptionId),
+    check("invoices_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("invoices_issuer_pair", sql`("issuer_type" IS NULL) = ("issuer_id" IS NULL)`),
+    check("invoices_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
+    check("invoices_total_not_negative", sql`"total" IS NULL OR "total" >= 0`),
   ],
 )
 
 export const invoiceLines = sqliteTable(
   "invoice_lines",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     invoiceId: integer("invoice_id")
       .notNull()
       .references(() => invoices.id),
@@ -1888,6 +1973,8 @@ export const invoiceLines = sqliteTable(
   (table) => [
     unique().on(table.invoiceId, table.position),
     index("invoice_lines_by_catalog_item_id").on(table.catalogItemId),
+    check("invoice_lines_amount_not_negative", sql`"amount" IS NULL OR "amount" >= 0`),
+    check("invoice_lines_unit_price_not_negative", sql`"unit_price" IS NULL OR "unit_price" >= 0`),
   ],
 )
 
@@ -1895,7 +1982,7 @@ export const invoiceLines = sqliteTable(
 export const payments = sqliteTable(
   "payments",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     direction: text("direction").notNull(),
     payerType: text("payer_type"),
     payerId: integer("payer_id"),
@@ -1928,6 +2015,10 @@ export const payments = sqliteTable(
     index("payments_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
     index("payments_by_refund_of").on(table.refundOf),
     index("payments_by_subscription_id").on(table.subscriptionId),
+    check("payments_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("payments_payer_pair", sql`("payer_type" IS NULL) = ("payer_id" IS NULL)`),
+    check("payments_payee_pair", sql`("payee_type" IS NULL) = ("payee_id" IS NULL)`),
+    check("payments_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
   ],
 )
 
@@ -1935,7 +2026,7 @@ export const payments = sqliteTable(
 export const paymentAllocations = sqliteTable(
   "payment_allocations",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     paymentId: integer("payment_id")
       .notNull()
       .references(() => payments.id),
@@ -1958,7 +2049,7 @@ export const paymentAllocations = sqliteTable(
 export const orders = sqliteTable(
   "orders",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     customerType: text("customer_type").notNull(),
     customerId: integer("customer_id").notNull(),
     purpose: text("purpose").notNull(),
@@ -2001,6 +2092,10 @@ export const orders = sqliteTable(
     index("orders_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
     index("orders_by_contract_id").on(table.contractId),
     index("orders_by_deal_id").on(table.dealId),
+    check("orders_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("orders_supplier_pair", sql`("supplier_type" IS NULL) = ("supplier_id" IS NULL)`),
+    check("orders_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
+    check("orders_total_not_negative", sql`"total" IS NULL OR "total" >= 0`),
   ],
 )
 
@@ -2008,7 +2103,7 @@ export const orders = sqliteTable(
 export const pipelines = sqliteTable(
   "pipelines",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id").references(() => accounts.id),
     externalId: text("external_id"),
     kind: text("kind").notNull().default("deal"),
@@ -2029,7 +2124,7 @@ export const pipelines = sqliteTable(
 export const pipelineStages = sqliteTable(
   "pipeline_stages",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     pipelineId: integer("pipeline_id")
       .notNull()
       .references(() => pipelines.id),
@@ -2058,7 +2153,7 @@ export const pipelineStages = sqliteTable(
 export const deals = sqliteTable(
   "deals",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     title: text("title").notNull(),
     organizationId: integer("organization_id").references(() => organizations.id),
     projectId: integer("project_id").references(() => projects.id),
@@ -2090,6 +2185,8 @@ export const deals = sqliteTable(
     index("deals_by_project_id").on(table.projectId),
     index("deals_by_stage_id").on(table.stageId),
     index("deals_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("deals_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("deals_amount_not_negative", sql`"amount" IS NULL OR "amount" >= 0`),
   ],
 )
 
@@ -2097,7 +2194,7 @@ export const deals = sqliteTable(
 export const leads = sqliteTable(
   "leads",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     title: text("title").notNull(),
     organizationId: integer("organization_id").references(() => organizations.id),
     projectId: integer("project_id").references(() => projects.id),
@@ -2131,6 +2228,8 @@ export const leads = sqliteTable(
     index("leads_by_stage_id").on(table.stageId),
     index("leads_by_deal_id").on(table.dealId),
     index("leads_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("leads_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("leads_amount_not_negative", sql`"amount" IS NULL OR "amount" >= 0`),
   ],
 )
 
@@ -2138,7 +2237,7 @@ export const leads = sqliteTable(
 export const pipelineStageChanges = sqliteTable(
   "pipeline_stage_changes",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     itemType: text("item_type").notNull(),
     itemId: integer("item_id").notNull(),
     pipelineId: integer("pipeline_id")
@@ -2162,7 +2261,7 @@ export const pipelineStageChanges = sqliteTable(
 export const crmFields = sqliteTable(
   "crm_fields",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -2178,14 +2277,17 @@ export const crmFields = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
   },
-  (table) => [unique().on(table.accountId, table.kind, table.code)],
+  (table) => [
+    unique().on(table.accountId, table.kind, table.code),
+    check("crm_fields_options_json", sql`"options" IS NULL OR json_valid("options")`),
+  ],
 )
 
 /** A downloaded file of a CRM record with its text; never a download link. Only CRM code reads it, under the viewer. */
 export const crmFiles = sqliteTable(
   "crm_files",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -2218,7 +2320,7 @@ export const crmFiles = sqliteTable(
 export const catalogItems = sqliteTable(
   "catalog_items",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     kind: text("kind").notNull(),
     name: text("name").notNull(),
     nameFolded: text("name_folded").notNull(),
@@ -2248,13 +2350,16 @@ export const catalogItems = sqliteTable(
       .where(sql`supplier_id IS NULL AND sku IS NOT NULL AND deleted_at IS NULL`),
     index("catalog_items_by_name_folded").on(table.nameFolded),
     index("catalog_items_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("catalog_items_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("catalog_items_supplier_pair", sql`("supplier_type" IS NULL) = ("supplier_id" IS NULL)`),
+    check("catalog_items_unit_price_not_negative", sql`"unit_price" IS NULL OR "unit_price" >= 0`),
   ],
 )
 
 export const orderLines = sqliteTable(
   "order_lines",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     orderId: integer("order_id")
       .notNull()
       .references(() => orders.id),
@@ -2270,6 +2375,8 @@ export const orderLines = sqliteTable(
   (table) => [
     unique().on(table.orderId, table.position),
     index("order_lines_by_catalog_item_id").on(table.catalogItemId),
+    check("order_lines_amount_not_negative", sql`"amount" IS NULL OR "amount" >= 0`),
+    check("order_lines_unit_price_not_negative", sql`"unit_price" IS NULL OR "unit_price" >= 0`),
   ],
 )
 
@@ -2277,7 +2384,7 @@ export const orderLines = sqliteTable(
 export const contracts = sqliteTable(
   "contracts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     number: text("number"),
     kind: text("kind").notNull(),
@@ -2311,6 +2418,9 @@ export const contracts = sqliteTable(
     index("contracts_by_deal_id").on(table.dealId),
     index("contracts_by_author_type_author_id").on(table.authorType, table.authorId),
     index("contracts_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("contracts_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("contracts_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
+    check("contracts_value_not_negative", sql`"value" IS NULL OR "value" >= 0`),
   ],
 )
 
@@ -2318,7 +2428,7 @@ export const contracts = sqliteTable(
 export const subscriptions = sqliteTable(
   "subscriptions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     direction: text("direction").notNull(),
     supplierType: text("supplier_type").notNull(),
@@ -2356,13 +2466,15 @@ export const subscriptions = sqliteTable(
     index("subscriptions_by_project_id").on(table.projectId),
     index("subscriptions_by_author_type_author_id").on(table.authorType, table.authorId),
     index("subscriptions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("subscriptions_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("subscriptions_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
   ],
 )
 
 export const subscriptionPrices = sqliteTable(
   "subscription_prices",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     subscriptionId: integer("subscription_id")
       .notNull()
       .references(() => subscriptions.id),
@@ -2386,6 +2498,9 @@ export const subscriptionPrices = sqliteTable(
       .where(sql`review <> 'rejected'`),
     index("subscription_prices_by_author_type_author_id").on(table.authorType, table.authorId),
     index("subscription_prices_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("subscription_prices_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("subscription_prices_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
+    check("subscription_prices_amount_not_negative", sql`"amount" IS NULL OR "amount" >= 0`),
   ],
 )
 
@@ -2393,7 +2508,7 @@ export const subscriptionPrices = sqliteTable(
 export const financialAccounts = sqliteTable(
   "financial_accounts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     nameFolded: text("name_folded").notNull(),
     kind: text("kind").notNull(),
@@ -2418,6 +2533,8 @@ export const financialAccounts = sqliteTable(
     index("financial_accounts_by_name_folded").on(table.nameFolded),
     index("financial_accounts_by_holder_type_holder_id").on(table.holderType, table.holderId),
     index("financial_accounts_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("financial_accounts_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("financial_accounts_holder_pair", sql`("holder_type" IS NULL) = ("holder_id" IS NULL)`),
   ],
 )
 
@@ -2425,7 +2542,7 @@ export const financialAccounts = sqliteTable(
 export const financialTransactions = sqliteTable(
   "financial_transactions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     financialAccountId: integer("financial_account_id")
       .notNull()
       .references(() => financialAccounts.id),
@@ -2466,13 +2583,16 @@ export const financialTransactions = sqliteTable(
     index("financial_transactions_by_project_id").on(table.projectId),
     index("financial_transactions_by_author_type_author_id").on(table.authorType, table.authorId),
     index("financial_transactions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    check("financial_transactions_metadata_json", sql`"metadata" IS NULL OR json_valid("metadata")`),
+    check("financial_transactions_counterparty_pair", sql`("counterparty_type" IS NULL) = ("counterparty_id" IS NULL)`),
+    check("financial_transactions_confirmed_by_pair", sql`("confirmed_by_type" IS NULL) = ("confirmed_by_id" IS NULL)`),
   ],
 )
 
 export const transactionSplits = sqliteTable(
   "transaction_splits",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     transactionId: integer("transaction_id")
       .notNull()
       .references(() => financialTransactions.id),
@@ -2502,7 +2622,7 @@ export { templates, templatesHistory } from "./schema/templates.js"
 export const records = sqliteTable(
   "records",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -2524,13 +2644,15 @@ export const records = sqliteTable(
     unique().on(table.accountId, table.type, table.externalId),
     index("records_by_account_id_batch_id").on(table.accountId, table.batchId),
     index("records_by_entity_type_entity_id").on(table.entityType, table.entityId),
+    check("records_fields_json", sql`"fields" IS NULL OR json_valid("fields")`),
+    check("records_entity_pair", sql`("entity_type" IS NULL) = ("entity_id" IS NULL)`),
   ],
 )
 
 export const recordRelations = sqliteTable(
   "record_relations",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     recordId: integer("record_id")
       .notNull()
       .references(() => records.id),
@@ -2552,7 +2674,7 @@ export const recordRelations = sqliteTable(
 export const proposedActions = sqliteTable(
   "proposed_actions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     kind: text("kind").notNull(),
     accountId: integer("account_id").references(() => accounts.id),
     targetType: text("target_type"),
@@ -2578,6 +2700,10 @@ export const proposedActions = sqliteTable(
     index("proposed_actions_by_target_type_target_id").on(table.targetType, table.targetId),
     index("proposed_actions_by_proposed_by_type_proposed_by_id").on(table.proposedByType, table.proposedById),
     index("proposed_actions_by_decided_by_type_decided_by_id").on(table.decidedByType, table.decidedById),
+    check("proposed_actions_payload_json", sql`"payload" IS NULL OR json_valid("payload")`),
+    check("proposed_actions_result_json", sql`"result" IS NULL OR json_valid("result")`),
+    check("proposed_actions_target_pair", sql`("target_type" IS NULL) = ("target_id" IS NULL)`),
+    check("proposed_actions_decided_by_pair", sql`("decided_by_type" IS NULL) = ("decided_by_id" IS NULL)`),
   ],
 )
 
@@ -2585,7 +2711,7 @@ export const proposedActions = sqliteTable(
 export const agentActions = sqliteTable(
   "agent_actions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     actorType: text("actor_type").notNull(),
     actorId: integer("actor_id").notNull(),
     tool: text("tool").notNull(),
@@ -2602,6 +2728,7 @@ export const agentActions = sqliteTable(
     index("agent_actions_by_started_at_desc").on(desc(table.startedAt)),
     index("agent_actions_by_actor_type_actor_id").on(table.actorType, table.actorId),
     index("agent_actions_by_target_type_target_id").on(table.targetType, table.targetId),
+    check("agent_actions_target_pair", sql`("target_type" IS NULL) = ("target_id" IS NULL)`),
   ],
 )
 
@@ -2637,7 +2764,7 @@ export { links } from "./schema/links.js"
 export const searches = sqliteTable(
   "searches",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").unique(),
     command: text("command").notNull(),
     params: text("params").notNull(),
@@ -2652,6 +2779,7 @@ export const searches = sqliteTable(
   (table) => [
     uniqueIndex("searches_history").on(table.command, table.params).where(sql`name IS NULL`),
     index("searches_by_last_run").on(desc(table.lastRunAt)),
+    check("searches_params_json", sql`"params" IS NULL OR json_valid("params")`),
   ],
 )
 
@@ -2659,7 +2787,7 @@ export const searches = sqliteTable(
 export const taggings = sqliteTable(
   "taggings",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     tagId: integer("tag_id")
       .notNull()
       .references(() => canonicalTags.id),
@@ -2675,7 +2803,9 @@ export const taggings = sqliteTable(
   (table) => [
     unique().on(table.tagId, table.taggableType, table.taggableId),
     uniqueIndex("taggings_main_topic").on(table.taggableType, table.taggableId).where(sql`main = 1`),
+    index("taggings_by_taggable_type_taggable_id").on(table.taggableType, table.taggableId),
     index("taggings_by_author_type_author_id").on(table.authorType, table.authorId),
+    check("taggings_author_pair", sql`("author_type" IS NULL) = ("author_id" IS NULL)`),
   ],
 )
 
@@ -2684,7 +2814,7 @@ export { tagConsolidations, tagRedirects } from "./schema/tag-consolidations.js"
 export const entityLinkEvents = sqliteTable(
   "entity_link_events",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     linkableType: text("linkable_type").notNull(),
     linkableId: integer("linkable_id").notNull(),
     entityType: text("entity_type").notNull(),
@@ -2704,7 +2834,7 @@ export const entityLinkEvents = sqliteTable(
 export const linkReviews = sqliteTable(
   "link_reviews",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     linkableType: text("linkable_type").notNull(),
     linkableId: integer("linkable_id").notNull(),
     entityType: text("entity_type").notNull(),
@@ -2720,13 +2850,14 @@ export const linkReviews = sqliteTable(
   (table) => [
     unique().on(table.linkableType, table.linkableId, table.entityType),
     index("link_reviews_by_status_created_at").on(table.status, table.createdAt),
+    check("link_reviews_candidates_json", sql`"candidates" IS NULL OR json_valid("candidates")`),
   ],
 )
 
 export const conversations = sqliteTable(
   "conversations",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id, { onDelete: "cascade" }),
@@ -2990,7 +3121,7 @@ export const conversationReadiness = sqliteTable(
 export const trackerItems = sqliteTable(
   "tracker_items",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -3013,6 +3144,7 @@ export const trackerItems = sqliteTable(
   (table) => [
     unique().on(table.accountId, table.kind, table.externalId),
     index("tracker_items_by_account_id_kind_parent_id").on(table.accountId, table.kind, table.parentId),
+    check("tracker_items_data_json", sql`"data" IS NULL OR json_valid("data")`),
   ],
 )
 
@@ -3020,7 +3152,7 @@ export const trackerItems = sqliteTable(
 export const contentChannels = sqliteTable(
   "content_channels",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -3039,7 +3171,7 @@ export const contentChannels = sqliteTable(
 export const contentAuthors = sqliteTable(
   "content_authors",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -3051,13 +3183,16 @@ export const contentAuthors = sqliteTable(
     deletedAt: integer("deleted_at"),
     syncedAt: integer("synced_at").notNull(),
   },
-  (table) => [unique().on(table.accountId, table.externalId)],
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    check("content_authors_data_json", sql`"data" IS NULL OR json_valid("data")`),
+  ],
 )
 
 export const contentTerms = sqliteTable(
   "content_terms",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -3072,14 +3207,18 @@ export const contentTerms = sqliteTable(
     deletedAt: integer("deleted_at"),
     syncedAt: integer("synced_at").notNull(),
   },
-  (table) => [unique().on(table.accountId, table.externalId), index("content_terms_by_tag_id").on(table.tagId)],
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("content_terms_by_tag_id").on(table.tagId),
+    check("content_terms_data_json", sql`"data" IS NULL OR json_valid("data")`),
+  ],
 )
 
 /** A post or page of a blog, or a social post, with its text as Markdown; the rest of the record is `data`. */
 export const contentPosts = sqliteTable(
   "content_posts",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id),
@@ -3105,6 +3244,7 @@ export const contentPosts = sqliteTable(
     unique().on(table.accountId, table.externalId),
     index("content_posts_by_account_id_status").on(table.accountId, table.status),
     index("content_posts_by_account_id_published_at").on(table.accountId, table.publishedAt),
+    check("content_posts_data_json", sql`"data" IS NULL OR json_valid("data")`),
   ],
 )
 
@@ -3112,7 +3252,7 @@ export const contentPosts = sqliteTable(
 export const contentPostRevisions = sqliteTable(
   "content_post_revisions",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     postId: integer("post_id")
       .notNull()
       .references(() => contentPosts.id),
@@ -3131,7 +3271,7 @@ export const contentPostRevisions = sqliteTable(
 export const contentMetrics = sqliteTable(
   "content_metrics",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     postId: integer("post_id")
       .notNull()
       .references(() => contentPosts.id),
@@ -3143,7 +3283,10 @@ export const contentMetrics = sqliteTable(
     clicks: integer("clicks"),
     raw: text("raw"),
   },
-  (table) => [index("content_metrics_by_post_id_at").on(table.postId, table.at)],
+  (table) => [
+    index("content_metrics_by_post_id_at").on(table.postId, table.at),
+    check("content_metrics_raw_json", sql`"raw" IS NULL OR json_valid("raw")`),
+  ],
 )
 
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */

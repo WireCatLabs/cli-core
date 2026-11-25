@@ -85,7 +85,7 @@ interface WhenOptions {
 
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/
 
-/** One `--at`: `HH:MM` every day, or weekdays and a time, `mon 09:00` or `mon,fri 09:00`. */
+/** One `--at`: `HH:MM` every day, or weekdays and a time, `mon 09:00` or `mon,fri 09:00`. @experimental */
 export const slotsOfAt = (at: string): Slot[] => {
   const [, words, clock = ""] = /^\s*(?:([a-z,]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
   if (!CLOCK.test(clock))
@@ -343,6 +343,7 @@ const reportTemplatesOf =
 /**
  * One past day's run of the agent schedule in `file`, as `backfillSchedule` makes it, with the owner's language and
  * templates as `schedule run` renders them; a stop of the command stops the agent.
+ * @experimental
  */
 export const backfillScheduleRun = (
   command: Command,
@@ -366,7 +367,10 @@ export const backfillScheduleRun = (
   )
 }
 
-/** Where a schedule is written and for whom: the CLI, the machine, the run's variables and its profile. */
+/**
+ * Where a schedule is written and for whom: the CLI, the machine, the run's variables and its profile.
+ * @experimental
+ */
 export interface ScheduleSite {
   app: AppIdentity
   system: ServerSystem
@@ -378,7 +382,7 @@ export interface ScheduleSite {
   limits?: ScheduleLimits
 }
 
-/** The tool's state folder, which holds its schedules. */
+/** The tool's state folder, which holds its schedules. @experimental */
 export const scheduleState = ({ app, env }: Pick<ScheduleSite, "app" | "env">) =>
   resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
 
@@ -403,7 +407,7 @@ const scheduleEnvironment = ({ app, env, profile }: ScheduleSite): Record<string
   }
 }
 
-/** An agent schedule as `schedule agent` makes it; the caller has checked the flags it was given. */
+/** An agent schedule as `schedule agent` makes it; the caller has checked the flags it was given. @experimental */
 export interface AgentScheduleSpec {
   name: string
   harness: Harness
@@ -424,7 +428,10 @@ export interface AgentScheduleSpec {
   paused?: boolean
 }
 
-/** The schedule `spec` describes, with the harness's argv built here, never by the caller: its limits live in it. */
+/**
+ * The schedule `spec` describes, with the harness's argv built here, never by the caller: its limits live in it.
+ * @experimental
+ */
 export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Schedule => {
   const { app, system, env, agentRuns = [], limits = {} } = site
   const { harness, prompt, when } = spec
@@ -475,6 +482,7 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
 /**
  * Writes the schedule's file and puts it on its timer, or takes it off when it is paused. A name another profile's
  * schedule holds is refused.
+ * @experimental
  */
 export const writeSchedule = async (
   site: ScheduleSite,
@@ -524,6 +532,7 @@ const ownRoutes = (schedule: Schedule, routes: readonly string[] | undefined) =>
 /**
  * Takes a schedule off its timer and keeps its file, or puts it back. It keeps the profile it was made for, as pausing
  * names no new one.
+ * @experimental
  */
 export const pauseSchedule = async (site: ScheduleSite, name: string, paused: boolean) => {
   const file = scheduleFile(scheduleState(site), scheduleName(name))
@@ -534,7 +543,7 @@ export const pauseSchedule = async (site: ScheduleSite, name: string, paused: bo
   return { schedule: kept, ...(await writeSchedule({ ...site, profile: owner }, kept)) }
 }
 
-/** Takes the schedule off its timer and removes its file; its past runs stay. */
+/** Takes the schedule off its timer and removes its file; its past runs stay. @experimental */
 export const removeSchedule = async (site: ScheduleSite, name: string): Promise<void> => {
   const file = scheduleFile(scheduleState(site), scheduleName(name))
   if (!existsSync(file)) throw new CliError("not_found", `no schedule ${name}`)
@@ -545,6 +554,7 @@ export const removeSchedule = async (site: ScheduleSite, name: string): Promise<
 /**
  * Runs the schedule in `file` now, as `schedule run` does: its report rendered with the owner's language and templates
  * and sent along `routes` (its own when absent, none when empty). A stop of the command stops the agent.
+ * @experimental
  */
 export const runScheduleNow = async (
   command: Command,

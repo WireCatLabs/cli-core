@@ -14,6 +14,7 @@ export { currentCaller, withCaller } from "../runs/run-context.js"
  * The name the audit log keeps for the agent behind one call: the client as it named itself, else the coding agent
  * whose environment started a stdio server, else `fallback`. A client's name is its own claim, a label and never a
  * permission (MCP's `clientInfo` is self-reported).
+ * @experimental
  */
 export const callingAgent = (fallback: string, caller: RunCaller | undefined = currentCaller()): string => {
   const client = caller?.agent?.client?.name

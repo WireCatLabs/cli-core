@@ -41,7 +41,7 @@ const CURRENT_EVERY_MS = 60_000
 /**
  * Keeps the store current: every new message, edit, deletion and reaction, and on start what arrived
  * while nothing listened. **One per profile**, held by a lock file; a lock whose process is gone is
- * taken over. Started by a person, a service unit or `server start` — never by itself (NEED-9).
+ * taken over. Started by a person, a service unit or `server start` — never by itself.
  */
 export const serveCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("serve"), {

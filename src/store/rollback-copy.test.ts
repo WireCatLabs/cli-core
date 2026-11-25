@@ -253,15 +253,17 @@ describe("the rollback copy", () => {
     }
   })
 
-  it("**is skipped with a warning when the disk has no room**, and the migration still runs", async () => {
+  it("**refuses the migration when the disk has no room**, and runs it with a warning when the owner says so", async () => {
     const { path, backups, database } = await fileAt(latest)
     try {
       const warnings: string[] = []
-      migrate(database, {
-        migrations: future,
-        now: () => T,
-        rollback: { store: path, freeBytes: () => 1024, warn: (line) => warnings.push(line) },
-      })
+      const short = { store: path, freeBytes: () => 1024, warn: (line: string) => warnings.push(line) }
+      expect(() => migrate(database, { migrations: future, now: () => T, rollback: short })).toThrow(
+        /not enough free disk space for a rollback copy .* so the store stays at schema \d+ and nothing was changed/,
+      )
+      expect(versionOf(database)).toBe(latest)
+
+      migrate(database, { migrations: future, now: () => T, rollback: { ...short, withoutCopy: true } })
       expect(warnings).toHaveLength(1)
       expect(warnings[0]).toContain("not enough free disk space for a rollback copy")
       expect(warnings[0]).toContain("pulled again from the sources")
@@ -272,7 +274,7 @@ describe("the rollback copy", () => {
     }
   })
 
-  it("**a failed migration leaves the store as it was and the copy whole**, and cleanup keeps it", async () => {
+  it("**a failed migration leaves the store as it was** and deletes the copy it took, so a retry adds none", async () => {
     const { path, backups, database } = await fileAt(latest)
     try {
       const schema = schemaOf(database)
@@ -292,11 +294,7 @@ describe("the rollback copy", () => {
       expect(schemaOf(database)).toEqual(schema)
       expect(baseRows(database)).toEqual(rows)
       expect(pointers(database)).toHaveLength(0)
-      const [copy] = copiesIn(backups)
-      expect((await tablesOfCopy(join(backups, String(copy)))).rows.chats).toBe(2)
-
-      pruneRollbackCopies(database, T + 48 * HOUR)
-      expect(copiesIn(backups)).toEqual([copy])
+      expect(copiesIn(backups)).toEqual([])
     } finally {
       database.close()
     }
@@ -323,6 +321,12 @@ describe("the rollback copy", () => {
 
   it("**is taken and pruned by an ordinary open**", async () => {
     const { path, backups, database } = await fileAt(33)
+    const present = new Set(
+      database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map((row) => String(row.name)),
+    )
     database.close()
     const warnings: string[] = []
     const store = await openStore({ path, now: () => T, warn: (line) => warnings.push(line) })
@@ -330,7 +334,7 @@ describe("the rollback copy", () => {
     const [copy] = copiesIn(backups)
     expect(copy).toMatch(/^wirecat-rollback-schema-33-/)
     expect((await tablesOfCopy(join(backups, String(copy)))).names.sort()).toEqual(
-      [...new Set([...COPY_TABLES, ...namedAfter(33)])].sort(),
+      [...new Set([...COPY_TABLES, ...[...namedAfter(33)].filter((table) => present.has(table))])].sort(),
     )
 
     await (await openStore({ path, now: () => T + 25 * HOUR, warn: (line) => warnings.push(line) })).close()

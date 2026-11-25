@@ -202,14 +202,14 @@ describe("syncTracker guards", () => {
   const DAYS = 2 * 86_400_000
   const T = Date.UTC(2026, 10, 17)
 
-  it("holds an id pass that would empty a kind, or follows a gap, until --rescan lets it through", async () => {
+  it("holds an id pass that would empty a kind past --rescan until --allow-deletions, and one after a gap always", async () => {
     const store = await storeOf()
     const source = fakeTrackerSource({ rows: exampleTrackerRows() })
     await syncTracker(source, store, account, { now: T })
     const lost = { ...source, ids: (async () => ({ items: [], hasMore: false })) as typeof source.ids }
     const held = await syncTracker(lost, store, account, { now: T + DAYS })
     expect(held.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "held", unlisted: 0 })
-    expect(held.synced.find((one) => one.kind === "issue")?.held).toMatch(/run sync --rescan/)
+    expect(held.synced.find((one) => one.kind === "issue")?.held).toMatch(/run sync --allow-deletions/)
     expect(await store.tracker.count(account, "issue")).toBe(3)
 
     const gapped = {
@@ -228,11 +228,19 @@ describe("syncTracker guards", () => {
       ...lost,
       changes: (async () => ({ items: [], hasMore: false, cursor: null })) as unknown as typeof source.changes,
     }
-    const refused = await syncTracker(gapped, store, account, { now: T + 3 * DAYS, rescan: true })
+    const refused = await syncTracker(gapped, store, account, {
+      now: T + 3 * DAYS,
+      rescan: true,
+      allowDeletions: 100,
+    })
     expect(refused.synced.find((one) => one.kind === "comment")?.pass).toBe("held")
     expect(await store.tracker.count(account, "comment")).toBe(1)
 
-    const through = await syncTracker(emptied, store, account, { now: T + 4 * DAYS, rescan: true })
+    const rescan = await syncTracker(emptied, store, account, { now: T + 4 * DAYS, rescan: true })
+    expect(rescan.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "held", unlisted: 0 })
+    expect(await store.tracker.count(account, "issue")).toBe(3)
+
+    const through = await syncTracker(emptied, store, account, { now: T + 5 * DAYS, allowDeletions: 3 })
     expect(through.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "complete", unlisted: 3 })
   })
 

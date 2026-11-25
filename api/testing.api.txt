@@ -1,0 +1,87 @@
+# @wirecat/cli-core "./testing": the stable API, written by cli-dev api-report. Do not edit.
+ARGV_LOG · const · export declare const ARGV_LOG: string;
+ContractCase · interface · export interface ContractCase {
+ContractCase · interface · name: string;
+ContractCase · interface · needs?: string;
+ContractCase · interface · run(): Promise<undefined | {
+ContractCase · interface · skipped: string;
+ContractCase · interface · }>;
+ContractCase · interface · }
+ContractOptions · interface · export interface ContractOptions {
+ContractOptions · interface · connect: (seed: Seed) => MessengerAdapter | Promise<MessengerAdapter>;
+ContractOptions · interface · ids?: IdMaker;
+ContractOptions · interface · orderBy?: "id" | "time";
+ContractOptions · interface · waitMs?: number;
+ContractOptions · interface · history?: "server" | "store";
+ContractOptions · interface · }
+IdKind · type · export type IdKind = "chat" | "message" | "person";
+IdMaker · type · export type IdMaker = (kind: IdKind, n: number, time: Date) => Id;
+McpStdio · interface · export interface McpStdio {
+McpStdio · interface · request: (method: string, params?: object) => Promise<unknown>;
+McpStdio · interface · call: (name: string, args?: Record<string, unknown>) => Promise<McpToolResult>;
+McpStdio · interface · tools: () => Promise<string[]>;
+McpStdio · interface · close: () => Promise<number>;
+McpStdio · interface · }
+McpStdioStreams · interface · export interface McpStdioStreams {
+McpStdioStreams · interface · stdin: PassThrough;
+McpStdioStreams · interface · stdout: PassThrough;
+McpStdioStreams · interface · }
+McpToolResult · interface · export interface McpToolResult {
+McpToolResult · interface · isError: boolean;
+McpToolResult · interface · body: unknown;
+McpToolResult · interface · }
+RunScopeCase · interface · export interface RunScopeCase {
+RunScopeCase · interface · name: string;
+RunScopeCase · interface · run(): Promise<void>;
+RunScopeCase · interface · }
+RunScopeOptions · interface · export interface RunScopeOptions {
+RunScopeOptions · interface · definition: ProgramDefinition;
+RunScopeOptions · interface · commands: Record<string, readonly string[]>;
+RunScopeOptions · interface · skip?: Record<string, string>;
+RunScopeOptions · interface · answering: () => RunOptions;
+RunScopeOptions · interface · silent: () => RunOptions;
+RunScopeOptions · interface · timeoutMs?: number;
+RunScopeOptions · interface · }
+Seed · interface · export interface Seed {
+Seed · interface · account: Account | null;
+Seed · interface · people: Contact[];
+Seed · interface · chats: Chat[];
+Seed · interface · members: Record<Id, Member[]>;
+Seed · interface · messages: Message[];
+Seed · interface · busy: Id;
+Seed · interface · dialog: Id;
+Seed · interface · person: Id;
+Seed · interface · twins: string;
+Seed · interface · }
+SyncAfterInstallCase · interface · export interface SyncAfterInstallCase {
+SyncAfterInstallCase · interface · name: string;
+SyncAfterInstallCase · interface · run(): Promise<void>;
+SyncAfterInstallCase · interface · }
+SyncAfterInstallOptions · interface · export interface SyncAfterInstallOptions {
+SyncAfterInstallOptions · interface · sync: readonly string[];
+SyncAfterInstallOptions · interface · run: (argv: string[], env: NodeJS.ProcessEnv) => Promise<{
+SyncAfterInstallOptions · interface · code: number;
+SyncAfterInstallOptions · interface · err: string;
+SyncAfterInstallOptions · interface · out?: string;
+SyncAfterInstallOptions · interface · }>;
+SyncAfterInstallOptions · interface · refusedUnderReadOnly?: readonly string[];
+SyncAfterInstallOptions · interface · profileLevels?: {
+SyncAfterInstallOptions · interface · variable: string;
+SyncAfterInstallOptions · interface · keys: readonly string[];
+SyncAfterInstallOptions · interface · };
+SyncAfterInstallOptions · interface · }
+argvLogSetup · const · export declare const argvLogSetup: () => void;
+contractCases · const · export declare const contractCases: ({ connect, ids, orderBy, waitMs, history, }: ContractOptions) => ContractCase[];
+contractSeed · const · export declare const contractSeed: ({ ids, loggedIn }?: {
+contractSeed · const · ids?: IdMaker;
+contractSeed · const · loggedIn?: boolean;
+contractSeed · const · }) => Seed;
+mcpOverStdio · const · export declare const mcpOverStdio: (start: (streams: McpStdioStreams) => Promise<number>, { protocolVersion }?: {
+mcpOverStdio · const · protocolVersion?: string;
+mcpOverStdio · const · }) => Promise<McpStdio>;
+neverAnswers · const · export declare const neverAnswers: typeof fetch;
+ownCatalogue · const · export declare const ownCatalogue: (program: Command, options?: CatalogueOptions) => Record<string, "read" | "write">;
+runScopeCases · const · export declare const runScopeCases: (options: RunScopeOptions) => RunScopeCase[];
+seedSearchRecipes · const · export declare const seedSearchRecipes: (store: MessageStore, account: AccountKey) => Promise<void>;
+setupFileProblems · const · export declare const setupFileProblems: (setup: Setup, packageRoot: string | URL) => string[];
+syncAfterInstallCases · const · export declare const syncAfterInstallCases: (options: SyncAfterInstallOptions) => SyncAfterInstallCase[];

@@ -73,6 +73,7 @@ const pointers = (program: Command, cli: string, start: string | undefined, prof
 /**
  * The screen `<tool> --help` and a bare `<tool>` show: what the tool is for, what it does that a client would not,
  * the other tools, and where the full list, the scenarios and the options are. It never lists every command.
+ * @experimental
  */
 export const firstScreen = (program: Command, screen: FirstScreen = {}): string => {
   const cli = program.name()
@@ -113,6 +114,7 @@ const optionsScreen = (program: Command): string => {
  * command's `--help`. `help options` prints the options for every command, `--help-all` the full commander help;
  * both are hidden, so `commands --json` and MCP do not change. For a tool that builds its own program;
  * `createProgram` calls it for tg, max and wa.
+ * @experimental
  */
 export const installHelp = (program: Command, screen: FirstScreen = {}): Command => {
   let full = false

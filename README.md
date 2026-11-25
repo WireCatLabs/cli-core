@@ -50,9 +50,10 @@ Acme. The search found "are you coming?" from the word "come", with no network.
 npm install --save-exact @wirecat/cli-core
 ```
 
-npm 7+ and pnpm also install its peers: `@wirecat/cli-base` in the range `package.json` names, and `commander` 15 or
-later. `@napi-rs/canvas` is optional, and charts need it only for PNG output. It runs on Node 22.16+ and 24+, and on
-Bun. Pin an exact version, because any release before 1.0 may break a caller ([Build on it](#build-on-it)).
+npm 7+ and pnpm also install its peers: `@wirecat/cli-base` in the range `package.json` names, and `commander` 15.
+`@napi-rs/canvas` is optional, and charts need it only for PNG output. It runs on Node 22.16+ and 24+, and on Bun.
+The stable API follows semver. Names marked `@experimental`, and the entry points outside `wirecat.stable`, may
+change in a minor ([Build on it](#build-on-it)).
 
 [Architecture](docs/dev/ARCHITECTURE.md) · [Write an adapter](docs/dev/ADAPTERS.md) ·
 [Query language](docs/search/query-language.md) · [Messenger rules](docs/dev/STANDARD.md) ·
@@ -157,9 +158,11 @@ describe("the adapter keeps the port's promises", () => {
 })
 ```
 
-**Before 1.0, any release may break a caller.** Releases are frequent, sometimes several a day, and any of them may
-change any entry point. The [changelog](CHANGELOG.md) lists every such change in its own section, with what to change.
-tg-cli and max-cli pin an exact version and move to a new one in their own pull request. Pin an exact version too.
+**The stable API follows semver from 1.0.0.** The entry points in `wirecat.stable` (`package.json`) are stable,
+except the names whose doc comment says `@experimental`; a break of them needs a major. Everything else is
+experimental and may change in a minor, and releases are frequent, sometimes several a day. The
+[changelog](CHANGELOG.md) lists every change that needs one, with what to change. Using only stable names, `^1.0.0` is
+safe; using experimental ones, pin an exact version, as tg-cli and max-cli do.
 The full list of entry points and what each holds is in the [API reference](docs/REFERENCE.md).
 
 ⚠ **Errors are recognised by shape, not by class** (`isCliFailure`). A package linked during development brings its

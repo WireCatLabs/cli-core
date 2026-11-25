@@ -13,6 +13,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { recoveryNotes } from "../cli/store-recover.js"
+import { withoutVersion73 } from "../testing/older-store.js"
 import { storeDamageReport } from "./damage.js"
 import { storeHealth } from "./health.js"
 import { readHealthMark } from "./marks.js"
@@ -207,6 +208,7 @@ describe("store recovery", () => {
   it("clears values that are not valid JSON, drops rows whose JSON is required, and counts both", async () => {
     const { path } = await seeded()
     const database = await openCache(path)
+    withoutVersion73(database, ["chats", "searches"])
     database.exec("UPDATE chats SET metadata = '{\"broken\": ' WHERE id = 1")
     database.exec(
       "INSERT INTO searches (name, command, params, language, version, fields_version, created_at, updated_at) " +

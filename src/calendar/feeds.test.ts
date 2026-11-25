@@ -313,6 +313,44 @@ describe("feed calendars", () => {
     await expect(cli("calendars", "add", ADDRESS)).rejects.toMatchObject({ details: { reason: "feed.duplicate" } })
   })
 
+  // INT-6: the feed still holds the event; only this build cannot read it, which is no sign it was deleted.
+  it("keeps an event the feed still holds when it stops parsing", async () => {
+    const { cli, serve } = await setup()
+    const feed = String((await cli("calendars", "add", ADDRESS)).id)
+    await cli("sync")
+    serve(
+      ics(
+        HOLIDAY,
+        MATCH.replace("DTSTART:20261028T180000Z", "DTSTART;TZID=Customized Time Zone:20261028T180000"),
+        WEEKLY,
+      ),
+    )
+    const report = await cli("sync")
+    expect(report).toMatchObject({ feeds: [{ calendar_id: Number(feed), skipped: 1 }] })
+    const live = (await cli("events", "list", `calendar:${feed}`)).items
+      .filter((one) => one.status !== "cancelled")
+      .map((one) => one.title)
+    expect(live).toContain("Example match")
+  })
+
+  it("an empty feed marks nothing deleted until the owner passes --allow-deletions", async () => {
+    const { cli, serve } = await setup()
+    const feed = String((await cli("calendars", "add", ADDRESS)).id)
+    await cli("sync")
+    const live = async () =>
+      (await cli("events", "list", `calendar:${feed}`)).items
+        .filter((one) => one.status !== "cancelled")
+        .map((one) => one.title)
+    const before = await live()
+    serve(ics())
+    const held = await cli("sync")
+    expect(JSON.stringify(held)).toMatch(/allow-deletions 6/)
+    expect(await live()).toEqual(before)
+    serve(ics())
+    await cli("sync", "--allow-deletions", "100")
+    expect(await live()).toEqual([])
+  })
+
   it("calendars remove deletes the feed's events and what was built from them, and keeps a Google copy", async () => {
     const { cli, saved, serve, source, path } = await setup()
     source.put("primary", {

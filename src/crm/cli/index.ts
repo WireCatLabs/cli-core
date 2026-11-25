@@ -7,7 +7,7 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
+import { allowDeletionsOption, FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
 import {
   listQuery,
@@ -100,7 +100,7 @@ export interface CrmRun {
   /**
    * The sign-in's own user id in the CRM, as the sign-in entry keeps it, read without the network. The copy's deals
    * and leads read offline are only this user's unless a sync found it the CRM's administrator; `null`, a CRM that
-   * limits its users shows none of them (SEC-197). A CRM that limits nobody passes `null`.
+   * limits its users shows none of them. A CRM that limits nobody passes `null`.
    */
   user: string | null
   /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */
@@ -330,6 +330,8 @@ export type CrmWithin = (
   view?: (body: Body) => string,
 ) => Promise<void>
 
+type SyncFlags = { maxPages?: number; rescan?: boolean; embed?: boolean; allowDeletions?: number }
+
 const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions): void => {
   const now = () => options.now?.() ?? Date.now()
   const within: CrmWithin = (command, work, view) =>
@@ -377,18 +379,19 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     "sync --embed",
   )
     .option("--rescan", "list everything again, every id too, dropping a round in progress")
+    .addOption(allowDeletionsOption())
     .option("--max-pages <pages>", "at most this many requests to the CRM in this run", integer(100_000))
     .option("--embed", "also index new activities and tasks for search all by meaning, with a model already downloaded")
-    .action(async (opts: { maxPages?: number; rescan?: boolean; embed?: boolean }, command: Command) => {
-      const { signal } = environmentOf(command)
+    .action(async (opts: SyncFlags, command: Command) => {
       await within(command, async (run) => {
         const source = run.source()
         const started = now()
         const report = await syncRecorded(source, run.store, run.account, {
           now: started,
           budget: runBudgetOf(command, opts.maxPages),
-          ...(signal ? { signal } : {}),
-          ...(opts.rescan ? { rescan: true } : {}),
+          signal: environmentOf(command).signal,
+          rescan: opts.rescan,
+          allowDeletions: opts.allowDeletions,
         })
         const stageTasks = await openStageTasks(run.store, run.account, started, {
           history: source.stageHistory !== undefined,

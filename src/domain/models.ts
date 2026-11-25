@@ -13,7 +13,7 @@ import type { CounterObservation, CounterObservations } from "./counters.js"
 /** Every id is a string, never a number: provider ids are 64-bit, and an id is not arithmetic. */
 export type Id = string
 
-/** `telegram`, `max`… Open, because a new adapter must not need a change here. */
+/** `telegram`, `max`… Open, because a new adapter must not need a change here. @experimental */
 export type Provider = string
 
 /** Whatever one provider knows that the shared model has no field for. */
@@ -22,7 +22,10 @@ export type ProviderMetadata = Record<string, unknown>
 /** `saved` is the account's notes-to-self chat. */
 export type ChatKind = "dialog" | "group" | "channel" | "saved" | "unknown"
 
-/** Where the owner stands in a chat. Kept apart from whether its messages are searchable: a chat left keeps them. */
+/**
+ * Where the owner stands in a chat. Kept apart from whether its messages are searchable: a chat left keeps them.
+ * @experimental
+ */
 export type MembershipState = "joined" | "left" | "public" | "imported" | "archived" | "external"
 
 export interface Chat {
@@ -115,6 +118,7 @@ export interface GroupChange {
   removePhoto?: true
 }
 
+/** @experimental */
 export const GROUP_SETTINGS = [
   "allCanPin",
   "onlyAdminsAdd",
@@ -144,9 +148,13 @@ export interface Folder {
   pinnedChatIds?: Id[]
 }
 
+/** @experimental */
 export const FOLDER_KINDS = ["contacts", "non-contacts", "groups", "channels", "bots"] as const
+/** @experimental */
 export type FolderKind = (typeof FOLDER_KINDS)[number]
+/** @experimental */
 export const FOLDER_SKIPS = ["muted", "read", "archived"] as const
+/** @experimental */
 export type FolderSkip = (typeof FOLDER_SKIPS)[number]
 
 /** A folder's rules beside its chats; `include` and `skip` replace what it had, the chat lists add to it. */
@@ -165,7 +173,7 @@ export interface FolderChange extends FolderRules {
   remove?: Id[]
 }
 
-/** What an admin may do, in max-cli's words; a messenger maps them onto its own. */
+/** What an admin may do, in max-cli's words; a messenger maps them onto its own. @experimental */
 export const ADMIN_RIGHTS = ["read", "members", "admins", "info", "pin", "link", "post", "edit", "delete"] as const
 
 export type AdminRight = (typeof ADMIN_RIGHTS)[number]
@@ -266,7 +274,7 @@ export interface Button {
   data?: string
 }
 
-/** Where one attachment's bytes can be fetched. */
+/** Where one attachment's bytes can be fetched. @experimental */
 export interface AttachmentLink {
   kind: string
   url: string
@@ -275,7 +283,7 @@ export interface AttachmentLink {
   unsafe?: boolean
 }
 
-/** What a chat has pinned after `messages pin` or `unpin`; `null` is nothing. */
+/** What a chat has pinned after `messages pin` or `unpin`; `null` is nothing. @experimental */
 export interface Pin {
   chatId: Id
   pinned: Id | null
@@ -325,7 +333,10 @@ export interface PollVote {
   votedAt: string
 }
 
-/** A chat marked read up to `messageId`, inclusive. `unread` is what the provider says is left, or `null`. */
+/**
+ * A chat marked read up to `messageId`, inclusive. `unread` is what the provider says is left, or `null`.
+ * @experimental
+ */
 export interface ReadMark {
   chatId: Id
   messageId: Id
@@ -427,7 +438,7 @@ export interface Message {
   delivery?: Delivery
 }
 
-/** MAX reports the owner's own messages with no sender id, so `outgoing` counts as well as the id. */
+/** MAX reports the owner's own messages with no sender id, so `outgoing` counts as well as the id. @experimental */
 export const senderIsMe = (message: Pick<Message, "outgoing" | "senderId">, account: string): boolean =>
   message.outgoing === true || (message.senderId !== null && String(message.senderId) === account)
 
@@ -644,7 +655,10 @@ export interface Contact {
 /** Somebody in a chat, as much of them as a chat card shows. */
 export type Member = Pick<Contact, "id" | "name" | "username">
 
-/** A contact of the messenger's address book: the phone is there when the messenger shows it to the owner. */
+/**
+ * A contact of the messenger's address book: the phone is there when the messenger shows it to the owner.
+ * @experimental
+ */
 export type AddressBookEntry = Member & { phone?: string | null }
 
 /** A topic of a forum group; its messages carry this id as `threadId`. */
@@ -661,7 +675,7 @@ export interface Topic {
   createdAt: string | null
 }
 
-/** Who the account may post as in one chat. `self` is the account itself, always offered. */
+/** Who the account may post as in one chat. `self` is the account itself, always offered. @experimental */
 export interface SenderIdentity {
   id: Id
   title: string
@@ -714,7 +728,7 @@ export interface LinkTarget {
 }
 
 /** Somewhere this account is logged in — a device, a browser, this tool. */
-/** One call in the account's call history. */
+/** One call in the account's call history. @experimental */
 export interface CallRecord {
   id: Id
   /** The dialog or group the call belongs to. */
@@ -737,6 +751,7 @@ export type Audience = "everyone" | "contacts" | "nobody"
 /**
  * An audience as `account privacy show` may report it: also the owner's contacts but some of them, which `set`
  * cannot choose. Kept apart from `Audience` so that a table keyed on it does not have to name it.
+ * @experimental
  */
 export type ShownAudience = Audience | "contacts_except"
 
@@ -762,10 +777,10 @@ export interface PrivacySettings {
   lastSeen?: ShownAudience
 }
 
-/** Every setting `account privacy set` knows. */
+/** Every setting `account privacy set` knows. @experimental */
 export type PrivacyKey = keyof PrivacySettings
 
-/** A set of stickers the account has added. */
+/** A set of stickers the account has added. @experimental */
 export interface StickerSet {
   id: Id
   title: string
@@ -774,6 +789,7 @@ export interface StickerSet {
   link: string | null
 }
 
+/** @experimental */
 export interface Sticker {
   id: Id
   setId: Id | null
@@ -783,8 +799,9 @@ export interface Sticker {
   url: string | null
 }
 
-/** Kinds of attachment `chats media` filters by. */
+/** Kinds of attachment `chats media` filters by. @experimental */
 export const MEDIA_KINDS = ["photo", "video", "file", "audio", "link"] as const
+/** @experimental */
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
 export interface AccountSession {
@@ -834,6 +851,7 @@ export interface PersonCard extends Contact {
 /**
  * When they were last seen: a time, or the bucket their privacy leaves — `hidden` only when the
  * messenger says nothing at all. Telegram answers `recently`, `week` or `month` instead of a time.
+ * @experimental
  */
 export type Seen = "online" | "recently" | "week" | "month" | "hidden" | (string & {})
 
@@ -934,6 +952,7 @@ export interface Account {
   phone?: string | null
 }
 
+/** @experimental */
 export interface Profile {
   id: Id
   name: string | null
@@ -944,7 +963,7 @@ export interface Profile {
 /** One message of a window around another, which carries `anchor: true`. */
 export type WindowedMessage = Message & { anchor?: true }
 
-/** A number the messenger reports for its period, beside the same number for the period before. */
+/** A number the messenger reports for its period, beside the same number for the period before. @experimental */
 export interface OfficialValue {
   current: number
   previous: number
@@ -953,6 +972,7 @@ export interface OfficialValue {
 /**
  * One of the messenger's own graphs, colours and zoom dropped. `x.type` is read from the points:
  * `date` for UTC day starts (`YYYY-MM-DD`), `time` for other moments (ISO 8601), `number` as given.
+ * @experimental
  */
 export interface OfficialGraph {
   kind: string
@@ -962,11 +982,12 @@ export interface OfficialGraph {
   percentage?: boolean
 }
 
-/** A graph the messenger could not give; the other graphs still answer. */
+/** A graph the messenger could not give; the other graphs still answer. @experimental */
 export interface OfficialGraphError {
   error: string
 }
 
+/** @experimental */
 export interface OfficialPerson {
   person: Id
   name: string | null
@@ -979,6 +1000,7 @@ interface OfficialStatsBase {
   period: { since: string; until: string }
 }
 
+/** @experimental */
 export interface OfficialGroupStats extends OfficialStatsBase {
   kind: "group"
   totals: Record<"members" | "messages" | "viewers" | "posters", OfficialValue>
@@ -990,6 +1012,7 @@ export interface OfficialGroupStats extends OfficialStatsBase {
   graphs: Record<string, OfficialGraph | OfficialGraphError>
 }
 
+/** @experimental */
 export interface OfficialChannelStats extends OfficialStatsBase {
   kind: "channel"
   totals: Record<

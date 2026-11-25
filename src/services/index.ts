@@ -635,14 +635,6 @@ export {
   searchAll,
 } from "./search-all.js"
 export {
-  type MeetingSearchCoverage,
-  type MeetingSearchCursor,
-  type ResourceWithMeetings,
-  type SearchAllIncludingMeetingsFound,
-  type SearchAllIncludingMeetingsRequest,
-  searchAllIncludingMeetings,
-} from "./search-all-deprecated.js"
-export {
   type MeetingAccountCoverage,
   type MeetingSearchItem,
   MOST_HITS_PER_MEETING,

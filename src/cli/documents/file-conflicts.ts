@@ -17,6 +17,7 @@ import { refusedPlace } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf, snakeKeys } from "../envelope.js"
+import { notLocalPaths } from "../path-options.js"
 import { marksUntrusted } from "../untrusted-marks.js"
 
 /** What a file-mirror CLI gives `fileConflictsCommand`: its mirrors, their state and stores, and its remote. */
@@ -66,7 +67,7 @@ export const fileConflictsCommand = (helpers: FileConflictCommands): Command => 
   const { remote, identity } = helpers
   const app = identity.command
   const one = (command: Command, id: string) => helpers.mirrors(command, id)[0] as Mirror
-  return annotate(new Command("conflicts"), { effects: LOCAL_READ })
+  return notLocalPaths(annotate(new Command("conflicts"), { effects: LOCAL_READ }), "path")
     .summary("files changed on both sides that a sync could not merge")
     .description(
       `files changed on both sides that a sync could not merge: list them, show the three versions and the lines ` +

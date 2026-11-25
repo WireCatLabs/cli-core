@@ -740,6 +740,12 @@ it by editing that line in a PR of its own, merged before the migration.
    full-text triggers. Choose a change drizzle-kit can express as `ALTER TABLE … ADD` — a new column is
    nullable or has a default — or a new table. The test "never rebuild a base table"
    (`src/store/sqlite/manifest.test.ts:14-19`, `:46`) refuses the rest.
+   A breaking version (its `minCompatible` is its own number, as 73 is) may keep drizzle-kit's copies: the runner
+   turns foreign keys off before `BEGIN`, refuses a table with a column the copy would lose, puts back every trigger
+   and index of the copied tables and checks their foreign keys before `COMMIT` (`src/store/sqlite/rebuild.ts`).
+   Since version 73 most base tables carry table-level `CHECK`s (`scripts/schema/checks.mjs`, frozen). SQLite cannot add
+   one in place, so a column added later gets a `RAISE(ABORT)` trigger instead, and a column a `CHECK` names can only
+   be dropped by such a copy.
 4. **Triggers, FTS5 tables and data fills go in a custom migration**, since `schema.ts` holds neither
    triggers nor FTS: `pnpm db:generate --custom --name version-<n>-<what>`, then write the SQL into
    the empty file. Put `--> statement-breakpoint` between statements — the bundle splits on nothing
@@ -832,7 +838,11 @@ The MCP server (`src/mcp/server.ts`) holds one connection for minutes and runs o
 the CLI's commands (`toolsFromCommands`, `src/mcp/agent.ts`), each run in-process through the CLI's own `run`
 (`runCommandForAgent`) on that connection, so a tool answers and refuses exactly as the command does. What only an
 agent needs comes from the command's metadata: `mcp: false` and `ownerOnlyOption` keep a command or an option off
-MCP, `grantsAuthority` offers a command only where the profile allows `mcp.authority`, `bot api` only where it allows `bot.api`, `readsStdin` turns what a command reads on stdin into an input field. The tools that answer with an image
+MCP, `grantsAuthority` offers a command only where the profile allows `mcp.authority`, `bot api` only where it allows `bot.api`, `readsStdin` turns what a command reads on stdin into an input field. Before any call runs, `refuseAgentPaths`
+(`src/cli/path-options.ts`, from `run()`'s `preAction`) checks every local path it names by its real path: no credential
+folder, no WireCat tool's folder, not the store. An option whose placeholder names a file or folder, and an argument so
+named, is a local path unless `notLocalPaths` says it names a remote file, a title or a command path; a test fails on
+an input named like a path that is neither. The tools that answer with an image
 (`messages photo`, `attachments show`, `stats charts`) stay definitions of their own (`src/mcp/tools.ts`).
 
 `mcp --http` (`src/mcp/http/`, CLI-58) serves the same factory over Streamable HTTP on 127.0.0.1 behind the

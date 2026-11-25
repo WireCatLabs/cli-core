@@ -46,6 +46,7 @@ export const beforeTimeLimit = (until: unknown): number => {
   return 1
 }
 
+/** @experimental */
 export type OpenDatabase = (path: string) => CacheDatabase
 
 /**
@@ -62,6 +63,7 @@ export type OpenDatabase = (path: string) => CacheDatabase
  */
 export const JOURNAL_SIZE_LIMIT = 64 * 1024 * 1024
 
+/** @experimental */
 export const PRAGMAS = `
   PRAGMA busy_timeout = 5000;
   PRAGMA journal_mode = WAL;

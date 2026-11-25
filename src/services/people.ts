@@ -35,7 +35,7 @@ export interface ContactSync {
 
 /**
  * A contact is somebody this account has a one-to-one chat with — a query over the chat list, never
- * a flag somebody maintains (max-cli `NEED-105`). Where the store holds who is in each one-to-one
+ * a flag somebody maintains. Where the store holds who is in each one-to-one
  * chat, it answers; otherwise the dialogs themselves do, offline from the stored chats.
  */
 export interface PeopleService {
@@ -483,7 +483,7 @@ const toContact = (chat: Chat): Contact => ({
 const byRecency = (a: Contact, b: Contact) => (b.lastMessagedAt ?? "").localeCompare(a.lastMessagedAt ?? "")
 const byName = (a: Contact, b: Contact) => (a.name ?? "").localeCompare(b.name ?? "")
 
-/** `--hide-phone`: the answer without the number, for output that will be pasted somewhere. */
+/** `--hide-phone`: the answer without the number, for output that will be pasted somewhere. @experimental */
 export const withoutPhone = <T extends { phone?: string | null }>(answer: T): T => {
   const { phone: _phone, ...rest } = answer
   return rest as T

@@ -1,0 +1,817 @@
+# @wirecat/cli-core ".": the stable API, written by cli-dev api-report. Do not edit.
+Account · interface · export interface Account {
+Account · interface · id: Id;
+Account · interface · name: string | null;
+Account · interface · username: string | null;
+Account · interface · phone?: string | null;
+Account · interface · }
+AccountSession · interface · export interface AccountSession {
+AccountSession · interface · current: boolean;
+AccountSession · interface · client: string | null;
+AccountSession · interface · device: string | null;
+AccountSession · interface · location: string | null;
+AccountSession · interface · lastActiveAt: string | null;
+AccountSession · interface · createdAt?: string | null;
+AccountSession · interface · }
+AdminRight · type · export type AdminRight = (typeof ADMIN_RIGHTS)[number];
+AppErrors · interface · export interface AppErrors {
+AppErrors · interface · reasons?: readonly ErrorReason[];
+AppErrors · interface · details?: readonly string[];
+AppErrors · interface · }
+Attachment · interface · export interface Attachment {
+Attachment · interface · kind: string;
+Attachment · interface · url?: string;
+Attachment · interface · width?: number;
+Attachment · interface · height?: number;
+Attachment · interface · title?: string;
+Attachment · interface · name?: string;
+Attachment · interface · size?: number;
+Attachment · interface · mime?: string;
+Attachment · interface · duration?: number;
+Attachment · interface · providerRef?: ProviderMetadata;
+Attachment · interface · localPath?: string;
+Attachment · interface · buttons?: Button[][];
+Attachment · interface · poll?: Poll;
+Attachment · interface · contact?: SharedContact;
+Attachment · interface · }
+Audience · type · export type Audience = "everyone" | "contacts" | "nobody";
+Button · interface · export interface Button {
+Button · interface · kind: ButtonKind;
+Button · interface · text: string;
+Button · interface · url?: string;
+Button · interface · data?: string;
+Button · interface · }
+ButtonKind · type · export type ButtonKind = "callback" | "link" | "message" | "chat" | "contact" | "location" | "app" | "clipboard" | "other";
+CORE_REASONS · const · export declare const REASONS: ErrorReason[];
+Chat · interface · export interface Chat {
+Chat · interface · parentChatId?: Id | null;
+Chat · interface · scope?: "personal" | "work";
+Chat · interface · searchable?: false;
+Chat · interface · id: Id;
+Chat · interface · title: string | null;
+Chat · interface · kind: ChatKind;
+Chat · interface · unreadCount: number | null;
+Chat · interface · lastMessageAt: string | null;
+Chat · interface · participantsCount: number | null;
+Chat · interface · muted?: boolean;
+Chat · interface · mutedUntil?: string | null;
+Chat · interface · archived?: boolean;
+Chat · interface · markedUnread?: boolean;
+Chat · interface · unreadMentions?: number;
+Chat · interface · membershipState?: MembershipState;
+Chat · interface · providerMetadata?: ProviderMetadata;
+Chat · interface · }
+ChatCard · interface · export interface ChatCard extends Chat {
+ChatCard · interface · members: Member[] | null;
+ChatCard · interface · }
+ChatEvent · interface · export interface ChatEvent {
+ChatEvent · interface · messageId: Id;
+ChatEvent · interface · timestamp: string;
+ChatEvent · interface · event: string;
+ChatEvent · interface · by: {
+ChatEvent · interface · id: Id | null;
+ChatEvent · interface · name: string | null;
+ChatEvent · interface · };
+ChatEvent · interface · people: {
+ChatEvent · interface · id: Id;
+ChatEvent · interface · name: string | null;
+ChatEvent · interface · }[];
+ChatEvent · interface · title?: string;
+ChatEvent · interface · }
+ChatEventNotice · interface · export interface ChatEventNotice {
+ChatEventNotice · interface · event: "chat_event";
+ChatEventNotice · interface · chatId: Id;
+ChatEventNotice · interface · chatTitle: string | null;
+ChatEventNotice · interface · change: ChatEvent;
+ChatEventNotice · interface · }
+ChatEvents · interface · export interface ChatEvents {
+ChatEvents · interface · chatId: Id;
+ChatEvents · interface · since: string;
+ChatEvents · interface · events: ChatEvent[];
+ChatEvents · interface · more: boolean;
+ChatEvents · interface · }
+ChatKind · type · export type ChatKind = "dialog" | "group" | "channel" | "saved" | "unknown";
+ChatUpdate · type · export type ChatUpdate = Omit<Chat, KeptFields | "membershipState"> & Partial<Pick<Chat, KeptFields>> & {
+ChatUpdate · type · membershipState?: MembershipState | "member" | null;
+ChatUpdate · type · };
+ChatUpdate · type · type KeptFields = "title" | "unreadCount" | "lastMessageAt" | "participantsCount";
+CheckRow · interface · export interface CheckRow extends Finding {
+CheckRow · interface · outcome: Outcome;
+CheckRow · interface · reason?: string;
+CheckRow · interface · command?: string;
+CheckRow · interface · }
+CheckWords · type · export type CheckWords<C extends string = string> = (check: C, args?: string) => string;
+Contact · interface · export interface Contact {
+Contact · interface · alias?: string | null;
+Contact · interface · displayName?: string | null;
+Contact · interface · id: Id;
+Contact · interface · name: string | null;
+Contact · interface · username: string | null;
+Contact · interface · description: string | null;
+Contact · interface · lastMessagedAt: string | null;
+Contact · interface · }
+CounterObservation · interface · export interface CounterObservation {
+CounterObservation · interface · value: number;
+CounterObservation · interface · observedAt: string;
+CounterObservation · interface · source: "remote_fetch" | "remote_update";
+CounterObservation · interface · reactions?: Reactions;
+CounterObservation · interface · }
+CounterState · interface · export interface CounterState {
+CounterState · interface · counter: CounterField;
+CounterState · interface · value: number | null;
+CounterState · interface · observedAt: string | null;
+CounterState · interface · source: CounterObservation["source"] | null;
+CounterState · interface · ageMilliseconds: number | null;
+CounterState · interface · freshness: "fresh" | "stale" | "unknown";
+CounterState · interface · }
+CrmActivity · interface · export interface CrmActivity {
+CrmActivity · interface · externalId: string;
+CrmActivity · interface · kind: CrmActivityKind;
+CrmActivity · interface · subject: string;
+CrmActivity · interface · body?: string | null;
+CrmActivity · interface · dueAt?: number | null;
+CrmActivity · interface · done: boolean;
+CrmActivity · interface · assignee?: string | null;
+CrmActivity · interface · createdAt: number;
+CrmActivity · interface · updatedAt: number;
+CrmActivity · interface · on: {
+CrmActivity · interface · kind: CrmKind;
+CrmActivity · interface · externalId: string;
+CrmActivity · interface · }[];
+CrmActivity · interface · }
+CrmActivityKind · type · export type CrmActivityKind = (typeof CRM_ACTIVITY_KINDS)[number];
+CrmField · interface · export interface CrmField {
+CrmField · interface · code: string;
+CrmField · interface · label: string | null;
+CrmField · interface · type: string;
+CrmField · interface · multiple: boolean;
+CrmField · interface · filterable: boolean;
+CrmField · interface · options?: {
+CrmField · interface · id: string;
+CrmField · interface · label: string;
+CrmField · interface · }[];
+CrmField · interface · holds?: "phone" | "email";
+CrmField · interface · }
+CrmItem · interface · export interface CrmItem {
+CrmItem · interface · externalId: string;
+CrmItem · interface · title: string;
+CrmItem · interface · pipeline: string;
+CrmItem · interface · stage: string;
+CrmItem · interface · status?: DealStatus | null;
+CrmItem · interface · amount?: string | null;
+CrmItem · interface · currency?: string | null;
+CrmItem · interface · closeDate?: string | null;
+CrmItem · interface · closedDate?: string | null;
+CrmItem · interface · closedReason?: string | null;
+CrmItem · interface · organization?: string | null;
+CrmItem · interface · contactName?: string | null;
+CrmItem · interface · companyName?: string | null;
+CrmItem · interface · people?: {
+CrmItem · interface · externalId: string;
+CrmItem · interface · role: DealRole;
+CrmItem · interface · primary?: boolean;
+CrmItem · interface · }[];
+CrmItem · interface · deal?: string | null;
+CrmItem · interface · createdAt?: number | null;
+CrmItem · interface · updatedAt?: number | null;
+CrmItem · interface · url?: string | null;
+CrmItem · interface · assignee?: string | null;
+CrmItem · interface · metadata?: Record<string, unknown>;
+CrmItem · interface · }
+CrmKind · type · export type CrmKind = (typeof CRM_KINDS)[number];
+CrmOrganization · interface · export interface CrmOrganization {
+CrmOrganization · interface · externalId: string;
+CrmOrganization · interface · name: string;
+CrmOrganization · interface · url?: string | null;
+CrmOrganization · interface · own?: boolean;
+CrmOrganization · interface · type?: string | null;
+CrmOrganization · interface · metadata?: Record<string, CrmValue>;
+CrmOrganization · interface · phones?: string[];
+CrmOrganization · interface · emails?: string[];
+CrmOrganization · interface · contactTypes?: Record<string, string>;
+CrmOrganization · interface · people?: string[];
+CrmOrganization · interface · assignee?: string | null;
+CrmOrganization · interface · createdAt?: number | null;
+CrmOrganization · interface · updatedAt?: number | null;
+CrmOrganization · interface · }
+CrmPerson · interface · export interface CrmPerson {
+CrmPerson · interface · externalId: string;
+CrmPerson · interface · name: string | null;
+CrmPerson · interface · email?: string | null;
+CrmPerson · interface · phone?: string | null;
+CrmPerson · interface · phones?: string[];
+CrmPerson · interface · emails?: string[];
+CrmPerson · interface · position?: string | null;
+CrmPerson · interface · organizations?: {
+CrmPerson · interface · externalId: string;
+CrmPerson · interface · primary?: boolean;
+CrmPerson · interface · sourceRole?: string | null;
+CrmPerson · interface · }[];
+CrmPerson · interface · firstName?: string | null;
+CrmPerson · interface · lastName?: string | null;
+CrmPerson · interface · assignee?: string | null;
+CrmPerson · interface · createdAt?: number | null;
+CrmPerson · interface · updatedAt?: number | null;
+CrmPerson · interface · url?: string | null;
+CrmPerson · interface · metadata?: Record<string, CrmValue>;
+CrmPerson · interface · contactTypes?: Record<string, string>;
+CrmPerson · interface · }
+CrmPipeline · interface · export interface CrmPipeline {
+CrmPipeline · interface · externalId: string;
+CrmPipeline · interface · name: string;
+CrmPipeline · interface · stages: CrmStage[];
+CrmPipeline · interface · }
+CrmRecords · interface · export interface CrmRecords {
+CrmRecords · interface · deal: CrmItem;
+CrmRecords · interface · lead: CrmItem;
+CrmRecords · interface · person: CrmPerson;
+CrmRecords · interface · organization: CrmOrganization;
+CrmRecords · interface · }
+CrmStage · interface · export interface CrmStage {
+CrmStage · interface · externalId: string;
+CrmStage · interface · name: string;
+CrmStage · interface · position: number;
+CrmStage · interface · outcome: StageOutcome;
+CrmStage · interface · }
+CrmStageEntry · interface · export interface CrmStageEntry {
+CrmStageEntry · interface · externalId: string;
+CrmStageEntry · interface · kind: DealKind;
+CrmStageEntry · interface · item: string;
+CrmStageEntry · interface · pipeline: string;
+CrmStageEntry · interface · stage: string;
+CrmStageEntry · interface · at: number;
+CrmStageEntry · interface · }
+CrmUser · interface · export interface CrmUser {
+CrmUser · interface · externalId: string;
+CrmUser · interface · name: string | null;
+CrmUser · interface · email?: string | null;
+CrmUser · interface · position?: string | null;
+CrmUser · interface · departments?: string[];
+CrmUser · interface · active?: boolean;
+CrmUser · interface · }
+CrmValue · interface · export interface CrmValue {
+CrmValue · interface · label: string | null;
+CrmValue · interface · value: unknown;
+CrmValue · interface · option_id?: string | string[];
+CrmValue · interface · }
+DealKind · type · export type DealKind = (typeof DEAL_KINDS)[number];
+Deletion · interface · export interface Deletion {
+Deletion · interface · chatId: Id;
+Deletion · interface · deleted: Id[];
+Deletion · interface · forEveryone: boolean;
+Deletion · interface · }
+Delivery · type · export type Delivery = "delivered" | "read";
+Discussion · interface · export interface Discussion {
+Discussion · interface · chatId: Id;
+Discussion · interface · messageId: Id;
+Discussion · interface · }
+Finding · interface · export interface Finding {
+Finding · interface · kind: "message" | "member";
+Finding · interface · rule: "blocked" | "invites" | "links" | "forwards" | "flood" | "newAccount";
+Finding · interface · personId: Id;
+Finding · interface · personName: string | null;
+Finding · interface · messageId?: Id;
+Finding · interface · action: Action;
+Finding · interface · }
+Folder · interface · export interface Folder {
+Folder · interface · id: string;
+Folder · interface · title: string;
+Folder · interface · chatIds: Id[];
+Folder · interface · emoji?: string;
+Folder · interface · include?: FolderKind[];
+Folder · interface · skip?: FolderSkip[];
+Folder · interface · excludedChatIds?: Id[];
+Folder · interface · pinnedChatIds?: Id[];
+Folder · interface · }
+FolderChange · interface · export interface FolderChange extends FolderRules {
+FolderChange · interface · title?: string;
+FolderChange · interface · add?: Id[];
+FolderChange · interface · remove?: Id[];
+FolderChange · interface · }
+FolderRules · interface · export interface FolderRules {
+FolderRules · interface · emoji?: string;
+FolderRules · interface · include?: FolderKind[];
+FolderRules · interface · skip?: FolderSkip[];
+FolderRules · interface · exclude?: Id[];
+FolderRules · interface · pin?: Id[];
+FolderRules · interface · }
+FormattedText · interface · export interface FormattedText {
+FormattedText · interface · text: string;
+FormattedText · interface · spans: TextSpan[];
+FormattedText · interface · }
+GroupCard · interface · export interface GroupCard extends Chat {
+GroupCard · interface · description: string | null;
+GroupCard · interface · link: string | null;
+GroupCard · interface · settings: GroupSettings & MoreGroupSettings;
+GroupCard · interface · }
+GroupChange · interface · export interface GroupChange {
+GroupChange · interface · title?: string;
+GroupChange · interface · description?: string;
+GroupChange · interface · settings?: Partial<GroupSettings> & MoreGroupSettings;
+GroupChange · interface · photo?: Upload;
+GroupChange · interface · removePhoto?: true;
+GroupChange · interface · }
+GroupMember · interface · export interface GroupMember extends Member {
+GroupMember · interface · role?: "owner" | "admin" | "member";
+GroupMember · interface · lastSeenAt?: string | null;
+GroupMember · interface · registeredAt?: string | null;
+GroupMember · interface · joinedAt?: string | null;
+GroupMember · interface · invitedBy?: Id | null;
+GroupMember · interface · isBot?: boolean;
+GroupMember · interface · deleted?: boolean;
+GroupMember · interface · flagged?: "scam" | "fake";
+GroupMember · interface · hasPhoto?: boolean;
+GroupMember · interface · }
+GroupSettingKey · type · export type GroupSettingKey = keyof GroupSettings | keyof MoreGroupSettings;
+GroupSettings · interface · export interface GroupSettings {
+GroupSettings · interface · allCanPin: boolean | null;
+GroupSettings · interface · onlyAdminsAdd: boolean | null;
+GroupSettings · interface · onlyAdminsCall: boolean | null;
+GroupSettings · interface · onlyOwnerEditsInfo: boolean | null;
+GroupSettings · interface · membersSeeLink: boolean | null;
+GroupSettings · interface · joinApproval?: boolean | null;
+GroupSettings · interface · }
+Id · type · export type Id = string;
+Inbox · interface · export interface Inbox {
+Inbox · interface · mode: "unread" | "new";
+Inbox · interface · since?: string;
+Inbox · interface · until?: string;
+Inbox · interface · chats: InboxChat[];
+Inbox · interface · skipped: Pick<Chat, "id" | "title" | "lastMessageAt">[];
+Inbox · interface · partial: boolean;
+Inbox · interface · left?: string[];
+Inbox · interface · quiet: number;
+Inbox · interface · checked?: Record<Id, string>;
+Inbox · interface · }
+InboxChat · interface · export interface InboxChat extends Pick<Chat, "id" | "title" | "kind" | "unreadCount"> {
+InboxChat · interface · messages: Message[];
+InboxChat · interface · more: boolean;
+InboxChat · interface · }
+InviteLink · interface · export interface InviteLink {
+InviteLink · interface · link: string;
+InviteLink · interface · approval: boolean;
+InviteLink · interface · expiresAt: string | null;
+InviteLink · interface · maxUses: number | null;
+InviteLink · interface · primary?: boolean;
+InviteLink · interface · revoked?: boolean;
+InviteLink · interface · pending?: number;
+InviteLink · interface · joined?: number;
+InviteLink · interface · }
+InviteLinkChange · interface · export interface InviteLinkChange {
+InviteLinkChange · interface · approval?: boolean;
+InviteLinkChange · interface · expiresAt?: string | null;
+InviteLinkChange · interface · maxUses?: number;
+InviteLinkChange · interface · }
+JoinRequest · interface · export interface JoinRequest {
+JoinRequest · interface · person: Member;
+JoinRequest · interface · requestedAt: string | null;
+JoinRequest · interface · about?: string;
+JoinRequest · interface · }
+KINDS · const · export declare const KINDS: readonly ["messages", "mail", "notes", "documents", "meetings", "events", "crm", "tracker"];
+Kind · type · export type Kind = (typeof KINDS)[number];
+LinkTarget · interface · export interface LinkTarget {
+LinkTarget · interface · kind: ChatKind;
+LinkTarget · interface · title: string | null;
+LinkTarget · interface · id: Id | null;
+LinkTarget · interface · username: string | null;
+LinkTarget · interface · participantsCount: number | null;
+LinkTarget · interface · description: string | null;
+LinkTarget · interface · member: boolean | null;
+LinkTarget · interface · approvalNeeded?: boolean;
+LinkTarget · interface · }
+LoginQr · interface · export interface LoginQr {
+LoginQr · interface · show: (link: string, scan?: string, expiresAt?: Date) => void;
+LoginQr · interface · }
+LoginQrOptions · interface · export interface LoginQrOptions {
+LoginQrOptions · interface · diagnostic: (text: string) => void;
+LoginQrOptions · interface · note: (text: string) => void;
+LoginQrOptions · interface · indent?: number;
+LoginQrOptions · interface · columns?: () => number | undefined;
+LoginQrOptions · interface · terminal?: boolean;
+LoginQrOptions · interface · json?: boolean;
+LoginQrOptions · interface · }
+MailFields · interface · export interface MailFields {
+MailFields · interface · subject: string | null;
+MailFields · interface · from: MailPerson | null;
+MailFields · interface · to: MailPerson[];
+MailFields · interface · cc: MailPerson[];
+MailFields · interface · bcc: MailPerson[];
+MailFields · interface · replyTo: MailPerson[];
+MailFields · interface · labels: string[];
+MailFields · interface · thread: string;
+MailFields · interface · read: boolean | null;
+MailFields · interface · flagged: boolean | null;
+MailFields · interface · senderScore?: {
+MailFields · interface · score: number;
+MailFields · interface · signals: string[];
+MailFields · interface · demoted?: true;
+MailFields · interface · };
+MailFields · interface · }
+MailPerson · interface · export interface MailPerson {
+MailPerson · interface · name: string | null;
+MailPerson · interface · address: string;
+MailPerson · interface · ref: string | null;
+MailPerson · interface · }
+MarkdownFormatting · interface · export interface MarkdownFormatting {
+MarkdownFormatting · interface · formatMarkdown(text: string): Promise<FormattedText>;
+MarkdownFormatting · interface · }
+Markup · interface · export interface Markup {
+Markup · interface · type: "bold" | "italic" | "strike" | "code";
+Markup · interface · from: number;
+Markup · interface · length: number;
+Markup · interface · }
+MeetingReference · interface · export interface MeetingReference {
+MeetingReference · interface · type: "meeting";
+MeetingReference · interface · accountId: number;
+MeetingReference · interface · meetingId: number;
+MeetingReference · interface · transcriptId?: number;
+MeetingReference · interface · cuePosition?: number;
+MeetingReference · interface · }
+Member · type · export type Member = Pick<Contact, "id" | "name" | "username">;
+Message · interface · export interface Message {
+Message · interface · id: Id;
+Message · interface · chatId: Id;
+Message · interface · senderId: Id | null;
+Message · interface · senderName: string | null;
+Message · interface · senderUsername?: string;
+Message · interface · mentions?: Id[];
+Message · interface · senderIsChat?: boolean;
+Message · interface · timestamp: string;
+Message · interface · editedAt: string | null;
+Message · interface · text: string;
+Message · interface · outgoing: boolean | null;
+Message · interface · attachments: Attachment[];
+Message · interface · replyTo: QuotedMessage | null;
+Message · interface · replyToId?: Id;
+Message · interface · forwardedFrom: QuotedMessage | null;
+Message · interface · threadId?: Id;
+Message · interface · threadRootId?: Id;
+Message · interface · reactions: Reactions | null;
+Message · interface · counterObservations?: CounterObservations;
+Message · interface · scheduledFor?: string;
+Message · interface · providerMetadata?: ProviderMetadata;
+Message · interface · starred?: boolean;
+Message · interface · delivery?: Delivery;
+Message · interface · }
+MessageChange · type · export type MessageChange = {
+MessageChange · type · event: "edit";
+MessageChange · type · message: MessageHit;
+MessageChange · type · }
+MessageChange · type · | {
+MessageChange · type · event: "delete";
+MessageChange · type · chatId: Id | null;
+MessageChange · type · chatTitle: string | null;
+MessageChange · type · messageId: Id;
+MessageChange · type · } | {
+MessageChange · type · event: "reaction";
+MessageChange · type · chatId: Id;
+MessageChange · type · chatTitle: string | null;
+MessageChange · type · messageId: Id;
+MessageChange · type · reactions: Reactions;
+MessageChange · type · counterObservation?: CounterObservation;
+MessageChange · type · };
+MessageDeliveryEvent · interface · export interface MessageDeliveryEvent {
+MessageDeliveryEvent · interface · event: "delivery";
+MessageDeliveryEvent · interface · chatId: Id;
+MessageDeliveryEvent · interface · chatTitle: string | null;
+MessageDeliveryEvent · interface · messageId: Id;
+MessageDeliveryEvent · interface · delivery: Delivery;
+MessageDeliveryEvent · interface · at: string;
+MessageDeliveryEvent · interface · }
+MessageEvent · type · export type MessageEvent = {
+MessageEvent · type · event: "message";
+MessageEvent · type · message: MessageHit;
+MessageEvent · type · } | MessageChange | PollVoteEvent | PersonReactionEvent | MessageStarEvent | MessageDeliveryEvent | ChatEventNotice;
+MessageHit · interface · export interface MessageHit extends Message {
+MessageHit · interface · chatTitle: string | null;
+MessageHit · interface · email?: MailFields;
+MessageHit · interface · excerpt?: string;
+MessageHit · interface · }
+MessageLink · type · export type MessageLink = MessagePermalink & {
+MessageLink · type · locator: string;
+MessageLink · type · files?: FileLink[];
+MessageLink · type · };
+MessagePermalink · type · export type MessagePermalink = {
+MessagePermalink · type · url: string;
+MessagePermalink · type · access: "public" | "restricted" | "unknown";
+MessagePermalink · type · reason: null;
+MessagePermalink · type · } | {
+MessagePermalink · type · url: null;
+MessagePermalink · type · access: "unavailable";
+MessagePermalink · type · reason: "unsupported_chat" | "unsupported_provider" | "offline";
+MessagePermalink · type · };
+MessageStarEvent · interface · export interface MessageStarEvent {
+MessageStarEvent · interface · event: "star";
+MessageStarEvent · interface · chatId: Id;
+MessageStarEvent · interface · chatTitle: string | null;
+MessageStarEvent · interface · messageId: Id;
+MessageStarEvent · interface · starred: boolean;
+MessageStarEvent · interface · }
+MoreGroupSettings · interface · export interface MoreGroupSettings {
+MoreGroupSettings · interface · onlyAdminsSend?: boolean | null;
+MoreGroupSettings · interface · onlyAdminsEditInfo?: boolean | null;
+MoreGroupSettings · interface · disappearingSeconds?: number | null;
+MoreGroupSettings · interface · }
+OfficialChatStats · type · export type OfficialChatStats = OfficialGroupStats | OfficialChannelStats;
+OutputOptions · interface · export interface OutputOptions {
+OutputOptions · interface · json?: boolean;
+OutputOptions · interface · jsonl?: boolean;
+OutputOptions · interface · quiet?: boolean;
+OutputOptions · interface · streams?: Streams;
+OutputOptions · interface · tty?: boolean;
+OutputOptions · interface · color?: boolean;
+OutputOptions · interface · env?: NodeJS.ProcessEnv;
+OutputOptions · interface · fields?: string;
+OutputOptions · interface · hitDetail?: Detail;
+OutputOptions · interface · capture?: (value: unknown) => void;
+OutputOptions · interface · compact?: boolean;
+OutputOptions · interface · }
+PASTE_QR · const · export declare const PASTE_QR: string;
+Page · interface · export interface Page<T> {
+Page · interface · items: T[];
+Page · interface · hasMore: boolean;
+Page · interface · }
+PeopleLookup · interface · export interface PeopleLookup {
+PeopleLookup · interface · provider?: Provider;
+PeopleLookup · interface · get(id: Id): Contact | undefined;
+PeopleLookup · interface · all(): Contact[];
+PeopleLookup · interface · }
+PersonAlias · interface · export interface PersonAlias {
+PersonAlias · interface · name?: string;
+PersonAlias · interface · username?: string;
+PersonAlias · interface · link?: string;
+PersonAlias · interface · firstSeenAt: string;
+PersonAlias · interface · lastSeenAt: string;
+PersonAlias · interface · source: "profile" | "messages";
+PersonAlias · interface · }
+PersonCard · interface · export interface PersonCard extends Contact {
+PersonCard · interface · notes?: {
+PersonCard · interface · id: string;
+PersonCard · interface · personId: string;
+PersonCard · interface · text: string;
+PersonCard · interface · revision: number;
+PersonCard · interface · createdAt: string;
+PersonCard · interface · updatedAt: string;
+PersonCard · interface · }[];
+PersonCard · interface · chats: Pick<Chat, "id" | "title" | "kind" | "lastMessageAt">[];
+PersonCard · interface · }
+PersonFlag · type · export type PersonFlag = "bot" | "verified" | "premium" | "scam" | "fake" | "restricted" | "deleted" | "support";
+PersonProfile · interface · export interface PersonProfile extends Omit<ProfileFacts, "chats"> {
+PersonProfile · interface · chats: SharedChatActivity[];
+PersonProfile · interface · aliases: PersonAlias[];
+PersonProfile · interface · }
+PersonReaction · interface · export interface PersonReaction {
+PersonReaction · interface · person: Member;
+PersonReaction · interface · own: boolean;
+PersonReaction · interface · reaction: string | null;
+PersonReaction · interface · reactedAt: string;
+PersonReaction · interface · }
+PersonReactionEvent · interface · export interface PersonReactionEvent {
+PersonReactionEvent · interface · event: "person_reaction";
+PersonReactionEvent · interface · chatId: Id;
+PersonReactionEvent · interface · chatTitle: string | null;
+PersonReactionEvent · interface · messageId: Id;
+PersonReactionEvent · interface · reaction: PersonReaction;
+PersonReactionEvent · interface · }
+PhoneBookEntry · interface · export interface PhoneBookEntry {
+PhoneBookEntry · interface · phone: string;
+PhoneBookEntry · interface · name: string;
+PhoneBookEntry · interface · }
+Poll · interface · export interface Poll {
+Poll · interface · chatId: Id;
+Poll · interface · messageId: Id;
+Poll · interface · question: string;
+Poll · interface · answers: PollAnswer[];
+Poll · interface · closed: boolean;
+Poll · interface · multiple: boolean;
+Poll · interface · anonymous: boolean;
+Poll · interface · voters: number | null;
+Poll · interface · quiz?: boolean;
+Poll · interface · revote?: boolean;
+Poll · interface · creator?: boolean;
+Poll · interface · }
+PollAnswer · interface · export interface PollAnswer {
+PollAnswer · interface · id: Id;
+PollAnswer · interface · text: string;
+PollAnswer · interface · voters: number | null;
+PollAnswer · interface · chosen: boolean;
+PollAnswer · interface · }
+PollVote · interface · export interface PollVote {
+PollVote · interface · person: Member;
+PollVote · interface · answers: Id[];
+PollVote · interface · votedAt: string;
+PollVote · interface · }
+PollVoteEvent · interface · export interface PollVoteEvent {
+PollVoteEvent · interface · event: "vote";
+PollVoteEvent · interface · chatId: Id;
+PollVoteEvent · interface · chatTitle: string | null;
+PollVoteEvent · interface · messageId: Id;
+PollVoteEvent · interface · vote: PollVote;
+PollVoteEvent · interface · }
+PrivacySettings · interface · export interface PrivacySettings {
+PrivacySettings · interface · findByPhone?: Audience;
+PrivacySettings · interface · phoneNumber?: Audience;
+PrivacySettings · interface · calls?: Audience;
+PrivacySettings · interface · chatInvites?: Audience;
+PrivacySettings · interface · hideOnline?: boolean;
+PrivacySettings · interface · readReceipts?: boolean;
+PrivacySettings · interface · profilePhoto?: ShownAudience;
+PrivacySettings · interface · about?: ShownAudience;
+PrivacySettings · interface · lastSeen?: ShownAudience;
+PrivacySettings · interface · }
+ProfileFacts · interface · export interface ProfileFacts {
+ProfileFacts · interface · id: Id;
+ProfileFacts · interface · name: string | null;
+ProfileFacts · interface · usernames: string[];
+ProfileFacts · interface · bio: string | null;
+ProfileFacts · interface · birthday?: string | null;
+ProfileFacts · interface · phone?: string | null;
+ProfileFacts · interface · flags: Partial<Record<PersonFlag, boolean>>;
+ProfileFacts · interface · seen?: Seen;
+ProfileFacts · interface · contact?: boolean;
+ProfileFacts · interface · mutualContact?: boolean;
+ProfileFacts · interface · commonChatsCount?: number | null;
+ProfileFacts · interface · registered?: Registered | null;
+ProfileFacts · interface · hasPhoto?: boolean;
+ProfileFacts · interface · chats: Pick<Chat, "id" | "title" | "kind" | "lastMessageAt">[];
+ProfileFacts · interface · }
+ProviderEntry · interface · export interface ProviderEntry {
+ProviderEntry · interface · name: Provider;
+ProviderEntry · interface · kind: Kind;
+ProviderEntry · interface · kinds?: readonly Kind[];
+ProviderEntry · interface · imported?: boolean;
+ProviderEntry · interface · aliases: readonly string[];
+ProviderEntry · interface · command?: string;
+ProviderEntry · interface · opens?: Partial<Record<RefKindName, string>>;
+ProviderEntry · interface · globalItemIds?: boolean;
+ProviderEntry · interface · }
+ProviderMetadata · type · export type ProviderMetadata = Record<string, unknown>;
+QuotedMessage · interface · export interface QuotedMessage {
+QuotedMessage · interface · id: Id;
+QuotedMessage · interface · senderId: Id | null;
+QuotedMessage · interface · senderName: string | null;
+QuotedMessage · interface · timestamp: string | null;
+QuotedMessage · interface · text: string;
+QuotedMessage · interface · attachments: Attachment[];
+QuotedMessage · interface · outgoing: boolean | null;
+QuotedMessage · interface · }
+RankingComponent · type · export type RankingComponent = Exclude<RankingMeasure, "answer-time"> | "replies-from-others" | "reactions-per-message" | "replies-from-others-per-message";
+RankingInput · interface · export interface RankingInput {
+RankingInput · interface · measure?: string;
+RankingInput · interface · score?: string;
+RankingInput · interface · weights?: unknown;
+RankingInput · interface · minMessages?: number;
+RankingInput · interface · messageKind?: string;
+RankingInput · interface · }
+RankingTarget · type · export type RankingTarget = "messages" | "contacts";
+Reactions · interface · export interface Reactions {
+Reactions · interface · counts: {
+Reactions · interface · reaction: string;
+Reactions · interface · count: number;
+Reactions · interface · }[];
+Reactions · interface · mine: string | null;
+Reactions · interface · total: number;
+Reactions · interface · }
+Reactor · interface · export interface Reactor {
+Reactor · interface · person: Member;
+Reactor · interface · reaction: string;
+Reactor · interface · reactedAt: string;
+Reactor · interface · }
+RefKindName · type · export type RefKindName = Exclude<Reference["type"], "entity">;
+Reference · type · export type Reference = {
+Reference · type · type: "message";
+Reference · type · provider: string;
+Reference · type · account: string;
+Reference · type · chat: string;
+Reference · type · message: string;
+Reference · type · } | {
+Reference · type · type: "chat";
+Reference · type · provider: string;
+Reference · type · account: string;
+Reference · type · chat: string;
+Reference · type · } | {
+Reference · type · type: "contact";
+Reference · type · provider: string;
+Reference · type · id: string;
+Reference · type · } | {
+Reference · type · type: SimpleReference;
+Reference · type · id: string;
+Reference · type · }
+Reference · type · | {
+Reference · type · type: "folder";
+Reference · type · id: string;
+Reference · type · path: string | null;
+Reference · type · } | MeetingReference;
+Registered · interface · export interface Registered {
+Registered · interface · at: string;
+Registered · interface · source: "telegram" | "max" | "estimate";
+Registered · interface · precision: "day" | "month";
+Registered · interface · }
+Review · interface · export interface Review {
+Review · interface · since: string;
+Review · interface · until: string;
+Review · interface · complete: boolean;
+Review · interface · chats: ReviewChat[];
+Review · interface · skipped: Pick<Chat, "id" | "title" | "lastMessageAt">[];
+Review · interface · partial: boolean;
+Review · interface · left?: string[];
+Review · interface · quiet: number;
+Review · interface · unanswered?: {
+Review · interface · olderThanHours: number;
+Review · interface · };
+Review · interface · waiting?: {
+Review · interface · olderThanHours: number;
+Review · interface · };
+Review · interface · checked?: Record<Id, string>;
+Review · interface · tasks?: {
+Review · interface · added: number;
+Review · interface · closed: number;
+Review · interface · review: number;
+Review · interface · };
+Review · interface · offline?: true;
+Review · interface · }
+ReviewChat · interface · export interface ReviewChat extends Pick<Chat, "id" | "title" | "kind"> {
+ReviewChat · interface · messages: Message[];
+ReviewChat · interface · more: boolean;
+ReviewChat · interface · answeredBy?: "owner" | "owner-and-admins";
+ReviewChat · interface · }
+SecretInput · interface · export interface SecretInput {
+SecretInput · interface · input?: NodeJS.ReadableStream & {
+SecretInput · interface · isTTY?: boolean;
+SecretInput · interface · };
+SecretInput · interface · output?: NodeJS.WritableStream;
+SecretInput · interface · echo?: boolean;
+SecretInput · interface · signal?: AbortSignal;
+SecretInput · interface · }
+SharedChatActivity · interface · export interface SharedChatActivity {
+SharedChatActivity · interface · id: Id;
+SharedChatActivity · interface · title: string | null;
+SharedChatActivity · interface · kind: ChatKind;
+SharedChatActivity · interface · theirMessages: number;
+SharedChatActivity · interface · firstAt: string | null;
+SharedChatActivity · interface · lastAt: string | null;
+SharedChatActivity · interface · complete: boolean;
+SharedChatActivity · interface · }
+SharedContact · interface · export interface SharedContact {
+SharedContact · interface · name: string;
+SharedContact · interface · firstName?: string;
+SharedContact · interface · lastName?: string;
+SharedContact · interface · phone?: string;
+SharedContact · interface · userId?: Id;
+SharedContact · interface · }
+StageOutcome · type · export type StageOutcome = DealStatus;
+TextSpan · interface · export interface TextSpan {
+TextSpan · interface · type: "bold" | "italic" | "strike" | "underline" | "code" | "pre" | "link" | "blockquote" | "spoiler" | "highlight" | "heading";
+TextSpan · interface · from: number;
+TextSpan · interface · length: number;
+TextSpan · interface · url?: string;
+TextSpan · interface · language?: string;
+TextSpan · interface · }
+Topic · interface · export interface Topic {
+Topic · interface · id: Id;
+Topic · interface · title: string;
+Topic · interface · closed: boolean;
+Topic · interface · pinned: boolean;
+Topic · interface · hidden?: boolean;
+Topic · interface · unreadCount: number | null;
+Topic · interface · lastMessageAt: string | null;
+Topic · interface · createdAt: string | null;
+Topic · interface · }
+TopicChange · interface · export interface TopicChange {
+TopicChange · interface · title?: string;
+TopicChange · interface · closed?: boolean;
+TopicChange · interface · pinned?: boolean;
+TopicChange · interface · hidden?: boolean;
+TopicChange · interface · icon?: string | null;
+TopicChange · interface · }
+WindowedMessage · type · export type WindowedMessage = Message & {
+WindowedMessage · type · anchor?: true;
+WindowedMessage · type · };
+atTerminal · const · export declare const atTerminal: (input: NodeJS.ReadableStream & {
+atTerminal · const · isTTY?: boolean;
+atTerminal · const · }) => boolean;
+bareCheck · const · export declare const bareCheck: <C extends string>(check: C, args?: string) => string;
+checkWords · const · export declare const checkWords: <C extends string>(command: string, profile?: string) => CheckWords<C>;
+e164Of · const · export declare const e164Of: (phone: string, region: string | undefined) => string | null | undefined;
+failureContext · const · export declare const failureContext: (errors?: AppErrors) => FailureContext;
+formatReference · const · export declare const formatReference: (reference: Reference) => string;
+isFolderProvider · const · export declare const isFolderProvider: (provider: string) => boolean;
+loginQr · const · export declare const loginQr: ({ diagnostic, note, indent: pad, columns, terminal, json, }: LoginQrOptions) => LoginQr;
+normalizeTag · const · export declare const normalizeTag: (value: string) => string;
+observedCounters · const · export declare const observedCounters: (message: Message, observedAt: string, fields: readonly CounterField[], source?: CounterObservation["source"]) => Message;
+parseMarkdownSpans · const · export declare const parseMarkdownSpans: (input: string) => FormattedText;
+parseReference · const · export declare const parseReference: (text: string) => Reference;
+pickChat · const · export declare const pickChat: (reference: string, chats: Chat[]) => Chat;
+pickPerson · const · export declare const pickPerson: (reference: string, people: PeopleLookup) => Contact;
+plainQr · const · export declare const plainQr: (link: string) => string;
+providerNamed · const · export declare const providerNamed: (word: string) => ProviderEntry | undefined;
+readSecret · const · export declare const readSecret: (prompt: string, { input, output, echo, signal: givenSignal }?: SecretInput) => Promise<string>;
+resolveOutput · const · export declare const resolveOutput: ({ json, jsonl, quiet, streams, tty, color, fields, hitDetail, env, capture, compact, }?: OutputOptions) => {
+resolveOutput · const · format: "json" | "jsonl" | "pretty";
+resolveOutput · const · color: boolean;
+resolveOutput · const · streams: Streams;
+resolveOutput · const · renderer: Renderer;
+resolveOutput · const · compact?: boolean | undefined;
+resolveOutput · const · full?: boolean | undefined;
+resolveOutput · const · };
+validateFormattedText · const · export declare const validateFormattedText: (formatted: FormattedText) => FormattedText;

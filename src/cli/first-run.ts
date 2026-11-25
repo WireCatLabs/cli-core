@@ -16,13 +16,14 @@ import {
   writeSetupAnswers,
 } from "./setup-answers.js"
 
-/** The languages cli-core stems and has a dictionary for; each is one stemmer of its alphabet. */
+/** The languages cli-core stems and has a dictionary for; each is one stemmer of its alphabet. @experimental */
 
 export interface FirstRunIo {
   ask: (prompt: string) => Promise<string>
   say: (text: string) => void
 }
 
+/** @experimental */
 export interface FirstRun {
   command: string
   env: NodeJS.ProcessEnv
@@ -43,6 +44,7 @@ const SKIPPED = new Set(["help", "guide", "completion", "mcp", "serve", "server"
 /**
  * Only a person at a terminal is asked. An agent in a real terminal passes every terminal check and would wait on
  * the question forever; a process locked read-only must write nothing, and every answer writes something.
+ * @experimental
  */
 export const asksAtStart = (start: {
   headless: boolean
@@ -58,7 +60,10 @@ export const asksAtStart = (start: {
   start.readOnlyLock === undefined &&
   !SKIPPED.has(start.path[0] ?? "")
 
-/** The system's language, as the first locale variable set names it: `LC_ALL`, `LC_MESSAGES`, `LANG`, `LANGUAGE`. */
+/**
+ * The system's language, as the first locale variable set names it: `LC_ALL`, `LC_MESSAGES`, `LANG`, `LANGUAGE`.
+ * @experimental
+ */
 export const systemLanguage = (env: NodeJS.ProcessEnv): string | undefined => {
   const named = [env.LC_ALL, env.LC_MESSAGES, env.LANG, ...(env.LANGUAGE ?? "").split(":")]
     .map((value) => value?.trim())
@@ -232,6 +237,7 @@ const answersAt = (path: string): SetupAnswers => {
 /**
  * The questions every WireCat tool shares, asked once for all of them: the answers go to the shared config
  * file, the languages to the store. Only this, at a terminal, writes the permission answer.
+ * @experimental
  */
 export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
   const path = sharedConfigPath(storePath(run.env), run.env)
@@ -254,6 +260,7 @@ export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
  * The first-run step a tool runs before each command: asks when `asksAtStart` says so, and lets the command run
  * whatever happens to the questions. `setup` asks all three again, since a refusal sends the owner there.
  * A tool that builds its own program gets it from `startCli` as `entry.atStart`.
+ * @experimental
  */
 export const setupAtStart = async (start: {
   command: string

@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { ManifestOperation, OperationPermission, SchemaNode } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, OperationPermission, SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -198,7 +198,10 @@ const applies = (permission: OperationPermission, body: unknown, input: ApiComma
   )
 }
 
-/** The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body. */
+/**
+ * The keys one call checks beside `api.<operation>`: the manifest's that apply, and the CLI's from the body.
+ * @experimental
+ */
 export const serviceApiKeys = (
   input: ServiceApiPermissionsInput,
   operation: ManifestOperation,

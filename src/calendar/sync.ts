@@ -14,6 +14,9 @@ const SLOTS_EVERY = 7 * DAY
 /** Series whose slots one transaction saves: a short one, so another process waits for the lock briefly. */
 const BATCH_SERIES = 50
 const BATCH_SLOTS = 250
+/** A full round that would mark more than this share of ten or more stored entries deleted is held. */
+const MOST_UNSEEN = 0.5
+const GUARDED_FROM = 10
 
 /**
  * A round that stopped before its end: where its listing is, and the series still to ask for their slots. A rerun
@@ -39,6 +42,8 @@ export interface PendingRound {
   everySeries?: boolean
   /** The source said its list is unchanged since `from`: the round marks nothing unseen. */
   unchanged?: true
+  /** Entries the source still has but could not read in this round (`ChangePage.kept`): never marked unseen. */
+  kept?: string[]
 }
 
 /** What the engine keeps in `EventStore.cursor`. Version 1 had no `round`, `updatedAt` or `done`. */
@@ -79,10 +84,11 @@ const roundOf = (value: unknown): PendingRound | null | undefined => {
     !isToken(round.next) ||
     !Array.isArray(round.series) ||
     round.series.some((id) => typeof id !== "string") ||
-    (round.everySeries !== undefined && typeof round.everySeries !== "boolean")
+    (round.everySeries !== undefined && typeof round.everySeries !== "boolean") ||
+    (round.kept !== undefined && (!Array.isArray(round.kept) || round.kept.some((id) => typeof id !== "string")))
   )
     return undefined
-  const { full, from, window, startedAt, reset, page, listed, next, series, everySeries, unchanged } =
+  const { full, from, window, startedAt, reset, page, listed, next, series, everySeries, unchanged, kept } =
     round as PendingRound
   return {
     full,
@@ -96,6 +102,7 @@ const roundOf = (value: unknown): PendingRound | null | undefined => {
     series,
     ...(everySeries === false ? { everySeries } : {}),
     ...(unchanged === true ? { unchanged } : {}),
+    ...(kept?.length ? { kept } : {}),
   }
 }
 
@@ -136,7 +143,7 @@ export const parseCalendarCursor = (value: string | null): CalendarCursor | null
 }
 
 /**
- * One year back and three months ahead (NEED-1706), from the start of today in UTC. Whole days, so the window moves
+ * One year back and three months ahead, from the start of today in UTC. Whole days, so the window moves
  * once a day: a source whose cursor holds the window lists everything again once a day, not on every run.
  */
 export const calendarSyncWindow = (now: number): SyncWindow => {
@@ -159,6 +166,8 @@ export interface CalendarSyncOptions {
   budget?: RunBudget
   /** The run's signal, checked before each save: a cancelled run stops after its current step and keeps its work. */
   signal?: AbortSignal
+  /** Let a full round the guard holds mark up to this many entries deleted: `sync --allow-deletions <count>`. */
+  allowDeletions?: number
 }
 
 export interface CalendarSyncResult {
@@ -177,6 +186,8 @@ export interface CalendarSyncResult {
   occurrences: number
   /** Entries a full round did not return, now marked deleted. */
   unseen: number
+  /** Why a full round marked nothing deleted although it did not return some entries, and how to let it through. */
+  held?: string
   /** Set when the calendar failed; its cursor stays at its last saved page, so the next run goes on from there. */
   error?: string
 }
@@ -220,6 +231,7 @@ interface Plan {
   expand: CalendarExpander | undefined
   budget: RunBudget
   signal: AbortSignal | undefined
+  allowDeletions: number
   /** Called on each page or series saved. */
   moved: () => void
 }
@@ -273,7 +285,7 @@ const deadList = (provider: string) =>
  * at most the step it was on. Returns why it stopped, or `null` when the round finished.
  */
 const syncOne = async (
-  { source, store, calendar, window, now, expand, budget, signal, moved }: Plan,
+  { source, store, calendar, window, now, expand, budget, signal, allowDeletions, moved }: Plan,
   stored: CalendarCursor | null,
   result: CalendarSyncResult,
 ): Promise<BudgetStop | null> => {
@@ -367,6 +379,7 @@ const syncOne = async (
       }
     }
     if (page.removed.length) result.removed += await store.removeEntries(calendar.id, page.removed, now)
+    if (page.kept?.length) round = { ...round, kept: [...new Set([...(round.kept ?? []), ...page.kept])] }
     if (page.unchanged && source.traits.fullListOnly && page.items.length === 0 && !page.hasMore)
       round = { ...round, page: null, listed: true, next: page.cursor ?? null, unchanged: true }
     else if (!page.hasMore) round = { ...round, page: null, listed: true, next: page.cursor ?? null }
@@ -396,7 +409,15 @@ const syncOne = async (
     for (const series of [...round.series]) {
       const why = stop()
       if (why) return why
-      const slots = await occurrences.call(source, calendar, series, round.window)
+      let slots: SeriesSlots["slots"]
+      try {
+        slots = await occurrences.call(source, calendar, series, round.window)
+      } catch (error) {
+        // A series gone between its listing and this call proves nothing yet: its slots stay as stored, and the
+        // next listing, which names a deleted series, cancels them.
+        if (!(isCliFailure(error) && error.code === "not_found")) throw error
+        slots = null
+      }
       if (signal?.aborted) return "cancelled"
       batch.push({ series, slots })
       moved()
@@ -407,8 +428,19 @@ const syncOne = async (
     await flush()
   }
   if (signal?.aborted) return "cancelled"
-  result.unseen =
-    round.full && !round.unchanged ? await store.markUnseen(calendar.id, round.startedAt, round.window, now) : 0
+  if (round.full && !round.unchanged) {
+    const keep = { keep: round.kept ?? [] }
+    const unseen = await store.markUnseen(calendar.id, round.startedAt, round.window, now, { ...keep, dryRun: true })
+    const stored = await store.markUnseen(calendar.id, Number.MAX_SAFE_INTEGER, round.window, now, { dryRun: true })
+    // The round's count of saved entries and slots: none at all, and the list was empty.
+    const many = cursor.done === 0 || (stored >= GUARDED_FROM && unseen > stored * MOST_UNSEEN)
+    if (unseen > 0 && many && unseen > allowDeletions)
+      result.held =
+        `${source.provider} did not list ${unseen} of the ${stored} entries stored in this calendar's window; none ` +
+        `was marked deleted. Check the calendar at the source, then run sync --allow-deletions ${unseen} to let ` +
+        "them through"
+    else result.unseen = await store.markUnseen(calendar.id, round.startedAt, round.window, now, keep)
+  }
   await save({
     token: round.next,
     window: round.window,
@@ -516,6 +548,7 @@ export const syncCalendars = async (
           expand: options.expand,
           budget,
           signal: options.signal,
+          allowDeletions: options.allowDeletions ?? 0,
           moved: () => {
             steps += 1
           },

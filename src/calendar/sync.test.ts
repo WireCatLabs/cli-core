@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { calendarSyncWindow, parseCalendarCursor, syncCalendars } from "./index.js"
 import { fakeCalendarSource, memoryEventStore } from "./testing/index.js"
@@ -103,5 +104,78 @@ describe("syncCalendars", () => {
     await damage("second")
     await syncCalendars(source, store, { accountId: 1, now: NOW + 7_200_000 })
     expect((await store.entry(id, "second"))?.deletedAt).not.toBeNull()
+  })
+
+  // INT-2: a series deleted between its listing and its slots call no longer stalls every later round.
+  it("finishes a round whose series the provider no longer finds, keeping its stored slots", async () => {
+    const store = memoryEventStore()
+    const source = fakeCalendarSource()
+    const at = NOW + 86_400_000
+    const series = {
+      externalId: "weekly",
+      kind: "series" as const,
+      status: "confirmed" as const,
+      title: "Weekly",
+      startsAt: at,
+      endsAt: at + 1_800_000,
+      recurrence: ["RRULE:FREQ=WEEKLY;COUNT=2"],
+    }
+    const { recurrence: _, ...plain } = series
+    const slot = { ...plain, externalId: "weekly_1", kind: "occurrence" as const, seriesExternalId: "weekly" }
+    const slots = [{ ...slot, originalStartsAt: at }]
+    source.put("primary", series)
+    source.setOccurrences("weekly", slots)
+    await syncCalendars(source, store, { accountId: 1, now: NOW })
+    const gone = {
+      ...source,
+      occurrences: async () => {
+        throw new CliError("not_found", "the series is gone")
+      },
+    }
+    source.put("primary", { ...series, title: "Weekly, renamed" })
+
+    const report = await syncCalendars(gone, store, { accountId: 1, now: NOW + 3_600_000 })
+
+    expect(report.synced[0]).toMatchObject({ state: "complete" })
+    const [calendar] = await store.calendars(1)
+    expect(parseCalendarCursor(await store.cursor(calendar?.id as number))?.round).toBeNull()
+    expect((await store.entry(calendar?.id as number, "weekly_1"))?.deletedAt).toBeNull()
+  })
+
+  // INT-6: the calendar engine now has the share guard the mail, CRM and tracker engines have.
+  it("holds a full round that would mark most of ten or more entries deleted, until --allow-deletions", async () => {
+    const store = memoryEventStore()
+    const source = fakeCalendarSource()
+    const ids = Array.from({ length: 12 }, (_, n) => `e${n}`)
+    for (const [n, id] of ids.entries())
+      source.put("primary", {
+        externalId: id,
+        kind: "single",
+        status: "confirmed",
+        title: `Review ${n}`,
+        startsAt: NOW + n * 3_600_000,
+        endsAt: NOW + n * 3_600_000 + 1_800_000,
+      })
+    await syncCalendars(source, store, { accountId: 1, now: NOW })
+    source.drop("primary", ...ids.slice(0, 8))
+    const [calendar] = await store.calendars(1)
+    const live = async () => {
+      let count = 0
+      for (const id of ids) if ((await store.entry(calendar?.id as number, id))?.deletedAt === null) count += 1
+      return count
+    }
+
+    const held = await syncCalendars(source, store, { accountId: 1, now: NOW + 3_600_000, full: true })
+    expect(held.synced[0]).toMatchObject({ state: "complete", unseen: 0, held: expect.stringMatching(/8 of the 12/) })
+    expect(await live()).toBe(12)
+
+    const through = await syncCalendars(source, store, {
+      accountId: 1,
+      now: NOW + 7_200_000,
+      full: true,
+      allowDeletions: 8,
+    })
+    expect(through.synced[0]).toMatchObject({ unseen: 8 })
+    expect(await live()).toBe(4)
   })
 })

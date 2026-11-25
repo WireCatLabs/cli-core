@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
-import { identifier, type ManifestOperation, type SchemaNode } from "@wirecat/cli-base/codegen"
+import { identifier, type ManifestOperation, type SchemaNode } from "@wirecat/cli-base/codegen/runtime"
 import { isLosslessNumber, isSafeNumber, LosslessNumber, parse, stringify } from "lossless-json"
 import * as v from "valibot"
 
@@ -14,6 +14,7 @@ export const apiFlagOf = (name: string): string =>
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .toLowerCase()
 
+/** @experimental */
 export const apiOptionKey = (name: string): string =>
   apiFlagOf(name).replace(/-([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())
 
@@ -75,7 +76,7 @@ export const sendsBytes = (operation: ManifestOperation): boolean => {
   return type !== undefined && !JSON_BODY.test(type) && !FORM_BODY.test(type)
 }
 
-/** The file `--body-file` names, `-` for stdin, as the bytes an upload sends. */
+/** The file `--body-file` names, `-` for stdin, as the bytes an upload sends. @experimental */
 export const readApiBytes = (
   path: string,
   read: (path: string | number) => Uint8Array<ArrayBuffer> = (from) => new Uint8Array(readFileSync(from)),

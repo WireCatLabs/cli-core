@@ -3,6 +3,15 @@ import type { CacheDatabase } from "./driver.js"
 import { clientRecorded, lockedOutNotice, recordClient, refusalAdvice, storeClients } from "./sqlite/clients.js"
 import { generatedMigrations } from "./sqlite/manifest.js"
 import {
+  afterRebuild,
+  beforeRebuild,
+  foreignKeysOff,
+  legacyRenames,
+  pauseForeignKeys,
+  rebuildOf,
+  withoutEmptyCopies,
+} from "./sqlite/rebuild.js"
+import {
   discardRollbackCopy,
   type RollbackCopy,
   type RollbackCopyOptions,
@@ -10,7 +19,9 @@ import {
   takeRollbackCopy,
 } from "./sqlite/rollback-copy.js"
 import { beginImmediate, rollBack } from "./sqlite/transaction.js"
+import { seedSequences } from "./sqlite/version-73.js"
 
+/** @experimental */
 export interface Migration {
   version: number
   /** The oldest schema version whose statements still work on a file at this version. */
@@ -23,6 +34,13 @@ export interface Migration {
   tables?: string[]
   /** Runs before the statements, inside the same transaction. */
   before?: (database: CacheDatabase, now: () => number) => void
+  /** Runs after the statements, inside the same transaction, with the tables they copied (`sqlite/rebuild.ts`). */
+  after?: (database: CacheDatabase, now: () => number, run: { rebuilt: string[]; from: number }) => void
+}
+
+/** What a migration does beyond its SQL. Frozen with the migration: later code must not change what it did. */
+const HOOKS: Record<number, Pick<Migration, "before" | "after">> = {
+  73: { after: (database, _now, { rebuilt, from }) => seedSequences(database, rebuilt, { margin: from > 0 }) },
 }
 
 /**
@@ -35,8 +53,12 @@ export interface Migration {
  * may be dropped and rebuilt. Every version after the first gets a `version-N.test.ts` that opens a file at N-1.
  *
  * Times are epoch milliseconds: an integer sorts and ranges without a format to agree on.
+ * @experimental
  */
-export const MIGRATIONS: Migration[] = generatedMigrations()
+export const MIGRATIONS: Migration[] = generatedMigrations().map((migration) => ({
+  ...migration,
+  ...HOOKS[migration.version],
+}))
 
 const HISTORY = `CREATE TABLE IF NOT EXISTS schema_migrations (
   version        INTEGER PRIMARY KEY,
@@ -100,6 +122,11 @@ const current = (
   return file
 }
 
+const pendingRebuild = (database: CacheDatabase, migrations: Migration[]): boolean => {
+  const from = hasTable(database, "schema_migrations") ? fileState(database).version : 0
+  return migrations.some((migration) => migration.version > from && rebuildOf(migration.statements) !== undefined)
+}
+
 /** The tables every pending migration that raises `minCompatible` names; none for a new file or a foreign one. */
 const copyBeforeBreaking = (
   database: CacheDatabase,
@@ -118,7 +145,14 @@ const copyBeforeBreaking = (
     for (const table of migration.tables ?? []) tables.push(table)
   }
   if (floor === file.minCompatible) return undefined
-  return takeRollbackCopy(database, { from: file.version, to: latest(migrations), tables, at: now() }, options)
+  const copiesTables = migrations.some(
+    (migration) => migration.version > file.version && rebuildOf(migration.statements) !== undefined,
+  )
+  return takeRollbackCopy(
+    database,
+    { from: file.version, to: latest(migrations), tables, at: now(), copiesTables },
+    options,
+  )
 }
 
 /**
@@ -126,6 +160,7 @@ const copyBeforeBreaking = (
  * A file that needs work is migrated inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
  * that fails names `store reset` when the app has one: without it the owner is stuck until a build that can migrate
  * the file. An app without that command (drive) passes no `command`, and the advice names none.
+ * @experimental
  */
 export const migrate = (
   database: CacheDatabase,
@@ -153,7 +188,36 @@ export const migrate = (
     refuseForeignOrNewer(database, settled, { ours, ownTable, command })
     return undefined
   }
-  let copy = rollback ? copyBeforeBreaking(database, migrations, { ownTable, now }, rollback) : undefined
+  const copy = rollback ? copyBeforeBreaking(database, migrations, { ownTable, now }, rollback) : undefined
+  const resume = pendingRebuild(database, migrations) ? pauseForeignKeys(database) : undefined
+  try {
+    return migrateLocked(database, { migrations, now, command, version, ownTable, ours, copy })
+  } finally {
+    resume?.()
+  }
+}
+
+const migrateLocked = (
+  database: CacheDatabase,
+  {
+    migrations,
+    now,
+    command,
+    version,
+    ownTable,
+    ours,
+    copy: taken,
+  }: {
+    migrations: Migration[]
+    now: () => number
+    command: string | undefined
+    version: string | undefined
+    ownTable: string | null
+    ours: number
+    copy: RollbackCopy | undefined
+  },
+): string | undefined => {
+  let copy = taken
   beginImmediate(database)
   try {
     database.exec(HISTORY)
@@ -175,10 +239,30 @@ export const migrate = (
             minCompatible: raisedTo,
           })
         : undefined
+    const notes: string[] = []
     for (const migration of migrations) {
       if (migration.version <= file.version) continue
+      const rebuild = rebuildOf(migration.statements)
+      // With foreign keys on, each DROP TABLE deletes the rows that point at the table, and foreign_key_check
+      // cannot see rows that are gone.
+      if (rebuild && !foreignKeysOff(database))
+        throw new Error(`schema ${migration.version} copies tables, and foreign keys could not be turned off`)
+      const saved = rebuild ? beforeRebuild(database, rebuild, migration.version, now()) : undefined
       migration.before?.(database, now)
-      for (const statement of migration.statements) database.exec(statement)
+      if (rebuild) legacyRenames(database, true)
+      try {
+        // Only for a store new in this run; an existing store keeps the copies drizzle-kit wrote, empty tables included.
+        const statements =
+          saved && file.version === 0 ? withoutEmptyCopies(migration.statements, saved.rows) : migration.statements
+        for (const statement of statements) database.exec(statement)
+      } finally {
+        if (rebuild) legacyRenames(database, false)
+      }
+      if (rebuild && saved) {
+        afterRebuild(database, rebuild, saved, migration.version)
+        for (const note of saved.notes) notes.push(note)
+      }
+      migration.after?.(database, now, { rebuilt: rebuild?.tables.map(({ name }) => name) ?? [], from: file.version })
       database
         .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
         .run(migration.version, migration.minCompatible, now())
@@ -186,9 +270,12 @@ export const migrate = (
     if (command && version) recordClient(database, { command, version, speaks: ours }, now())
     if (copy) recordRollbackCopy(database, copy, now())
     database.exec("COMMIT")
-    return notice
+    const said = [...(notice ? [notice] : []), ...notes]
+    return said.length > 0 ? said.join("\n") : undefined
   } catch (error) {
     rollBack(database)
+    // Only the copy this attempt wrote: the store is still at its version, and each retry would add another.
+    if (copy) discardRollbackCopy(copy)
     if (error instanceof CliError) throw error
     const cause = error instanceof Error ? error.message : String(error)
     throw new CliError(

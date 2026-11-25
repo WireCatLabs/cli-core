@@ -76,7 +76,7 @@ const chunkLines = (orm: StoreContext["orm"], conversation: number, first: numbe
 
 /**
  * Whether a found chunk still says what its vector encodes. A build never makes a deleted message a member,
- * so any deleted one in range went after the build: the hit goes, whatever text is left (NEED-393, NEED-550).
+ * so any deleted one in range went after the build: the hit goes, whatever text is left.
  */
 export const chunkFreshness = (
   { orm }: StoreContext,

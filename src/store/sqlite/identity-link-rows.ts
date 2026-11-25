@@ -65,7 +65,7 @@ export const linkRows = (
 
 /**
  * What a proposal rests on: its signal and the two identities it names, in either order. The owner's rejection
- * holds against this evidence only (NEED-2444); a new signal or identity for the same people proposes them again.
+ * holds against this evidence only; a new signal or identity for the same people proposes them again.
  */
 export const evidenceKeyOf = ({
   signal,

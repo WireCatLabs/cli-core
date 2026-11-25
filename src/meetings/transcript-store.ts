@@ -45,7 +45,6 @@ export interface DocumentMeeting {
 
 /** The meeting whose transcript a Drive document is, by the `driveFileId` the meeting's transcript named. */
 export interface MeetingTranscriptDocumentStore {
-  transcriptMeetings(documentIds: readonly number[]): Promise<Map<number, number>>
   /** The meeting each document is a transcript, recording or notes of; a document of two meetings names the first. */
   documentMeetings(documentIds: readonly number[]): Promise<Map<number, DocumentMeeting>>
 }

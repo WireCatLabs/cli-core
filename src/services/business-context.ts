@@ -43,7 +43,7 @@ export const keyOf = ({ provider, account }: AccountKey): string => `${provider}
  * given. A row no account reported — the owner's, an agent's — is always in it. `left` collects every account whose
  * rows were kept out, so `coverage` can say so. `denied` holds the kinds the profile denies (`deals.list`,
  * `leads.list`): no row, title or count of them is answered, and `coverage` says they were denied. `viewers` are the
- * CRM copies' rules for the profile (SEC-197, `crmViewerOf`): a deal or lead one may not read is never named, and each
+ * CRM copies' rules for the profile (`crmViewerOf`): a deal or lead one may not read is never named, and each
  * note on why a copy shows less goes to `coverage`.
  */
 export interface Scope {
@@ -211,7 +211,7 @@ export { CATEGORIES, type Category }
 const EMPLOYED = new Set(["employee", "contractor", "founder"])
 
 /**
- * Each organization's categories, derived from usable relationships in scope and never stored (NEED-2377): `client`
+ * Each organization's categories, derived from usable relationships in scope and never stored: `client`
  * is `customer-of` an own organization, `supplier` one an own organization is `customer-of`, `partner` `partner-of`
  * one, `employer` one the owner's person is `member-of` as employee, contractor or founder. Read once per answer.
  */

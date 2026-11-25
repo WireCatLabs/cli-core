@@ -55,7 +55,7 @@ export const answerOf = async (command: Command, question: string): Promise<stri
 
 /**
  * For a command a person typed: the flag says yes, or the terminal asks, or nobody can — and it is
- * refused. An agent's run over MCP goes ahead (NEED-773). Never asks under `--json` or `--jsonl`: a program reads those, and a harness that gives
+ * refused. An agent's run over MCP goes ahead. Never asks under `--json` or `--jsonl`: a program reads those, and a harness that gives
  * an agent a terminal would otherwise wait for ever.
  */
 export const terminalAsker =

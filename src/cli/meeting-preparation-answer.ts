@@ -21,6 +21,7 @@ const mapMeeting = (meeting: MeetingPreparation["items"][number]["meeting"]) => 
     updatedAt: at(meeting.updatedAt),
   }
 }
+/** @experimental */
 export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const candidate = packet.upcoming.candidate
   const mapped = snakeKeys({

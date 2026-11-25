@@ -9,6 +9,7 @@ import { setTaskRulesStop, taskRulesStop } from "./sqlite/task-rule-stops.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, Delta, Range, TaskAnalysisMark, TaskAnalysisMarkWrite } from "./types.js"
 
+/** @experimental */
 export interface SyncStore {
   /** What a sync remembered under `name` for this account, and when; a caller encodes a number itself. */
   syncState(key: AccountKey, name: string): Promise<{ value: string; at: string } | undefined>

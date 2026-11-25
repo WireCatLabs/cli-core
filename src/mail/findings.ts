@@ -266,7 +266,7 @@ const VALUES: Partial<Record<MailFindingKind, Record<string, readonly string[]>>
   order_update: { status: ORDER_STATUSES },
 }
 
-/** One line per kind, `kind: needed fields; optional ones`, for `mail findings add --help`. */
+/** One line per kind, `kind: needed fields; optional ones`, for `mail findings add --help`. @experimental */
 export const mailFindingFieldsHelp = (): string =>
   MAIL_FINDING_KINDS.map((kind) => {
     const { needs, may } = MAIL_FINDING_FIELDS[kind]

@@ -84,30 +84,40 @@ import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js
 
 const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
 
+/** @experimental */
 export const addStoreMaintenanceCommands = sharedCommand(addStoreMaintenanceCommandsDefinition)
 export const appDoctorCommand = sharedCommand(appDoctorCommandDefinition)
 export const appCompleteCommand = sharedCommand(appCompleteCommandDefinition)
 export const appMcpCommand = sharedCommand(appMcpCommandDefinition)
+/** @experimental */
 export const botAdminsCommand = sharedCommand(botAdminsCommandDefinition)
+/** @experimental */
 export const botMembersCommand = sharedCommand(botMembersCommandDefinition)
 export const generatedApiCommand = sharedCommand(generatedApiCommandDefinition)
 export const serviceApiCommand = sharedCommand(serviceApiCommandDefinition)
 export const botCommand = sharedCommand(botCommandDefinition)
+/** @experimental */
 export const botMcpCommand = sharedCommand(botMcpCommandDefinition)
+/** @experimental */
 export const botMessagesCommand = sharedCommand(botMessagesCommandDefinition)
 export const commandsCommand = sharedCommand(commandsCommandDefinition)
 export const configCommand = sharedCommand(configCommandDefinition)
 export const setupCommand = sharedCommand(setupCommandDefinition)
 export const guideCommand = sharedCommand(guideCommandDefinition)
+/** @experimental */
 export const addMeetingBatchCommand = sharedCommand(addMeetingBatchCommandDefinition)
 export const addMeetingPreparationCommand = sharedCommand(addMeetingPreparationCommandDefinition)
+/** @experimental */
 export const addMeetingProjectCandidatesCommand = sharedCommand(addMeetingProjectCandidatesCommandDefinition)
+/** @experimental */
 export const addMeetingSeriesInventoryCommand = sharedCommand(addMeetingSeriesInventoryCommandDefinition)
 export const accountCommand = sharedCommand(accountCommandDefinition)
+/** @experimental */
 export const messengerSessionCommands = sharedCommand(messengerSessionCommandsDefinition)
 export const storeCommand = sharedCommand(storeCommandDefinition)
 export const attachmentsCommand = sharedCommand(attachmentsCommandDefinition)
 export const chatsCommand = sharedCommand(chatsCommandDefinition)
+/** @experimental */
 export const markReadCommand = sharedCommand(markReadCommandDefinition)
 export const completeCommand = sharedCommand(completeCommandDefinition)
 export const contactsCommand = sharedCommand(contactsCommandDefinition)
@@ -121,18 +131,27 @@ export const inboxCommand = sharedCommand(inboxCommandDefinition)
 export const mcpCommand = sharedCommand(mcpCommandDefinition)
 export const mentionsCommand = sharedCommand(mentionsCommandDefinition)
 export const messagesCommand = sharedCommand(messagesCommandDefinition)
+/** @experimental */
 export const sendCommand = sharedCommand(sendCommandDefinition)
+/** @experimental */
 export const deleteCommand = sharedCommand(deleteCommandDefinition)
+/** @experimental */
 export const editCommand = sharedCommand(editCommandDefinition)
+/** @experimental */
 export const forwardCommand = sharedCommand(forwardCommandDefinition)
+/** @experimental */
 export const pinCommand = sharedCommand(pinCommandDefinition)
+/** @experimental */
 export const starCommands = sharedCommand(starCommandsDefinition)
+/** @experimental */
 export const unpinCommand = sharedCommand(unpinCommandDefinition)
 export const metadataCommand = sharedCommand(metadataCommandDefinition)
 export const modelsCommand = sharedCommand(modelsCommandDefinition)
 export const pollsCommand = sharedCommand(pollsCommandDefinition)
 export const reactionsCommand = sharedCommand(reactionsCommandDefinition)
+/** @experimental */
 export const callsCommand = sharedCommand(callsCommandDefinition)
+/** @experimental */
 export const stickersCommand = sharedCommand(stickersCommandDefinition)
 export const repliesCommand = sharedCommand(repliesCommandDefinition)
 export const reviewCommand = sharedCommand(reviewCommandDefinition)
@@ -145,7 +164,9 @@ export const serverCommand = sharedCommand(serverCommandDefinition)
 export const statsCommand = sharedCommand(statsCommandDefinition)
 export const tagsCommand = sharedCommand(tagsCommandDefinition)
 export const tasksCommand = sharedCommand(tasksCommandDefinition)
+/** @experimental */
 export const tasksStatsCommand = sharedCommand(tasksStatsCommandDefinition)
+/** @experimental */
 export const topicsCommand = sharedCommand(topicsCommandDefinition)
 export const projectsCommand = sharedCommand(projectsCommandDefinition)
 export const watchCommand = sharedCommand(watchCommandDefinition)
@@ -156,4 +177,5 @@ export const upgradeCommand = sharedCommand(upgradeCommandDefinition)
 import { modelCatalogueCommand as modelCatalogueDefinition } from "./model-catalogue-command.js"
 import { templatesCommand as templatesDefinition } from "./templates-command.js"
 export const modelCatalogueCommand = sharedCommand(modelCatalogueDefinition)
+/** @experimental */
 export const templatesCommand = sharedCommand(templatesDefinition)

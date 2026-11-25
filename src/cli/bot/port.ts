@@ -84,7 +84,7 @@ export interface BotPeople {
   senders(): PersonFacts[]
 }
 
-/** What a bot shows in a chat while it works. */
+/** What a bot shows in a chat while it works. @experimental */
 export const BOT_ACTIONS = ["typing", "photo", "video", "voice", "file"] as const
 export type BotAction = (typeof BOT_ACTIONS)[number]
 
@@ -120,7 +120,7 @@ export interface BotChatMembers {
   removeMember(chat: BotChatRef, person: Id, options: { block: boolean }): Promise<void>
 }
 
-/** One command in the menu people see when they type `/`. */
+/** One command in the menu people see when they type `/`. @experimental */
 export interface BotMenuEntry {
   /** Without the `/`. */
   name: string
@@ -134,7 +134,7 @@ export interface BotMenu {
   setMenu(entries: BotMenuEntry[]): Promise<void>
 }
 
-/** Where a pressed button was, as `bot watch` kept it. */
+/** Where a pressed button was, as `bot watch` kept it. @experimental */
 export interface BotPress {
   chatId: Id
   messageId: Id
@@ -164,7 +164,7 @@ export interface BotWebhooks {
   deleteWebhook(url: string): Promise<void>
 }
 
-/** What happened in the bot's chats besides messages: a button, people coming and going, a start. */
+/** What happened in the bot's chats besides messages: a button, people coming and going, a start. @experimental */
 export type BotNotice =
   | {
       event: "callback"
@@ -190,7 +190,10 @@ export interface BotUpdateRef {
 /** One update as `bot watch` prints it; without `update`, a redelivery is printed and kept again. */
 export type BotEvent = (MessageEvent | BotNotice) & { update?: BotUpdateRef }
 
-/** One request as it reached `bot watch --public-url`: the body exactly as sent, never parsed and written again. */
+/**
+ * One request as it reached `bot watch --public-url`: the body exactly as sent, never parsed and written again.
+ * @experimental
+ */
 export interface BotWebhookRequest {
   method: string
   /** Path and query, against the local listener. */
@@ -199,7 +202,7 @@ export interface BotWebhookRequest {
   body: Uint8Array
 }
 
-/** What the receiver answers a request that is not a delivery. */
+/** What the receiver answers a request that is not a delivery. @experimental */
 export interface BotWebhookAnswer {
   status: number
   body?: string
@@ -226,6 +229,7 @@ export interface BotSecret {
   description: string
 }
 
+/** @experimental */
 export interface BotUpdatesPage {
   events: BotEvent[]
   /** Where the next call starts; the same as given when nothing came. Opaque to the caller. */

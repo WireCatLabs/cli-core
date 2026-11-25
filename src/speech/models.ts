@@ -6,7 +6,7 @@ import { CliError } from "@wirecat/cli-base"
  * holds the owner's session.
  *
  * Measured 2026-09-24 through the WebAssembly build of sherpa-onnx, one thread, a Ryzen AI 9 HX 470
- * laptop, 5 minutes of Ogg Opus cut by VAD, Node 24 and Bun 1.3.14 alike (`FIND-131`, `FIND-133`):
+ * laptop, 5 minutes of Ogg Opus cut by VAD, Node 24 and Bun 1.3.14 alike:
  * `gigaam-v3` ×7 real time, `gigaam-v3-ctc` ×8, `parakeet-v3` ×5 and 1.3 GB of memory. Whisper small
  * ran at ×1.1 and is not offered.
  */

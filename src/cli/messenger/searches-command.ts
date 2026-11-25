@@ -25,7 +25,10 @@ const line = ({ id, name, command, params, runs, lastRunAt }: StoredSearch) =>
     lastRunAt?.slice(0, 16).replace("T", " ") ?? "never run",
   ].join("  ")
 
-/** `searches list` takes a query over the saved search fields, none of them a filter: the list is short and whole. */
+/**
+ * `searches list` takes a query over the saved search fields, none of them a filter: the list is short and whole.
+ * @experimental
+ */
 export const SEARCHES_QUERY = unfilteredQuery("saved_search", savedSearch)
 
 /** Saved searches and the history of `search messages` and `stats messages show`, in the local store only. */

@@ -4,7 +4,7 @@
  *
  * ⚠ **Nothing here may carry content.** An operation name, an id, a file or folder path, a count, a duration and an
  * error code are safe: a run record stays on the owner's machine, and keeping the ids that tell runs apart was the
- * owner's choice (NEED-110, 2026-10-27). A chat title, a name, a message body, a phone number, a token, a URL as sent
+ * owner's choice (2026-10-27). A chat title, a name, a message body, a phone number, a token, a URL as sent
  * or a query string are not — not truncated and not hashed. The adapter builds `ids` and `counts` from fields it names,
  * never by copying a request, and never from what the person typed: a typed chat is often a title. Anything that
  * leaves the machine (a bug report) strips the ids too.
@@ -93,7 +93,7 @@ export type EventSink = (event: DiagnosticEvent) => void
 /** A sentence for a person, and the warning event it stands for when there is one: a log record keeps only the event. */
 export type Warn = (message: string, warning?: WarningEvent) => void
 
-/** `FLOOD_WAIT`, `PEER_ID_INVALID`, `login.token` — or nothing. A sentence is dropped, not trimmed. */
+/** `FLOOD_WAIT`, `PEER_ID_INVALID`, `login.token` — or nothing. A sentence is dropped, not trimmed. @experimental */
 export const providerErrorKey = (value: unknown): string | undefined =>
   typeof value === "string" && /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(value) ? value : undefined
 
@@ -104,6 +104,7 @@ export const providerErrorKey = (value: unknown): string | undefined =>
  * → messages.list    chat 777
  * ← messages.list    chat 777  118ms  3 messages
  * ```
+ * @experimental
  */
 export const renderEvent = (event: DiagnosticEvent): string => {
   if (event.event === "store")

@@ -14,6 +14,7 @@ import type {
   WindowedMessage,
 } from "../domain/models.js"
 
+/** @experimental */
 export interface RenderOptions {
   /** 0 — the conversation; 1 — the ids worth searching by; 2 — everything the model knows. */
   verbosity?: 0 | 1 | 2
@@ -39,6 +40,7 @@ const INDENT = " ".repeat(TIME_WIDTH + 2)
 const MIN_WIDTH = 40
 const SENDER_COLOURS = ["green", "yellow", "magenta", "blue", "red"] as const
 
+/** @experimental */
 export const renderMessages = (
   messages: (Message | MessageHit | WindowedMessage)[],
   options: RenderOptions = {},
@@ -58,6 +60,7 @@ export const renderMessages = (
   return blocks.join("\n\n")
 }
 
+/** @experimental */
 export const renderMessage = (message: Message | MessageHit | WindowedMessage, options: RenderOptions = {}): string => {
   const paint = painter(options)
   const width = Math.max(MIN_WIDTH, options.width ?? 80)
@@ -206,7 +209,10 @@ const attachmentLines = (
   return [...polls, ...cards, ...files, ...keyboard]
 }
 
-/** `📊 question`, then each answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals. */
+/**
+ * `📊 question`, then each answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals.
+ * @experimental
+ */
 export const pollLines = (poll: Poll): string[] => {
   const kind = [
     poll.closed ? "closed" : "",

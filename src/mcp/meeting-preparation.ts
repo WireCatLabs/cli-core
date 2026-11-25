@@ -20,7 +20,10 @@ const inputs = {
   without: { ...jsonSchemaOf(v.strictObject(withoutCommunications)) } as Record<string, unknown>,
 }
 
-/** `communications: true` from a host that connects a messages source; without one the argument could only refuse. */
+/**
+ * `communications: true` from a host that connects a messages source; without one the argument could only refuse.
+ * @experimental
+ */
 export const meetingPreparationTool = ({ communications = false }: { communications?: boolean } = {}) => ({
   name: "meeting_prepare",
   description: `Prepare cited context for one exact provider series in the server's selected account. Reads remote upcoming proof and bounded stored history, related meeting transcripts through explicit people/confirmed project links, accepted meeting facts and directly sourced tasks; performs no writes. Optional project selects one existing project name/key/alias for up to four bounded word-evidence pages across the selected account and history window; matches remain unconfirmed and do not infer membership. ${communications ? "Optional communications searches only explicit host-captured source IDs with literal words, bounded excerpts and independent index/read/output coverage; it does not infer identity or project membership. Each source may resume with its opaque cursor; restart_required means narrow or restart that selection rather than advancing. " : ""}Optional windows (an ISO date or time, local without a zone, or 7d ago) default to now, seven days ahead and thirty days of history. Coverage identifies incomplete and unqueried context. ${UNTRUSTED_NEUTRAL}`,
@@ -28,6 +31,7 @@ export const meetingPreparationTool = ({ communications = false }: { communicati
   inputSchema: { ...(communications ? inputs.with : inputs.without), type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },
 })
+/** @experimental */
 export const callMeetingPreparationTool = async (
   read: MeetingPreparationReader,
   input: unknown,

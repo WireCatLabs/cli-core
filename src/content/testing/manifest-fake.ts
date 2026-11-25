@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ManifestOperation, PageParameter } from "@wirecat/cli-base/codegen"
+import type { ManifestOperation, PageParameter } from "@wirecat/cli-base/codegen/runtime"
 import type { ApiCommandInput } from "../../cli/bot/api.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmOperationCall, CrmRule } from "../../crm/manifest/manifest.js"

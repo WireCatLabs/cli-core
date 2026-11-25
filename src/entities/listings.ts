@@ -15,7 +15,10 @@ const source = v.strictObject({
 
 const person = v.strictObject({ ref: reference, name: v.nullable(text), kind: text })
 
-/** One document of any account: a Drive file, a notes folder's file, an added source, an import's document. */
+/**
+ * One document of any account: a Drive file, a notes folder's file, an added source, an import's document.
+ * @experimental
+ */
 export const documentEntry = v.strictObject({
   ref: reference,
   id,
@@ -42,7 +45,7 @@ export const documentEntry = v.strictObject({
 
 const linked = v.strictObject({ ref: reference, title: v.nullable(text), at: v.nullable(time), role: v.nullable(text) })
 
-/** One document with a part of its text, its tags, the people it names and the meetings it belongs to. */
+/** One document with a part of its text, its tags, the people it names and the meetings it belongs to. @experimental */
 export const documentEntryDetails = v.strictObject({
   ...documentEntry.entries,
   text: v.nullable(text),
@@ -61,7 +64,7 @@ export const documentEntryDetails = v.strictObject({
   events: v.array(linked),
 })
 
-/** One account holding documents, with its folders and how many documents each holds. */
+/** One account holding documents, with its folders and how many documents each holds. @experimental */
 export const documentSource = v.strictObject({
   ...source.entries,
   name: v.nullable(text),
@@ -84,7 +87,10 @@ const participant = v.strictObject({
   response: v.nullable(v.picklist(PARTICIPANT_RESPONSES)),
 })
 
-/** One real meeting, call or calendar event: a calendar's event and its Zoom or Meet record are one row. */
+/**
+ * One real meeting, call or calendar event: a calendar's event and its Zoom or Meet record are one row.
+ * @experimental
+ */
 export const meetingEntry = v.strictObject({
   /** `event:<id>` when a calendar or a meeting service's record made an event of it, else `meeting:<account>/<id>`. */
   ref: reference,
@@ -132,7 +138,7 @@ export const meetingEntry = v.strictObject({
   untrusted,
 })
 
-/** One meeting row with its transcript lines, summaries, findings batches and the calendar's text. */
+/** One meeting row with its transcript lines, summaries, findings batches and the calendar's text. @experimental */
 export const meetingEntryDetails = v.strictObject({
   ...meetingEntry.entries,
   description: v.nullable(text),
@@ -180,6 +186,7 @@ export const meetingEntryDetails = v.strictObject({
 /**
  * The listings' answers by entity name. Not in `ENTITIES`: that registry's inferred type is at the compiler's size
  * limit, so a CLI registers these as its own (memo's `entityFields`).
+ * @experimental
  */
 export const LISTING_ENTITIES = {
   document_entry: documentEntry,

@@ -1,5 +1,5 @@
 import { CliError, type ErrorCode, wallClock } from "@wirecat/cli-base"
-import { type GraphqlBinding, graphqlDocument, type ManifestOperation } from "@wirecat/cli-base/codegen"
+import { type GraphqlBinding, graphqlDocument, type ManifestOperation } from "@wirecat/cli-base/codegen/runtime"
 import { type FetchLike, providerWaitMs, readJsonResponse, statusToCode } from "@wirecat/cli-base/http"
 import type { Command } from "commander"
 import { providerRequest } from "../command-runs.js"
@@ -8,6 +8,7 @@ import { itemOf, renderAnswer } from "../envelope.js"
 import type { ApiCommandInput } from "./api.js"
 import { apiJson, graphqlVariables, parseApiJson, sendsBytes } from "./api-input.js"
 
+/** @experimental */
 export interface HttpApiRequest {
   method: string
   url: URL
@@ -18,6 +19,7 @@ export interface HttpApiRequest {
   redirect?: "follow" | "manual" | "error"
 }
 
+/** @experimental */
 export interface HttpApiExecutorOptions {
   /** The service's name in messages: "Notion". */
   service: string
@@ -56,7 +58,10 @@ const segment = (name: string, value: string | undefined): string => {
   return encodeURIComponent(value)
 }
 
-/** Why the generated command cannot send the operation's body, or `undefined` when it can: JSON, or an upload's bytes. */
+/**
+ * Why the generated command cannot send the operation's body, or `undefined` when it can: JSON, or an upload's bytes.
+ * @experimental
+ */
 export const unsendableBody = (operation: ManifestOperation): string | undefined => {
   const type = operation.request?.contentType
   return type === undefined || sendsBytes(operation)
@@ -64,7 +69,7 @@ export const unsendableBody = (operation: ManifestOperation): string | undefined
     : `it sends ${type}, which the generated command cannot send`
 }
 
-/** One generated HTTP operation and its flags as the request they stand for; nothing is sent. */
+/** One generated HTTP operation and its flags as the request they stand for; nothing is sent. @experimental */
 export const httpApiRequest = (
   operation: ManifestOperation,
   input: ApiCommandInput,
@@ -275,6 +280,7 @@ export const httpApiSend = (options: HttpApiSendOptions) => {
  * The `execute` of `generatedApiCommand` for any OpenAPI CLI: fills the path, adds the query, sends the JSON body
  * with the caller's headers through the caller's fetch, and prints the answer. Nothing here retries: a write is
  * never sent twice, since the first may have landed (WC-OUT-20).
+ * @experimental
  */
 export const httpApiExecutor =
   (options: HttpApiExecutorOptions) =>

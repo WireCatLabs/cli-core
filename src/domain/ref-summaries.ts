@@ -4,11 +4,15 @@ import type { AccountKey } from "../store/types.js"
 import { providerNamed } from "./providers.js"
 import type { RefKindName } from "./references.js"
 
+/** @experimental */
 export type RefState = "available" | "deleted" | "unavailable"
-/** A message or chat of the `email` provider is mail, so it reads as `email` and `email_thread`. */
+/** A message or chat of the `email` provider is mail, so it reads as `email` and `email_thread`. @experimental */
 export type RefSummaryKind = RefKindName | "email" | "email_thread" | "unknown"
 
-/** What a reference names, read from the store in one batch so a page of refs costs one query per kind. */
+/**
+ * What a reference names, read from the store in one batch so a page of refs costs one query per kind.
+ * @experimental
+ */
 export interface RefSummary {
   /** Canonical spelling; the map key is the text the caller passed. */
   ref: string
@@ -29,6 +33,7 @@ export interface RefSummary {
   excerpt?: string | null
 }
 
+/** @experimental */
 export interface RefsStore {
   /** One query per kind present. Never throws for a bad ref: it comes back `unknown`, `unavailable`. */
   summaries(refs: readonly string[], options?: { excerpt?: boolean }): Promise<Map<string, RefSummary>>
@@ -44,12 +49,16 @@ export interface RefsStore {
   ends(ref: string): Promise<{ provider: string; account: string }[][] | undefined>
 }
 
-/** The caller's answer to "which profile opens this": one signed in, or the choices and why there is not one. */
+/**
+ * The caller's answer to "which profile opens this": one signed in, or the choices and why there is not one.
+ * @experimental
+ */
 export type ProfilesFor = (
   provider: string,
   account: string | null,
 ) => { profile: string } | { why: string; profiles: string[] }
 
+/** @experimental */
 export interface RefOpen {
   /** Ready to run; contains `<profile>` when `profiles` is not exactly one. `null` when no CLI opens it. */
   argv: string[] | null
@@ -57,16 +66,21 @@ export interface RefOpen {
   why: string | null
 }
 
+/** @experimental */
 export const PROFILE_PLACEHOLDER = "<profile>"
 
 const unregistered = (provider: string) => `no CLI has registered ${provider} in this store yet; run its CLI once`
 
+/** @experimental */
 export const profilesOn = (profiles: Profiles, app: string, key: AccountKey): string[] =>
   Object.entries(profiles[app] ?? {})
     .filter(([, saved]) => saved.provider === key.provider && saved.account === key.account)
     .map(([name]) => name)
 
-/** From the store's record, so it answers for any CLI that registered its provider, not only the messengers. */
+/**
+ * From the store's record, so it answers for any CLI that registered its provider, not only the messengers.
+ * @experimental
+ */
 export const storedProfilesFor =
   (profiles: Profiles): ProfilesFor =>
   (provider, account) => {
@@ -87,6 +101,7 @@ export const storedProfilesFor =
 /**
  * Which CLI changes a CRM copy on its server, and as which profile; `profile` is `null` unless exactly one fits.
  * `account` is the row's: the write refuses a row of any other account than its profile's live one.
+ * @experimental
  */
 export interface WritesWith {
   tool: string | null
@@ -101,6 +116,7 @@ const keyText = (key: AccountKey) => `${key.provider}:${key.account}`
 /**
  * `null` for the owner's own row: memo itself writes it. `allowed` is the caller's profile or group lock: a profile it
  * forbids is never named, and the one profile it leaves is the answer.
+ * @experimental
  */
 export const writesWithOf = (
   account: AccountKey | null,
@@ -140,6 +156,7 @@ const openKind = (kind: RefSummaryKind): RefKindName | undefined =>
 /**
  * The command that opens a ref. A registered provider opens its own kinds; anything else opens with the caller's
  * `local` words (memo's `notes show`). The profile is never picked: with none or several, `argv` keeps `<profile>`.
+ * @experimental
  */
 export const openOf = (
   summary: RefSummary,
@@ -197,7 +214,7 @@ const WORDS: Record<RefSummaryKind, string> = {
   unknown: "Unknown",
 }
 
-/** `Chat «Сайт + автоматизация» (MAX)`: the one label every review row, status line and `show` prints. */
+/** `Chat «Сайт + автоматизация» (MAX)`: the one label every review row, status line and `show` prints. @experimental */
 export const refLabel = (summary: RefSummary): string => {
   const named = summary.title === null ? summary.ref : `«${oneLine(summary.title)}»`
   const notes = [summary.in === null ? null : oneLine(summary.in), summary.state === "available" ? null : summary.state]

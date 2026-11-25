@@ -21,6 +21,7 @@ import { LOCAL_READ } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { storeRecoverCommand } from "./store-recover.js"
 
+/** @experimental */
 export type StoreInfo = v.InferOutput<typeof storeInfoEntity>
 
 /** Before version 6 the column does not exist, and a file behind this build is not migrated here. */
@@ -79,6 +80,7 @@ export const storeInfo = async (env: NodeJS.ProcessEnv): Promise<StoreInfo> => {
   }
 }
 
+/** @experimental */
 export const storeInfoCommand = (): Command =>
   annotate(new Command("info"), { output: { entity: "store_info" }, effects: LOCAL_READ })
     .summary("the shared store's format, size and contents, and whether this tool can read it")

@@ -126,7 +126,7 @@ const highestBuild = ({ orm }: StoreContext, chatKey: number): number =>
   )
 
 /**
- * Plan C3–C4, corrected by NEED-475 A. The chat's provider and rule links and its conversations are
+ * The chat's provider and rule links and its conversations are
  * written under a new build number in short transactions; one more makes that build the one readers
  * see; older builds are then deleted, a batch at a time. Until the switch readers see the previous
  * build, so a failed build leaves it in place. Agent links have no build and stay; one whose message

@@ -58,6 +58,7 @@ const syncedCalendar = v.strictObject({
   removed: count,
   occurrences: count,
   unseen: count,
+  held: v.optional(text),
   error: v.optional(text),
 })
 

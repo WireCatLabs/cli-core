@@ -72,6 +72,7 @@ export interface JsonRequest {
  * `--json=a,b` or `--json a,b` keeps those fields, a bare `--json` all of them. The separate word is taken only when
  * every name in it is a field of the command's answer, so `--json chats list` and `messages list --json 111` keep
  * their words. Commander sees a plain `--json` either way.
+ * @experimental
  */
 export const liftJson = (
   argv: readonly string[],

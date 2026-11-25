@@ -4,7 +4,7 @@ import { index, integer, sqliteTable, text } from "../drizzle/core.js"
 export const decisionRequests = sqliteTable(
   "decision_requests",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     tokenDigest: text("token_digest").notNull().unique(),
     proposalId: text("proposal_id").notNull(),
     action: text("action").notNull(),

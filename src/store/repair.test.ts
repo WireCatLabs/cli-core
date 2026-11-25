@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { withoutVersion73 } from "../testing/older-store.js"
 import type { CacheDatabase, SqlValue } from "./driver.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
@@ -79,6 +80,7 @@ const draftStore = async ({ rows = false } = {}) => {
   const path = join(mkdtempSync(join(tmpdir(), "repair-")), "messages.db")
   const database = await openCache(path)
   migrate(database)
+  withoutVersion73(database, ["messages"])
   database.exec(
     "PRAGMA foreign_keys=OFF; DROP TABLE conversation_messages; DROP TABLE conversation_state; DROP TABLE conversations; DROP TABLE message_links; DROP TRIGGER involvement_message_ai; DROP TRIGGER involvement_message_au; DROP TRIGGER involvement_message_ad; DROP TRIGGER conversation_chunks_chat_scope; DROP TRIGGER conversation_chunks_account_scope; DROP TRIGGER conversation_chunks_project_ai; DROP TRIGGER conversation_chunks_project_au; DROP TRIGGER conversation_chunks_project_ad; DROP TRIGGER vector_index_chat_au; ALTER TABLE messages DROP COLUMN mentions",
   )

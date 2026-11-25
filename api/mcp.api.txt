@@ -1,0 +1,57 @@
+# @wirecat/cli-core "./mcp": the stable API, written by cli-dev api-report. Do not edit.
+AgentProgram · interface · export interface AgentProgram {
+AgentProgram · interface · run: (argv: string[], environment: RunOptions) => Promise<number>;
+AgentProgram · interface · commands: readonly CommandInfo[];
+AgentProgram · interface · }
+AgentTool · interface · export interface AgentTool {
+AgentTool · interface · availability?: () => CommandAvailability;
+AgentTool · interface · command: string;
+AgentTool · interface · path: readonly string[];
+AgentTool · interface · title: string;
+AgentTool · interface · description: string;
+AgentTool · interface · keywords?: readonly string[];
+AgentTool · interface · writes: boolean;
+AgentTool · interface · input: v.ObjectSchema<v.ObjectEntries, undefined>;
+AgentTool · interface · output?: CommandOutput;
+AgentTool · interface · }
+BotServerOptions · interface · export interface BotServerOptions {
+BotServerOptions · interface · bot: BotMessenger;
+BotServerOptions · interface · program: AgentProgram;
+BotServerOptions · interface · settings: Pick<Settings, "profile" | "permissions" | "readOtherBots">;
+BotServerOptions · interface · levels?: () => Readonly<Record<PermissionKey, Level>>;
+BotServerOptions · interface · keyOf?: (path: readonly string[]) => PermissionKey | null | undefined;
+BotServerOptions · interface · authority?: (path: readonly string[]) => boolean;
+BotServerOptions · interface · fetchOnly?: (path: readonly string[]) => boolean;
+BotServerOptions · interface · fetches?: (path: readonly string[]) => boolean;
+BotServerOptions · interface · env: NodeJS.ProcessEnv;
+BotServerOptions · interface · skill?: URL;
+BotServerOptions · interface · }
+CatalogueOptions · interface · export interface CatalogueOptions {
+CatalogueOptions · interface · includeUnavailable?: boolean;
+CatalogueOptions · interface · root?: readonly string[];
+CatalogueOptions · interface · exclude?: readonly (readonly string[])[];
+CatalogueOptions · interface · currentLevels?: () => Readonly<Record<PermissionKey, Level>>;
+CatalogueOptions · interface · levels?: Readonly<Record<PermissionKey, Level>>;
+CatalogueOptions · interface · readOnly?: boolean;
+CatalogueOptions · interface · keyOf?: (path: readonly string[]) => PermissionKey | null | undefined;
+CatalogueOptions · interface · permissions?: CommandPermissions | undefined;
+CatalogueOptions · interface · authority?: (path: readonly string[]) => boolean;
+CatalogueOptions · interface · fetchOnly?: (path: readonly string[]) => boolean;
+CatalogueOptions · interface · fetches?: (path: readonly string[]) => boolean;
+CatalogueOptions · interface · omit?: readonly string[];
+CatalogueOptions · interface · offline?: boolean;
+CatalogueOptions · interface · stdin?: (path: readonly string[]) => StdinField | undefined;
+CatalogueOptions · interface · }
+CommandAvailability · interface · export interface CommandAvailability {
+CommandAvailability · interface · available: boolean;
+CommandAvailability · interface · reason?: string;
+CommandAvailability · interface · permission?: string;
+CommandAvailability · interface · level?: Level;
+CommandAvailability · interface · }
+RunBotCommand · type · export type RunBotCommand = AgentProgram["run"];
+createBotServer · const · export declare const createBotServer: (options: BotServerOptions) => {
+createBotServer · const · build: () => McpServer;
+createBotServer · const · tools: import("../agent.js").AgentTool[];
+createBotServer · const · offered: string[];
+createBotServer · const · };
+toolsFromCommands · const · export declare const toolsFromCommands: (commands: readonly CommandInfo[], options?: CatalogueOptions) => AgentTool[];

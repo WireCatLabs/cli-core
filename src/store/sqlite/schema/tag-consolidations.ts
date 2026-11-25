@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "../drizzle/core.js"
+import { check, index, integer, sql, sqliteTable, text } from "../drizzle/core.js"
 import { canonicalTags } from "./canonical-tags.js"
 
 export const tagRedirects = sqliteTable(
@@ -18,7 +18,7 @@ export const tagRedirects = sqliteTable(
 export const tagConsolidations = sqliteTable(
   "tag_consolidations",
   {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
     sourceId: integer("source_id")
       .notNull()
       .references(() => canonicalTags.id),
@@ -40,5 +40,14 @@ export const tagConsolidations = sqliteTable(
     index("tag_consolidations_by_source_id").on(table.sourceId),
     index("tag_consolidations_by_survivor_id").on(table.survivorId),
     index("tag_consolidations_by_actor_type_actor_id").on(table.actorType, table.actorId),
+    check(
+      "tag_consolidations_source_member_ids_json",
+      sql`"source_member_ids" IS NULL OR json_valid("source_member_ids")`,
+    ),
+    check(
+      "tag_consolidations_survivor_member_ids_json",
+      sql`"survivor_member_ids" IS NULL OR json_valid("survivor_member_ids")`,
+    ),
+    check("tag_consolidations_counts_json", sql`"counts" IS NULL OR json_valid("counts")`),
   ],
 )

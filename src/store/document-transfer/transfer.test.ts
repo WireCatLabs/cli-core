@@ -330,7 +330,7 @@ describe("provider-neutral document annotation transfer", () => {
     const sourceDb = await sql(f.source)
     sourceDb
       .prepare(
-        "UPDATE bots SET token_digest='synthetic-private-value', metadata='synthetic-private-metadata' WHERE name='synthetic-reader'",
+        "UPDATE bots SET token_digest='synthetic-private-value', metadata='\"synthetic-private-metadata\"' WHERE name='synthetic-reader'",
       )
       .run()
     const destination = await open(f.destination)

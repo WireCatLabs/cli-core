@@ -21,7 +21,10 @@ const problemOf = (issues: [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]]): s
   return `${v.getDotPath(issue) ?? "the whole file"} ${reasonOf(issue)}${count}`
 }
 
-/** Reads and checks a config file; a missing one is the fallback, a broken one an error naming its first problem. */
+/**
+ * Reads and checks a config file; a missing one is the fallback, a broken one an error naming its first problem.
+ * @experimental
+ */
 export const loadSnakeCaseConfig = <T extends v.GenericSchema>(
   path: string,
   schema: T,

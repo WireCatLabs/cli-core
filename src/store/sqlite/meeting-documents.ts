@@ -147,11 +147,6 @@ export const meetingTranscriptDocumentsOver = ({ database }: StoreContext): Meet
       return found
     })
   return {
-    async transcriptMeetings(documentIds) {
-      if (!documentIds.length) return new Map()
-      const found = await meetingsOf(documentIds, [TRANSCRIPT_ROLE])
-      return new Map([...found].map(([document, { meetingId }]) => [document, meetingId]))
-    },
     async documentMeetings(documentIds) {
       return documentIds.length ? meetingsOf(documentIds, MEETING_DOCUMENT_ROLES) : new Map()
     },

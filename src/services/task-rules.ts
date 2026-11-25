@@ -284,6 +284,7 @@ export const applyTaskRulesSinceLastPass = async (
 /**
  * A reply rule's `task` action: one `request` task pointing at the message. The service gives back
  * the task a source already has, so a message arriving twice opens one.
+ * @experimental
  */
 export const openRequestTask = async (store: MessageStore, account: AccountKey, message: Message): Promise<boolean> => {
   const { created } = await createTaskService({ store: store.tasks }).add({

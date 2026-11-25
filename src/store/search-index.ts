@@ -10,6 +10,7 @@ import { fillStems } from "./sqlite/stems-fill.js"
 import { write } from "./sqlite/transaction.js"
 import * as words from "./sqlite/words.js"
 
+/** @experimental */
 export interface SearchIndexStore {
   /** Of `terms`, those the index knows as a word or the beginning of one. */
   knownTerms(terms: string[]): Promise<Set<string>>

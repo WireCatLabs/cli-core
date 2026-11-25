@@ -21,7 +21,7 @@ import { botExamples } from "./examples.js"
 import { BOT_MESSAGES_QUERY, botMessageWindow } from "./list-queries.js"
 import type { BotAdapter, BotMessenger } from "./port.js"
 
-/** The adapter's `method`, or a refusal naming what this messenger's bot cannot do. */
+/** The adapter's `method`, or a refusal naming what this messenger's bot cannot do. @experimental */
 export const botCan = <K extends keyof BotAdapter>(
   adapter: BotAdapter,
   method: K,
@@ -35,7 +35,10 @@ export const botCan = <K extends keyof BotAdapter>(
   return found.bind(adapter) as NonNullable<BotAdapter[K]>
 }
 
-/** The bot's own id — the key its local copy is kept under — remembered after the first time it is asked. */
+/**
+ * The bot's own id — the key its local copy is kept under — remembered after the first time it is asked.
+ * @experimental
+ */
 export const botIdOf = async (context: BotContext, adapter: BotAdapter): Promise<string> => {
   const known = context.registry.botId()
   if (known) return known

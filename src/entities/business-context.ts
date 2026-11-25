@@ -137,7 +137,7 @@ export const personBusiness = v.strictObject({
   categories,
 })
 
-/** Any canonical person's context: every account in scope read, their business, and what was not read. */
+/** Any canonical person's context: every account in scope read, their business, and what was not read. @experimental */
 export const personContext: v.GenericSchema = v.strictObject({
   ...crossAccountContext.entries,
   person: linkedPerson,
@@ -146,7 +146,10 @@ export const personContext: v.GenericSchema = v.strictObject({
   coverage,
 })
 
-/** One organization: people, customers, suppliers, partners, projects, open deals, money and how much is said. */
+/**
+ * One organization: people, customers, suppliers, partners, projects, open deals, money and how much is said.
+ * @experimental
+ */
 export const organizationContext: v.GenericSchema = v.strictObject({
   organization: v.strictObject({ ...organization.entries, own: v.boolean() }),
   categories,
@@ -181,7 +184,10 @@ export const organizationContext: v.GenericSchema = v.strictObject({
 
 const { untrusted: _, ...dealRow } = deal.entries
 
-/** One deal or lead: the row, its stages, client, people, project, money and what its people said in its time. */
+/**
+ * One deal or lead: the row, its stages, client, people, project, money and what its people said in its time.
+ * @experimental
+ */
 export const dealContext: v.GenericSchema = v.strictObject({
   deal: v.strictObject(dealRow),
   stages: section(v.strictObject({ from: nullableText, to: text, pipeline: reference, at: time, exact: v.boolean() })),
@@ -200,7 +206,7 @@ export const dealContext: v.GenericSchema = v.strictObject({
   coverage,
 })
 
-/** A deal context's compact form, for a model's context. */
+/** A deal context's compact form, for a model's context. @experimental */
 export const dealBrief: v.GenericSchema = v.strictObject({
   ref: reference,
   kind: v.picklist(DEAL_KINDS),

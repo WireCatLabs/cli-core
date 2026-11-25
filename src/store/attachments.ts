@@ -9,6 +9,7 @@ import type { Where } from "./sqlite/query-filter.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export interface AccountAttachments {
   /**
    * Where `messages download` saved a held message's files, for reading them later. Answers how many
@@ -35,6 +36,7 @@ export interface AccountAttachments {
   ): Promise<AttachmentView[]>
 }
 
+/** @experimental */
 export interface AttachmentsStore extends AccountAttachments {
   /** Where the file of one attachment was saved, when that is recorded. */
   localPathOf(attachmentPk: number): Promise<string | null>

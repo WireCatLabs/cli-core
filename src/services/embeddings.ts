@@ -52,7 +52,7 @@ export interface EmbeddingsService {
   clear(chat: string, model?: ModelChoice): Promise<{ chat: Id; cleared: number }>
   /**
    * The conversations nearest in meaning to `query`, in one chat or every one of the account (E7). With no
-   * local model downloaded it answers by words alone (NEED-552 A): never a download, never a remote model.
+   * local model downloaded it answers by words alone: never a download, never a remote model.
    */
   search(
     query: string,
@@ -89,7 +89,7 @@ export interface EmbeddingsService {
   }): Promise<{ model: string; chats: ChatReadiness[]; unbuiltGroups?: number }>
   /**
    * Builds and embeds, on this machine, the chats that changed or were never built — one chat, or every built
-   * chat and every group chat never built — within the bounds (NEED-551 A). Never downloads a model.
+   * chat and every group chat never built — within the bounds. Never downloads a model.
    */
   refresh(options: RefreshOptions): Promise<Refreshed>
 }
@@ -192,7 +192,7 @@ export interface FoundConversation {
   /** `context`: the hit is an image, found by the messages around it; its message is `chunk`. */
   matchedIn?: "context"
   by: ("meaning" | "words")[]
-  /** The chunk's text changed after it was embedded: the score is for what it said then (NEED-550 B). */
+  /** The chunk's text changed after it was embedded: the score is for what it said then. */
   stale: boolean
   /** The chunk's messages that share most words with the query, as "sender: text", so a reader need not open it. */
   lines?: string[]

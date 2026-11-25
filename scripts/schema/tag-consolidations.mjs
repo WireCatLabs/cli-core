@@ -45,5 +45,9 @@ export const taggingTable = {
     ...actor("author"),
     ...ts(),
   ],
-  keys: ["UNIQUE (tag_id, taggable_type, taggable_id)", "UNIQUE (taggable_type, taggable_id) WHERE main = 1"],
+  keys: [
+    "UNIQUE (tag_id, taggable_type, taggable_id)",
+    "UNIQUE (taggable_type, taggable_id) WHERE main = 1",
+    "INDEX (taggable_type, taggable_id)",
+  ],
 }

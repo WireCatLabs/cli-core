@@ -80,7 +80,7 @@ export const readCurrent = (lock: string): string | undefined => {
   }
 }
 
-/** The profiles a serve is running for now — what an update must restart for its new code to run. */
+/** The profiles a serve is running for now — what an update must restart for its new code to run. @experimental */
 export const servingProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv): string[] => {
   const dir = dirname(lockPath(app, "default", env))
   if (!existsSync(dir)) return []

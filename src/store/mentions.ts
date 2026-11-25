@@ -22,6 +22,7 @@ import type { StoreContext } from "./sqlite/open.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey } from "./types.js"
 
+/** @experimental */
 export interface AccountMentions {
   /** The account's phones, e-mail addresses, links and documents that match the query, newest message first. */
   mentions(
@@ -43,6 +44,7 @@ export interface AccountMentions {
   rejectMention(key: AccountKey, id: number, by: Decider): Promise<MentionDecision>
 }
 
+/** @experimental */
 export interface MentionsStore extends AccountMentions {
   /** Finds the mentions of every stored message again, every account's; decisions stay. */
   rebuildMentions(options?: {

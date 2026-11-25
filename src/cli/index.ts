@@ -616,6 +616,7 @@ export {
   oauthSessionCommand,
 } from "./oauth-session.js"
 export { pagingOf, positiveCount, window, withPaging } from "./paging.js"
+export { notLocalPaths } from "./path-options.js"
 export {
   type CommandPermissions,
   type ConditionalKey,
@@ -806,15 +807,7 @@ export {
   upgradeCommand,
   watchCommand,
 } from "./shared-command-exports.js"
-export {
-  assertSharedContracts,
-  customizeSharedCommand,
-  hasSharedContract,
-  overrideSharedContract,
-  type SharedContractOverride,
-  sharedContractOverrides,
-  sharedContracts,
-} from "./shared-contracts.js"
+export { hasSharedContract, overrideSharedContract } from "./shared-contracts.js"
 export { runnable, withSafety } from "./steps.js"
 export { type StoreInfo, sharedStoreCommand, storeInfo, storeInfoCommand } from "./store-info.js"
 export {

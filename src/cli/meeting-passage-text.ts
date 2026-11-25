@@ -7,6 +7,7 @@ import { runMarkOf, withUntrustedMarked } from "./untrusted-marks.js"
  * The passage as the host prints it from `meetings passage`'s `output`, or as `callMeetingPassageTool` answers it: in a scheduled agent's run, text and Markdown
  * are formatted again from the marked cues. The meetings module cannot read the run's mark; JSON is marked by
  * `renderAnswer`.
+ * @experimental
  */
 export const passageForRun = (
   command: Command,

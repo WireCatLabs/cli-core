@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { afterEach, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "../driver.js"
-import { MIGRATIONS, migrate } from "../migrations.js"
+import { MIGRATIONS, type Migration, migrate } from "../migrations.js"
 import { openCache } from "../open.js"
 import { read, write } from "./transaction.js"
 
@@ -181,17 +181,21 @@ while (Date.now() < end) {
     const path = join(mkdtempSync(join(tmpdir(), "migrate-busy-")), "store.db")
     const database = await openCache(path)
     opened.push(database)
-    migrate(database, { migrations: MIGRATIONS.slice(0, -1) })
+    migrate(database)
+    // A small next version: the time measured is the wait for the lock, not version 73's table copies.
+    const last = MIGRATIONS.at(-1) as Migration
+    const next = [
+      ...MIGRATIONS,
+      { version: last.version + 1, minCompatible: last.minCompatible, statements: ["CREATE TABLE later (id INTEGER)"] },
+    ]
     const other = holder(path)
     try {
       await new Promise((resolve) => other.stdout.once("data", resolve))
       await new Promise((resolve) => setTimeout(resolve, 200))
       const started = Date.now()
-      migrate(database)
+      migrate(database, { migrations: next })
       expect(Date.now() - started).toBeLessThan(1000)
-      expect(database.prepare("SELECT max(version) AS v FROM schema_migrations").get()?.v).toBe(
-        MIGRATIONS.at(-1)?.version,
-      )
+      expect(database.prepare("SELECT max(version) AS v FROM schema_migrations").get()?.v).toBe(last.version + 1)
     } finally {
       other.kill()
     }

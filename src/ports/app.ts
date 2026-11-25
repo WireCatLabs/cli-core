@@ -38,6 +38,7 @@ export interface AppIdentity {
   errors?: AppErrors
 }
 
+/** @experimental */
 export const envName = (app: AppIdentity, name: string): string => `${app.envPrefix}_${name}`
 
 const locking = (value: string | undefined) => value !== undefined && value.trim() !== "" && value !== "0"

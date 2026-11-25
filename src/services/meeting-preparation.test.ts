@@ -227,7 +227,9 @@ describe("shared meeting preparation", () => {
     await expect(f.service.prepare(series, { ...f.request, maxReadBytes: 1 })).rejects.toMatchObject({
       code: "invalid_response",
     })
-    f.db.prepare("UPDATE meetings SET metadata=? WHERE id=?").run("x".repeat(1000), f.context.meetingId)
+    f.db
+      .prepare("UPDATE meetings SET metadata=? WHERE id=?")
+      .run(JSON.stringify({ note: "x".repeat(1000) }), f.context.meetingId)
     await expect(f.service.prepare(series, { ...f.request, maxReadBytes: 500 })).rejects.toMatchObject({
       code: "validation_error",
     })

@@ -59,6 +59,7 @@ export const doctorCommand = (messenger: Messenger): Command => {
   return command
 }
 
+/** @experimental */
 export const DOCTOR_DEEP_OPTION =
   "also read every page of the store and check every search index (about 30 s for 6 GB); without it, only the file header and schema"
 
@@ -69,7 +70,7 @@ const summaryOptions = (command: Command, app: { command: string; version: strin
   version: app.version,
 })
 
-/** The plain-words account of a damaged store, under the answer. */
+/** The plain-words account of a damaged store, under the answer. @experimental */
 export const damageNotes = (store: unknown): string[] => {
   const { damage, damage_mark_cleared: cleared } =
     (store as

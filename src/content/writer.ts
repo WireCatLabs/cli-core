@@ -63,7 +63,7 @@ export const CONTENT_WRITE_KEYS: readonly PermissionKey[] = [POSTS_PUBLISH_KEY, 
 
 /**
  * Built in, and only ever tightening (WC-PERM-7). Every write asks: a draft is not public, but publishing is, and the
- * owner chose `ask` for it too (NEED-2720 B). A deletion for good asks as well.
+ * owner chose `ask` for it too. A deletion for good asks as well.
  */
 export const CONTENT_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
   "posts.create": "ask",

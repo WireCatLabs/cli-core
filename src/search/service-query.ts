@@ -11,14 +11,16 @@ import {
 /**
  * Where a read looks, the one vocabulary of messages, mail, calendar and meetings: the store (`archive`), the
  * service's own search (`server`), or both, with what the service returns kept in the store.
+ * @experimental
  */
 export const BACKENDS = ["archive", "server", "both"] as const
+/** @experimental */
 export type Backend = (typeof BACKENDS)[number]
 
-/** The operators a service's own search may read; patterns and regexes always stay with the store. */
+/** The operators a service's own search may read; patterns and regexes always stay with the store. @experimental */
 export type ServiceOperator = "term" | "phrase" | "range"
 
-/** A parsed query whose leaves may carry what resolving them found, as messages' `ResolvedNode` does. */
+/** A parsed query whose leaves may carry what resolving them found, as messages' `ResolvedNode` does. @experimental */
 export type QueryTree<P extends Predicate = Predicate> =
   | P
   | { kind: "boolean"; clauses: { occur: Occur; node: QueryTree<P> }[]; span: Span }
@@ -26,6 +28,7 @@ export type QueryTree<P extends Predicate = Predicate> =
 /**
  * What a service's search can filter, and how its call is built. `B` is one call's criteria in the caller's terms. The
  * store answers the whole query afterwards, so a part the service cannot read is left out: that only widens a call.
+ * @experimental
  */
 export interface ServiceCapability<P extends Predicate, B> {
   /** The fields the service filters, each with the operators it reads. */
@@ -49,6 +52,7 @@ export interface ServiceCapability<P extends Predicate, B> {
   sends?(branch: B): boolean
 }
 
+/** @experimental */
 export interface ServiceCalls<B> {
   calls: B[]
   /** False when the cap left a branch unasked. */
@@ -108,6 +112,7 @@ const branchesOf = <P extends Predicate, B>(
  * Splits a parsed query into the calls a service's search can take: the parts it can read kept, the rest left out,
  * which only widens a call and never loses a hit, since the store answers the whole query after. Each OR branch is a
  * call of its own, up to `maxCalls`, unless the service can OR. `scope` holds in every call (`--chat`).
+ * @experimental
  */
 export const serviceCallsOf = <P extends Predicate, B>(
   root: QueryTree<P>,

@@ -49,6 +49,7 @@ export interface TaskView extends Task {
   note?: { id: string; title: string | null; text: string; updatedAt: string } | null
 }
 
+/** @experimental */
 export const TASK_QUERY = {
   entity: "task",
   backend: "sql",
@@ -102,6 +103,7 @@ export const TASK_STATS_QUERY = {
 export const PAIR_DECISIONS = ["review", "unsure"] as const
 export type PairDecision = (typeof PAIR_DECISIONS)[number]
 
+/** @experimental */
 export const TASK_PAIR_QUERY = {
   entity: "task_pair",
   backend: "sql",

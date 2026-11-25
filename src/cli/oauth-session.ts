@@ -1,5 +1,5 @@
 import { CliError, isMovedRun, type KeyringStore, resolvePaths, systemKeyring } from "@wirecat/cli-base"
-import type { OAuthFlow } from "@wirecat/cli-base/codegen"
+import type { OAuthFlow } from "@wirecat/cli-base/codegen/runtime"
 import { annotate } from "@wirecat/cli-base/commands"
 import { hostFetch } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -21,7 +21,10 @@ import type { ServiceApiManifest } from "./service-api-manifest.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 import { storageOf } from "./token-session.js"
 
-/** The authorization code flow an OpenAPI spec declares; a GraphQL service (Linear) writes the same object by hand. */
+/**
+ * The authorization code flow an OpenAPI spec declares; a GraphQL service (Linear) writes the same object by hand.
+ * @experimental
+ */
 export const oauthFlowOf = (manifest: ServiceApiManifest, scheme?: string): OAuthFlow => {
   const schemes = Object.entries(manifest.securitySchemes ?? {}).filter(
     ([name, one]) => (scheme === undefined || name === scheme) && one.flows?.authorizationCode !== undefined,
@@ -37,6 +40,7 @@ export const oauthFlowOf = (manifest: ServiceApiManifest, scheme?: string): OAut
   return flow
 }
 
+/** @experimental */
 export interface OAuthPresetOptions {
   /** A short word, part of the keyring account: `attio`. */
   id: string
@@ -53,13 +57,17 @@ export interface OAuthPresetOptions {
   rotating?: boolean
 }
 
+/** @experimental */
 export interface OAuthPreset {
   provider: OAuthProvider
   scopes: readonly string[]
   rotating: boolean
 }
 
-/** An installed app's sign-in (authorization code with PKCE) from the flow a spec declares, and the scopes it asks. */
+/**
+ * An installed app's sign-in (authorization code with PKCE) from the flow a spec declares, and the scopes it asks.
+ * @experimental
+ */
 export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions): OAuthPreset => {
   const known = Object.keys(flow.scopes)
   const unknown = options.scopes.filter((scope) => !known.includes(scope))
@@ -93,13 +101,14 @@ export const oauthPreset = (flow: OAuthFlow, options: OAuthPresetOptions): OAuth
   return { provider, scopes: [...options.scopes], rotating: options.rotating === true }
 }
 
-/** What the CLI's entry hands `run()` beside cli-core's own; a test hands a fake service and browser. */
+/** What the CLI's entry hands `run()` beside cli-core's own; a test hands a fake service and browser. @experimental */
 export interface OAuthEnvironment extends BaseEnvironment {
   fetch?: typeof fetch
   /** Gets the command, so the entry opens nothing under `--json`, `--no-input`, CI or without a terminal. */
   openBrowser?: (url: string, command?: Command) => Promise<void>
 }
 
+/** @experimental */
 export interface OAuthSessionOptions {
   app: AppIdentity
   resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
@@ -122,6 +131,7 @@ export interface OAuthSessionOptions {
  * `session start | status | end | list` for a service signed in in the browser (WC-SECR-22): PKCE on the loopback,
  * the account checked before the tokens are kept, refreshes under one lock, and a run with moved folders that never
  * removes the owner's sign-in.
+ * @experimental
  */
 export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
   const { app, providerId, service } = options

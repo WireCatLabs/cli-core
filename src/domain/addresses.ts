@@ -4,7 +4,7 @@ export const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u
 /** Whether a lower-cased, trimmed value is an email address. */
 export const isEmailAddress = (value: string): boolean => EMAIL_ADDRESS.test(value)
 
-/** Local parts that name a mailbox, not a person; the no-reply family names no one at all. */
+/** Local parts that name a mailbox, not a person; the no-reply family names no one at all. @experimental */
 export const ROLE_ADDRESS_WORDS = {
   noReply: ["noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon", "bounce", "bounces"],
   shared: [
@@ -72,7 +72,10 @@ const SEPARATORS = /[.\-_]/u
 const partsOf = (address: string): string[] => localPart(address).split(SEPARATORS)
 const NO_REPLY_PARTS = ROLE_ADDRESS_WORDS.noReply.map((word) => `.${word.split(SEPARATORS).join(".")}.`)
 
-/** Whether the address is a no-reply one, which belongs to no person: `noreply-12345@`, `service.no-reply@`. */
+/**
+ * Whether the address is a no-reply one, which belongs to no person: `noreply-12345@`, `service.no-reply@`.
+ * @experimental
+ */
 export const isNoReplyAddress = (address: string): boolean => {
   const word = localWord(address)
   const parts = `.${partsOf(address).join(".")}.`
@@ -83,6 +86,7 @@ export const isNoReplyAddress = (address: string): boolean => {
 /**
  * Whether the whole local part, `+tag` and `.`/`-`/`_` aside, is a role word (`info@`, `Hello+news@`, `no_reply@`),
  * or the address is a no-reply one.
+ * @experimental
  */
 export const isRoleAddress = (address: string): boolean => ROLE.has(localWord(address)) || isNoReplyAddress(address)
 
@@ -95,5 +99,5 @@ const PERSON_LIKE = new Set(["hr"])
 /** Whether the address is a role address that one person often reads alone, such as `hr@`. */
 export const isPersonLikeRoleAddress = (address: string): boolean => PERSON_LIKE.has(localWord(address))
 
-/** Whether a program sends from the address: `notify@`, `alerts@`, `bank-notifications@`. */
+/** Whether a program sends from the address: `notify@`, `alerts@`, `bank-notifications@`. @experimental */
 export const isNotificationAddress = (address: string): boolean => partsOf(address).some((part) => NOTIFY.has(part))

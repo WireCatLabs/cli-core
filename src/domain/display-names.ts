@@ -1,6 +1,6 @@
 import { foldName } from "../resolve.js"
 
-/** What a person can be shown as when their name has nothing to read. */
+/** What a person can be shown as when their name has nothing to read. @experimental */
 export interface NameFallbacks {
   /** A name one of the person's accounts carries: a real name beats a handle. */
   name?: string | null
@@ -42,6 +42,7 @@ const given = (value: string | null | undefined): string | undefined => {
  * A name as it is shown: no wrapping quotes, no repeated or edge spaces. One with no letter or digit (`!`, `!$`), or a
  * placeholder such as `null` or «Без имени», gives way to an account's name, then the username, the phone, the email;
  * the stored name stays as it came.
+ * @experimental
  */
 export const displayName = (name: string | null | undefined, fallbacks: NameFallbacks = {}): string | null => {
   const unwrapped = typeof name === "string" ? unquoted(name) : ""
@@ -90,6 +91,7 @@ export const noFallbacks = (): Required<NameFallbacks> => ({ name: null, usernam
 /**
  * The name two people share when case, quotes, punctuation and word order are ignored: `"Ivanov Ivan"` and
  * `ivan IVANOV` give one key. `null` for a name with no letter or digit, which matches nobody.
+ * @experimental
  */
 export const nameKey = (name: string | null | undefined): string | null => {
   if (typeof name !== "string") return null

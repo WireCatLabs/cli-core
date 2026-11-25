@@ -9,6 +9,7 @@ export interface ContextSource {
   provider: string
   account: string
 }
+/** @experimental */
 export interface ContextEvidenceRequest {
   source: ContextSource
   /** Required unless `chat` is given; a chat read takes no query. */
@@ -24,6 +25,7 @@ export interface ContextEvidenceRequest {
   cursor?: { at: number; id: number; scope: string }
   signal?: AbortSignal
 }
+/** @experimental */
 export interface ContextEvidenceItem {
   ref: string
   provider: string
@@ -49,6 +51,7 @@ export interface ContextEvidenceSender {
   /** The identity is the owner's: linked to the owner person, or the account's own. */
   owner: boolean
 }
+/** @experimental */
 export interface ContextEvidencePage {
   source: ContextSource
   items: ContextEvidenceItem[]
@@ -66,6 +69,7 @@ export interface ContextEvidencePage {
     consistency: "snapshot-per-page"
   }
 }
+/** @experimental */
 export interface ContextEvidenceReader {
   read(request: ContextEvidenceRequest): Promise<ContextEvidencePage>
 }

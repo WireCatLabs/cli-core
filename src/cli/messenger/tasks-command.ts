@@ -145,6 +145,7 @@ const pairLine = (pair: TaskPair) =>
 /**
  * `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". With
  * `end`, a date alone is the end of that day: a task due on the 20th is not overdue all of the 20th.
+ * @experimental
  */
 export const dateOrNone =
   (flag: string, { end = false }: { end?: boolean } = {}) =>

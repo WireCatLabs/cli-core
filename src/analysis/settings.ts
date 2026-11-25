@@ -16,7 +16,7 @@ const AI_FIELDS = {
 }
 const fileKey = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
-/** The AI settings as the config file names them, in snake_case; `AISettings` is what the code reads. */
+/** The AI settings as the config file names them, in snake_case; `AISettings` is what the code reads. @experimental */
 export const AI_ENTRIES = Object.fromEntries(
   Object.entries(AI_FIELDS).map(([key, schema]) => [fileKey(key), schema]),
 ) as {
@@ -26,9 +26,11 @@ export const AI_ENTRIES = Object.fromEntries(
   embedding_dims: (typeof AI_FIELDS)["embeddingDims"]
   models: (typeof AI_FIELDS)["models"]
 }
+/** @experimental */
 export type AISettings = v.InferOutput<v.ObjectSchema<typeof AI_FIELDS, undefined>>
 export const AI_DEFAULTS: AISettings = { embeddingProvider: "local" }
 
+/** @experimental */
 export const AI_SETTING_KEYS = Object.keys(AI_FIELDS) as (keyof AISettings)[]
 
 export const resolveAISettings = (

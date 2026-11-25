@@ -41,7 +41,10 @@ export const profileFree = <T extends Command>(command: T): T => {
   return command
 }
 
-/** Whether the command line puts a profile before this command: not for `PROFILE_FREE` or a `profileFree` one. */
+/**
+ * Whether the command line puts a profile before this command: not for `PROFILE_FREE` or a `profileFree` one.
+ * @experimental
+ */
 export const takesProfile = (command: Command): boolean => {
   let top: Command | undefined
   for (let at: Command | null = command; at?.parent; at = at.parent) {
@@ -81,6 +84,7 @@ export const liftProfile = (
  * The group a run reads, from the first word (`liftProfile` lifts it) or `<PREFIX>_GROUP`; `all`, the default, is
  * every account, so no restriction. Under `<PREFIX>_GROUP_LOCK` any other group, `all` included, is refused, as the
  * profile lock refuses another profile (WC-ACCT-5); a lock of `all` locks nothing.
+ * @experimental
  */
 export const runGroup = (app: AppIdentity, env: NodeJS.ProcessEnv, word?: string): RunGroup | undefined => {
   const GROUP = envName(app, "GROUP")

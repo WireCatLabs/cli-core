@@ -1,0 +1,205 @@
+# @wirecat/cli-core "./sends": the stable API, written by cli-dev api-report. Do not edit.
+Asker · type · export type Asker = (key: PermissionKey, request: GuardRequest) => Promise<void>;
+CEILING_KEY · const · export declare const CEILING_KEY = "*";
+DEFAULT_PERMISSIONS · const · export declare const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>>;
+FloodDeadline · interface · export interface FloodDeadline {
+FloodDeadline · interface · operation: string;
+FloodDeadline · interface · chatId?: string;
+FloodDeadline · interface · until: string;
+FloodDeadline · interface · providerError?: string;
+FloodDeadline · interface · }
+FloodMemory · class · export declare class FloodMemory {
+FloodMemory · class · readonly path: string;
+FloodMemory · class · constructor(path: string, now?: () => number);
+FloodMemory · class · read(): FloodState;
+FloodMemory · class · owed(operation: string, chatId?: string): FloodDeadline | undefined;
+FloodMemory · class · remember(deadline: Omit<FloodDeadline, "until"> & {
+FloodMemory · class · waitMs: number;
+FloodMemory · class · }): FloodDeadline;
+FloodMemory · class · sendBlock(): SendBlock | undefined;
+FloodMemory · class · block(block: Omit<SendBlock, "since" | "until"> & {
+FloodMemory · class · until?: string;
+FloodMemory · class · }): SendBlock;
+FloodMemory · class · unblock(state: SendBlock["state"]): void;
+FloodMemory · class · clear(): FloodState;
+FloodMemory · class · }
+FloodState · interface · export interface FloodState {
+FloodState · interface · deadlines: FloodDeadline[];
+FloodState · interface · sendBlock?: SendBlock;
+FloodState · interface · }
+GuardRequest · interface · export interface GuardRequest {
+GuardRequest · interface · chatId: Id | null;
+GuardRequest · interface · kind?: SendKind;
+GuardRequest · interface · action?: ChatAction | AccountAction;
+GuardRequest · interface · count?: number;
+GuardRequest · interface · sendId?: string;
+GuardRequest · interface · sendAs?: Id;
+GuardRequest · interface · operationId?: string;
+GuardRequest · interface · scheduledFor?: string;
+GuardRequest · interface · notify?: boolean;
+GuardRequest · interface · personIds?: Id[];
+GuardRequest · interface · forEveryone?: boolean;
+GuardRequest · interface · key?: PermissionKey;
+GuardRequest · interface · }
+KeyedGuard · type · export type KeyedGuard = SendGuard & {
+KeyedGuard · type · refuse(request: GuardRequest): void;
+KeyedGuard · type · };
+LEVELS · const · export declare const LEVELS: readonly ["deny", "readonly", "ask", "allow"];
+Level · type · export type Level = (typeof LEVELS)[number];
+Operated · type · export type Operated<T> = T & {
+Operated · type · operationId: string;
+Operated · type · };
+PaceRate · interface · export interface PaceRate {
+PaceRate · interface · perMinute: number;
+PaceRate · interface · burst: number;
+PaceRate · interface · }
+Pacer · class · export declare class Pacer {
+Pacer · class · readonly path: string;
+Pacer · class · constructor(path: string, rate: PaceRate, now?: () => number);
+Pacer · class · get interval(): number;
+Pacer · class · reserve(): Promise<number>;
+Pacer · class · holdFor(waitMs: number): Promise<void>;
+Pacer · class · reset(): Promise<void>;
+Pacer · class · }
+Recipient · interface · export interface Recipient {
+Recipient · interface · id: Id;
+Recipient · interface · title: string | null;
+Recipient · interface · partnerId?: Id;
+Recipient · interface · addedAt: string;
+Recipient · interface · }
+RecipientList · class · export declare class RecipientList {
+RecipientList · class · readonly path: string;
+RecipientList · class · readonly command: string;
+RecipientList · class · readonly lockWaitMs?: number | undefined;
+RecipientList · class · constructor(path: string, command: string, lockWaitMs?: number | undefined);
+RecipientList · class · read(): Recipient[] | undefined;
+RecipientList · class · list(filter?: RecipientFilter): {
+RecipientList · class · state: "off" | "empty" | "on";
+RecipientList · class · items: Recipient[];
+RecipientList · class · };
+RecipientList · class · add(recipient: Recipient): boolean;
+RecipientList · class · addAsync(recipient: Recipient): Promise<boolean>;
+RecipientList · class · remove(reference: string): Recipient | undefined;
+RecipientList · class · rekey(from: Id, to: Id): Promise<boolean>;
+RecipientList · class · off(): boolean;
+RecipientList · class · }
+SendBlock · interface · export interface SendBlock {
+SendBlock · interface · state: "frozen" | "limited" | "banned";
+SendBlock · interface · since: string;
+SendBlock · interface · until: string | null;
+SendBlock · interface · hint: string;
+SendBlock · interface · }
+SendEntry · interface · export interface SendEntry {
+SendEntry · interface · at: string;
+SendEntry · interface · profile: string;
+SendEntry · interface · chatId: Id | null;
+SendEntry · interface · outcome: SendOutcome;
+SendEntry · interface · kind?: SendKind;
+SendEntry · interface · action?: ChatAction | AccountAction;
+SendEntry · interface · people?: number;
+SendEntry · interface · messageId?: Id;
+SendEntry · interface · key?: string;
+SendEntry · interface · count?: number;
+SendEntry · interface · forEveryone?: boolean;
+SendEntry · interface · sendId?: string;
+SendEntry · interface · operationId?: string;
+SendEntry · interface · parentOperationId?: string;
+SendEntry · interface · replyTo?: Id;
+SendEntry · interface · threadId?: Id;
+SendEntry · interface · sendAs?: Id;
+SendEntry · interface · resultChatId?: Id;
+SendEntry · interface · length?: number;
+SendEntry · interface · attachments?: {
+SendEntry · interface · kind: "photo" | "file" | "video" | "voice" | "sticker";
+SendEntry · interface · bytes: number;
+SendEntry · interface · }[];
+SendEntry · interface · scheduledFor?: string;
+SendEntry · interface · notify?: boolean;
+SendEntry · interface · origin?: string;
+SendEntry · interface · reservation?: string;
+SendEntry · interface · errorCode?: string;
+SendEntry · interface · }
+SendGuard · interface · export interface SendGuard {
+SendGuard · interface · check(request: GuardRequest, options?: {
+SendGuard · interface · reserve?: boolean;
+SendGuard · interface · }): void;
+SendGuard · interface · reserve?(request: GuardRequest): Promise<void>;
+SendGuard · interface · ask?(request: GuardRequest): Promise<void>;
+SendGuard · interface · record(entry: Omit<SendEntry, "at" | "profile">): void;
+SendGuard · interface · }
+SendGuardOptions · interface · export interface SendGuardOptions {
+SendGuardOptions · interface · profile: string;
+SendGuardOptions · interface · command?: string;
+SendGuardOptions · interface · readOnlyLock?: string;
+SendGuardOptions · interface · permissions?: Readonly<Record<PermissionKey, Level>> | (() => Readonly<Record<PermissionKey, Level>>);
+SendGuardOptions · interface · permissionSources?: Readonly<Record<PermissionKey, string>>;
+SendGuardOptions · interface · permissionDefaults?: Readonly<Record<PermissionKey, Level>>;
+SendGuardOptions · interface · permissionFix?: (request: GuardRequest, key: PermissionKey) => string;
+SendGuardOptions · interface · ask?: Asker;
+SendGuardOptions · interface · sendsPerHour: number;
+SendGuardOptions · interface · journal: SendJournal;
+SendGuardOptions · interface · recipients: RecipientList;
+SendGuardOptions · interface · flood?: FloodMemory;
+SendGuardOptions · interface · warn: Warn;
+SendGuardOptions · interface · now?: () => Date;
+SendGuardOptions · interface · }
+SendJournal · class · export declare class SendJournal {
+SendJournal · class · readonly path: string;
+SendJournal · class · constructor(path: string,
+SendJournal · class · resource?: LogRecord["resource"]);
+SendJournal · class · locked<T>(body: () => T): T;
+SendJournal · class · lockedAsync<T>(body: () => T): Promise<T>;
+SendJournal · class · append(entry: SendEntry): void;
+SendJournal · class · entries(filter?: SendFilter): SendEntry[];
+SendJournal · class · }
+SendKind · type · export type SendKind = "message" | "reaction" | "edit" | "forward" | "pin" | "read" | "delete" | "chat" | "account";
+SendOutcome · type · export type SendOutcome = "sent" | "outcome_unknown" | "refused" | "failed" | "reserved";
+StickerFile · interface · export interface StickerFile {
+StickerFile · interface · name: string;
+StickerFile · interface · source: UploadSource;
+StickerFile · interface · }
+Upload · interface · export interface Upload {
+Upload · interface · kind: UploadKind;
+Upload · interface · name: string;
+Upload · interface · source: UploadSource;
+Upload · interface · asFile?: true;
+Upload · interface · }
+UploadKind · type · export type UploadKind = "photo" | "file" | "voice";
+UploadSource · type · export type UploadSource = {
+UploadSource · type · kind: "file";
+UploadSource · type · path: string;
+UploadSource · type · size: number;
+UploadSource · type · } | {
+UploadSource · type · kind: "bytes";
+UploadSource · type · bytes: Uint8Array;
+UploadSource · type · };
+guardFor · const · export declare const guardFor: (app: AppIdentity, settings: GuardSettings, warn: Warn, env?: NodeJS.ProcessEnv, ask?: Asker) => SendGuard;
+guardedWrite · const · export declare const guardedWrite: <T>(guard: SendGuard, attempt: Attempt, act: () => Promise<T>, settled?: (done: T) => Partial<Attempt>, prepare?: () => Promise<void>) => Promise<T>;
+guardedWrite · const · type Attempt = Omit<SendEntry, "at" | "profile" | "outcome"> & {
+guardedWrite · const · operationId: string;
+guardedWrite · const · key?: PermissionKey;
+guardedWrite · const · personIds?: Id[];
+guardedWrite · const · };
+keyForCommand · const · export declare const keyForCommand: (path: readonly string[]) => PermissionKey | null | undefined;
+keyedGuard · const · export declare const keyedGuard: (build: (ask: Asker) => SendGuard, ask: Asker, levelOf: (key: PermissionKey) => Level, extra: readonly PermissionKey[]) => KeyedGuard;
+layerPermissions · const · export declare const layerPermissions: (layers: readonly [string, Readonly<Record<PermissionKey, Level>> | undefined][]) => {
+layerPermissions · const · levels: Record<string, "allow" | "ask" | "deny" | "readonly">;
+layerPermissions · const · sources: Record<string, string>;
+layerPermissions · const · };
+levelFor · const · export declare const levelFor: (permissions: Readonly<Record<PermissionKey, Level>>, key: PermissionKey, defaults?: Readonly<Record<PermissionKey, Level>>) => {
+levelFor · const · level: Level;
+levelFor · const · key: PermissionKey | null;
+levelFor · const · };
+newOperationId · const · export declare const newOperationId: typeof newSendId;
+newSendId · const · export declare const newSendId: () => string;
+pacePathFor · const · export declare const pacePathFor: (app: AppIdentity, profile: string, env?: NodeJS.ProcessEnv) => string;
+readUpload · const · export declare const readUpload: (kind: UploadKind, path: string, { app, env, anyFile, photoTypes, }: {
+readUpload · const · app: AppIdentity;
+readUpload · const · env?: NodeJS.ProcessEnv;
+readUpload · const · anyFile?: boolean;
+readUpload · const · photoTypes?: readonly string[];
+readUpload · const · }) => Promise<Upload>;
+refusedPlace · const · export declare const refusedPlace: (path: string, app: AppIdentity, env: NodeJS.ProcessEnv, platform?: NodeJS.Platform) => boolean;
+sendGuard · const · export declare const sendGuard: ({ profile, recipients, command, readOnlyLock, permissions, permissionSources, permissionDefaults, permissionFix, ask, sendsPerHour, journal, flood, warn, now, }: SendGuardOptions) => SendGuard;
+sendsPathFor · const · export declare const sendsPathFor: (app: AppIdentity, profile: string, env?: NodeJS.ProcessEnv) => string;
+uploadBlob · const · export declare const uploadBlob: (source: UploadSource, type?: string) => Promise<Blob>;

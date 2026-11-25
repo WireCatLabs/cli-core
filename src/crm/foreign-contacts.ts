@@ -9,7 +9,7 @@ import type { CrmLiveKind, CrmSource } from "./source.js"
 import { CRM_SHARED_FOLDERS } from "./state-folders.js"
 
 /**
- * The owner's rule (NEED-2487, NEED-2703 B): a user sees at most this many other people's records a UTC day: a
+ * The owner's rule: a user sees at most this many other people's records a UTC day: a
  * contact's or company's details, or a deal's, lead's, contact's or company's files.
  */
 export const DAILY_FOREIGN_CONTACTS = 100
@@ -146,7 +146,7 @@ export const foreignContacts = (
 
 /**
  * `api call` of a method that returns contacts or companies or their contact data: only the CRM's administrator
- * makes it (NEED-2488), since one raw list would hand over the whole client base past the day's limit. The CLI knows
+ * makes it, since one raw list would hand over the whole client base past the day's limit. The CLI knows
  * its methods and says which read clients; a source without `isAdmin` is not limited.
  */
 export const refuseForeignClientReads = async (source: CrmSource, readsClients: boolean, method: string) => {

@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs"
+import { checksOf } from "./checks.mjs"
 import { indexes, model } from "./spec.mjs"
 
 const mdPath = process.argv[2] ?? new URL("../../docs/storage/schema.md", import.meta.url).pathname
@@ -17,6 +18,8 @@ const CONVENTIONS = [
   "Booleans without `is_`. Times are epoch milliseconds, integers: they sort and range without a format to agree on.",
   "One search index per corpus: messages, emails, attachments, documents, notes, memories, meetings.",
   "Every foreign key and every polymorphic pair is indexed; listed under each table as *Indexes*.",
+  "Every base table with an integer `id` key is `AUTOINCREMENT` (store version 73): an id is never handed out twice, so an old reference never names another row.",
+  "`CHECK` constraints hold only rules that never change: a JSON column holds valid JSON, a pointer pair is whole or empty, an amount is not negative. Evolving rules stay in triggers.",
 ]
 
 const flags = (col) =>
@@ -53,6 +56,7 @@ const md = [
           `| \`${col.name}\` | ${col.type} | ${flags(col)} | ${col.ref ? `→ \`${col.ref}\`` : ""} | ${mdEsc(col.note)} |`,
       )
       const keys = [...(t.keys ?? []), ...indexes(t)]
+      const checks = checksOf(t)
       return [
         ...head,
         "| Column | Type | Constraints | References | Meaning |",
@@ -60,6 +64,7 @@ const md = [
         ...rows,
         "",
         ...(keys.length ? [`*Keys and indexes:* ${keys.map((k) => `\`${k}\``).join(", ")}`, ""] : []),
+        ...(checks.length ? [`*Checks:* ${checks.map(({ sql }) => `\`CHECK (${sql})\``).join(", ")}`, ""] : []),
       ]
     }),
   ]),

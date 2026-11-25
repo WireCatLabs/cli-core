@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it } from "vitest"
 import { sampleMeeting } from "../meetings/testing/index.js"
+import { withoutVersion73 } from "../testing/older-store.js"
 import { openCache } from "./open.js"
 import { meetingHitIndexOver } from "./sqlite/meeting-hit-index.js"
 import { openSqlite } from "./sqlite/open.js"
@@ -122,6 +123,7 @@ it("validates options and retains malformed summary queues without leaking store
   await expect(store.meetings.indexSearch({ accountId, signal: aborted.signal })).rejects.toMatchObject({
     code: "timeout",
   })
+  withoutVersion73(db, ["meeting_summaries"])
   db.prepare("UPDATE meeting_summaries SET sections=?").run("Private AliceExample invalid JSON")
   const queue = db.prepare("SELECT count(*) AS n FROM meeting_index_pending").get()?.n
   await expect(store.meetings.indexSearch({ accountId })).rejects.toMatchObject({ code: "invalid_response" })
@@ -135,7 +137,7 @@ it("validates options and retains malformed summary queues without leaking store
 it("does not hydrate or parse huge unrelated summary metadata within a small text budget", async () => {
   const { store, db, accountId } = await fixture()
   db.prepare("UPDATE meeting_summaries SET metadata=?,doc_url=?").run(
-    "Private AliceExample invalid metadata ".repeat(100000),
+    JSON.stringify("Private AliceExample invalid metadata ".repeat(100000)),
     null,
   )
   expect((await store.meetings.indexSearch({ accountId, maxReadBytes: 4096 })).remaining).toBe(0)

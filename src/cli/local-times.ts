@@ -5,7 +5,7 @@ import { type AnswerOutput, type Body, renderAnswer } from "./envelope.js"
 
 export const UTC_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u
 
-/** `YYYY-MM-DD HH:MM` on the wall clock of `zone`, with no offset: the answer names the zone once. */
+/** `YYYY-MM-DD HH:MM` on the wall clock of `zone`, with no offset: the answer names the zone once. @experimental */
 export const wallClock = (zone: string) => {
   const format = new Intl.DateTimeFormat("en-CA", {
     timeZone: zone,
@@ -31,7 +31,7 @@ export const wallClock = (zone: string) => {
   }
 }
 
-/** Turns a UTC time into the shown one; any other text comes back as it was. */
+/** Turns a UTC time into the shown one; any other text comes back as it was. @experimental */
 export type ShownTime = (value: string) => string
 
 const localised = (value: unknown, shown: ShownTime): unknown => {
@@ -46,6 +46,7 @@ const localised = (value: unknown, shown: ShownTime): unknown => {
  * Answers as `renderAnswer` does, and a person reads every UTC time in the zone in use (`zone`, else the computer's),
  * with one line naming it (WC-TIME-4). A `view` builds its text with the `shown` it is given. JSON, JSONL, compact
  * rows and agents keep UTC (WC-TIME-2), and `next` is left alone: its args run.
+ * @experimental
  */
 export const answerLocally = <T>(
   command: Command,

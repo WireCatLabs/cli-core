@@ -6,6 +6,7 @@ import type { BotPress } from "./port.js"
  * Where the bot's next poll starts. State, not cache: a poll with it confirms everything before it
  * to the messenger for every reader of this bot, so losing it prints a batch twice and never loses
  * one. `{ "marker": … }`, the shape max-cli has always written.
+ * @experimental
  */
 export class UpdatesCursor {
   readonly #path: string
@@ -37,7 +38,7 @@ interface KeptPress extends BotPress {
 const KEPT_PRESSES = 500
 const PRESS_LIFETIME_MS = 24 * 60 * 60 * 1000
 
-/** The buttons `bot watch` saw pressed, so `bot callbacks answer --text` can find the message later. */
+/** The buttons `bot watch` saw pressed, so `bot callbacks answer --text` can find the message later. @experimental */
 export class PressLog {
   readonly #path: string
 

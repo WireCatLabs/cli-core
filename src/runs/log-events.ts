@@ -1,7 +1,10 @@
 import { defineLogEvents } from "@wirecat/cli-base/standards"
 import type { DiagnosticEvent } from "./events.js"
 
-/** Every event cli-core's writers log, with the attribute keys each record carries, as written (snake_case). */
+/**
+ * Every event cli-core's writers log, with the attribute keys each record carries, as written (snake_case).
+ * @experimental
+ */
 export const CORE_LOG_EVENTS = defineLogEvents([
   { id: "provider.request", meaning: "a request went to the messenger", keys: ["operation"] },
   { id: "provider.response", meaning: "the messenger answered the request, or it failed", keys: ["operation"] },

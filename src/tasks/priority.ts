@@ -1,7 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 
-/** Quarters of [0, 1], lowest first; a person reads the label, a board column is ordered by the number. */
+/**
+ * Quarters of [0, 1], lowest first; a person reads the label, a board column is ordered by the number.
+ * @experimental
+ */
 export const PRIORITY_LABELS = ["low", "medium", "high", "critical"] as const
+/** @experimental */
 export type PriorityLabel = (typeof PRIORITY_LABELS)[number]
 
 /** The number a label is given: the middle of its quarter, so a move leaves room on either side. */
@@ -10,6 +14,7 @@ const MIDDLE: Readonly<Record<PriorityLabel, number>> = { low: 0.125, medium: 0.
 /** The scores of the old 0 (urgent) … 4 (low), as store version 41 converted them. */
 export const LEGACY_PRIORITY_SCORES = [0.875, 0.625, 0.375, 0.1875, 0.0625] as const
 
+/** @experimental */
 export const priorityLabel = (score: number | null): PriorityLabel | null =>
   score === null ? null : (PRIORITY_LABELS[Math.min(3, Math.max(0, Math.floor(score * 4)))] as PriorityLabel)
 
@@ -35,6 +40,7 @@ export const checkedScore = (score: number): number => {
 /**
  * A priority as typed: a label, or 0 (urgent) … 4 (low) as before, which keeps the meaning it had.
  * `none` clears it.
+ * @experimental
  */
 export const priorityOf = (value: string): number | null => {
   const word = value.trim().toLowerCase()
@@ -50,5 +56,8 @@ export const priorityOf = (value: string): number | null => {
   )
 }
 
-/** `priorityOf` for a command-line option: Commander stores a parser's `null` as an empty string, so `none` stays a word. */
+/**
+ * `priorityOf` for a command-line option: Commander stores a parser's `null` as an empty string, so `none` stays a word.
+ * @experimental
+ */
 export const priorityOption = (value: string): number | "none" => priorityOf(value) ?? "none"

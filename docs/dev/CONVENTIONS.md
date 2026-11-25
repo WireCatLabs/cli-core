@@ -28,7 +28,9 @@ What differs here:
   vendor clients and vendor adapters stay outside Core, and `biome.json` refuses their imports.
   Persistence and CLI/MCP adapters implement shared contracts inside Core.
 - **The changelog** has these headings, each at most once per version: `Added`,
-  `Changed — may break callers`, `Fixed`, `Security`, `Removed`. A pull request adds its entries as a fragment,
+  `Changed — may break callers`, `Changed — experimental`, `Deprecated`, `Fixed`, `Security`, `Removed`. From 1.0.0
+  on, `Changed — may break callers` and `Removed` are breaks of the stable API and need a major; the other three need
+  a minor. A pull request adds its entries as a fragment,
   `changes/<branch>.md`, under those headings; the release pull request collects every fragment into
   `## <version> — DD.MM.YYYY` and deletes them. Only `bin/release` edits `CHANGELOG.md`; the `standards` check fails
   any other pull request that changes it. No backlog or decision ids.

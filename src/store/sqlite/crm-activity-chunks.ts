@@ -269,8 +269,9 @@ const ranked = (best: Map<number, Best>, limit: number) =>
 /**
  * The deals and leads of one account whose activities are nearest to `query` by their best chunk's vector of
  * `model`, best first, each with its nearest activity. An activity counts only through a live deal or lead of `kinds`
- * the viewer may read (SEC-197): one on contacts or companies alone, or on a hidden deal, is never found, and a hidden
- * deal is never named. By the model's vector index, or by a scan of the account's chunks while it has none.
+ * the viewer may read, so a search never shows what the viewer may not see: one on contacts or companies alone, or on
+ * a hidden deal, is never found, and a hidden deal is never named. By the model's vector index, or by a scan of the
+ * account's chunks while it has none.
  */
 export const nearestCrmActivities = (
   database: CacheDatabase,

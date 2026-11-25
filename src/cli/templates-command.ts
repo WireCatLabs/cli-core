@@ -34,6 +34,7 @@ import { type Body, itemOf, listOf } from "./envelope.js"
 import { type QueryWords, queryTerms, withQuery } from "./list-query.js"
 import { ownerLanguageOf, scheduleState } from "./schedule/schedule-command.js"
 
+/** @experimental */
 export interface TemplatesOptions {
   env: () => NodeJS.ProcessEnv
   output: (answer: Body, command: Command) => void

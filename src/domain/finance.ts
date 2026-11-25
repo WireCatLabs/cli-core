@@ -1,15 +1,21 @@
 import { moneyLabel } from "./money.js"
 
+/** @experimental */
 export const INVOICE_DIRECTIONS = ["receivable", "payable"] as const
+/** @experimental */
 export const INVOICE_STATUSES = ["draft", "issued", "partly_paid", "paid", "void"] as const
-/** `in` is money to the owner, `out` money from the owner. */
+/** `in` is money to the owner, `out` money from the owner. @experimental */
 export const MONEY_DIRECTIONS = ["in", "out"] as const
-/** The owner's entry is confirmed at once; an agent's or an import's waits as proposed. */
+/** The owner's entry is confirmed at once; an agent's or an import's waits as proposed. @experimental */
 export const FINANCE_REVIEWS = ["proposed", "confirmed", "rejected"] as const
 
+/** @experimental */
 export type InvoiceDirection = (typeof INVOICE_DIRECTIONS)[number]
+/** @experimental */
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
+/** @experimental */
 export type MoneyDirection = (typeof MONEY_DIRECTIONS)[number]
+/** @experimental */
 export type FinanceReview = (typeof FINANCE_REVIEWS)[number]
 
 /** An invoice's status from what confirmed payments settle; `draft` and `void` are the owner's and stay. */

@@ -3,6 +3,7 @@ import type { Command } from "commander"
 import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
+import { notLocalPaths } from "../path-options.js"
 import { DOCUMENT_UNTRUSTED, marksUntrusted } from "../untrusted-marks.js"
 import { bindQuery, documentQueries, folderRow, termsOf } from "./queries.js"
 import { allOf, type DocumentWords, examples, wordsOf } from "./words.js"
@@ -25,7 +26,9 @@ const addDocumentFolderCommandsDefinition = (program: Command, helpers: Document
   const wording = wordsOf(helpers.words)
   const { prefix, text } = wording
   const queries = documentQueries()
-  const folders = annotate(program.command("folders"), { effects: LOCAL_READ }).description(text.folders)
+  const folders = notLocalPaths(annotate(program.command("folders"), { effects: LOCAL_READ }), "folder").description(
+    text.folders,
+  )
   examples(
     annotate(folders.command("add"), { effects: FETCH })
       .argument("<folder>", text.folderArgument)

@@ -15,7 +15,7 @@ const extensionOf = ({ name, path }: FileHint) => extname(name ?? path).toLowerC
 
 /**
  * Only an exact text layer: plain text, a Word document, a PDF that carries its text. A photo, a scan
- * or a PDF of pictures is an agent's to read (owner, NEED-546: no OCR in the tool).
+ * or a PDF of pictures is an agent's to read (the owner's decision: no OCR in the tool).
  */
 export const extractText = async (
   bytes: Uint8Array,

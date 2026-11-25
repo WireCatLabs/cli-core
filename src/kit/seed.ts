@@ -26,13 +26,14 @@ export type IdKind = "chat" | "message" | "person"
 /** An id for the `n`th thing of a kind; `time` is when a message was sent, for a messenger whose ids carry it. */
 export type IdMaker = (kind: IdKind, n: number, time: Date) => Id
 
+/** @experimental */
 export const BUSY_PAGE = 3
 const BUSY_MESSAGES = 10
 
-/** Ids that are not numbers, so no code may take them for one. */
+/** Ids that are not numbers, so no code may take them for one. @experimental */
 export const wordIds: IdMaker = (kind, n) => `${kind}-${n}`
 
-/** Whole numbers within 2^53, for a messenger whose store pages by id. */
+/** Whole numbers within 2^53, for a messenger whose store pages by id. @experimental */
 export const digitIds: IdMaker = (kind, n) => String({ person: 100, chat: 200, message: 1000 }[kind] + n)
 
 const START = Date.parse("2026-09-01T09:00:00.000Z")

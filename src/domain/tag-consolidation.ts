@@ -1,3 +1,4 @@
+/** @experimental */
 export interface TagConsolidationOptions {
   sourceId: string
   survivorId: string
@@ -8,6 +9,7 @@ export interface TagConsolidationOptions {
   signal?: AbortSignal
 }
 
+/** @experimental */
 export interface TagConsolidationPreview {
   source: { id: string; name: string }
   survivor: { id: string; name: string }
@@ -54,17 +56,20 @@ export interface TagConsolidationPreview {
   }
 }
 
+/** @experimental */
 export interface TagConsolidationStore {
   previewTagConsolidation(options: TagConsolidationOptions): Promise<TagConsolidationPreview>
   applyTagConsolidation(options: TagConsolidationApplyOptions): Promise<TagConsolidationReceipt>
 }
 
+/** @experimental */
 export interface TagConsolidationApplyOptions extends Omit<TagConsolidationOptions, "sampleLimit"> {
   by: "owner"
   expectedPreviewFingerprint: string
   idempotencyKey: string
 }
 
+/** @experimental */
 export interface TagConsolidationReceipt {
   id: string
   sourceId: string

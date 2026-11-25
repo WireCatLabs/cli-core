@@ -16,6 +16,7 @@ import { snakeKeys } from "./envelope.js"
 import { heldPhrase } from "./messenger/search-answers.js"
 import { ON_CHAT_ROW, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 
+/** @experimental */
 export interface ProjectStatusHints {
   /** The step that syncs a chat held in part back to `since` (`YYYY-MM-DD`); null when no command here can. */
   sync: (chat: StatusChatSummary, since: string) => NextStep | null
@@ -37,7 +38,10 @@ const SECTIONS = {
   failed: "status.failed",
 }
 
-/** The `project_status` answer drawn by `--compact`: a row per chat, then each listed signal with its own row. */
+/**
+ * The `project_status` answer drawn by `--compact`: a row per chat, then each listed signal with its own row.
+ * @experimental
+ */
 export const projectStatusRow = (signals: readonly { id: string }[]): RowShape => ({
   columns: [],
   hidden: ["project", "purposes", "signals"],
@@ -62,7 +66,10 @@ const statusItem = v.looseObject({
   data: v.record(v.string(), v.unknown()),
 })
 
-/** Where a project stands: per chat signals, open money, and what was left out. Empty lists are left out. */
+/**
+ * Where a project stands: per chat signals, open money, and what was left out. Empty lists are left out.
+ * @experimental
+ */
 export const projectStatusSchema = v.looseObject({
   project: v.string(),
   key: v.nullable(v.string()),
@@ -113,6 +120,7 @@ export const projectStatusSchema = v.looseObject({
   ),
 })
 
+/** @experimental */
 export type ProjectStatusItem = v.InferOutput<typeof projectStatusSchema>
 
 const coverageOf = (found: ProjectStatus, chat: string) =>
@@ -306,7 +314,7 @@ const chatRow = (found: ProjectStatus, hints: ProjectStatusHints, chat: StatusCh
   }
 }
 
-/** The answer of `projects status`: the item, two steps at most, what is missing, and the window. */
+/** The answer of `projects status`: the item, two steps at most, what is missing, and the window. @experimental */
 export const projectStatusAnswer = (found: ProjectStatus, hints: ProjectStatusHints) => {
   const unlisted = unlistedOf(found)
   const lists = Object.fromEntries(
@@ -414,7 +422,7 @@ const moneyLine = (one: StatusItem, titles: Map<string, string | null>) => {
   return `  ${words.padEnd(7)} ${sum}${asks}${where} · ${one.evidence[0]?.ref ?? ""} [${one.basis}]`
 }
 
-/** The human form: header, money, a line per chat with what is open, then the steps. */
+/** The human form: header, money, a line per chat with what is open, then the steps. @experimental */
 export const projectStatusText = (found: ProjectStatus, hints: ProjectStatusHints): string => {
   const titles = new Map(found.chats.map((chat) => [chat.ref, chat.title]))
   const { next } = projectStatusAnswer(found, hints)

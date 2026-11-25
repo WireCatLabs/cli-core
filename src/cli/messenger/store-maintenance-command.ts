@@ -58,6 +58,7 @@ import {
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { inStoreBackups } from "../path-options.js"
 import { commandAt, lineOf, nextStep } from "../steps.js"
 import { storeInfoCommand } from "../store-info.js"
 import { storeRecoverCommand } from "../store-recover.js"
@@ -189,6 +190,7 @@ const result = (command: Command, value: unknown, next: NextStep[] = []) =>
 /**
  * Who mounts the store file's commands: a messenger, or any CLI on the shared store. Without a `provider` nothing is
  * said about chats.
+ * @experimental
  */
 export type StoreOwner = { app: AppIdentity } & Partial<Pick<Messenger, "provider" | "history" | "historyOnDemand">>
 
@@ -535,8 +537,13 @@ const migrateCommand = (owner: StoreOwner): Command =>
     .description(
       "bring the store up to this build's schema, then normalize, index and stem the messages and notes stored before it",
     )
+    .option(
+      "--no-backup",
+      "migrate even when no rollback copy can be written; older tools then cannot open the store again",
+    )
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
+      const { backup = true } = this.opts<{ backup?: boolean }>()
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
         result(this, { path, exists: false })
@@ -545,11 +552,12 @@ const migrateCommand = (owner: StoreOwner): Command =>
       }
       const answer = await reading(path, (database) => {
         const from = schemaOf(database).version
-        migrate(database, {
+        const notice = migrate(database, {
           command: owner.app.command,
           version: owner.app.version,
-          rollback: { store: path, warn: (line) => renderer.warn(line) },
+          rollback: { store: path, warn: (line) => renderer.warn(line), withoutCopy: !backup },
         })
+        if (notice) renderer.warn(notice)
         const { normalized, indexed, terms } = buildWordIndex(database, (note) => renderer.note(note))
         const stemmed = buildStems(database, (note) => renderer.note(note))
         const notes = buildNoteIndex(database, (note) => renderer.note(note))
@@ -668,7 +676,10 @@ const vacuumInto = async (path: string, target: string) => {
 const stampNow = () => new Date().toISOString().replace(/[:.]/g, "-")
 
 const backupCommand = (): Command =>
-  destroysNothing(annotate(new Command("backup"), { output: { entity: "store_backup" }, effects: LOCAL_WRITE }))
+  inStoreBackups(
+    destroysNothing(annotate(new Command("backup"), { output: { entity: "store_backup" }, effects: LOCAL_WRITE })),
+    "file",
+  )
     .description("copy the store into a new file, while it is in use; never overwrites a file")
     .argument("<file>", "the new file")
     .option(...ENCRYPT_OPTION)
@@ -731,7 +742,10 @@ const decryptCommand = (): Command =>
  * `serve` runs: that opens the store on its first write, so until then it holds nothing to see.
  */
 const restoreCommand = (owner: StoreOwner): Command =>
-  grantsAuthority(annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE }))
+  inStoreBackups(
+    grantsAuthority(annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })),
+    "file",
+  )
     .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
     .description(
       "put a backup in place of the store; the store it replaces is kept beside it, never deleted. Given a rollback " +

@@ -10,12 +10,14 @@ export interface DamagedTable {
   sample: string
 }
 
+/** @experimental */
 export interface SearchIndexHealth {
   name: string
   ok: boolean
   error?: string
 }
 
+/** @experimental */
 export interface StoreHealth {
   path: string
   /** `quick`: the file header and the schema only, in milliseconds. `deep`: every page and every search index. */
@@ -81,7 +83,7 @@ export const invalidJson = (database: CacheDatabase): InvalidJson[] =>
 
 export const QUICK_CHECK_LIMIT = 10_000
 
-/** What `doctor` checks by default, said where it answers. */
+/** What `doctor` checks by default, said where it answers. @experimental */
 export const QUICK_HEALTH_CHECKS = "the file header, its size against its page count, and the schema's own pages"
 
 const FTS5 = /^\s*CREATE\s+VIRTUAL\s+TABLE\s+\S+\s+USING\s+fts5\s*\(/i
@@ -214,6 +216,7 @@ const quickHealth = (database: CacheDatabase, path: string) => {
 /**
  * The store's health without changing it. `quick` takes milliseconds at any size; `deep` reads every page
  * (about 30 s for 6 GB) and checks every search index, under a transaction it rolls back.
+ * @experimental
  */
 export const storeHealth = async (path: string, { deep = false }: { deep?: boolean } = {}): Promise<StoreHealth> => {
   const started = Date.now()

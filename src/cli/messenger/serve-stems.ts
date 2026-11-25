@@ -2,9 +2,12 @@ import { failureKey } from "../../errors/failures.js"
 import type { MessageStore } from "../../store/store.js"
 import type { ServeNotice } from "./serve-notice.js"
 
+/** @experimental */
 export const STEMS_EVERY_MS = 30_000
+/** @experimental */
 export const STEMS_SLICE_MS = 2_000
 
+/** @experimental */
 export interface StemFills {
   /** Starts filling; a second call is ignored. */
   start(): void
@@ -17,6 +20,7 @@ export interface StemFills {
  * `serve`'s fill of stems still building — after an upgrade changed the default stemmers, a large store
  * would otherwise wait for a search or `store migrate`. A short slice per interval, so the store stays free
  * for everything else; it ends when the stems are ready, and never touches stems waiting for a reindex.
+ * @experimental
  */
 export const stemFills = ({
   withStore,

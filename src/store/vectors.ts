@@ -10,6 +10,7 @@ import type { ChunkToEmbed } from "./sqlite/vectors.js"
 import * as vectors from "./sqlite/vectors.js"
 import type { AccountKey, ConversationHit, PictureInput, StoredReadiness } from "./types.js"
 
+/** @experimental */
 export interface AccountVectors {
   /** Chunks of the chat's current build with no vector of `model`, by hash after `after` (phase 5). */
   chunksToEmbed(
@@ -120,6 +121,7 @@ export interface AccountVectors {
   embeddedOnlyElsewhere(key: AccountKey, options: { chatId?: Id; model: string }): Promise<Id[]>
 }
 
+/** @experimental */
 export interface VectorsStore extends AccountVectors {
   saveVectors(model: string, dims: number, vectors: { hash: string; vector: Float32Array }[]): Promise<void>
   /** Which of these chunk hashes already have a vector of `model`. */

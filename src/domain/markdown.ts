@@ -22,6 +22,7 @@ const WORD = /[\p{L}\p{N}]/u
  * ⚠ `_` and `*` open and close only at a word's edge, so `file_name_here` and `2*3*4` stay as they
  * are — the case where turning Markdown on would otherwise change a message nobody meant to format.
  * A backslash keeps the next character literal.
+ * @experimental
  */
 export const parseMarkdown = (input: string): { text: string; markup: Markup[] } => {
   let text = ""

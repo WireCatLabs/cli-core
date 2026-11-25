@@ -12,13 +12,14 @@ const PROTOCOL = "2025-06-18"
 const START_MS = 30_000
 export const CHILD_IDLE_MS = 10 * 60 * 1000
 
-/** How to start the one-profile server for a profile: `<node> <script> <profile> mcp`. */
+/** How to start the one-profile server for a profile: `<node> <script> <profile> mcp`. @experimental */
 export interface ChildSpec {
   command: string
   args: string[]
   env: NodeJS.ProcessEnv
 }
 
+/** @experimental */
 export interface AllProfilesOptions {
   /** `tg`: the tools' prefix and the server's name. */
   command: string
@@ -226,10 +227,11 @@ const refusal = (code: ErrorCode, text: string, details?: Record<string, unknown
   ) as CallToolResult
 
 /**
- * **One server for every profile of a tool** (TASK-26): `<tool> mcp` shows the tools `<tool> <profile> mcp` shows,
+ * **One server for every profile of a tool**: `<tool> mcp` shows the tools `<tool> <profile> mcp` shows,
  * each with a required `profile`, and runs a call in that profile's own server, started as a child the first time
  * it is needed. The child applies the profile's permissions, keyring, store and audit log, so nothing here decides
  * what a profile may do; this only routes.
+ * @experimental
  */
 export const allProfilesServer = (options: AllProfilesOptions) => {
   const children = pool(options)
@@ -341,7 +343,10 @@ export const listedTools = async (server: McpServer): Promise<Tool[]> => {
   }
 }
 
-/** Over stdin and stdout until the client closes stdin or the process is told to stop; then the children close. */
+/**
+ * Over stdin and stdout until the client closes stdin or the process is told to stop; then the children close.
+ * @experimental
+ */
 export const serveAllProfilesOverStdio = async (
   options: AllProfilesOptions,
   io: { stdin?: Readable; stdout?: Writable; signal?: AbortSignal } = {},
@@ -362,7 +367,10 @@ export const serveAllProfilesOverStdio = async (
   }
 }
 
-/** Over HTTP behind the tunnel, one login for every profile; the caller keeps it running and closes it. */
+/**
+ * Over HTTP behind the tunnel, one login for every profile; the caller keeps it running and closes it.
+ * @experimental
+ */
 export const serveAllProfilesOverHttp = async (
   options: AllProfilesOptions,
   http: Omit<HttpOptions, "appName" | "onError">,

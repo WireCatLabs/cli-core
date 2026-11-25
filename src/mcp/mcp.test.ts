@@ -2197,10 +2197,10 @@ describe("the MCP server", () => {
             output_dir: join(folder, "missing", "downloads"),
           })
           expect(download.isError).toBe(true)
-          expect(download.body).toMatchObject({ error: { code: "validation_error" } })
+          expect(download.body).toMatchObject({ error: { code: "permission_error", param: "--output-dir" } })
           const extract = await call("attachments extract", { chat: "7", from_dir: folder })
           expect(extract.isError).toBe(true)
-          expect(extract.body).toMatchObject({ error: { code: "validation_error" } })
+          expect(extract.body).toMatchObject({ error: { code: "permission_error", param: "--from-dir" } })
           await store.attachments.keepDownloads(owner, "7", "903", [
             { kind: "file", position: 0, path: join(folder, "synthetic.txt") },
           ])
@@ -3732,7 +3732,7 @@ describe("sending over MCP", () => {
     expect(sent[0]?.stickerFile).toMatchObject({ name: "cat.webp" })
     for (const refused of guarded) {
       expect(refused.isError).toBe(true)
-      expect(JSON.stringify(refused.body)).toContain("credential files")
+      expect(JSON.stringify(refused.body)).toContain("no credential folder")
     }
     expect(unknown.isError).toBe(true)
     expect(sent).toHaveLength(1)

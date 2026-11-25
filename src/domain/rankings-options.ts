@@ -13,13 +13,16 @@ export const AUTHOR_MEASURES = [
 ] as const
 export type RankingTarget = "messages" | "contacts"
 export type MessageKind = "all" | "posts" | "comments"
+/** @experimental */
 export type RankingMeasure = (typeof MESSAGE_MEASURES)[number] | (typeof AUTHOR_MEASURES)[number]
 export type RankingComponent =
   | Exclude<RankingMeasure, "answer-time">
   | "replies-from-others"
   | "reactions-per-message"
   | "replies-from-others-per-message"
+/** @experimental */
 export type ScorePreset = "helpful" | "active" | "engaging"
+/** @experimental */
 export type RankingWeights = Partial<Record<RankingComponent, number>>
 export interface RankingInput {
   measure?: string
@@ -28,6 +31,7 @@ export interface RankingInput {
   minMessages?: number
   messageKind?: string
 }
+/** @experimental */
 export interface RankingOptions {
   target: RankingTarget
   measure: RankingMeasure | "score"
@@ -59,6 +63,7 @@ function invalid(message: string): never {
   throw new CliError("validation_error", message, { reason: "ranking.invalid" })
 }
 
+/** @experimental */
 export const rankingOptions = (target: RankingTarget, input: RankingInput): RankingOptions => {
   const measures: readonly string[] = target === "messages" ? MESSAGE_MEASURES : AUTHOR_MEASURES
   const { measure, score, weights: given, minMessages } = input

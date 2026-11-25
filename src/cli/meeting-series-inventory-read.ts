@@ -9,6 +9,7 @@ import {
 import { momentOf } from "../services/moment.js"
 import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
 
+/** @experimental */
 export type MeetingSeriesInventoryReader = (
   request: MeetingSeriesInventoryRequest,
 ) => Promise<MeetingSeriesInventoryResult>
@@ -38,6 +39,7 @@ export const boundMeetingSeriesInventoryItem = (item: { limits: { bytes: number 
       "meeting inventory bytes cannot fit the provider page; increase bytes or lower limit",
     )
 }
+/** @experimental */
 export const readMeetingSeriesInventory = async (
   read: MeetingSeriesInventoryReader,
   input: unknown,

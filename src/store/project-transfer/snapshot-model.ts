@@ -6,6 +6,7 @@ import { type ProjectAnnotations, projectAnnotationsSchema } from "./schema.js"
 
 const text = (max: number) => v.pipe(v.string(), v.minLength(1), v.maxLength(max))
 const timestamp = v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+/** @experimental */
 export const projectAnnotationSnapshotSchema = v.strictObject({
   ...projectAnnotationsSchema.entries,
   version: v.literal(2),
@@ -36,6 +37,7 @@ export const projectAnnotationSnapshotSchema = v.strictObject({
   ),
 })
 
+/** @experimental */
 export type ProjectAnnotationSnapshot = v.InferOutput<typeof projectAnnotationSnapshotSchema>
 
 export const snapshotGraph = (value: ProjectAnnotationSnapshot): ProjectAnnotations => ({
@@ -57,6 +59,7 @@ export const snapshotGraph = (value: ProjectAnnotationSnapshot): ProjectAnnotati
   external: value.external,
 })
 
+/** @experimental */
 export const decodeProjectAnnotationSnapshot = (json: string): ProjectAnnotationSnapshot => {
   const invalid = (field: string): never => {
     throw new CliError("validation_error", `invalid project annotation snapshot.${field}`)
@@ -87,6 +90,7 @@ export const decodeProjectAnnotationSnapshot = (json: string): ProjectAnnotation
   return snapshot
 }
 
+/** @experimental */
 export const projectAnnotationSnapshotFingerprint = (json: string): string => {
   const snapshot = decodeProjectAnnotationSnapshot(json)
   const order = (a: { ref: string }, b: { ref: string }) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0)

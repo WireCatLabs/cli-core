@@ -1,11 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 
+/** @experimental */
 export interface TagRedirectSnapshot {
   complete: true
   tags: readonly { id: string; kind: "tag" }[]
   redirects: readonly { sourceId: string; survivorId: string }[]
 }
 
+/** @experimental */
 export interface TagRedirectResolution {
   requestedId: string
   canonicalId: string
@@ -15,6 +17,7 @@ export interface TagRedirectResolution {
   memberIds: string[]
 }
 
+/** @experimental */
 export interface TagRedirectIndex {
   resolve(id: string): TagRedirectResolution
 }
@@ -38,7 +41,7 @@ const tagId = (value: unknown, field: string): string => {
   return value
 }
 
-/** Validates the whole captured graph before exposing any resolution; it enables no store writes. */
+/** Validates the whole captured graph before exposing any resolution; it enables no store writes. @experimental */
 export const createTagRedirectIndex = (snapshot: TagRedirectSnapshot): TagRedirectIndex => {
   const input = record(snapshot, ["complete", "tags", "redirects"], "snapshot")
   if (input.complete !== true) invalid("snapshot.complete must be true; partial tag graphs cannot resolve labels")

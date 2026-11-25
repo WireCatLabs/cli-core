@@ -757,8 +757,9 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     saveEntries: async (calendarId, entries, now) => write(database, () => saveAll(calendarId, entries, now)),
     removeEntries: async (calendarId, externalIds, now) =>
       write(database, () => removeAll(calendarId, externalIds, now)),
-    markUnseen: async (calendarId, seenBefore, window, now) =>
+    markUnseen: async (calendarId, seenBefore, window, now, { keep = [], dryRun = false } = {}) =>
       write(database, () => {
+        const kept = new Set(keep)
         const marked = database
           .prepare(
             `SELECT * FROM calendar_entries WHERE calendar_id = ? AND deleted_at IS NULL AND (seen_at IS NULL OR seen_at < ?)
@@ -767,6 +768,12 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
           )
           .all(calendarId, seenBefore, window.to, window.from)
           .filter((row) => entryInWindow(entryOf(row), window))
+          .filter(
+            (row) =>
+              !kept.has(String(row.external_id)) &&
+              (row.series_external_id == null || !kept.has(String(row.series_external_id))),
+          )
+        if (dryRun) return marked.length
         const mark = database.prepare("UPDATE calendar_entries SET deleted_at = ?, updated_at = ? WHERE id = ?")
         for (const row of marked) mark.run(now, now, Number(row.id))
         for (const eventId of new Set(marked.map((row) => int(row.event_id))))

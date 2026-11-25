@@ -65,6 +65,7 @@ import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { queryAfterDashes, siblingOption } from "./option-hints.js"
 import { tooLargeSteps } from "./output-budget.js"
+import { refuseAgentPaths } from "./path-options.js"
 import type { CommandPermissions } from "./permission-keys.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, isProfileName, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
@@ -486,6 +487,7 @@ const runOnce = async (typed: string[], definition: ProgramDefinition, options: 
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, storeChangeRefusal(definition.app))
     if (lock) refuseLockedOutputs(action, definition.app, commandEnv)
+    if (options.agent) refuseAgentPaths(action, definition.app, commandEnv)
     refuseWriteBeforeConnecting(action, {
       app: definition.app,
       env: commandEnv,

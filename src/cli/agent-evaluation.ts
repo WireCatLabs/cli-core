@@ -2,12 +2,14 @@ import { captureStreams } from "@wirecat/cli-base"
 import type { ProgramDefinition, RunOptions } from "./program.js"
 import { run } from "./program.js"
 
+/** @experimental */
 export interface AgentTask {
   id: string
   request: string
   maxCalls: number
   check: (observations: readonly Observation[]) => boolean
 }
+/** @experimental */
 export interface Observation {
   argv: readonly string[]
   exitCode: number
@@ -15,10 +17,12 @@ export interface Observation {
   stderr: readonly string[]
   outputBytes: number
 }
+/** @experimental */
 export type AgentPolicy = (
   task: Pick<AgentTask, "id" | "request">,
   call: (argv: string[]) => Promise<Observation>,
 ) => Promise<void>
+/** @experimental */
 export interface EvaluationResult {
   task: string
   correct: boolean
@@ -27,7 +31,10 @@ export interface EvaluationResult {
   failure?: "call_limit" | "agent_failed" | "incorrect"
 }
 
-/** The harness records metrics, never message bodies, credentials, request operands or policy reasoning. */
+/**
+ * The harness records metrics, never message bodies, credentials, request operands or policy reasoning.
+ * @experimental
+ */
 export const evaluateAgent = async (
   tasks: readonly AgentTask[],
   agent: AgentPolicy,

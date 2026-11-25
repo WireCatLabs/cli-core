@@ -1184,7 +1184,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--newest` |  | newest first instead of best first |  | `bot search messages` (planned), `search messages`, `searches create` |
 | `--no-approval` |  | anyone with it joins at once |  | `chats links update` (tg-only) |
 | `--no-as-reply` |  | send without linking to the matched message |  | `replies edit` |
-| `--no-backup` |  | delete the store without backing it up first |  | `store reset` |
+| `--no-backup` |  | delete the store without backing it up first |  | `store migrate`, `store reset` |
 | `--no-block` |  | remove without banning; by default a removed person cannot come back by the link |  | `bot chats moderate` (planned) |
 | `--no-buttons` |  | take the buttons off the message |  | `bot messages edit` (planned) |
 | `--no-catch-up` |  | skip local preparation after this run |  | `messages sync`, `projects evidence`, `store gaps repair` |

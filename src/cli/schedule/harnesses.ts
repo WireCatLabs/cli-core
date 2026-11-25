@@ -292,11 +292,12 @@ const AGENT_HARNESSES = {
   },
 } as const satisfies Record<string, HarnessKind>
 
+/** @experimental */
 export type Harness = keyof typeof AGENT_HARNESSES
 
 /** The variables a harness reads its limits from; a run rebuilds them, so a saved one is never taken from the file. */
 export const HARNESS_VARIABLES = ["GEMINI_CLI_SYSTEM_SETTINGS_PATH", "OPENCODE_CONFIG_CONTENT"] as const
-/** Every agent a schedule may start, as `schedule agent <harness>` and a digest's agent take it. */
+/** Every agent a schedule may start, as `schedule agent <harness>` and a digest's agent take it. @experimental */
 export const HARNESSES = Object.keys(AGENT_HARNESSES) as readonly Harness[]
 export const AGENT_MODELS = Object.fromEntries(HARNESSES.map((id) => [id, AGENT_HARNESSES[id].model])) as Record<
   Harness,
@@ -306,9 +307,10 @@ export const AGENT_MODELS = Object.fromEntries(HARNESSES.map((id) => [id, AGENT_
 export const harnessOf = (id: Harness): HarnessKind => AGENT_HARNESSES[id]
 export const COSTED = HARNESSES.filter((id) => harnessOf(id).reportsCost).join(", ")
 
+/** @experimental */
 export const isHarness = (id: string): id is Harness => (HARNESSES as readonly string[]).includes(id)
 
-/** An agent's name, programs and what holds it, as `schedule agents list` answers them. */
+/** An agent's name, programs and what holds it, as `schedule agents list` answers them. @experimental */
 export const harnessInfo = (harness: Harness) => {
   const { name, programs, reportsCost, restricted, restrictedReason, allowedWithAck } = harnessOf(harness)
   return {
@@ -322,7 +324,7 @@ export const harnessInfo = (harness: Harness) => {
   }
 }
 
-/** Whether the harness reports what a run cost; the cost caps hold only for one that does. */
+/** Whether the harness reports what a run cost; the cost caps hold only for one that does. @experimental */
 export const reportsCost = (harness: Harness): boolean => harnessOf(harness).reportsCost
 
 /** The harness's program on PATH, by the first of its names found. */
@@ -331,7 +333,10 @@ export const programOf = (harness: Harness, env: NodeJS.ProcessEnv, platform: No
     .programs.map((name) => findProgram(name, env, platform))
     .find(Boolean)
 
-/** Which harness an agent schedule's argv starts, by its program's name; null for one no harness here knows. */
+/**
+ * Which harness an agent schedule's argv starts, by its program's name; null for one no harness here knows.
+ * @experimental
+ */
 export const harnessOfArgv = (argv: readonly string[]): Harness | null => {
   const name = basename(argv[0] ?? "")
     .replace(/\.(exe|cmd)$/i, "")
@@ -351,7 +356,7 @@ export const harnessRefusal = (harness: Harness, accepted: boolean): string | un
   return `${kind.name} cannot run on a schedule: ${kind.restrictedReason}`
 }
 
-/** Each harness, with its program when it is on PATH: what `schedule agents list` answers. */
+/** Each harness, with its program when it is on PATH: what `schedule agents list` answers. @experimental */
 export const harnessesOn = (env: NodeJS.ProcessEnv, platform: NodeJS.Platform) =>
   HARNESSES.map((id) => {
     const path = programOf(id, env, platform) ?? null

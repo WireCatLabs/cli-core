@@ -312,6 +312,22 @@ describe("syncMail", () => {
     expect((await emails(env)).map(({ externalId }) => externalId)).not.toContain("9006")
   })
 
+  // INT-1: the search proved the mail is there; a listing that leaves it out says nothing about a deletion.
+  it("marks nothing deleted when the listing leaves out mail the search found", async () => {
+    const { env, write } = setup([mail(1), mail(2), mail(3), mail(4), mail(5), mail(6)])
+    await importInto(env)
+    write([mail(1), mail(2), mail(3), mail(4), mail(5), mail(6)], { failOnce: ["103"] })
+
+    const second = await importInto(env)
+
+    expect(second.deleted).toBe(0)
+    expect(second.deletionsSkipped).toMatch(/left out of its listing/)
+    expect((await emails(env)).find(({ externalId }) => externalId === "9003")).toMatchObject({
+      deletedAt: null,
+      bodyText: "Synthetic body 3",
+    })
+  })
+
   it("saves a mail marked deleted again when the source lists it again", async () => {
     const all = [1, 2, 3, 4, 5, 6].map((n) => mail(n))
     const { env, write } = setup(all)

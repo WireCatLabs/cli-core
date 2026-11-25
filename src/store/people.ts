@@ -68,6 +68,7 @@ import type {
   UnlinkOptions,
 } from "./types.js"
 
+/** @experimental */
 export interface AccountPeople {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
   /**
@@ -153,7 +154,7 @@ export interface PeopleStore extends AccountPeople {
    * An agent's link. It merges at once only on strong evidence the store finds itself, never on the agent's word:
    * one value, a mobile number or a personal address, that no one else holds or that each of its holders has from a
    * different source, whatever their names; from two different sources; and for a phone at least one that keeps its
-   * user's own number (a messenger account or a call's number; NEED-2445, NEED-2600, NEED-2697). A landline, a value two
+   * user's own number (a messenger account or a call's number). A landline, a value two
    * records of one source share, a company's line, a role address, a name or a CRM's word alone is weak. The
    * merge is recorded as an `identity_link` the agent decided, with the evidence, the reason and the run, and the owner
    * undoes it with `undoMerge`. Weak evidence, the owner's person, a pair the owner rejected, or `apply: false` (the
@@ -169,13 +170,13 @@ export interface PeopleStore extends AccountPeople {
   }): Promise<{ items: (PersonMerge & { agent: AgentMerge })[]; hasMore: boolean }>
   /**
    * The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed.
-   * `company` turns down a shared-mailbox proposal and gives its address to an organization (NEED-2528);
-   * `organization` turns down a match whose two sides are a company's mailboxes and gives them all to it (NEED-2573).
+   * `company` turns down a shared-mailbox proposal and gives its address to an organization;
+   * `organization` turns down a match whose two sides are a company's mailboxes and gives them all to it.
    */
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /**
    * One pass of the people matcher: the same address joins people in every scope, a phone two people have, or one each
-   * source has once whatever the names (NEED-2697), joins them, a phone more people of one source share, a role address such as `info@`, a meeting guest's typed address, and one
+   * source has once whatever the names, joins them, a phone more people of one source share, a role address such as `info@`, a meeting guest's typed address, and one
    * name with a shared phone, address, chat or company domain become proposals. Never over the owner's separation; a pair the owner rejected is proposed again only on new evidence.
    */
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>

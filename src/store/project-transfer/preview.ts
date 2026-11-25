@@ -9,6 +9,7 @@ import type { ProjectAnnotationPreview } from "./snapshot-plan.js"
 
 export type { ProjectAnnotationPreview } from "./snapshot-plan.js"
 
+/** @experimental */
 export interface ProjectAnnotationPreviewOptions {
   snapshot: string
   target: string
@@ -17,6 +18,7 @@ export interface ProjectAnnotationPreviewOptions {
   maxReadBytes?: number
   env?: NodeJS.ProcessEnv
 }
+/** @experimental */
 export const previewProjectAnnotationSnapshot = async (
   options: ProjectAnnotationPreviewOptions,
 ): Promise<ProjectAnnotationPreview> => {

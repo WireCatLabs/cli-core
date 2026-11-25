@@ -1,4 +1,5 @@
 import type { CacheDatabase } from "../store/driver.js"
+import { VERSION_72_TABLES as VERSION_72 } from "./version-72-tables.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
@@ -272,8 +273,47 @@ const UNDO: Record<number, string> = {
     DROP INDEX meetings_title_to_fold;`,
 }
 
+const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
+
+/**
+ * Version 73 copied every base table to add AUTOINCREMENT and CHECKs. A CHECK makes SQLite refuse a `DROP COLUMN` of a
+ * column it names, so the tables go back to their version 72 definitions first; the replay copies them again.
+ */
+export const withoutVersion73 = (database: CacheDatabase, only?: string[]): void => {
+  const tables = Object.entries(VERSION_72).filter(([name]) => !only || only.includes(name))
+  database.exec("PRAGMA foreign_keys = OFF")
+  try {
+    database.exec("BEGIN")
+    for (const [name, sql] of tables) {
+      const kept = database
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL",
+        )
+        .all(name)
+        .map((row) => String(row.sql))
+      // Copied twice rather than renamed: a rename parses the whole schema, about 10 ms a table.
+      database.exec(`CREATE TEMP TABLE __plain AS SELECT * FROM ${quote(name)}`)
+      database.exec(`DROP TABLE ${quote(name)}`)
+      database.exec(sql)
+      const columns = database
+        .prepare("SELECT name FROM pragma_table_info(?)")
+        .all(name)
+        .map((row) => quote(String(row.name)))
+        .join(", ")
+      database.exec(`INSERT INTO ${quote(name)} (${columns}) SELECT ${columns} FROM temp.__plain`)
+      database.exec("DROP TABLE temp.__plain")
+      for (const statement of kept) database.exec(statement)
+    }
+    database.exec("COMMIT")
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON")
+  }
+}
+
 /** Makes a store look as if it stopped before `version`, so the next open replays every migration from there. */
 export const rollBackTo = (database: CacheDatabase, version: number): void => {
+  if (version <= 73 && database.prepare("SELECT 1 FROM schema_migrations WHERE version = 73").get())
+    withoutVersion73(database)
   for (const [from, sql] of Object.entries(UNDO).reverse()) if (Number(from) >= version) database.exec(sql)
   database.prepare("DELETE FROM schema_migrations WHERE version >= ?").run(version)
 }
