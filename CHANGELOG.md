@@ -5,6 +5,29 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 1.2.0 — 25.11.2026
+
+### Added
+
+- **Mail sorting rules (store version 77).** `store.mail.sorting` keeps the owner's and the program's rules over mail:
+  `add` (with `dryRun`), `rules`, `remove`, `undo`, `reset` and `scopes`, all experimental. A rule names its scope,
+  one mail, a List-Id, a subject pattern, an address or a registrable domain, and says whether it sorts past mail too
+  (`applyTo: "all"`) or only mail dated from now on (`"new"`). The first scope that has a rule wins, in that order, then
+  the header classifier; within a scope the owner's rule beats the program's and the newest wins, and a domain rule may
+  beat the address rules (`overAddresses`). A rule sets the mail type, makes the sender a bot or a person through
+  `moveToBot` and `moveToPerson`, or files the sender under an organization. An email a rule typed has `typeSignal`
+  `rule:<id>`. A domain rule on a free-mail or throwaway domain is the owner's only and is set only with the `confirm`
+  of a dry run that shows how many addresses and emails it touches. Removing or undoing a rule types its mail again and
+  moves its senders back. Not the storage `store.mail.rules`.
+- **`tokenSessionCommand`, `oauthSessionCommand` and `fileMirrorsCommand` are marked as cli-core's own commands**,
+  as `appDoctorCommand` is. `commands --json` gives them `origin: "cli-core"`, so the `reserved-shared-command` lint
+  rule (WC-CMD-34) stops warning on the CLIs that mount them. A CLI changes them only through their options: an
+  option, a description or an annotation added to the returned command afterwards stops the run with
+  `contract.unacknowledged-override`. No CLI does that today.
+- **`accountRemoveCommand` takes `effects`.** A CLI whose removal reaches no service passes `LOCAL_WRITE` here,
+  instead of annotating the returned command. asterisk, beeline, notion and yandex-disk annotate it today, so
+  `accountRemoveCommand` stays unmarked until they pass `effects`.
+
 ## 1.1.0 — 25.11.2026
 
 ### Added
