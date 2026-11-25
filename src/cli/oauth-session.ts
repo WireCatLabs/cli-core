@@ -213,9 +213,14 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
         fetch:
           environment.fetch ??
           (hostFetch({
-            hosts: [provider.authorizeUrl, provider.tokenUrl, provider.revokeUrl]
-              .filter((url): url is string => url !== undefined)
-              .map((url) => new URL(url).hostname),
+            // Providers often sign in and hand out tokens on one host; hostFetch refuses a host listed twice.
+            hosts: [
+              ...new Set(
+                [provider.authorizeUrl, provider.tokenUrl, provider.revokeUrl]
+                  .filter((url): url is string => url !== undefined)
+                  .map((url) => new URL(url).hostname),
+              ),
+            ],
           }) as typeof fetch),
         signInCommand: `${app.command} ${profile} session start`,
         ...(environment.signal ? { signal: environment.signal } : {}),
