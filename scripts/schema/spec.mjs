@@ -592,7 +592,7 @@ const NEW = {
         id(),
         fk("identity_id", "identities", { notnull: true }),
         fk("organization_id", "organizations", { notnull: true }),
-        c("method", "text", { notnull: true, note: "how it was decided: `mention`, `owner`, an import" }),
+        c("method", "text", { notnull: true, note: "how it was decided: `mention`, `owner`, an import, `domain`" }),
         c("author", "text", { notnull: true, note: "`owner`, an agent by name, `rules`" }),
         ...ts(),
       ],

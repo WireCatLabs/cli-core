@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
+import { releaseDomainHolds } from "./domain-organizations.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { isOwner, mergePerson, move, recordOf, renameAfterLeaving, required, unlinkIdentity } from "./person-links.js"
@@ -243,16 +244,19 @@ export const moveToPerson = (
       }
       if (bot !== undefined && identitiesOf(database, chosen.person).length === 0)
         database.prepare("DELETE FROM sender_bots WHERE id = ?").run(bot)
+      releaseDomainHolds(database, moving)
       logMoves(database, moving, from, { person: target }, log)
       return recordOf(context, target)
     }
     if (chosen.identity !== undefined && chosen.ref !== undefined && bot !== undefined) {
       const alone = Number(unlinkIdentity(context, chosen.ref, { method: "unlink", by: "owner" }).uid)
+      releaseDomainHolds(database, [chosen.identity])
       logMoves(database, [chosen.identity], from, { person: alone }, log)
       return recordOf(context, alone)
     }
     if (bot !== undefined) database.prepare("DELETE FROM sender_bots WHERE id = ?").run(bot)
     const moving = chosen.identity === undefined ? identitiesOf(database, chosen.person) : [chosen.identity]
+    releaseDomainHolds(database, moving)
     logMoves(database, moving, from, { person: chosen.person }, log)
     return recordOf(context, chosen.person)
   })
