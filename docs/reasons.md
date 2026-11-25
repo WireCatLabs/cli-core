@@ -91,6 +91,7 @@ headings.
 | `contract.ref` | `validation_error` | the reference names no contract, or no deal for it |  |
 | `contract.unacknowledged-override` | `configuration_error` | a shared command contract changed without an explicit override |  |
 | `crm.activities-failed` | `validation_error` | the activities and tasks could not be read; the deals and leads were synced |  |
+| `crm.activities-unlisted-held` | `validation_error` | a full list would mark most activities deleted; held until --rescan |  |
 | `crm.activity-field` | `validation_error` | a comment's or task's field is not valid, or the kind does not take it |  |
 | `crm.amount-unkept` | `validation_error` | a CRM deal's amount is in a currency or with decimals the store cannot hold: the deal is kept without it |  |
 | `crm.client-reads-admin-only` | `permission_error` | a raw api call that reads contacts or companies is the CRM administrator's |  |
@@ -236,6 +237,7 @@ headings.
 | `identity.merge-conflict` | `conflict` | a row of the renamed identity has no counterpart on the identity it merges into; the pair is left as it was |  |
 | `identity.no-merge` | `not_found` | nothing of that person is merged into the other; people show lists the merges |  |
 | `identity.none` | `not_found` | the provider shows no accounts on a document |  |
+| `identity.not-a-person` | `validation_error` | a bot, a program or an organization is never proposed as a person by name |  |
 | `identity.not-shared` | `validation_error` | only a match on a shared mailbox can say the mailbox is a company's |  |
 | `identity.nothing-left` | `validation_error` | a split leaves at least one identity with the person |  |
 | `identity.owner` | `validation_error` | one side is the owner's person, and only the owner joins anyone to themselves |  |
@@ -628,6 +630,7 @@ headings.
 | `template.unknown-language` | `validation_error` | cli-core ships no template in that language, so one would never be used |  |
 | `topic.owner-only` | `permission_error` | only the owner may use this topic |  |
 | `tracker.field` | `validation_error` | a field of an issue or a comment the tracker's write does not take as given |  |
+| `tracker.kind-unread` | `permission_error` | the sign-in cannot read this kind of the tracker; the copy has none of it |  |
 | `tracker.no-record` | `invalid_response` | the tracker answered a write with no record and no error; sync and look |  |
 | `tracker.reference` | `validation_error` | a team, state, label, project or user no single row of the copy has by that name |  |
 | `tracker.team-required` | `validation_error` | a new issue needs its team: name one, or sync a copy that holds one |  |
