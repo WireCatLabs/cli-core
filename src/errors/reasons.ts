@@ -755,6 +755,7 @@ const OTHERS: Entry[] = [
   validation("organization.ambiguous", "more than one organization matches; name the one meant as a reference"),
   validation("identity.shared-phone", "more than six people share the phone number, so it proposes no one"),
   validation("identity.common-name", "more than six people have the name, so it proposes no one"),
+  validation("identity.not-a-person", "a bot, a program or an organization is never proposed as a person by name"),
   validation("identity.owner", "one side is the owner's person, and only the owner joins anyone to themselves"),
   validation("identity.shared-email", "more than six people share the address, so it proposes no one"),
   validation("identity-link.dedicated-review", "an identity link is staged and decided through the people review"),
