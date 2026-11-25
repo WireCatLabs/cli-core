@@ -184,6 +184,35 @@ describe("syncTracker: sprints, trashed issues and what changed", () => {
     expect((await store.tracker.get(account, "comment", "comment-1"))?.deletedAt).toBeNull()
   })
 
+  it("saves each page with the cursor after it in one write, so a page is never saved without its cursor", async () => {
+    const store = await storeOf()
+    const seen: (string | undefined)[] = []
+    const save = store.tracker.save.bind(store.tracker)
+    store.tracker.save = async (...args) => {
+      const changed = await save(...args)
+      if (args[1] === "issue") seen.push((await store.sync.syncState(account, "tracker:issue"))?.value)
+      return changed
+    }
+    await syncTracker(fakeTrackerSource({ rows: exampleTrackerRows(), pageSize: 2 }), store, account, { now })
+    expect(seen.map((value) => JSON.parse(value ?? "null"))).toEqual([
+      expect.objectContaining({ token: null, round: { from: null, page: expect.stringMatching(/^2@/) } }),
+      expect.objectContaining({ token: expect.any(String), round: null }),
+    ])
+  })
+
+  it("saves the given state with the id pass's marks, and neither in a dry run", async () => {
+    const store = await storeOf()
+    await syncTracker(fakeTrackerSource({ rows: exampleTrackerRows() }), store, account, { now })
+    const state = { "tracker:issue:pass": "kept" }
+    expect(await store.tracker.removeUnlisted(account, "issue", [], now + 1, now + 1, { dryRun: true, state })).toBe(3)
+    expect(await store.tracker.count(account, "issue")).toBe(3)
+    expect(await store.tracker.count(account, "comment")).toBe(1)
+    expect((await store.sync.syncState(account, "tracker:issue:pass"))?.value).toBe("null")
+    expect(await store.tracker.removeUnlisted(account, "issue", [], now + 1, now + 1, { state })).toBe(3)
+    expect(await store.tracker.count(account, "issue")).toBe(0)
+    expect((await store.sync.syncState(account, "tracker:issue:pass"))?.value).toBe("kept")
+  })
+
   it("marks a row read as deleted at once, and takes the issue's comments with it", async () => {
     const store = await storeOf()
     const rows = exampleTrackerRows()
@@ -211,6 +240,9 @@ describe("syncTracker guards", () => {
     expect(held.synced.find((one) => one.kind === "issue")).toMatchObject({ pass: "held", unlisted: 0 })
     expect(held.synced.find((one) => one.kind === "issue")?.held).toMatch(/run sync --allow-deletions/)
     expect(await store.tracker.count(account, "issue")).toBe(3)
+    const cursor = JSON.parse((await store.sync.syncState(account, "tracker:issue"))?.value ?? "null")
+    expect(cursor.passAt).toBe(T + DAYS)
+    expect((await store.sync.syncState(account, "tracker:issue:pass"))?.value).toBe("null")
 
     const gapped = {
       ...source,

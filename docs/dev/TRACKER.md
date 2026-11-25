@@ -63,9 +63,12 @@ sign-in could not read with `context.gap()`.
 ## `syncTracker(source, store, account, options)`
 
 For each kind: the changes since the kind's cursor, page by page, each page saved with the cursor after it
-(`tracker:<kind>` in the account's sync state). Then, once `passEvery` (a day) has passed since the last complete one,
-an id pass that marks deleted each stored row the list lacks and that was not saved since the pass began. A pass that
-stops keeps its ids and the page it reached.
+(`tracker:<kind>` in the account's sync state) in one transaction, so a page is saved with its cursor or not at all.
+Then, once `passEvery` (a day) has passed since the last complete one, an id pass that marks deleted each stored row
+the list lacks and that was not saved since the pass began; its marks, the end of the pass and the kind's `passAt` are
+one transaction too. A pass that stops keeps its ids and the page it reached. Each commit waits for the disk, so the
+sync commits once a page of changes or ids, once to end a kind's id pass and once at the end of the run
+([sync-writes](https://github.com/WireCatLabs/cli-testing/tree/main/performance/tracker/sync-writes)).
 
 - **Budget.** The engine takes one request from `options.budget` before each call. A run that stops answers
   `state: "partial"` and `stopped`; the kinds it finished are skipped by the next run until every kind has had its

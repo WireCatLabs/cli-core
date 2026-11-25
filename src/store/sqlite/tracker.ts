@@ -22,6 +22,7 @@ import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { excerptOf } from "./crm-files.js"
 import type { StoreContext } from "./open.js"
+import { writeState } from "./sync.js"
 import {
   dropTrackerChunks,
   isChunkedTrackerKind,
@@ -32,7 +33,7 @@ import {
   trackerChunkWriter,
   trackerEmbedded,
 } from "./tracker-chunks.js"
-import { write } from "./transaction.js"
+import { read, write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
 /** One stored tracker record with what the store keeps beside it. */
@@ -98,18 +99,20 @@ export interface TrackerStore {
   /**
    * Upserts records of one kind; a field a record leaves out keeps its stored value, and a record listed again after
    * the tracker stopped listing it comes back. A record the tracker calls `deleted` is marked deleted, and an issue
-   * takes its comments with it. Answers how many changed: a row read again as it was stored is not counted.
+   * takes its comments with it. Answers how many changed: a row read again as it was stored is not counted. `state`
+   * is the account's sync state saved in the same transaction, as a sync's cursor after the page.
    */
   save<K extends TrackerKind>(
     key: AccountKey,
     kind: K,
     records: readonly TrackerRecords[K][],
     now: number,
+    state?: Record<string, string>,
   ): Promise<number>
   /**
    * After a complete list of the kind's ids: marks deleted every stored one the list lacks that has not been synced
    * since `before`, so a row saved while the list was read is never taken for a deleted one, and the comments of an
-   * issue it marks. Answers how many of the kind.
+   * issue it marks. Answers how many of the kind. `state` is saved in the same transaction; a dry run writes nothing.
    */
   removeUnlisted(
     key: AccountKey,
@@ -117,7 +120,7 @@ export interface TrackerStore {
     listed: readonly string[],
     before: number,
     now: number,
-    options?: { dryRun?: boolean },
+    options?: { dryRun?: boolean; state?: Record<string, string> },
   ): Promise<number>
   get<K extends TrackerKind>(key: AccountKey, kind: K, externalId: string): Promise<TrackerItem<K> | undefined>
   /** An issue by its readable key (`ENG-12`), in any letter case. */
@@ -252,7 +255,17 @@ const queryOf = (words: readonly string[], exact: boolean) => {
 export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   const { database } = context
 
-  const save = <K extends TrackerKind>(key: AccountKey, kind: K, records: readonly TrackerRecords[K][], now: number) =>
+  const saveStates = (accountId: number, state: Record<string, string> = {}) => {
+    for (const [name, value] of Object.entries(state)) writeState(context, accountId, name, value)
+  }
+
+  const save = <K extends TrackerKind>(
+    key: AccountKey,
+    kind: K,
+    records: readonly TrackerRecords[K][],
+    now: number,
+    state?: Record<string, string>,
+  ) =>
     write(database, () => {
       const accountId = accountPk(context, key)
       const stored = database.prepare(
@@ -372,6 +385,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
         for (const hash of freed?.released ?? []) released.push(hash)
       }
       dropUnusedVectors(database, released)
+      saveStates(accountId, state)
       return changed
     })
 
@@ -408,12 +422,13 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
     listed: readonly string[],
     before: number,
     now: number,
-    { dryRun = false }: { dryRun?: boolean } = {},
+    { dryRun = false, state }: { dryRun?: boolean; state?: Record<string, string> } = {},
   ) => {
-    const accountId = findAccountPk(context, key)
-    if (accountId === undefined) return 0
+    const found = findAccountPk(context, key)
+    if (found === undefined && (dryRun || !state)) return 0
     const keep = new Set(listed)
-    return write(database, () => {
+    return (dryRun ? read : write)(database, () => {
+      const accountId = found ?? accountPk(context, key)
       const mark = database.prepare("UPDATE tracker_items SET deleted_at = ? WHERE id = ?")
       let removed = 0
       const marked: number[] = []
@@ -434,7 +449,10 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       }
       if (isChunkedTrackerKind(kind)) dropTrackerChunks(database, marked)
       deleteComments(database, accountId, issues, now)
-      if (!dryRun) restoreListed(accountId, kind, listed)
+      if (!dryRun) {
+        restoreListed(accountId, kind, listed)
+        saveStates(accountId, state)
+      }
       return removed
     })
   }
@@ -571,7 +589,7 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
   }
 
   return {
-    save: async (key, kind, records, now) => save(key, kind, records, now),
+    save: async (key, kind, records, now, state) => save(key, kind, records, now, state),
     removeUnlisted: async (key, kind, listed, before, now, options) =>
       removeUnlisted(key, kind, listed, before, now, options),
     get: async <K extends TrackerKind>(key: AccountKey, kind: K, externalId: string) => {
