@@ -5,6 +5,95 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 1.1.0 — 25.11.2026
+
+### Added
+
+- **`store.people.listBots` and `showBot`** read the sender bots: by name, by part of a name, address or username, or by
+  the organization they send for (`organization:<id>`). `showBot` adds every move to or from the bot. memo and Desktop
+  build their bots list on them.
+- **The domain-list pack: more organizations get a sector, and the lists update without a release.**
+  `domainListsCommand` (experimental) gives a CLI `domain-lists update` and `domain-lists list`. `update` downloads the
+  newest pack from WireCat's GitHub release `domain-lists`, each file checked by sha256 the way `models download` checks
+  a model, and swaps the pack folder whole. The first pack holds UT1's sector and webmail lists (CC BY-SA 4.0, their
+  own files), the FDIC-insured US banks, UT1's malware and cryptojacking hosts, and Stop Forum Spam's toxic domains,
+  which each computer fetches from Stop Forum Spam itself because its terms forbid redistribution. Each source carries
+  its licence, credit and class: `commercial-ok`, or `non-commercial`, which WireCat may use and a paid service may
+  not; `--commercial-only` leaves those out. Sender domains are matched on this computer only, never sent anywhere.
+  Two sectors come from the pack, `gaming_gambling` and `adult`. UT1's webmail providers never make an organization.
+  Spam and malware lists never set a sector: the lookup reports them apart, for exact host names only, and nothing
+  reads them yet. `.github/workflows/domain-lists.yml` builds and publishes the pack weekly.
+- **About 23,000 more free-mail providers are never an organization.** Built in from microlink's free-email-domains
+  (MIT), less the domains Wikidata calls an organization, such as `sky.com` or `orange.fr`, whose own bills come from
+  that domain. An organization already made on a domain that is now free mail stays.
+- **Each email has a type of its own, apart from its sender (store version 76).** `Email.mailType` is one of
+  `auto_reply`, `security`, `calendar`, `travel`, `event_ticket`, `order`, `shipping`, `bill`, `social_notification`,
+  `discussion_list`, `newsletter`, `promotion`, `system_alert`, `account_notice`, `personal` or `other`, worked out
+  locally from the stored headers, recipients, attachment types, schema.org markup in a kept HTML body, the sender's bot
+  and its organization's sector, and whether the owner wrote to the sender. `Email.reach` (`direct`, `group`,
+  `broadcast`) is worked out per email too, and `Email.typeSignal` says what decided the type. They are kept on the
+  email and cleared by triggers when what decides them changes; a store's existing mail gets them in batches on the
+  first read that filters by them. The words are in the [glossary](docs/dev/GLOSSARY.md#mail-types).
+- **`store.mail.emails` filters by `types` and `reaches`**, and **`store.mail.mailSenders`** lists the senders of
+  incoming mail with their mail counted by type and reach: a sender is listed when any of its mail passes the filter,
+  so a shop that sends receipts and sales shows under both. Both are experimental.
+- **`oauthSessionCommand` takes the sign-ins a CLI kept before**, so zm and drive can move to it with nobody signing
+  in again. All new options are optional:
+  - `codec` is the entry's format (`zoomTokenCodec`, `driveSessionCodec`). The standard one stays the default.
+  - `legacyAccounts(env, profile)` names where older versions kept a profile's sign-in, as an account or as a service
+    and an account. The first read copies it to `oauth:<provider>:<profile>`. `session end` removes it too. A run with
+    moved folders only reads it.
+  - `startOptions` adds options to `session start`, such as a client or the scopes to ask. `preset` reads them from
+    `command.opts()`.
+  - `preset` may be async. In `session start` it also gets the sign-in steps, so it can ask for a missing client id
+    with `--answer-stdin`.
+  - `verify` may return `extra`, which the codec saves in the entry at sign-in (drive's `principal`).
+  - `afterSignIn(command, signedIn)` runs once the sign-in is kept. It gets the profile, the account and the client
+    the sign-in used, so a CLI can save that client beside it (WC-SECR-25).
+  - `profiles(env)` is the list `session list` names, for a CLI that keeps its profiles in its own config.
+- **`session start --answer-stdin`** in every CLI built on `oauthSessionCommand`. With `--json` it asks for the
+  redirected address as a `needs` line when the browser does not come back to this computer.
+- **`session status` gives `expires_at`**, when the access token runs out. A refresh moves it on.
+- **`session list` rows have `state`**: `saved`, `missing` or `unknown`, in `oauthSessionCommand` and
+  `tokenSessionCommand`. When the keyring cannot be reached, or an entry cannot be read, the row is `signed_in: null`
+  and `state: "unknown"` and the list still answers. One warning names the cause, and `session status` says more.
+- **`storageOf`, `timeLimit` and `withTimeLimit` are exported** from `@wirecat/cli-core/cli`, so CLIs stop keeping
+  copies of them.
+- **`credentialStorage` reads an older entry under another service** (`legacyAccounts: [{ service, account }]`). It
+  copies an entry it found in the private file within the file, never into the keyring. `remove` removes the older
+  entries too, except in a run with moved folders, so the next read does not sign the profile in again.
+
+### Changed — experimental
+
+- **Bots are their own entity, apart from people (store version 75).** A sender bot (`sender-bot:<id>`) now holds its
+  identities itself, in `sender_bot_identities`: an identity belongs to one person or one bot, never both. Its messages
+  and mail keep pointing at the identity. A bot never appears in `people.list`, its counts, `people.similar` or
+  `people.ties`; `people list kind:automated` keeps the people a name or a bulk mailbox marks. The upgrade moves every
+  version 74 bot's identities off its person row. That row stays, hidden, so a move back gives its uid back, and its
+  `person:` ref still names the bot in a move. `minCompatible` stays 73: triggers keep a 1.0 build from giving a bot's
+  identity a person again, and the next list settles a bot such a build sorts.
+- **`SenderBot` describes the bot itself**: its name, identities, organization, author, reason, counts, reach and
+  signals, and no longer `person`. `moveToPerson` gives each identity back to the person it came from unless `person` is
+  named. Both moves take `sender-bot:<id>`, `person:<uid>` or an identity.
+- **`people.list` rows lose `bot`**, and `KindSignal` loses `owner-choice`: no listed row is a bot.
+- **A sector from the rules is changed or removed when a newer list no longer gives it.** Rules mark their sector
+  `metadata.sector_by = 'rules'`; a sector with any other `sector_by` is the owner's and stays. When the built-in table
+  or the pack changes, the next kind pass works out every organization's sector again. An organization's `sector` can
+  now also be `gaming_gambling` or `adult`.
+
+### Fixed
+
+- **`tokenSessionCommand`'s `session list` no longer fails for every profile when one sign-in cannot be read**, from
+  a keyring this run cannot reach or a broken entry. That profile is `unknown` and the others are listed. WireCat
+  Desktop reads its profiles from this list.
+- **A generated `api` command refuses an empty required argument before it sends anything.** `linear api issue-delete
+  --id "" --yes` used to send the request, and Linear's answer left the write unconfirmed (exit 14,
+  `outcome.unknown`). Now a required path, query or header parameter, or a required GraphQL variable from a flag
+  or from `--body`, that is empty or only spaces stops the command with exit 2 (`validation_error`, reason `input.invalid`),
+  naming the flag, and nothing is sent. An empty path parameter could otherwise reach another endpoint (`/posts/`).
+  `serviceApiWriter` refuses the same for code. A bot API's body field is still sent empty: Telegram's `setWebhook`
+  takes an empty `url` to remove the hook.
+
 ## 1.0.0 — 25.11.2026
 
 ### Added
