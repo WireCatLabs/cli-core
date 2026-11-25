@@ -20,7 +20,9 @@
   in `candidates`, no longer an empty list. `TrackerFilter`'s `assignee`, `project`, `state`, `label` and `sprint`
   take several ids too.
 
-### Changed — may break callers
+### Changed — experimental
+
+The tracker commands are not in the stable API; these may still break a caller that relied on the old answers.
 
 - **A quoted argument to `issues search` is words in any order, not a phrase.** `issues search "invoice currency"`
   now matches as `issues search invoice currency` does, as its help says. Quote marks inside the query
