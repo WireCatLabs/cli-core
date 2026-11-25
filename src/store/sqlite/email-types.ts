@@ -105,7 +105,9 @@ export const storeMailTypes = (database: CacheDatabase): boolean => {
   if (rulesOf(database) !== TYPE_RULES)
     writeBatch(database, () => {
       if (rulesOf(database) === TYPE_RULES) return
-      database.prepare("UPDATE emails SET mail_type = NULL WHERE mail_type IS NOT NULL").run()
+      database
+        .prepare("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL WHERE mail_type IS NOT NULL")
+        .run()
       database
         .prepare(
           "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) " +

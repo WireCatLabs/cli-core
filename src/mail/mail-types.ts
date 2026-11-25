@@ -25,7 +25,10 @@ import { DISCUSSION_SENDERS, type Reach, reachOfOne } from "../store/sqlite/send
 
 /**
  * What one email is, apart from who sent it: a shop's receipt is an `order` and its sale a `promotion`. The first
- * that matches wins, in this order. @experimental
+ * that matches wins, in this order, with one exception: an automated sender's List-Unsubscribe mail with no campaign
+ * marker is an `account_notice` before the list types are tried (Zero's rule that keeps receipts out of promotions).
+ * `system_alert` comes before `account_notice`: an alert carries Auto-Submitted too, and would never be reached.
+ * @experimental
  */
 export const MAIL_TYPES = [
   "auto_reply",

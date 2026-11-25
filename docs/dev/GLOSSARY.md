@@ -102,9 +102,10 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 
 ### Mail types
 
-The values of `mailType`, in the order they are tried: the first that matches wins. Mail from someone the owner wrote
-to is typed by what the email itself carries (a part, schema.org markup, list headers), never by an address word or a
-subject alone.
+The values of `mailType`, in the order they are tried: the first that matches wins. One exception: mail with
+List-Unsubscribe but no one-click unsubscribe or campaign marker, from an automated address such as `notifications@`,
+is an `account_notice` before the list types are tried. Mail from someone the owner wrote to is typed by what the
+email itself carries (a part, schema.org markup, list headers), never by an address word or a subject alone.
 
 | Word | One meaning | Not |
 |---|---|---|
