@@ -7,6 +7,146 @@ shape of this file.
 
 ## 1.0.0-rc.0 — 25.11.2026
 
+### Added
+
+- **Every error reason is listed, and its list is a contract.** [Error reasons](docs/reasons.md) names all 613
+  reasons cli-core raises (`CORE_REASONS`) with their code, meaning and detail keys, generated from the source. New
+  reasons and reworded messages may come in any release. Removing or renaming a reason, or moving it to another code,
+  is a break: it is listed under "Changed — may break callers" or "Removed", and from 1.0.0 on it needs a major.
+  `pnpm docs:check` fails when the page and the source disagree, or when a listed reason goes without a changelog
+  entry that names it.
+- **The changelog takes two more headings: "Changed — experimental" and "Deprecated".** They are for a change to the
+  experimental part of the API and for something marked to be removed later; both need a minor release. From 1.0.0
+  on, "Changed — may break callers" and "Removed" are breaks of the stable API and need a major. `bin/release` picks
+  the version those headings need, stops before a new major unless run with `--major`, and publishes a pre-release
+  such as `1.0.0-rc.1` under npm's `next` tag, never as `latest`.
+- **A stable API under semver.** `package.json` lists the stable entry points in `wirecat.stable`: `.`, `./cli`,
+  `./cli/start`, `./mcp`, `./sends`, `./skill-validation`, `./sqlite-runtime`, `./store`, `./testing` and `./update`.
+  Inside them, a name whose doc comment says `@experimental` is outside the promise, and so is every other entry point.
+  From 1.0.0 a break of the stable API needs a major; a change to experimental names needs only a minor. The stable
+  names are the ones two or more CLIs import (or the CLI template), and the types those names reach. `MessageStore`
+  is now `MessageStoreCore` (stable: `accounts`, `chats`, `messages`, `people`, `tags`, `close`) plus
+  `MessageStoreAreas` (experimental: every other area, like the family entry points `./meetings`, `./mail`, `./crm`
+  and the rest they belong to). Code that names `MessageStore` needs no change.
+
+- **A CLI's own declarations compile when they infer a type cli-core returns.** Every module's types can be named
+  at `@wirecat/cli-core/internal/<path>`, types only: TypeScript writes that path into a declaration it infers, so a
+  CLI that keeps a returned value without a type annotation no longer fails with TS2883. Nothing can be imported
+  from it at run time, and it is experimental, outside `wirecat.stable`.
+- **`people.list` rows say how a sender's mail reached the owner.** Each row has `reach` (`direct`, `group`,
+  `broadcast` or `null`) and `signals` (`auto-submitted`, `null-return-path`, `no-reply`, `one-click-unsubscribe`,
+  `feedback-id`, `bulk-mail`, `discussion-list`, `many-recipients`, `undisclosed-recipients`), worked out for the page
+  and not stored ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)). A List-Id three addresses write to is a discussion
+  (`group`), one sender under many `+tag` addresses a newsletter. The types `Reach`, `SenderSignal` and `REACHES` are
+  exported from `./store`.
+- **Mail sync keeps `Auto-Submitted`, one-click `List-Unsubscribe-Post` and `Feedback-ID`** in `emails.headers`,
+  each only when a DKIM signature of the From's own domain that Gmail passed covers it, and an empty Return-Path
+  ([MAIL.md](docs/dev/MAIL.md#syncmailsource-store-options)). Mail of an IMAP server without Gmail's stamp keeps
+  none of the three. No store version.
+
+### Changed — may break callers
+
+- **`sync --rescan` no longer lets a sync mark most of a kind deleted.** In the CRM, tracker and content syncs,
+  `--rescan` only lists everything again; the mass-deletion guard stays on. The one way past it is
+  `--allow-deletions <count>` (`allowDeletions` in `syncCrm`, `syncTracker`, `syncContent` and `syncCalendars`): a
+  held pass goes through when it would mark at most that many deleted, and its message names the number. The flag
+  is owner-only, so an MCP server does not offer it. `crmSyncContract` and `contentSyncContract` check both: a rescan
+  stays held, `allowDeletions` lets it through.
+- **`EventStore.markUnseen` takes an optional fifth argument**, `{ keep, dryRun }`: entries the source still has but
+  could not read are not marked, and a dry run marks nothing and answers how many it would. A store that implements
+  the port itself keeps working without it, but keeps marking such entries deleted.
+- **An MCP call that names a refused place now answers `permission_error` (`access.denied`)**, with the option or
+  argument in `param`, before the command runs. `attachments extract --output-dir` and `--from-dir` answered
+  `validation_error` before.
+- **Store version 73: an id is never handed out twice, and only cli-core 1.0 tools open the store after it.** Every
+  base table with an integer `id` (101 tables) is copied once to become `AUTOINCREMENT`. Each counter starts 1,000
+  above the largest id the store still knows, from the table's own rows, foreign keys, `<name>_type`/`<name>_id`
+  pointers and the kept highest ids of memories and facts. So after `people delete`, `organizations delete` or
+  `records clear`, an old reference such as `organization:2766` no longer names a new row. `minCompatible` becomes 73:
+  a 0.x tool refuses the file. Upgrade every installed CLI to cli-core 1.0 first, and migrate with `serve`, `mcp` and
+  syncs stopped, since the copy holds the write lock. Tables that other tools add to the file are left as they are.
+- **The migration refuses to run without a rollback copy.** If the copy of the store cannot be written, for example
+  because the disk is full, the store stays at its version and nothing changes. `store migrate --no-backup`
+  migrates anyway, with no way back to the older tools.
+- **The store checks rules that never change, with `CHECK` constraints:** a JSON column holds valid JSON, a pointer
+  pair (`*_type`, `*_id`) is whole or empty, and an amount is not negative. On upgrade, text that is not JSON is kept
+  whole as a JSON string, and the rows are named in a warning and in `store_settings` (`migration:73:repaired`). A
+  half-set pointer or a negative amount stops the migration, naming the rows, and changes nothing.
+- **A reference that already pointed at a deleted row no longer stops the migration.** Such rows are kept as they
+  were, named in a warning by table, column and ids, and listed in `store_settings` (`migration:73:broken-references`).
+  Only a reference the copy itself would break stops it, naming the rows. So does a copy that would change how many
+  rows a table holds, naming the table and both counts. A refused or failed migration deletes the rollback copy it
+  wrote, so a retry does not add another; older copies stay.
+  A new store creates its empty tables directly instead of copying them, so its first open takes about as long as
+  before version 73.
+- **Deleting a message, chat, note, document, memory or email no longer scans every tagging:** `taggings` has an index
+  on `(taggable_type, taggable_id)`.
+- **Linking replies to their thread no longer scans the chat:** `messages` has an index on
+  `(chat_id, thread_external_id)` for the messages not yet linked to a thread root.
+- **The peer ranges are bounded for 1.0.** `@wirecat/cli-base` is `^1.0.0-0`: cli-core's types name the codegen
+  types from `@wirecat/cli-base/codegen/runtime`, cli-base 1.0's stable part, which older cli-base lacks. `commander` is `^15.0.0` (it was `>=15`): the command skeleton reads
+  a few commander fields that have no public accessor, now all in one internal module with a test, and a new
+  commander major is accepted only after that test passes on it.
+
+- **`@wirecat/cli-core/store` no longer re-exports the SQLite implementation.** About 390 names declared under
+  `src/store/sqlite/` (maintenance helpers such as `resetAttachmentWords` and `backfillNormalized`, row types,
+  query constants and the area interfaces) left the entry. `openStore`, `StoreOptions`, `MessageStore`, `storePath`
+  and the other names declared outside `src/store/sqlite/` stay. The 80 of them that CLIs import moved to the new
+  experimental entry `@wirecat/cli-core/store/areas` under the same names: change the import path. The rest have no
+  importer; their types are still reachable as members of `MessageStore`, for example `MessageStore["mail"]`.
+
+- **`./cli` no longer re-exports five cli-base names** that are cli-base's own: `assertSharedContracts`,
+  `customizeSharedCommand`, `SharedContractOverride`, `sharedContractOverrides` and `sharedContracts`. Import them
+  from `@wirecat/cli-base/commands`.
+- **`KindSignal` has two more values, `auto-submitted` and `null-return-path`, and `ListedPerson` two more fields,
+  `reach` and `signals`.** Code that maps every `KindSignal` or builds a `ListedPerson` by hand adds them.
+
+### Fixed
+
+- **A mail sync no longer marks mail deleted that the server's search found and its listing left out.** A run of a
+  folder whose listing returned fewer messages than its search skips the deletion check, and says why in
+  `deletionsSkipped`, budgeted or not.
+- **A CRM id pass is held when the adapter said it could not read the whole kind**, as the tracker's already was.
+  The hold also covers a pass that spans several runs, and no flag lifts it. The tracker's id pass now keeps that
+  mark across runs too.
+- **A calendar round no longer stalls on a series deleted between its listing and its slots call.** The series'
+  stored slots stay as they are, the round ends, and the next listing settles the series.
+- **An ICS feed event that stops parsing is no longer marked deleted.** The feed still holds it, so its stored copy
+  stays as it was. The ICS source names such events in the new `ChangePage.kept`.
+- **A full calendar round is held when it would mark most of a calendar deleted**: an empty list, or more than half
+  of ten or more stored entries. The round still ends; `held` says why and names `sync --allow-deletions`.
+- **Serve no longer makes a remote path, a chat folder's title or a command path absolute** against the client's
+  folder. Only local paths are, as one declaration says (`notLocalPaths`).
+- **Parity builds every CLI that uses cli-core, not 9 of them.** A release now builds and tests all 19, adding
+  amo-cli, asterisk-cli, attio-cli, beeline-cli, hubspot-cli, linear-cli, notion-cli, slack-cli, wordpress-cli and
+  ydisk-cli. A pull request and a push to `main` build 7 of them (tg, max, wa, memo, mail, drive and attio) to save
+  the Actions minutes all WireCat repositories share; the monthly run and a run by hand build all.
+- **The CLIs are on the parity known-broken list until 2026-12-02.** Each adopts cli-core 1.0 on its `release/1.0`
+  branch, in a draft pull request, and its main stays on 0.x until the 1.0.0 batch. Without the list, every pull
+  request and release from main failed parity on the CLIs' main.
+- **A sender whose mail a program sends is `automated`, not a stranger.** Most of their mail with a signed
+  `Auto-Submitted` (not an auto-reply) or an empty Return-Path makes them `automated` (signals `auto-submitted`,
+  `null-return-path`), unless the owner wrote to them. Every stored kind is worked out again on the next list.
+
+### Security
+
+- **One check for every file or folder an MCP call names.** Before any MCP call runs, each option and argument that
+  takes a local path is checked by its real path, so neither a link nor `..` gets past. A call cannot name a
+  credential folder, a folder of this or another WireCat tool, or the message store. `store backup` and
+  `store restore` may still name the store's own backups folder. A new option whose placeholder names a file or
+  folder is checked without more code; `notLocalPaths` marks one that names no local file, and a test fails on an
+  input named like a path that is neither. A CLI marks its own remote paths with `notLocalPaths` from
+  `@wirecat/cli-core/cli` (experimental). A shell run is unchanged, and the checks the commands already make stay.
+
+### Removed
+
+- **`searchAllIncludingMeetings` and its types** (`ResourceWithMeetings`, `MeetingSearchCursor`,
+  `SearchAllIncludingMeetingsRequest`, `MeetingSearchCoverage`, `SearchAllIncludingMeetingsFound`) from
+  `@wirecat/cli-core/services`. Call `searchAll` with `scope.meetings` and read `SearchAllFound`.
+- **`SyncOptions.limitError`** (document sync), which nothing called: a walk past `maxEntries` already goes on in the next sync.
+- **`MeetingTranscriptDocumentStore.transcriptMeetings`**. `documentMeetings` gives each document's meeting with its
+  role; keep the entries whose role is `transcript`.
+
 ## 0.753.0 — 25.11.2026
 
 ### Added
