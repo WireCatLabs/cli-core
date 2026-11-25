@@ -11,6 +11,7 @@ import {
   saveConfigFile,
 } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import type { Effects } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { lockPath, readLock, servingProfiles } from "../background/lock.js"
 import { alive } from "../background/processes.js"
@@ -105,6 +106,8 @@ export interface AccountRemoveOptions {
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
   /** The owner's own home; unset, the account's from the user database. A test names its sandbox. */
   ownerHome?: string
+  /** A CLI whose removal reaches no service says so here (`LOCAL_WRITE`), not by annotating the command after. */
+  effects?: Effects
 }
 
 type Kind = "sign_in" | "keyring" | "config" | "file" | "store" | "unit" | "schedule"
@@ -243,7 +246,7 @@ export const accountRemoveCommand = (
 ): Command =>
   logsInOrOut(
     annotate(new Command("remove"), {
-      effects: REMOTE_WRITE,
+      effects: options.effects ?? REMOTE_WRITE,
       mcp: false,
       output: { entity: "account_removal" },
       examples: [

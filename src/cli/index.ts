@@ -615,7 +615,6 @@ export {
   type OAuthSignedIn,
   oauthFlowOf,
   oauthPreset,
-  oauthSessionCommand,
 } from "./oauth-session.js"
 export { pagingOf, positiveCount, window, withPaging } from "./paging.js"
 export { notLocalPaths } from "./path-options.js"
@@ -778,6 +777,7 @@ export {
   metadataCommand,
   modelCatalogueCommand,
   modelsCommand,
+  oauthSessionCommand,
   pinCommand,
   pollsCommand,
   projectsCommand,
@@ -805,6 +805,7 @@ export {
   tasksCommand,
   tasksStatsCommand,
   templatesCommand,
+  tokenSessionCommand,
   topicsCommand,
   unpinCommand,
   upgradeCommand,
@@ -829,6 +830,5 @@ export {
   signedInSite,
   storageOf,
   type TokenSessionOptions,
-  tokenSessionCommand,
 } from "./token-session.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

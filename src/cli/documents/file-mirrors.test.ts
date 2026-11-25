@@ -9,7 +9,9 @@ import type { Expect, FileTarget, RemoteFile } from "../../documents.js"
 import type { KeyedGuard } from "../../sends/keyed-guard.js"
 import { outputFor, provide } from "../context.js"
 import { type Body, renderAnswer } from "../envelope.js"
-import { type FileMirrorWrite, fileMirrorsCommand } from "./file-mirrors.js"
+import { hasSharedContract } from "../shared-contracts.js"
+import type { FileMirrorWrite } from "./file-mirrors.js"
+import { fileMirrorsCommand } from "./index.js"
 
 const FOLDER = "/Notes"
 const sha = (text: string | Buffer) => createHash("sha256").update(text).digest("hex")
@@ -132,10 +134,16 @@ const setup = (rewrite?: (text: string) => string, env?: NodeJS.ProcessEnv) => {
     return bodies.at(-1) as Body & { item?: Record<string, unknown>; items?: Record<string, unknown>[] }
   }
   const add = async () => (await run("add", FOLDER, local)).item?.id as string
-  return { home, state, local, remote, writes, runs, run, add, streams }
+  return { home, state, local, remote, writes, runs, run, add, streams, program }
 }
 
 describe("fileMirrorsCommand", () => {
+  it("is cli-core's own mirrors group", () => {
+    const { program } = setup()
+    const mirrors = program.commands.find((command) => command.name() === "mirrors")
+    expect(mirrors && hasSharedContract(mirrors)).toBe(true)
+  })
+
   it("marks the files a preview names for a scheduled agent, and leaves the mirror's own folder as it is", async () => {
     const preview = async (env: NodeJS.ProcessEnv) => {
       const { local, remote, run, add, streams } = setup(undefined, env)

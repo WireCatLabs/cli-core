@@ -1,6 +1,9 @@
 import type { Command } from "commander"
+import { honoursDryRun } from "../dry-run-guard.js"
+import { sharedCommand } from "../shared-contracts.js"
 import { addDocumentCatalogCommands, type DocumentCatalogCommands } from "./catalog.js"
 import { addLocalDocumentCommands, type LocalDocumentCommands } from "./documents.js"
+import { fileMirrorsCommand as fileMirrorsCommandDefinition } from "./file-mirrors.js"
 import { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
 import { addDocumentHistoryCommands, type DocumentHistoryCommands } from "./history.js"
 import { addDocumentKnowledgeCommands, type DocumentKnowledgeCommands } from "./knowledge.js"
@@ -33,12 +36,7 @@ export {
 export { addLocalDocumentCommands, type ImportedDocument, type LocalDocumentCommands } from "./documents.js"
 export { type FileConflictCommands, type FileConflictConnection, fileConflictsCommand } from "./file-conflicts.js"
 export { addFileEditCommands, type FileEditCommands } from "./file-edit.js"
-export {
-  type FileMirrorCommands,
-  type FileMirrorRemote,
-  type FileMirrorWrite,
-  fileMirrorsCommand,
-} from "./file-mirrors.js"
+export type { FileMirrorCommands, FileMirrorRemote, FileMirrorWrite } from "./file-mirrors.js"
 export { addFileUpdateCommand, type FileUpdateCommands, type FileUpdatePort } from "./file-update.js"
 export { addDocumentFolderCommands, type DocumentFolderCommands } from "./folders.js"
 export {
@@ -133,3 +131,5 @@ export {
   documentSourceFromManifest,
   type ManifestDocumentSource,
 } from "./manifest/source.js"
+
+export const fileMirrorsCommand = honoursDryRun(sharedCommand(fileMirrorsCommandDefinition))
