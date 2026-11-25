@@ -1,6 +1,8 @@
 import { getDomainWithoutSuffix } from "tldts"
 import { isReadable } from "../../domain/display-names.js"
-import { SECTORS, sectorOfDomain } from "../../domain/organization-sectors.js"
+import { installedPack, isPackFreeMailDomain, lookupDomains } from "../../domain/domain-lists.js"
+import { SECTORS_BUILT } from "../../domain/organization-sectors.generated.js"
+import { isFreeMailDomain, SECTORS, type Sector, sectorOfDomain } from "../../domain/organization-sectors.js"
 import { isCompanyName } from "../../domain/person-kinds.js"
 import { FREE_MAIL, isDisposableDomain, registrableOf } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
@@ -46,7 +48,12 @@ export const REFUSED_DOMAIN = "organization-domain"
 export const companyDomainOf = (address: string): string | undefined => {
   if (!address.includes("@")) return undefined
   const domain = registrableOf(address)
-  return domain.includes(".") && !FREE_MAIL.has(domain) && !SENDING_PLATFORMS.has(domain) && !isDisposableDomain(domain)
+  return domain.includes(".") &&
+    !FREE_MAIL.has(domain) &&
+    !isFreeMailDomain(domain) &&
+    !isPackFreeMailDomain(domain) &&
+    !SENDING_PLATFORMS.has(domain) &&
+    !isDisposableDomain(domain)
     ? domain
     : undefined
 }
@@ -162,11 +169,12 @@ const othersAt = (database: CacheDatabase, domains: ReadonlySet<string>, seen: R
 /**
  * Plan step 5: a sender bot or a shared mailbox at a company domain joins that domain's organization, made when none holds
  * it; a human there becomes a `member-of` it, never merged. Free mail, throwaway mail and sending platforms make none.
- * An organization holding a domain of the built-in Wikidata list gets its `metadata.sector`.
+ * An organization holding a domain of the built-in Wikidata list or of the domain-list pack gets its `metadata.sector`.
  * The owner's word holds: a membership the owner removed and a domain whose organization the owner erased are not made
  * again. The caller holds the write lock.
  */
 export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[], at: number): void => {
+  refreshSectors(database, at)
   const mail = mailOf(database, people)
   if (mail.size === 0) return
   const { byDomain, held } = holdersOf(database)
@@ -225,24 +233,74 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
   const seen = new Set(humans.map(({ id }) => id))
   for (const person of humans) if (!person.holds) join(person.id, mail.get(keyOf(person)) ?? [])
   if (created.size > 0) for (const [person, addresses] of othersAt(database, created, seen)) join(person, addresses)
-  setSectors(database, byDomain, at)
+  if (created.size > 0)
+    setSectors(database, byDomain, at, new Set([...created].flatMap((domain) => [...(byDomain.get(domain) ?? [])])))
 }
 
-/** Each organization holding a company domain takes that domain's sector, the first in `SECTORS` order if several. */
-const setSectors = (database: CacheDatabase, byDomain: ReadonlyMap<string, ReadonlySet<number>>, at: number) => {
-  const found = new Map<number, number>()
-  for (const [domain, organizations] of byDomain) {
-    const sector = sectorOfDomain(domain)
-    if (sector === undefined) continue
-    const rank = SECTORS.indexOf(sector)
-    for (const organization of organizations)
-      if (rank < (found.get(organization) ?? SECTORS.length)) found.set(organization, rank)
-  }
-  const set = database.prepare(
-    "UPDATE organizations SET metadata = json_set(coalesce(metadata, '{}'), '$.sector', ?), updated_at = ? " +
-      "WHERE id = ? AND deleted_at IS NULL AND json_extract(metadata, '$.sector') IS NOT ?",
+/** Which lists the sectors in the store come from: this build's table and the pack in place. */
+export const SECTORS_FROM = "organizations.sectors_from"
+
+const listsVersion = (): string => {
+  const pack = installedPack()
+  return [SECTORS_BUILT, pack?.version ?? "none", ...Object.keys(pack?.files ?? {}).sort()].join(" ")
+}
+
+/** A newer table or pack can give a sector, change it or take it away: every organization is worked out again once. */
+const refreshSectors = (database: CacheDatabase, at: number): void => {
+  const version = listsVersion()
+  if (database.prepare("SELECT value FROM store_settings WHERE key = ?").get(SECTORS_FROM)?.value === version) return
+  setSectors(database, holdersOf(database).byDomain, at)
+  database
+    .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+    .run(SECTORS_FROM, version, at)
+}
+
+/**
+ * Each organization holding a company domain takes that domain's sector, the first in `SECTORS` order if several; the
+ * built-in table wins over the pack, which only fills its gaps. A rule's sector goes when no list gives one any more.
+ * `metadata.sector_by` is `rules` (or absent, as #3350 wrote it) for a rule's sector; any other value is the owner's,
+ * which no rule changes.
+ */
+const setSectors = (
+  database: CacheDatabase,
+  byDomain: ReadonlyMap<string, ReadonlySet<number>>,
+  at: number,
+  only?: ReadonlySet<number>,
+) => {
+  const scope = [...byDomain].filter(
+    ([, organizations]) => only === undefined || [...organizations].some((one) => only.has(one)),
   )
-  for (const [organization, rank] of found) set.run(SECTORS[rank] ?? null, at, organization, SECTORS[rank] ?? null)
+  if (scope.length === 0) return
+  const pack = lookupDomains(new Set(scope.map(([domain]) => domain))).sectors
+  const rank = (sector: Sector, fromPack: boolean) => SECTORS.indexOf(sector) + (fromPack ? SECTORS.length : 0)
+  const found = new Map<number, number | undefined>()
+  for (const [domain, organizations] of scope) {
+    const core = sectorOfDomain(domain)
+    const ranks = [
+      ...(core === undefined ? [] : [rank(core, false)]),
+      ...(pack.get(domain) ?? []).map((one) => rank(one, true)),
+    ]
+    const best = ranks.reduce<number | undefined>((low, one) => (low === undefined || one < low ? one : low), undefined)
+    for (const organization of organizations) {
+      if (only !== undefined && !only.has(organization)) continue
+      const before = found.get(organization)
+      found.set(organization, before === undefined ? best : best === undefined ? before : Math.min(before, best))
+    }
+  }
+  const byRules = "coalesce(json_extract(metadata, '$.sector_by'), 'rules') = 'rules'"
+  const set = database.prepare(
+    "UPDATE organizations SET metadata = json_set(coalesce(metadata, '{}'), '$.sector', ?, '$.sector_by', 'rules'), " +
+      `updated_at = ? WHERE id = ? AND deleted_at IS NULL AND ${byRules} AND json_extract(metadata, '$.sector') IS NOT ?`,
+  )
+  const clear = database.prepare(
+    "UPDATE organizations SET metadata = json_remove(metadata, '$.sector', '$.sector_by'), updated_at = ? " +
+      `WHERE id = ? AND deleted_at IS NULL AND ${byRules} AND json_extract(metadata, '$.sector') IS NOT NULL`,
+  )
+  for (const [organization, ranked] of found) {
+    const sector = ranked === undefined ? undefined : SECTORS[ranked % SECTORS.length]
+    if (sector === undefined) clear.run(at, organization)
+    else set.run(sector, at, organization, sector)
+  }
 }
 
 /** The owner erased an organization: no rule makes one for the company domains it held again. */

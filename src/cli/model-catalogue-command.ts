@@ -245,7 +245,7 @@ const PROGRESS_EVERY_MS = 500
  * `{"event":"progress","step":"download",…}` on stderr under --json, for a window to draw a bar by: at most every half
  * second, but always the first line and the last.
  */
-const downloadProgress = (emit: ReturnType<typeof stepLines>, label: string) => {
+export const downloadProgress = (emit: ReturnType<typeof stepLines>, label: string) => {
   let last = Number.NEGATIVE_INFINITY
   return (done: number, total: number) => {
     const now = Date.now()

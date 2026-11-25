@@ -64,6 +64,7 @@ import { counterRefresh, counters } from "./counters.js"
 import { deal, lead, pipeline, stage } from "./deal.js"
 import { document } from "./document.js"
 import { documentLink } from "./document-link.js"
+import { domainList } from "./domain-list.js"
 import { evidence } from "./evidence.js"
 import { fact } from "./fact.js"
 import { reference, untrusted } from "./fields.js"
@@ -282,6 +283,7 @@ export {
   counters,
   document,
   documentLink,
+  domainList,
   endedAccountSessions,
   evidence,
   evidencePacket,
@@ -663,6 +665,7 @@ export const ENTITIES = {
   chat_rules: chatRules,
   chat_moderation: chatModeration,
   "model.chosen": chosenModel,
+  domain_list: domainList,
   model_key: modelKey,
   chat_sending: chatSending,
   "model_key.stored": storedModelKey,

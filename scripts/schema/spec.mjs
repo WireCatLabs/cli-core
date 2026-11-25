@@ -560,7 +560,7 @@ const NEW = {
   actors: [
     {
       name: "organizations",
-      doc: "A company, team, family or community the owner deals with. Projects, work accounts and people's identities belong to one. `metadata.sector` says what it does (`bank`, `airline`, `shop`, …), set from the company domains it holds and the Wikidata list built into the package.",
+      doc: "A company, team, family or community the owner deals with. Projects, work accounts and people's identities belong to one. `metadata.sector` says what it does (`bank`, `airline`, `shop`, …), set from the company domains it holds, the Wikidata list built into the package and the domain-list pack; `metadata.sector_by` is `rules` for a rule's sector, which a newer list changes or removes.",
       cols: [
         id(),
         c("kind", "text", { notnull: true, note: "company, team, family, community" }),

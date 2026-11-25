@@ -724,20 +724,45 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   (`registrableOf`, so `mail.bank.example` is `bank.example`): the organization already holding an address there, else
   a new `company` named by the sender when the name is a company's or the domain's own word, else by the domain. Its
   addresses go to `organization_identities` with method `domain`, author `rules`, and a bot's `sender_bots.organization_id`
-  is set (`people.listBots` filters by it). A human with an address there gets a `member-of` link (author `rule`), never a merge and never a proposal; a
-  human alone makes no organization. Free mail (`FREE_MAIL`), throwaway mail (`disposable-email-domains-js`) and
-  sending platforms (`SENDING_PLATFORMS`) are never a company domain. Two organizations holding one domain leave it
+  is set (`people.listBots` filters by it). A human with an address there gets a `member-of` link (author `rule`),
+  never a merge and never a proposal; a human alone makes no organization. Free mail (`FREE_MAIL`; about 23,000
+  providers in `src/domain/free-mail-domains.generated.ts`, built by `scripts/free-mail-domains.ts` from microlink's
+  MIT list less the domains Wikidata calls an organization; and the pack's `freemail` lists, UT1 `webmail`), throwaway
+  mail (`disposable-email-domains-js`) and sending platforms (`SENDING_PLATFORMS`) are never a company domain. An
+  organization made before its domain joined a free-mail list stays. Two organizations holding one domain leave it
   ungrouped. Each organization holding a company domain takes that domain's `metadata.sector` (`Organization.sector`:
-  `airline`, `bank`, `financial`, `telecom`, `social`, `shop`, `delivery`, `news`, `government`; the first in that
-  order when its domains differ), from `src/domain/organization-sectors.generated.ts`. That table is built into the
-  package at release by `scripts/organization-sectors.ts` from the official websites (P856) of Wikidata items (CC0),
-  so nothing is looked up per sender. A sector is what an organization does; `Category` (client, supplier, …) is what
-  it is to the owner. The owner's word holds: a removed `member-of` leaves a rejected `relationship` proposal the rule checks;
+  `airline`, `bank`, `financial`, `telecom`, `social`, `shop`, `delivery`, `news`, `government`, then the pack's
+  `gaming_gambling` and `adult`; the first in that order when its domains differ). The built-in table wins:
+  `src/domain/organization-sectors.generated.ts`, built at release by `scripts/organization-sectors.ts` from the
+  official websites (P856) of Wikidata items (CC0). The domain-list pack fills its gaps (below). Nothing is looked up
+  per sender. A rule's sector carries `metadata.sector_by = 'rules'` (none on those #3350 wrote, read the same); a
+  newer table or pack changes or removes it, and any other `sector_by` is the owner's, which no rule touches. The store
+  keeps which lists it last worked sectors out from (`store_settings` key `organizations.sectors_from`: the table's
+  build date, the pack's version and its sources); when that changes, the next kind pass works out every
+  organization's sector again, and otherwise only those it makes. A sector is what an organization does; `Category`
+  (client, supplier, …) is what it is to the owner. The owner's word holds: a removed `member-of` leaves a rejected
+  `relationship` proposal the rule checks;
   `knowledge.eraseOrganization` leaves a rejected `organization-domain` proposal per domain, so the rule never remakes
   it; `moveToPerson` drops the rule's holds on the moved identities, and a person the owner kept as one holds nothing.
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;
   a `name:` search looks for the typed text in both scripts (`spellings`). Each row's `usernameSource` names the
   messenger its `@username` belongs to.
+- **The domain-list pack** (`src/domain/domain-lists.ts`, `src/services/domain-lists-download.ts`, the `domain-lists`
+  command). Lists too big, too often updated or share-alike for the package: UT1's sector categories and its webmail
+  list (CC BY-SA 4.0, their own files, so share-alike stays on them), FDIC-insured US banks, UT1 malware and
+  cryptojacking hosts, and Stop Forum Spam's toxic domains. `scripts/domain-lists.ts` builds one gzip file per source
+  and `manifest.json`; `.github/workflows/domain-lists.yml` (weekly, or by hand) publishes them as assets of the
+  release `domain-lists-<date>` and replaces `manifest.json` on the release `domain-lists`, the pointer the CLIs read.
+  Neither is marked Latest. `domain-lists update` downloads like `models download`: `installFiles` checks each file
+  against the manifest's sha256 as it arrives, then the pack folder (`<WireCat state>/lists/domains`) is swapped whole.
+  A list whose terms forbid redistribution (`upstream`, Stop Forum Spam) is fetched whole from its source by each
+  computer; its sha256 is recorded as it came. Each source carries its licence, credit and class: `commercial-ok`, or
+  `non-commercial`, which WireCat may use since it is free and a paid service may not. `--commercial-only` leaves
+  those out, and `lookupDomains(…, { commercialOnly: true })` skips them where they are installed. `sector` lists set
+  a sector; `freemail` lists keep a domain from ever making an organization (`isPackFreeMailDomain`, held in memory:
+  a few hundred domains); `bad` lists only say a host is known for malware or spam, match exact hosts (an entry for
+  `click.mail.brand.example` says nothing about `brand.example`) and never set a sector. `lookupDomains` reads each
+  list from disk a megabyte at a time for the hosts asked, since the biggest has hundreds of thousands of lines.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. Who may be one person waits as an `identity_link` proposal; an

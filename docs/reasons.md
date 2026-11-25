@@ -151,6 +151,7 @@ headings.
 | `document.scan-unturned` | `configuration_error` | tesseract has no osd data, so a page on its side is read as it lies; install it to read scans again |  |
 | `document.version-missing` | `not_found` | the local copy holds no such version of the document |  |
 | `documents.other-account` | `configuration_error` | the documents are signed in as another account than the tracker copy of the same provider |  |
+| `domain-lists.offline` | `permission_error` | updating the domain lists needs the network; --offline was requested |  |
 | `download.mismatch` | `invalid_response` | the downloaded file has other content than the listing said |  |
 | `enrichment.owner-only` | `permission_error` | only the owner turns enrichment on, not an agent |  |
 | `event.conference-exists` | `validation_error` | the event has a meeting link already, which its attendees use |  |
