@@ -79,6 +79,11 @@ mailing service is a bot.
 
 ### What the screen shows
 
+A tab is a filtered view, not a table (owner, 2026-11-25). How rows are stored never decides what a tab may show:
+Subscriptions can list any mail under any filter. A mail gets its own category, apart from its sender, so one shop's
+receipts and promotions land in different places. Rules and the owner's corrections work on two levels, the address
+and the domain: a person rarely writes from a newsletter address, but may write from the same domain.
+
 | Tab | Who | Filters inside |
 |---|---|---|
 | **People** | persons, reach `direct` or `group` | Known (tie) · Not known (no tie, today's Strangers) |
@@ -208,12 +213,13 @@ after the headers and the address, and it is matched on both the `From` domain a
    tabs right, or should Bots sit inside Organizations? Proposed in review: three tabs (People, Bots, Organizations),
    with Subscriptions a filter, since a subscription is a way of delivery, not a sender, and one bot (a shop) sends
    both receipts and promotions, so a tab per sender splits its mail badly. People then needs the same filter, or
-   newsletter authors fill it again.
+   newsletter authors fill it again. Answer (owner, 2026-11-25): tabs are views over per-mail categories, so four
+   tabs stay and a shop's mail splits by category, not by sender.
 2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
    reach `direct`, or two senders split by address?
 3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
    one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
 4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
    a `models`-style command the owner runs?
-5. **The full split of bots.** Give a bot its own `bot:` reference and move its identities off the person (memo and
-   Desktop change), or keep the person-anchored form of #3339?
+5. ~~The full split of bots.~~ Decided (owner, 2026-11-25): a bot is its own entity with its own table and `bot:`
+   reference; the person-anchored form of #3339 is replaced.
