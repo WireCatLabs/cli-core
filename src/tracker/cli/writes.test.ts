@@ -244,6 +244,64 @@ describe("tracker write commands", () => {
     })
   })
 
+  it("a label made after the last sync is asked of the tracker once and kept in the copy; an unknown one is refused", async () => {
+    const rows = exampleTrackerRows()
+    const { cli, source } = await setup({}, rows)
+    const asked: string[] = []
+    const changes = source.changes.bind(source)
+    source.changes = (kind, cursor, page, context) => {
+      asked.push(kind)
+      return changes(kind, cursor, page, context)
+    }
+    const later = Date.UTC(2026, 10, 18)
+    rows.label.push(
+      { externalId: "label-new", name: "Regression", team: "team-1", updatedAt: later },
+      { externalId: "label-two", name: "Flaky", team: null, updatedAt: later },
+    )
+    const done = await cli("issues", "create", "--title", "X", "--label", "regression", "--label", "flaky")
+    expect(done.item.issue).toMatchObject({ labels: ["label-new", "label-two"] })
+    expect(asked).toEqual(["label"])
+    const listed = (await cli("issues", "list", "label:Regression")).items.map((one) => one.external_id)
+    expect(listed).toEqual([(done.item.issue as { external_id: string }).external_id])
+    await expect(cli("issues", "create", "--title", "Y", "--label", "Regresion")).rejects.toMatchObject({
+      message: expect.stringMatching(/no label Regresion .*close names: Regression; nor among the labels changed/),
+      details: {
+        reason: "tracker.reference",
+        param: "--label",
+        candidates: [{ id: "label-new", name: "Regression", team: "team-1" }],
+      },
+    })
+    expect(source.sent).toHaveLength(1)
+  })
+
+  it("a label the tracker deleted since the last sync is never taken from its changes", async () => {
+    const rows = exampleTrackerRows()
+    const { cli, source } = await setup({}, rows)
+    rows.label.push({
+      externalId: "label-gone",
+      name: "Gone",
+      team: null,
+      updatedAt: Date.UTC(2026, 10, 18),
+      deleted: true,
+    })
+    await expect(cli("issues", "create", "--title", "X", "--label", "Gone")).rejects.toThrow(
+      /no label Gone .*nor among the labels changed since the last sync/,
+    )
+    expect(source.sent).toEqual([])
+  })
+
+  it("a name the copy lacks before any sync is refused with the hint to run sync", async () => {
+    const { cli, store } = await setup()
+    await store.sync.setSyncState(
+      ACCOUNT,
+      "tracker:label",
+      JSON.stringify({ v: 1, token: null, round: null, passAt: 0 }),
+    )
+    await expect(cli("issues", "create", "--title", "X", "--label", "Nope")).rejects.toThrow(
+      /no label Nope in the copy.*not in the copy; run sync, then try again/,
+    )
+  })
+
   it("a new issue is refused when the copy holds no team", async () => {
     const { cli, source } = await setup({}, { ...exampleTrackerRows(), team: [] })
     await expect(cli("issues", "create", "--title", "X")).rejects.toMatchObject({

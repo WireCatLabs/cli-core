@@ -43,6 +43,7 @@ export const nearestTracker = async (
     throw new CliError(
       "not_found",
       `no issue, project or comment has vectors of ${model.id} yet, so only words were matched`,
+      { reason: "tracker.no-vectors", model: model.id },
     )
   const [vector] = await withLocal(
     model,

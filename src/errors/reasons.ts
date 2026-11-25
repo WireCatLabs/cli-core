@@ -585,7 +585,10 @@ const OTHERS: Entry[] = [
   ),
   validation("tracker.write-unsupported", "the tracker does not take this write, or does not recognise a repeated one"),
   validation("tracker.field", "a field of an issue or a comment the tracker's write does not take as given"),
-  validation("tracker.reference", "a team, state, label, project or user no single row of the copy has by that name"),
+  validation(
+    "tracker.reference",
+    "a team, state, label, project, user or sprint no single row of the copy has by that name",
+  ),
   validation("tracker.team-required", "a new issue needs its team: name one, or sync a copy that holds one"),
   ["tracker.no-record", "invalid_response", "the tracker answered a write with no record and no error; sync and look"],
   [
@@ -664,6 +667,11 @@ const OTHERS: Entry[] = [
   validation("order.ref", "the reference names no order, or a shop's number names more than one"),
   validation("order.status", "a rejected or deleted order's status does not change"),
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
+  [
+    "tracker.no-vectors",
+    "not_found",
+    "no issue, project or comment is embedded with the model yet; sync --embed builds them",
+  ],
   ["person.no-owner", "not_found", "no person is marked as the owner in the store"],
   ["person.unknown", "not_found", "the store has no person by that reference; people list gives person:<uid>"],
   ["person.no-doubt", "not_found", "nothing about that person is in doubt; people links check lists who is"],

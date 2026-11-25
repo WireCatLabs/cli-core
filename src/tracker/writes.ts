@@ -1,6 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import { TRACKER_PRIORITY_LABELS, type TrackerKind, type TrackerRecords } from "../domain/tracker.js"
+import { TRACKER_PRIORITY_LABELS, type TrackerKind, type TrackerRecords, trackerTitleOf } from "../domain/tracker.js"
 import { foldName } from "../resolve.js"
+import { editDistance } from "../search/correct.js"
 import type { Asker } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
@@ -11,7 +12,7 @@ import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { priorityLabel, priorityOf } from "../tasks/index.js"
 import type { TrackerSource } from "./source.js"
-import { trackerSelfOf } from "./sync.js"
+import { trackerCursorName, trackerSelfOf } from "./sync.js"
 import {
   TRACKER_ASSIGN_OTHERS_KEY,
   TRACKER_WRITE_DEFAULTS,
@@ -66,8 +67,17 @@ export interface TrackerCommentWritten {
 }
 
 const PAGE = 500
-const PLURALS = { team: "teams", user: "users", state: "states", label: "labels", project: "projects" } as const
-type Named = keyof typeof PLURALS
+const PLURALS = {
+  team: "teams",
+  user: "users",
+  state: "states",
+  label: "labels",
+  project: "projects",
+  sprint: "sprints",
+} as const
+/** The kinds a command names by their id or name: an issue's fields and the `issues list` filters. */
+export type TrackerNamed = keyof typeof PLURALS
+type Named = TrackerNamed
 
 const invalid = (message: string, param?: string, details: Record<string, unknown> = {}) =>
   new CliError("validation_error", message, { reason: "tracker.field", ...(param ? { param } : {}), ...details })
@@ -84,11 +94,18 @@ const namesOf = (kind: Named, record: TrackerRecords[Named]): string[] => {
   const { name } = record as { name: string }
   if (kind === "team") return [name, (record as TrackerRecords["team"]).key ?? ""]
   if (kind === "user") return [name, (record as TrackerRecords["user"]).email ?? ""]
+  if (kind === "sprint") {
+    // Linear leaves most cycles unnamed, so people name them by number.
+    const { number } = record as TrackerRecords["sprint"]
+    return typeof number === "number" ? [name, String(number), `Sprint ${number}`] : [name]
+  }
   return [name]
 }
 
+type Copy = Pick<TrackerWriteContext, "store" | "account">
+
 /** Every live row of the kind, page by page: a uniqueness check over a capped page could miss the second match. */
-const allOf = async <K extends Named>(context: TrackerWriteContext, kind: K, parent?: string) => {
+const allOf = async <K extends Named>(context: Copy, kind: K, parent?: string) => {
   const all: TrackerItem<K>[] = []
   for (let offset = 0; ; offset += PAGE) {
     const page = await context.store.tracker.list(context.account, kind, {
@@ -101,17 +118,152 @@ const allOf = async <K extends Named>(context: TrackerWriteContext, kind: K, par
   }
 }
 
-/** A team's states are its own; its labels are its own and the workspace's, which belong to no team. */
-const withinTeam = (kind: Named, item: TrackerItem, team: string | undefined) => {
-  if (team === undefined || (kind !== "state" && kind !== "label")) return true
-  const owner = (item.record as TrackerRecords["state"] | TrackerRecords["label"]).team ?? null
+/** A team's states and sprints are its own; its labels are its own and the workspace's, which belong to no team. */
+const withinTeam = (kind: Named, record: TrackerRecords[Named], team: string | undefined) => {
+  if (team === undefined || (kind !== "state" && kind !== "label" && kind !== "sprint")) return true
+  const owner = (record as TrackerRecords["state" | "label" | "sprint"]).team ?? null
   return owner === team || (kind === "label" && owner === null)
+}
+
+const named = (kind: Named, record: TrackerRecords[Named], want: string) =>
+  namesOf(kind, record).some((name) => name && foldName(name) === want)
+
+/** How an error names a row: by its title, and its team, since every team may have a "Done" or a cycle 12. */
+const candidateOf = (kind: Named, record: TrackerRecords[Named]) => {
+  const team = (record as { team?: string | null }).team
+  return { id: record.externalId, name: trackerTitleOf(kind, record), ...(team ? { team } : {}) }
+}
+
+/** The rows whose name is nearest to what was typed, for an error: a typo, or a part of a longer name. */
+const closeRows = (kind: Named, all: readonly TrackerItem[], given: string) => {
+  const want = foldName(given.trim())
+  const distance = (name: string) => {
+    const folded = foldName(name)
+    const edits = editDistance(want, folded, 2)
+    // A letter or two is part of nearly every name, so only a longer value counts as part of one.
+    const part = want.length >= 3 && (folded.includes(want) || want.includes(folded))
+    return edits <= 2 ? edits : part ? 3 : 4
+  }
+  return all
+    .map((one) => {
+      const names = namesOf(kind, one.record as TrackerRecords[Named]).filter(Boolean)
+      return {
+        candidate: candidateOf(kind, one.record as TrackerRecords[Named]),
+        edits: names.reduce((least, name) => Math.min(least, distance(name)), 4),
+      }
+    })
+    .filter(({ edits }) => edits <= 3)
+    .sort((a, b) => a.edits - b.edits)
+    .slice(0, 5)
+    .map(({ candidate }) => candidate)
+}
+
+/**
+ * The live rows of this account's copy a reference names: the one with that id, else every one with that name in any
+ * letter case. A state, a label or a sprint is looked for among `team`'s.
+ */
+export const trackerMatches = async (
+  context: Copy,
+  kind: Named,
+  given: string,
+  team?: string,
+): Promise<TrackerItem[]> => {
+  const byId = await context.store.tracker.get(context.account, kind, given)
+  if (byId && byId.deletedAt === null && withinTeam(kind, byId.record as TrackerRecords[Named], team)) return [byId]
+  const want = foldName(given.trim())
+  return (await allOf(context, kind, kind === "state" ? team : undefined)).filter(
+    (one) => withinTeam(kind, one.record, team) && named(kind, one.record, want),
+  )
+}
+
+/** A reference the copy holds none of: refused with the names nearest to it, never answered as an empty list. */
+export const unknownTrackerReference = async (
+  context: Copy,
+  kind: Named,
+  given: string,
+  param: string,
+  { team, scoped = "", hint }: { team?: string; scoped?: string; hint?: string } = {},
+): Promise<CliError> => {
+  const all = (await allOf(context, kind, kind === "state" ? team : undefined)).filter((one) =>
+    withinTeam(kind, one.record, team),
+  )
+  const close = closeRows(kind, all, given)
+  return invalid(
+    `no ${kind} ${given} in the copy${scoped}` +
+      (close.length ? `; close names: ${close.map(({ name }) => name).join(", ")}` : "") +
+      `; ${hint ?? `see ${PLURALS[kind]} list, or run sync`}`,
+    param,
+    { reason: "tracker.reference", ...(close.length ? { candidates: close } : {}) },
+  )
+}
+
+/** Several rows of the copy share the name: refused with each, so the caller names one by its id. */
+export const ambiguousTrackerReference = (
+  kind: Named,
+  given: string,
+  found: readonly TrackerRecords[Named][],
+  param: string,
+  scoped = "",
+): CliError =>
+  invalid(`${found.length} ${PLURALS[kind]} are named ${given}${scoped}; name one by its id`, param, {
+    reason: "tracker.reference",
+    candidates: found.map((record) => candidateOf(kind, record)),
+  })
+
+type ChangedPage = { items: TrackerRecords[Named][]; complete: boolean } | undefined
+// One command resolving several new labels asks the tracker once for the kind.
+const changedPages = new WeakMap<TrackerWriteContext, Map<Named, Promise<ChangedPage>>>()
+
+const changedPage = async (context: TrackerWriteContext, kind: Named): Promise<ChangedPage> => {
+  if (!context.source) return undefined
+  let token: string | null = null
+  try {
+    const kept = await context.store.sync.syncState(context.account, trackerCursorName(kind))
+    token = (JSON.parse(kept?.value ?? "null") as { token?: string | null } | null)?.token ?? null
+  } catch {
+    return undefined
+  }
+  if (token === null) return undefined
+  try {
+    const page = await context.source().changes(kind, token)
+    if ("reset" in page) return undefined
+    return {
+      items: (page.items as TrackerRecords[Named][]).filter((one) => one.deleted !== true),
+      complete: !page.hasMore,
+    }
+  } catch (error) {
+    // A cancel or a sign-in the tracker refused fails the write too; anything else leaves the copy's answer.
+    if (isCliError(error) && ["cancelled", "authentication_error", "permission_error"].includes(error.code)) throw error
+    return undefined
+  }
+}
+
+/**
+ * A name the copy lacks may be newer than the last sync: one call for what changed of the kind since then. A single
+ * row found there is stored as a sync stores it; with no cursor, a dead one, or a failed call, the copy's answer stands.
+ */
+const changedSinceSync = async (
+  context: TrackerWriteContext,
+  kind: Named,
+  given: string,
+  team: string | undefined,
+): Promise<{ found: TrackerRecords[Named][]; complete: boolean } | undefined> => {
+  const pages = changedPages.get(context) ?? new Map<Named, Promise<ChangedPage>>()
+  changedPages.set(context, pages)
+  if (!pages.has(kind)) pages.set(kind, changedPage(context, kind))
+  const page = await pages.get(kind)
+  if (!page) return undefined
+  const want = foldName(given.trim())
+  const found = page.items.filter((one) => withinTeam(kind, one, team) && named(kind, one, want))
+  if (found.length === 1) await context.store.tracker.save(context.account, kind, found, context.now?.() ?? Date.now())
+  return { found, complete: page.complete }
 }
 
 /**
  * A record of this account's copy by the tracker's id, or by a name only one of them has, in any letter case. A state
- * or a label is looked for among the issue's team's. Anything else is refused before a write is sent: a reference the
- * copy does not hold would reach the tracker as typed.
+ * or a label is looked for among the issue's team's. A name the copy lacks is looked for among what the tracker changed
+ * since the last sync. Anything else is refused before a write is sent: a reference the copy does not hold would reach
+ * the tracker as typed.
  */
 const referenceOf = async (
   context: TrackerWriteContext,
@@ -120,22 +272,28 @@ const referenceOf = async (
   param: string,
   team?: string,
 ): Promise<string> => {
-  const byId = await context.store.tracker.get(context.account, kind, given)
-  if (byId && byId.deletedAt === null && withinTeam(kind, byId, team)) return given
-  const want = foldName(given.trim())
-  const found = (await allOf(context, kind, kind === "state" ? team : undefined)).filter(
-    (one) => withinTeam(kind, one, team) && namesOf(kind, one.record).some((name) => name && foldName(name) === want),
-  )
+  const scoped = (kind === "state" || kind === "label" || kind === "sprint") && team ? " for the issue's team" : ""
+  const found = await trackerMatches(context, kind, given, team)
   if (found.length === 1) return (found[0] as TrackerItem).record.externalId
-  const candidates = found.map((one) => ({ id: one.record.externalId, name: (one.record as { name: string }).name }))
-  const scoped = (kind === "state" || kind === "label") && team ? " for the issue's team" : ""
-  throw invalid(
-    found.length
-      ? `${found.length} ${PLURALS[kind]} are named ${given}${scoped}; name one by its id`
-      : `no ${kind} ${given} in the copy${scoped}; see ${PLURALS[kind]} list, or run sync`,
-    param,
-    { reason: "tracker.reference", ...(candidates.length ? { candidates } : {}) },
-  )
+  if (found.length > 1)
+    throw ambiguousTrackerReference(
+      kind,
+      given,
+      found.map(({ record }) => record as TrackerRecords[Named]),
+      param,
+      scoped,
+    )
+  const fresh = await changedSinceSync(context, kind, given, team)
+  if (fresh?.found.length === 1) return (fresh.found[0] as TrackerRecords[Named]).externalId
+  if (fresh && fresh.found.length > 1) throw ambiguousTrackerReference(kind, given, fresh.found, param, scoped)
+  throw await unknownTrackerReference(context, kind, given, param, {
+    ...(team === undefined ? {} : { team }),
+    scoped,
+    hint:
+      fresh === undefined || !fresh.complete
+        ? "not in the copy; run sync, then try again"
+        : `nor among the ${PLURALS[kind]} changed since the last sync; see ${PLURALS[kind]} list`,
+  })
 }
 
 /** The team a new issue goes to: the one named, or the copy's only team; several and none named is refused. */

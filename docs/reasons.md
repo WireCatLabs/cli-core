@@ -636,7 +636,8 @@ headings.
 | `tracker.field` | `validation_error` | a field of an issue or a comment the tracker's write does not take as given |  |
 | `tracker.kind-unread` | `permission_error` | the sign-in cannot read this kind of the tracker; the copy has none of it |  |
 | `tracker.no-record` | `invalid_response` | the tracker answered a write with no record and no error; sync and look |  |
-| `tracker.reference` | `validation_error` | a team, state, label, project or user no single row of the copy has by that name |  |
+| `tracker.no-vectors` | `not_found` | no issue, project or comment is embedded with the model yet; sync --embed builds them |  |
+| `tracker.reference` | `validation_error` | a team, state, label, project, user or sprint no single row of the copy has by that name |  |
 | `tracker.team-required` | `validation_error` | a new issue needs its team: name one, or sync a copy that holds one |  |
 | `tracker.unlisted-held` | `validation_error` | a tracker's id list would mark too much deleted, or the sign-in read only part; nothing was |  |
 | `tracker.write-unsupported` | `validation_error` | the tracker does not take this write, or does not recognise a repeated one |  |

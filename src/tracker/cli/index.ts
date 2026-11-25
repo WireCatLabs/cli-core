@@ -11,6 +11,7 @@ import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { allowDeletionsOption, FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../../cli/envelope.js"
 import { listQuery, nativeTermLists, queryTerms, termField, typedQuery, withQuery } from "../../cli/list-query.js"
+import { commandAt, lineOf, nextStep, rootOf } from "../../cli/steps.js"
 import { aheadOf } from "../../domain/moment.js"
 import {
   STATE_TYPES,
@@ -20,8 +21,10 @@ import {
   type TrackerKind,
   type TrackerRecords,
 } from "../../domain/tracker.js"
+import { chosenTextModel } from "../../embeddings/models.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { searchTracker } from "../../services/search-all-tracker.js"
 import { embedTracker } from "../../services/tracker-meaning.js"
 import type { TrackerFilter, TrackerItem } from "../../store/sqlite/tracker.js"
 import type { MessageStore } from "../../store/store.js"
@@ -30,7 +33,13 @@ import type { TrackerSource } from "../source.js"
 import { syncTracker } from "../sync.js"
 import { trackerIssueTask } from "../tasks.js"
 import type { TrackerWrite } from "../writer.js"
-import type { TrackerWrites } from "../writes.js"
+import {
+  ambiguousTrackerReference,
+  type TrackerNamed,
+  type TrackerWrites,
+  trackerMatches,
+  unknownTrackerReference,
+} from "../writes.js"
 import { addTrackerWriteCommands } from "./writes.js"
 
 /** The selected profile's tracker account, opened for one command and closed before its answer is printed. */
@@ -85,18 +94,26 @@ const listQueryOf = (kind: TrackerKind): QueryRegistry => ({
   fields: [ARCHIVED],
 })
 
-/** What `issues list` narrows by: each by the tracker's id, as `issues show` and the lists name them. */
+/** What `issues list` narrows by: each by its name or the tracker's id, as `issues show` and the lists name them. */
 const ISSUES_QUERY = {
   entity: "tracker_issue",
   backend: "native",
   fields: [
-    termField("team", "kw", "team:team-1", { relation: "the team's id, as teams list shows it" }),
-    termField("project", "kw", "project:project-1", { relation: "the project's id, as projects list shows it" }),
-    termField("assignee", "kw", "assignee:none", { relation: "the user's id, as users list shows it, or none" }),
-    termField("state", "kw", "state:state-1", { relation: "the state's id, as states list shows it" }),
+    termField("team", "kw", "team:ENG", { relation: "the team's name, key or id, as teams list shows it" }),
+    termField("project", "kw", 'project:"Billing revamp"', {
+      relation: "the project's name or id, as projects list shows it",
+    }),
+    termField("assignee", "kw", "assignee:none", {
+      relation: "the user's name, e-mail or id, as users list shows it, or none",
+    }),
+    termField("state", "kw", 'state:"In Progress"', {
+      relation: "the state's name or id, as states list shows it; with team:, that team's",
+    }),
     termField("type", "enum", "type:started", { values: [...STATE_TYPES], relation: "repeat for any of several" }),
-    termField("label", "kw", "label:label-1", { relation: "the label's id, as labels list shows it" }),
-    termField("sprint", "kw", "sprint:sprint-1", { relation: "the sprint's id, as sprints list shows it, or none" }),
+    termField("label", "kw", "label:Bug", { relation: "the label's name or id, as labels list shows it" }),
+    termField("sprint", "kw", "sprint:12", {
+      relation: "the sprint's name, number or id, as sprints list shows it, or none",
+    }),
     ARCHIVED,
   ],
 } as const satisfies QueryRegistry
@@ -561,7 +578,7 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
       ).description("issues copied from the tracker, newest change first; run sync to bring them up to date"),
     ),
     "issues list type:started",
-    "issues list assignee:none --json",
+    "issues list label:Bug assignee:none --json",
   ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
     const lists = nativeTermLists(listQuery(typedQuery(words), ISSUES_QUERY, "issues list"), "issues list", ["type"])
     if ([...lists.values()].flat().some((one) => one.operator !== "term" && one.operator !== "phrase"))
@@ -570,18 +587,46 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
     const terms = new Map(
       [...lists].filter(([field]) => field !== "type").map(([field, [one]]) => [field, one?.value as string]),
     )
-    const noneOr = (field: string) => (terms.get(field)?.toLowerCase() === "none" ? "none" : terms.get(field))
-    const assignee = noneOr("assignee")
-    const sprint = noneOr("sprint")
     await within(command, true, async (run) => {
+      const TEAMED = new Set<TrackerNamed>(["state", "label", "sprint"])
+      // A name every team's state or sprint has matches each of them; only the team itself must be one row.
+      const rowsOf = async (field: string, kind: TrackerNamed, team?: string): Promise<TrackerItem[] | undefined> => {
+        const given = terms.get(field)
+        if (given === undefined) return undefined
+        const scoped = team !== undefined && TEAMED.has(kind) ? " for that team" : ""
+        const found = await trackerMatches(run, kind, given, team)
+        if (found.length) return found
+        throw await unknownTrackerReference(run, kind, given, `${field}:`, {
+          ...(team === undefined ? {} : { team }),
+          scoped,
+        })
+      }
+      const idsOf = async (field: string, kind: TrackerNamed, team?: string) =>
+        (await rowsOf(field, kind, team))?.map(({ record }) => record.externalId)
+      const teams = await rowsOf("team", "team")
+      if (teams && teams.length > 1)
+        throw ambiguousTrackerReference(
+          "team",
+          terms.get("team") as string,
+          teams.map(({ record }) => record as TrackerRecords["team"]),
+          "team:",
+        )
+      const team = teams?.[0]?.record.externalId
+      const noneOr = async (field: string, kind: TrackerNamed) =>
+        terms.get(field)?.toLowerCase() === "none" ? null : await idsOf(field, kind, team)
+      const project = await idsOf("project", "project")
+      const assignee = await noneOr("assignee", "user")
+      const state = await idsOf("state", "state", team)
+      const label = await idsOf("label", "label", team)
+      const sprint = await noneOr("sprint", "sprint")
       const filter: TrackerFilter = {
-        ...(terms.has("team") ? { parent: terms.get("team") as string } : {}),
-        ...(terms.has("project") ? { project: terms.get("project") as string } : {}),
-        ...(assignee !== undefined ? { assignee: assignee === "none" ? null : assignee } : {}),
-        ...(terms.has("state") ? { state: terms.get("state") as string } : {}),
+        ...(team !== undefined ? { parent: team } : {}),
+        ...(project ? { project } : {}),
+        ...(assignee !== undefined ? { assignee } : {}),
+        ...(state ? { state } : {}),
         ...(types.length ? { stateTypes: types } : {}),
-        ...(terms.has("label") ? { label: terms.get("label") as string } : {}),
-        ...(sprint !== undefined ? { sprint: sprint === "none" ? null : sprint } : {}),
+        ...(label ? { label } : {}),
+        ...(sprint !== undefined ? { sprint } : {}),
         ...(terms.has("archived") ? { archived: true } : {}),
         limit: opts.limit,
         offset: (opts.page - 1) * opts.limit,
@@ -618,28 +663,50 @@ const addTrackerCommandsDefinition = (program: Command, options: TrackerCommandO
   example(
     paging(
       answerEntity(annotate(issues.command("search"), { effects: LOCAL_READ }), "tracker_hit", trackerView)
-        .description("find issues, projects and comments in the copy by their words")
+        .description(
+          "find issues, projects and comments in the copy by their words, and by meaning once sync --embed built " +
+            "their vectors",
+        )
         .argument(
           "<words...>",
-          "every word must match, in any form; a word of four letters or more finds the words it begins",
+          'every word must match, in any form and any order; a word of four letters or more finds the words it begins; "a phrase" in quote marks inside the query keeps its words together; a question finds what holds some of its words',
         ),
     ),
-    'issues search "invoice currency"',
+    "issues search invoice currency",
+    'issues search "why do refunds round wrong?"',
   ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+    const { env } = environmentOf(command)
+    const download = commandAt(rootOf(command), "models download") !== undefined
     await within(command, true, async (run) => {
-      const found = await run.store.tracker.find({
-        words,
+      const found = await searchTracker(run.store, {
+        text: words.join(" "),
         accounts: [run.account],
-        kinds: ["issue", "project", "comment"],
         limit: opts.limit,
         offset: (opts.page - 1) * opts.limit,
+        now: now(),
+        ...(download ? { command: options.app.command } : {}),
+        ...(env ? { env } : {}),
       })
+      const noVectors = found.meaningReason === "tracker.no-vectors"
+      const why =
+        found.meaningSkipped === undefined
+          ? undefined
+          : `found by words only: ${found.meaningSkipped}` +
+            (noVectors ? `; \`${lineOf(command, "sync --embed")}\` builds the vectors that find them by meaning` : "")
+      if (why) outputFor(command).renderer.note(why)
+      const next: NextStep[] = noVectors
+        ? [resumeStep({ embed: true }, "builds the vectors that find issues, projects and comments by meaning")]
+        : download && found.meaningReason === "model.not-downloaded"
+          ? [nextStep("models.download", { args: { model: chosenTextModel(env).id } })]
+          : []
       return listOf("issues search", {
-        items: found.items.map((hit) => viewOf(hit.item, { excerpt: hit.excerpt })),
+        items: found.items.map(({ hit, item }) => viewOf(item, { excerpt: hit.text, found_by: hit.foundBy })),
         limit: opts.limit,
         page: opts.page,
         has_more: found.hasMore,
         args: { words },
+        ...(why ? { missing: [{ field: "found_by", why }] } : {}),
+        ...(next.length ? { next } : {}),
       })
     })
   })

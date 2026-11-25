@@ -176,8 +176,21 @@ new issues, projects and comments (`embedTracker` in `src/services/tracker-meani
 deadline) with a model already downloaded, answered under `embeddings`. A run its budget stopped embeds nothing, and the
 step that goes on keeps `embed`. A missing model keeps the sync's report and its step, and is named in `meta.issues`
 with `source` `tracker:embeddings`. Every text field from the tracker is named in the row's `untrusted`. Each list
-narrows by its query, as `deals list` does: `issues list team:<id> assignee:none type:started`, and `archived:include`
-for archived rows too, and `sprint:<id>` or `sprint:none` for the issues of a sprint or of none.
+narrows by its query, as `deals list` does: `issues list team:ENG label:Bug assignee:none type:started`, and
+`archived:include` for archived rows too, and `sprint:<n>` or `sprint:none` for the issues of a sprint or of none.
+
+- **Filters by name.** `team:`, `project:`, `assignee:`, `state:`, `label:` and `sprint:` take the tracker's id, or a
+  name in any letter case, resolved in the copy as the writes resolve theirs (`trackerMatches` in
+  `src/tracker/writes.ts`): a team by its key too, a user by e-mail, a sprint by its number or `Sprint <n>`; with
+  `team:`, a state, label or sprint of that team (a label of no team too). A name no row has is refused with
+  `tracker.reference` and the nearest names in `candidates` (each with its team), never answered with an empty list; a
+  name several rows have matches each of them (every team's `In Progress`), except `team:`, which must be one.
+- **`issues search`** ranks as the `tracker` lane of `search all` does (`searchTracker` in
+  `src/services/search-all-tracker.ts`, over the same lane): the words joined into one query, so a shell-quoted
+  argument is words in any order and only quote marks inside the query make a phrase; a question finds what holds some of its
+  words; and by meaning too once `sync --embed` built vectors. Each hit has `found_by`. Searched by words only, the
+  answer says why in `missing` (`field: found_by`), with a `sync --embed` step when the model is there but nothing is
+  embedded, or a `models.download` step when the CLI has that command.
 
 ## One sync with documents
 
@@ -228,7 +241,11 @@ return [...library.commands, ...holder.commands]
   `--project` a project by id or name; `--assignee <user>` a user by id, name or e-mail; `--parent <id>` and `<issue>`
   an issue's key or id. The issue's team is the one named, else the copy's: an update that moves the issue looks in the
   new team. A name matches in any letter case and only when one row of the account's copy has it, every row read, not
-  one page; two are refused with both as `candidates`, none with `tracker.reference`. A new issue without `--team` goes
+  one page; two are refused with both as `candidates`, none with `tracker.reference` and the nearest names as
+  `candidates`. A name the copy lacks is first looked for in one `changes` call from the kind's last sync cursor, and a
+  single live row found there is saved to the copy and used: a label made after the last sync. One command asks once
+  per kind. With no cursor, a reset, a page that says there is more, or a failed call (a refused sign-in fails the
+  write), the refusal says the name is not in the copy and to run sync. A new issue without `--team` goes
   to the copy's only team; several teams are refused with the choices, and none says to sync (`tracker.team-required`).
   `--priority <n>` is the family's priority (`priorityOf` in `src/tasks/priority.ts`): low, medium, high, critical or
   none, a score from 0.0 to 1.0, or the old 0 urgent … 4 low; `urgent` is critical. It is written on the tracker's
@@ -260,7 +277,7 @@ return [...library.commands, ...holder.commands]
 
 The `tracker` lane of `search all` (`RESOURCES_SEARCHED`) reads the copies of every account of a provider the registry
 marks `tracker`, or those `--source` names, through `store.tracker.find`: issues, projects and comments by the words of
-their title and text, as `issues search` finds them, and by meaning through `nearestTracker` when the query is words or
+their title and text, and by meaning through `nearestTracker` when the query is words or
 phrases (`OR` too, as notes take it) with no `title:`, not `exact`, and the model and some vectors are there. The two
 lists are fused by reciprocal rank as notes' and messages' are, a question's hit voting once; a hit found both ways has
 `foundBy` `["words", "meaning"]`, and its cosine places it among the other lanes'. `tracker: { by, meaningSkipped? }`
