@@ -268,6 +268,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261123022342_version-72-document-history", version: 72, minCompatible: 56 },
   { name: "20261123022347_version-72-document-changes-trigger", version: 72, minCompatible: 56 },
   { name: "20261123230507_version-73-autoincrement", version: 73, minCompatible: 73, tables: V73_TABLES },
+  { name: "20261125025700_version-74-sender-bots", version: 74, minCompatible: 73 },
+  { name: "20261125025709_version-74-sender-bot-triggers", version: 74, minCompatible: 73 },
 ]
 
 export const generatedMigrations = (

@@ -241,7 +241,7 @@ headings.
 | `identity.not-shared` | `validation_error` | only a match on a shared mailbox can say the mailbox is a company's |  |
 | `identity.nothing-left` | `validation_error` | a split leaves at least one identity with the person |  |
 | `identity.owner` | `validation_error` | one side is the owner's person, and only the owner joins anyone to themselves |  |
-| `identity.owner-only` | `permission_error` | only the owner undoes a merge, splits a person, confirms or undoes a link, or links an identity to themselves |  |
+| `identity.owner-only` | `permission_error` | only the owner undoes or confirms a merge, a split or a link, links an identity to themselves, or moves a sender |  |
 | `identity.rejected` | `conflict` | the owner rejected linking these people on this evidence; only a new signal or identity proposes them again |  |
 | `identity.same` | `validation_error` | the two identities are one person already |  |
 | `identity.separated` | `conflict` | the owner separated this identity from that person; only the owner links it again |  |
@@ -515,6 +515,10 @@ headings.
 | `selection.changed` | `validation_error` | the stored selection changed meanwhile |  |
 | `selection.invalid` | `validation_error` | the selection is not valid |  |
 | `selection.out-of-scope` | `permission_error` | the selection reaches outside what this profile may read |  |
+| `sender-bot.assignee` | `validation_error` | a sender bot is no one's assignee; move it to a person first |  |
+| `sender-bot.not-a-person` | `validation_error` | the person named is a sender bot; name a person |  |
+| `sender-bot.not-found` | `not_found` | no sender bot has that id; people list kind:automated lists them |  |
+| `sender-bot.owner` | `validation_error` | the owner's own person is never a bot |  |
 | `serve.outdated` | `configuration_error` | the store or the installed version is newer than this serve; it stopped so its unit starts the installed one |  |
 | `session.duplicate` | `conflict` | another profile here already signs in to this account as this user |  |
 | `session.missing` | `authentication_error` | this profile is not signed in: no saved sign-in or API token |  |

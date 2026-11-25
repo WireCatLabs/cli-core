@@ -27,6 +27,7 @@ import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { queryFilter, type Where } from "./query-filter.js"
 import { pageOfRows } from "./rows-page.js"
+import { refuseBotAssignee } from "./sender-bots.js"
 import { stemmerCache } from "./stems.js"
 import {
   BOARD_SCOPE,
@@ -741,6 +742,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       write(database, () => {
         checkRevision(rowById(task), check.revision)
         const person = personOf(to)
+        refuseBotAssignee(database, person)
         const held = database
           .prepare(
             "SELECT 1 FROM task_assignments WHERE task_id = ? AND assignee_type = 'person' " +

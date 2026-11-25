@@ -11,6 +11,7 @@ import { enrichmentTables } from "./enrichments.mjs"
 import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
+import { senderBotTables } from "./sender-bots.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 import { templateSection } from "./templates.mjs"
 import { trackerTables } from "./tracker.mjs"
@@ -614,6 +615,7 @@ const NEW = {
         ...ts(),
       ],
     },
+    ...senderBotTables,
   ],
   mail: [
     {
@@ -671,6 +673,7 @@ const NEW = {
         "UNIQUE (account_id, external_id)",
         "INDEX (account_id, sent_at DESC)",
         "INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL",
+        `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`,
       ],
     },
     {

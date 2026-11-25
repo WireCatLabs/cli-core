@@ -416,6 +416,15 @@ PeopleStore · interface · similar(name: string, options?: {
 PeopleStore · interface · limit?: number;
 PeopleStore · interface · }): Promise<SimilarPerson[]>;
 PeopleStore · interface · ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>;
+PeopleStore · interface · moveToBot(subject: string | IdentityRef, by: Decider, options?: {
+PeopleStore · interface · bot?: string;
+PeopleStore · interface · name?: string;
+PeopleStore · interface · reason?: string;
+PeopleStore · interface · }): Promise<SenderBot>;
+PeopleStore · interface · moveToPerson(subject: string | IdentityRef, by: Decider, options?: {
+PeopleStore · interface · person?: string;
+PeopleStore · interface · reason?: string;
+PeopleStore · interface · }): Promise<PersonRecord>;
 PeopleStore · interface · }
 PersonFacts · interface · export interface PersonFacts {
 PersonFacts · interface · id: Id;

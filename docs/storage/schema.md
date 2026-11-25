@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-145 tables, 28 full-text indexes.
+147 tables, 28 full-text indexes.
 
 ## Conventions
 
@@ -332,6 +332,39 @@ An AI agent or a script that works here: it registers itself, owns projects and 
 *Keys and indexes:* `INDEX (owner_person_id)`
 
 *Checks:* `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
+
+### `sender_bots`
+
+A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. Not a person, so it is never proposed as the same person, has no ties and is no task's assignee. Its identities are those of the person row it was sorted from, which `people list` shows as `automated`. Not the `bots` table, which holds agents that work here.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `person_id` | integer | not null, unique |  | the person row whose identities are this bot's; its `person:` uid stays the bot's handle in lists. No foreign key: an older build erasing the person does not know this table, and a trigger drops the bot with it |
+| `name` | text |  |  | the owner's name for it; null shows its identities' name |
+| `organization_id` | integer |  |  | the organization it sends for; no foreign key, a trigger clears it when the organization row goes |
+| `author` | text | not null |  | `rules` or `owner`: the owner's bot never goes back by a rule |
+| `reason` | text |  |  | what sorted it: the kind signals, such as `no-reply`, or the owner's words |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+### `sender_bot_moves`
+
+Every move of an identity between a person and a sender bot, by the rules or by the owner. An identity whose latest move is the owner's is never moved by a rule again. A trigger drops an identity's rows with it.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `identity_id` | integer | not null |  | no foreign key: an older build purging an account does not know this table |
+| `from_person_id` | integer |  |  | the person it left, or null |
+| `from_bot_id` | integer |  |  | the sender bot it left, or null |
+| `to_person_id` | integer |  |  | the person it went to, or null |
+| `to_bot_id` | integer |  |  | the sender bot it went to, or null |
+| `author` | text | not null |  | `rules` or `owner` |
+| `reason` | text |  |  | the kind signals of a rule's move, or the owner's words |
+| `created_at` | integer | not null |  | when it moved |
+
+*Keys and indexes:* `INDEX (identity_id)`
 
 ## Chats and messages
 
@@ -765,7 +798,7 @@ One email.
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `mail_rule_id` | integer |  |  | the `mail_rules` row that decided how this email is stored; no constraint, removing the rule clears it |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId')))`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
 
 *Checks:* `CHECK ("references" IS NULL OR json_valid("references"))`, `CHECK ("headers" IS NULL OR json_valid("headers"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`
 

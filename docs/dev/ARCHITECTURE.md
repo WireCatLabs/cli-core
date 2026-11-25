@@ -690,7 +690,23 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   more than `SMALL_GROUP_MEMBERS` recipients; else `direct`. The owner missing from a To or Cc that names others says
   nothing, since an alias the store does not know looks the same. The reach most of their mail had wins, the wider on a
   tie; mail the owner wrote them or a private chat both wrote in makes it `direct`, and with no mail a one-to-one chat
-  or a small group does. `null` when nothing says. The page reads every stored email's List-Id once for this.
+  or a small group does. `null` when nothing says. The page reads the List-Ids of its people's mail, and the senders of
+  those lists through the index `emails_by_list_id` (version 74).
+- **Sender bots** (`sender-bots.ts`, version 74): a program that writes to the owner is a `sender_bots` row, not a
+  person. A bot keeps the person row it was sorted from: its identities stay linked there, so ingest, merges, purges and
+  `people show person:<uid>` work as before, and `people.list` lists it as `automated` under that ref with
+  `bot: "sender-bot:<id>"` and no ties. Kept kinds move a person to a bot by rule when their kind is `automated` by a
+  program's signal (`PROGRAM_SIGNALS`: the platform's bot flag, a no-reply or notification address, a signed
+  `Auto-Submitted`, an empty Return-Path, `bulk_never_replied`), the owner wrote them nothing (no mail tie, no private
+  chat both wrote in; the platform's flag holds against both), no `ALWAYS_SHOWN` reason holds, and every identity of
+  theirs is the program's, or they have one. A name or a bulk mailbox alone marks a person `automated` and moves
+  nothing: a newsletter a human writes stays a person. A rule's bot goes back to a person when those rules stop holding.
+  The owner's `moveToBot` and `moveToPerson` move a person, a bot or one identity (one of several gets a person row of
+  its own first) for its whole history, and win over the rules and every `KIND_RULES` bump: a bot the owner made has
+  `author = 'owner'`, and an identity whose latest move is the owner's to a person is never moved by a rule. Every move
+  is a `sender_bot_moves` row. A bot is never joined to anyone by the matcher (`identity.not-a-person`), never assigned a
+  task (`sender-bot.assignee`), never offered by `people.similar` and has no ties in `people.ties`. Neither table has a
+  foreign key, so an older build erasing a person or purging an account still can; triggers drop their rows.
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;
   a `name:` search looks for the typed text in both scripts (`spellings`). Each row's `usernameSource` names the
   messenger its `@username` belongs to.

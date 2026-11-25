@@ -283,7 +283,7 @@ const join = (
     result.skipped.push({ persons: [String(from), String(into)], signal: method, reason: "identity.separated" })
     return into
   }
-  if (touchesOwner(pass, from, into, method)) return into
+  if (touchesOwner(pass, from, into, method) || touchesBot(pass, from, into, method)) return into
   if (index.rejected(from, into) !== undefined) {
     propose(pass, {
       identity: sides.identity,
@@ -313,9 +313,18 @@ const touchesOwner = ({ context, result }: Pass, from: number, to: number, signa
   return true
 }
 
+/** A sender bot is never proposed as the same person, by any signal; the owner moves it by hand. */
+const touchesBot = ({ context, result }: Pass, from: number, to: number, signal: string): boolean => {
+  const held = context.database.prepare("SELECT 1 FROM sender_bots WHERE person_id IN (?, ?) LIMIT 1").get(from, to)
+  if (held === undefined) return false
+  result.skipped.push({ persons: [String(from), String(to)], signal, reason: "identity.not-a-person" })
+  return true
+}
+
 const propose = (pass: Pass, opening: Omit<Opening, "by">) => {
   const { context, index, result } = pass
   if (touchesOwner(pass, opening.from, opening.to, opening.signal)) return
+  if (touchesBot(pass, opening.from, opening.to, opening.signal)) return
   const opened = openIdentityLink(context, { ...opening, by: RULE }, index)
   const persons: [string, string] = [String(opening.from), String(opening.to)]
   if (opened.outcome === "skipped") {

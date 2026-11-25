@@ -772,7 +772,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 1890
+                "maxLines": 1893
               }
             }
           }
@@ -780,7 +780,12 @@
       }
     },
     {
-      "includes": ["src/crm/cli/index.ts", "src/store/sqlite/emails.ts", "src/store/sqlite/notes.ts"],
+      "includes": [
+        "src/crm/cli/index.ts",
+        "src/errors/reasons.ts",
+        "src/store/sqlite/emails.ts",
+        "src/store/sqlite/notes.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -817,7 +822,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 3255
+                "maxLines": 3260
               }
             }
           }

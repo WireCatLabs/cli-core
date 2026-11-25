@@ -362,6 +362,8 @@ export const bots = sqliteTable(
   ],
 )
 
+export { senderBotMoves, senderBots } from "./schema/sender-bots.js"
+
 export const chats = sqliteTable(
   "chats",
   {
@@ -863,6 +865,9 @@ export const emails = sqliteTable(
     unique().on(table.accountId, table.externalId),
     index("emails_by_time").on(table.accountId, desc(table.sentAt)),
     index("emails_by_mail_rule_id").on(table.mailRuleId).where(sql`mail_rule_id IS NOT NULL`),
+    index("emails_by_list_id").on(
+      sql`coalesce(json_extract(headers, '$."list-id"'), json_extract(metadata, '$.listId'))`,
+    ),
     index("emails_by_email_thread_id").on(table.emailThreadId),
     index("emails_by_from_identity_id").on(table.fromIdentityId),
     check("emails_references_json", sql`"references" IS NULL OR json_valid("references")`),

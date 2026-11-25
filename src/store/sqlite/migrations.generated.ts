@@ -2093,5 +2093,26 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `transaction_splits_by_category_folded` ON `transaction_splits` (`category_folded`);",
       "CREATE INDEX `transaction_splits_by_project_id` ON `transaction_splits` (`project_id`);"
     ]
+  },
+  {
+    "name": "20261125025700_version-74-sender-bots",
+    "statements": [
+      "CREATE TABLE `sender_bot_moves` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT,\n\t`identity_id` integer NOT NULL,\n\t`from_person_id` integer,\n\t`from_bot_id` integer,\n\t`to_person_id` integer,\n\t`to_bot_id` integer,\n\t`author` text NOT NULL,\n\t`reason` text,\n\t`created_at` integer NOT NULL\n);",
+      "CREATE TABLE `sender_bots` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT,\n\t`person_id` integer NOT NULL UNIQUE,\n\t`name` text,\n\t`organization_id` integer,\n\t`author` text NOT NULL,\n\t`reason` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL\n);",
+      "CREATE INDEX `emails_by_list_id` ON `emails` (coalesce(json_extract(headers, '$.\"list-id\"'), json_extract(metadata, '$.listId')));",
+      "CREATE INDEX `sender_bot_moves_by_identity_id` ON `sender_bot_moves` (`identity_id`);"
+    ]
+  },
+  {
+    "name": "20261125025709_version-74-sender-bot-triggers",
+    "statements": [
+      "-- No foreign keys on the bot tables, so an older build that erases a person or an organization, or purges an account,\n-- still can; these drop or clear their rows with it.\nCREATE TRIGGER sender_bots_person_ad AFTER DELETE ON persons BEGIN\n  DELETE FROM sender_bots WHERE person_id = OLD.id;\nEND;",
+      "CREATE TRIGGER sender_bots_organization_ad AFTER DELETE ON organizations BEGIN\n  UPDATE sender_bots SET organization_id = NULL WHERE organization_id = OLD.id;\nEND;",
+      "CREATE TRIGGER sender_bot_moves_identity_ad AFTER DELETE ON identities BEGIN\n  DELETE FROM sender_bot_moves WHERE identity_id = OLD.id;\nEND;",
+      "CREATE TRIGGER person_kind_sender_bot_ai AFTER INSERT ON sender_bots BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id = NEW.person_id;\nEND;",
+      "CREATE TRIGGER person_kind_sender_bot_ad AFTER DELETE ON sender_bots BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id = OLD.person_id;\nEND;",
+      "CREATE TRIGGER person_kind_sender_bot_au AFTER UPDATE OF person_id, author, name ON sender_bots BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (OLD.person_id, NEW.person_id);\nEND;",
+      "CREATE TRIGGER person_kind_sender_bot_move_ai AFTER INSERT ON sender_bot_moves BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT person_id FROM identity_links WHERE identity_id = NEW.identity_id);\nEND;"
+    ]
   }
 ]

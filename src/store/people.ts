@@ -51,12 +51,14 @@ import * as personLinks from "./sqlite/person-links.js"
 import { linkPhones, PROPOSAL_SCORE, RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
+import { ownerOnly } from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import { type ShownBecause, shownReasons } from "./sqlite/person-ties.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
+import { moveToBot, moveToPerson, type SenderBot, senderBotsOf } from "./sqlite/sender-bots.js"
 import { write } from "./sqlite/transaction.js"
 import type {
   AccountKey,
@@ -232,8 +234,29 @@ export interface PeopleStore extends AccountPeople {
   counts(query?: string): Promise<Record<PersonKind, number>>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */
   similar(name: string, options?: { limit?: number }): Promise<SimilarPerson[]>
-  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
+  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie, or a bot. */
   ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>
+  /**
+   * The owner says a sender is a program: a person (`person:<uid>`) or one identity moves to a sender bot for its
+   * whole history, listed as `automated` under its person row's ref, and no rule moves it back. One identity of a person
+   * with others gets a person row of its own; `bot` (`sender-bot:<id>`) joins a stored bot instead. The owner's alone;
+   * refused for the owner's own person.
+   */
+  moveToBot(
+    subject: string | IdentityRef,
+    by: Decider,
+    options?: { bot?: string; name?: string; reason?: string },
+  ): Promise<SenderBot>
+  /**
+   * The owner says a sender is a person: a bot (`sender-bot:<id>` or its `person:<uid>`), or one identity of it, moves
+   * to a person for its whole history, and no rule makes it a bot again. Said of a person who is no bot, it keeps them
+   * a person. `person` joins that person instead. The owner's alone.
+   */
+  moveToPerson(
+    subject: string | IdentityRef,
+    by: Decider,
+    options?: { person?: string; reason?: string },
+  ): Promise<PersonRecord>
 }
 
 export const accountPeopleOver = (context: StoreContext): AccountPeople => {
@@ -393,7 +416,21 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     similar: async (name, { limit = 8 } = {}) => similarPeople(database, name, limit),
     ties: async (people) => {
       const reasons = shownReasons(database)
-      return Object.fromEntries(people.map((ref) => [ref, reasons.get(Number(ref.replace(/^person:/, ""))) ?? []]))
+      const bots = senderBotsOf(database)
+      return Object.fromEntries(
+        people.map((ref) => {
+          const id = Number(ref.replace(/^person:/, ""))
+          return [ref, bots.has(id) ? [] : (reasons.get(id) ?? [])]
+        }),
+      )
+    },
+    moveToBot: async (subject, by, options) => {
+      ownerOnly(by, "moves a sender to a bot")
+      return moveToBot(context, subject, options)
+    },
+    moveToPerson: async (subject, by, options) => {
+      ownerOnly(by, "moves a sender to a person")
+      return moveToPerson(context, subject, options)
     },
   }
 }
