@@ -19422,7 +19422,7 @@
     },
     {
       "table": "messages",
-      "name": "messages_by_thread_external_id",
+      "name": "messages_by_chat_id_thread_external_id",
       "columns": [
         {
           "value": "chat_id",

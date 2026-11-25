@@ -1962,7 +1962,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `messages_to_normalize` ON `messages` (`id`) WHERE normalized_text IS NULL AND deleted_at IS NULL;",
       "CREATE INDEX `messages_by_sender_identity_id` ON `messages` (`sender_identity_id`);",
       "CREATE INDEX `messages_by_thread_root_id` ON `messages` (`thread_root_id`);",
-      "CREATE INDEX `messages_by_thread_external_id` ON `messages` (`chat_id`,`thread_external_id`) WHERE thread_root_id IS NULL AND thread_external_id IS NOT NULL;",
+      "CREATE INDEX `messages_by_chat_id_thread_external_id` ON `messages` (`chat_id`,`thread_external_id`) WHERE thread_root_id IS NULL AND thread_external_id IS NOT NULL;",
       "CREATE INDEX `notes_by_notable_type_notable_id` ON `notes` (`notable_type`,`notable_id`);",
       "CREATE INDEX `notes_by_author_type_author_id` ON `notes` (`author_type`,`author_id`);",
       "CREATE INDEX `order_lines_by_catalog_item_id` ON `order_lines` (`catalog_item_id`);",

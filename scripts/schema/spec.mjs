@@ -233,6 +233,7 @@ const EDITS = {
       "INDEX (chat_id, reply_to_external_id) WHERE reply_to_external_id IS NOT NULL AND deleted_at IS NULL",
       "INDEX (account_id, external_id)",
       "INDEX (id) WHERE normalized_text IS NULL AND deleted_at IS NULL",
+      "INDEX (chat_id, thread_external_id) WHERE thread_root_id IS NULL AND thread_external_id IS NOT NULL",
     ],
   },
   message_revisions: { addPk: true, cols: { captured_at: "created_at" } },

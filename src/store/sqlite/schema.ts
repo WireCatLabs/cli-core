@@ -517,11 +517,11 @@ export const messages = sqliteTable(
     index("messages_by_account").on(table.accountId, table.externalId),
     // Empty once the backfill is done, so every open can ask "anything left?" without reading the table.
     index("messages_to_normalize").on(table.id).where(sql`normalized_text IS NULL AND deleted_at IS NULL`),
-    index("messages_by_sender_identity_id").on(table.senderIdentityId),
-    index("messages_by_thread_root_id").on(table.threadRootId),
-    index("messages_by_thread_external_id")
+    index("messages_by_chat_id_thread_external_id")
       .on(table.chatId, table.threadExternalId)
       .where(sql`thread_root_id IS NULL AND thread_external_id IS NOT NULL`),
+    index("messages_by_sender_identity_id").on(table.senderIdentityId),
+    index("messages_by_thread_root_id").on(table.threadRootId),
     check("messages_reply_to_json", sql`"reply_to" IS NULL OR json_valid("reply_to")`),
     check("messages_forward_json", sql`"forward" IS NULL OR json_valid("forward")`),
     check("messages_reactions_json", sql`"reactions" IS NULL OR json_valid("reactions")`),

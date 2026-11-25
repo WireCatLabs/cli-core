@@ -453,7 +453,7 @@ A group's size once a day: the messenger's own count and how many members one re
 | `starred` | integer |  |  | 1 when the owner starred the message; only this account sees the star |
 | `delivery` | integer |  |  | own message: 1 delivered, 2 read; null when no receipt came; only rises |
 
-*Keys and indexes:* `UNIQUE (chat_id, external_id)`, `INDEX (chat_id, sent_at DESC)`, `INDEX (chat_id, sent_at DESC) WHERE starred = 1`, `INDEX (chat_id, reply_to_external_id) WHERE reply_to_external_id IS NOT NULL AND deleted_at IS NULL`, `INDEX (account_id, external_id)`, `INDEX (id) WHERE normalized_text IS NULL AND deleted_at IS NULL`, `INDEX (sender_identity_id)`, `INDEX (thread_root_id)`
+*Keys and indexes:* `UNIQUE (chat_id, external_id)`, `INDEX (chat_id, sent_at DESC)`, `INDEX (chat_id, sent_at DESC) WHERE starred = 1`, `INDEX (chat_id, reply_to_external_id) WHERE reply_to_external_id IS NOT NULL AND deleted_at IS NULL`, `INDEX (account_id, external_id)`, `INDEX (id) WHERE normalized_text IS NULL AND deleted_at IS NULL`, `INDEX (chat_id, thread_external_id) WHERE thread_root_id IS NULL AND thread_external_id IS NOT NULL`, `INDEX (sender_identity_id)`, `INDEX (thread_root_id)`
 
 *Checks:* `CHECK ("reply_to" IS NULL OR json_valid("reply_to"))`, `CHECK ("forward" IS NULL OR json_valid("forward"))`, `CHECK ("reactions" IS NULL OR json_valid("reactions"))`, `CHECK ("metadata" IS NULL OR json_valid("metadata"))`, `CHECK ("mentions" IS NULL OR json_valid("mentions"))`
 
