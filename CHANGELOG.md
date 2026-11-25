@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.753.0 — 25.11.2026
+
+### Added
+
+- **A CRM CLI built from a manifest can add notes and tasks.** `crmManifestWrites` and `crmManifestWriteCapabilities`
+  take `activities`: the CLI's own functions for a comment, a task and a task marked done, and the operation each
+  sends. They mount `activities create` and `activities close` under the same guard and journal as any CRM write.
+  Each also checks its operation's `api` keys, so `api.<operation>: deny` stops it, and `crmAlsoChecks` takes
+  `crmManifestActivityKeys` so `--dry-run` names them ([CRM](docs/dev/CRM.md#writes-from-a-manifest)).
+
+### Fixed
+
+- **Mail to one of the owner's aliases is owed an answer.** `review --unanswered` and `tasks agenda` took mail as
+  addressed to the owner only when the account's own address was in To or Cc, so mail sent to an alias was never owed.
+  Now any address under `mail_own_addresses` counts: those configured in `MailAccount.addresses` and the senders of
+  Sent mail.
+- **A long sync stays fast as the chat grows.** Each saved message looked through the whole chat for replies
+  waiting for it as their thread's root, so a page of 100 took 78 ms at 10,000 stored messages and 919 ms at 90,000.
+  That search now runs once per page (tg-cli [#917](https://github.com/WireCatLabs/tg-cli/issues/917)).
+
 ## 0.752.0 — 25.11.2026
 
 ### Added
