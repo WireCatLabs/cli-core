@@ -197,9 +197,11 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
     .prepare(
       `SELECT person_id AS id FROM identity_links WHERE identity_id IN (SELECT value FROM json_each(?))
         UNION SELECT from_person_id FROM identity_link_events WHERE identity_id IN (SELECT value FROM json_each(?))
+          AND from_person_id IS NOT NULL
+        UNION SELECT from_person_id FROM sender_bot_moves WHERE identity_id IN (SELECT value FROM json_each(?))
           AND from_person_id IS NOT NULL`,
     )
-    .all(gone, gone)
+    .all(gone, gone, gone)
     .map(({ id }) => Number(id))
   for (const table of ["identity_revisions", "identity_link_events", "identity_links"])
     database.prepare(`DELETE FROM ${table} WHERE identity_id IN (SELECT value FROM json_each(?))`).run(gone)

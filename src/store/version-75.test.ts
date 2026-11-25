@@ -116,6 +116,8 @@ it("moves a version 74 store's bots off their people, and an older build's write
       "INSERT INTO sender_bots (person_id, author, reason, created_at, updated_at) VALUES (?, 'rules', 'no-reply', 3, 3)",
     )
     .run(later)
+  // ...and stores the kinds it worked out, so no stored kind is left to work out.
+  after.prepare("UPDATE persons SET kind = 'automated' WHERE id = ?").run(later)
 
   expect((await bots(upgraded)).map(({ identities }) => identities)).toEqual(
     expect.arrayContaining([["email:pat@later.ru"]]),

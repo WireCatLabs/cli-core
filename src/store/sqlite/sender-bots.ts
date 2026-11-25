@@ -222,6 +222,16 @@ const outOfBot = (database: CacheDatabase, identities: readonly number[], to: nu
   return went
 }
 
+/**
+ * The source re-keyed `from` onto `to`, both stored: a bot holding `from` takes `to` from its person, since one
+ * account is one program. The person it leaves is hidden as `intoBot` hides one. The caller holds the write lock.
+ */
+export const rekeyIntoBot = (database: CacheDatabase, from: number, to: number, at: number): void => {
+  const bot = holderOf(database, from).bot
+  if (bot === undefined || holderOf(database, to).bot !== undefined) return
+  intoBot(database, [to], bot, { author: "rules", reason: "the source re-keyed the identity", at })
+}
+
 /** People holding an identity the owner last moved to a person, or kept as one: no rule makes them a bot. */
 export const ownerPeopleOf = (database: CacheDatabase): Set<number> =>
   new Set(
@@ -279,6 +289,10 @@ export const ruleBotsBack = (database: CacheDatabase, at: number): void => {
   const log = { author: "rules" as const, reason: "the owner wrote to it", at }
   for (const row of back) outOfBot(database, botIdentitiesOf(database, Number(row.id)), undefined, log)
 }
+
+/** Whether a build before version 75 sorted a bot onto a person row since the last kept list. */
+export const hasLegacyBots = (database: CacheDatabase): boolean =>
+  database.prepare("SELECT 1 FROM sender_bots WHERE person_id > 0 LIMIT 1").get() !== undefined
 
 /**
  * A bot a build before version 75 sorted after the upgrade holds its person row's identities there: they move to the

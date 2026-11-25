@@ -5,6 +5,7 @@ import { pointerPairs } from "./entity-types.js"
 import { settleLinks } from "./identity-link-rows.js"
 import type { StoreContext } from "./open.js"
 import { mergePerson } from "./person-links.js"
+import { rekeyIntoBot } from "./sender-bots.js"
 import { write } from "./transaction.js"
 
 export type IdentityRekeyOutcome = "renamed" | "merged" | "unchanged" | "skipped"
@@ -197,6 +198,7 @@ export const rekeyIdentity = (
     return "renamed"
   }
   const keptId = Number(kept.id)
+  rekeyIntoBot(database, oldId, keptId, context.now())
   const [mine, theirs] = [personOfIdentity(database, oldId), personOfIdentity(database, keptId)]
   if (mine !== undefined && theirs !== undefined && mine !== theirs)
     persons.push(mergePerson(context, mine, theirs, { method: "identity-rekey", by }))

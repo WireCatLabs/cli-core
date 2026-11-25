@@ -32,6 +32,16 @@ WHEN EXISTS (SELECT 1 FROM sender_bot_identities WHERE identity_id = NEW.identit
   SELECT RAISE(IGNORE);
 END;
 --> statement-breakpoint
+-- A re-key moves a person's link onto an identity a bot holds: the bot keeps it, and the move is logged.
+CREATE TRIGGER sender_bot_identity_link_au AFTER UPDATE OF identity_id ON identity_links
+WHEN EXISTS (SELECT 1 FROM sender_bot_identities WHERE identity_id = NEW.identity_id) BEGIN
+  INSERT INTO sender_bot_moves (identity_id, from_person_id, from_bot_id, to_person_id, to_bot_id, author, reason, created_at)
+  SELECT NEW.identity_id, NEW.person_id, NULL, NULL, s.bot_id, 'rules', 'the source re-keyed the identity',
+    CAST(unixepoch('subsec') * 1000 AS INTEGER)
+  FROM sender_bot_identities s WHERE s.identity_id = NEW.identity_id;
+  DELETE FROM identity_links WHERE identity_id = NEW.identity_id;
+END;
+--> statement-breakpoint
 -- ...and the person row it made for it, with its log row, goes again.
 CREATE TRIGGER sender_bot_identity_person_ai AFTER INSERT ON identity_link_events
 WHEN NEW.from_person_id IS NULL

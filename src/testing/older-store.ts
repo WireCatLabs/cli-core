@@ -5,6 +5,7 @@ import { VERSION_72_TABLES as VERSION_72 } from "./version-72-tables.js"
 const UNDO: Record<number, string> = {
   75:
     "DROP TRIGGER person_kind_sender_bot_origin_au; DROP TRIGGER sender_bot_identity_link_bi; " +
+    "DROP TRIGGER sender_bot_identity_link_au; " +
     "DROP TRIGGER sender_bot_identity_person_ai; DROP TRIGGER sender_bot_identities_linked_bi; " +
     "DROP TRIGGER sender_bots_holding_bd; DROP TRIGGER sender_bot_identities_identity_ad; " +
     "DROP TRIGGER sender_bots_emptied_ad; DROP TRIGGER sender_bots_emptied_au; " +

@@ -229,8 +229,12 @@ it("lets an account purge take a bot's rows with its identities", async () => {
   ])
   expect(await bots(store)).toHaveLength(2)
 
+  const persons = count(db, "SELECT count(*) AS n FROM persons")
+
   await store.accounts.purge(TG)
 
+  // The person rows the bots emptied go with them, as a purged identity's person does.
+  expect(count(db, "SELECT count(*) AS n FROM persons")).toBe(persons - 2)
   expect(count(db, "SELECT count(*) AS n FROM sender_bots")).toBe(0)
   expect(count(db, "SELECT count(*) AS n FROM sender_bot_identities")).toBe(0)
   expect(count(db, "SELECT count(*) AS n FROM sender_bot_moves")).toBe(0)
@@ -269,4 +273,40 @@ it("finds bots by name and address and by the organization of their domain", asy
   await expect(store.people.listBots({ limit: 10, query: "ba" })).rejects.toMatchObject({
     details: { reason: "query.short-text" },
   })
+})
+
+it("keeps one holder through a re-key: the bot takes the identity that stays, from either side", async () => {
+  const { store, db } = await opened()
+  const held = (id: string) =>
+    db
+      .prepare(
+        "SELECT (SELECT count(*) FROM identity_links l WHERE l.identity_id = i.id) AS links, " +
+          "(SELECT count(*) FROM sender_bot_identities s WHERE s.identity_id = i.id) AS bots " +
+          "FROM identities i WHERE i.provider = 'telegram' AND i.external_id = ?",
+      )
+      .get(id)
+  await store.people.savePeople(TG, [
+    { id: "80", name: "Old Bot", isBot: true },
+    { id: "81", name: "New Bot" },
+    { id: "90", name: "Old Kim" },
+    { id: "91", name: "New Kim" },
+  ])
+  const kim = await uidOf(store, "telegram", "90")
+  await store.people.list({ limit: 0 })
+  const [bot] = (await store.people.listBots({ limit: 10 })).items
+  const other = await store.people.moveToBot({ provider: "telegram", id: "91" }, "owner")
+
+  await store.people.rekeyIdentities("telegram", [
+    { from: "80", to: "81" },
+    { from: "90", to: "91" },
+  ])
+
+  expect(held("81")).toEqual({ links: 0, bots: 1 })
+  expect(held("91")).toEqual({ links: 0, bots: 1 })
+  expect((await store.people.showBot(String(bot?.bot))).identities.map(({ id }) => id)).toEqual(["81"])
+  expect((await store.people.showBot(other.bot)).identities.map(({ id }) => id)).toEqual(["91"])
+  expect(await people(store)).not.toContain("Old Kim")
+  expect((await store.people.showBot(other.bot)).moves).toEqual(
+    expect.arrayContaining([expect.objectContaining({ from: kim, reason: "the source re-keyed the identity" })]),
+  )
 })

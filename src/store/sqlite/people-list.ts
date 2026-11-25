@@ -19,7 +19,7 @@ import { fold } from "../normalize.js"
 import { groupByDomain, type Sorted } from "./domain-organizations.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
-import { ownerPeopleOf, ruleBotsBack, ruleToBot, settleLegacyBots } from "./sender-bots.js"
+import { hasLegacyBots, ownerPeopleOf, ruleBotsBack, ruleToBot, settleLegacyBots } from "./sender-bots.js"
 import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { mergedAssignees } from "./task-board.js"
 import { hiddenTestPeople } from "./test-people.js"
@@ -581,6 +581,9 @@ const keep = (database: CacheDatabase, worked: Worked[]): void => {
  * Answers whether every stored one is current.
  */
 export const storeKinds = (database: CacheDatabase): boolean => {
+  // A 1.0 build keeps the kinds of the people it sorts onto a bot, so nothing else would bring their bot here.
+  if (!isQueryOnly(database) && hasLegacyBots(database))
+    writeBatch(database, () => settleLegacyBots(database, Date.now()))
   if (isQueryOnly(database))
     return (
       rulesOf(database) === KIND_RULES &&
