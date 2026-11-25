@@ -55,7 +55,7 @@ export const parseManifest = (value: unknown): PackManifest => {
     ids.add(source.id)
     if (typeof source.url !== "string" || !source.url.startsWith("https://"))
       throw invalid(`gives ${source.id} a url that is not https`)
-    if (source.signal !== "sector" && source.signal !== "bad") throw invalid(`gives ${source.id} no signal`)
+    if (!["sector", "freemail", "bad"].includes(source.signal)) throw invalid(`gives ${source.id} no signal`)
     if (source.class !== "commercial-ok" && source.class !== "non-commercial")
       throw invalid(`gives ${source.id} no licence class`)
     if (source.upstream === true) {

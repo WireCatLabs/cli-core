@@ -1,6 +1,6 @@
 import { getDomainWithoutSuffix } from "tldts"
 import { isReadable } from "../../domain/display-names.js"
-import { installedPack, lookupDomains } from "../../domain/domain-lists.js"
+import { installedPack, isPackFreeMailDomain, lookupDomains } from "../../domain/domain-lists.js"
 import { SECTORS_BUILT } from "../../domain/organization-sectors.generated.js"
 import { isFreeMailDomain, SECTORS, type Sector, sectorOfDomain } from "../../domain/organization-sectors.js"
 import { isCompanyName } from "../../domain/person-kinds.js"
@@ -51,6 +51,7 @@ export const companyDomainOf = (address: string): string | undefined => {
   return domain.includes(".") &&
     !FREE_MAIL.has(domain) &&
     !isFreeMailDomain(domain) &&
+    !isPackFreeMailDomain(domain) &&
     !SENDING_PLATFORMS.has(domain) &&
     !isDisposableDomain(domain)
     ? domain

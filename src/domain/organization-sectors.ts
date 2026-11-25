@@ -2,7 +2,7 @@ import { FREE_MAIL_DOMAINS } from "./free-mail-domains.generated.js"
 import { SECTOR_DOMAINS } from "./organization-sectors.generated.js"
 
 /** Sectors only the domain-list pack gives (`domain-lists update`): UT1 has them, Wikidata's table does not. */
-export const PACK_SECTORS = ["gaming_gambling", "adult", "freemail"] as const
+export const PACK_SECTORS = ["gaming_gambling", "adult"] as const
 
 /**
  * What an organization does (a bank, an airline, a shop), from the websites Wikidata lists, built into the package by

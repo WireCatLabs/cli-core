@@ -226,15 +226,18 @@ const installPack = (version: string, sectors: string[]) => {
     sources: [
       { ...source, id: "sectors", signal: "sector" },
       { ...source, id: "bad", signal: "bad", tag: "malware" },
+      { ...source, id: "webmail", signal: "freemail" },
     ],
     files: {
       sectors: { sha256: "", lines: sectors.length, bytes: 0 },
       bad: { sha256: "", lines: 1, bytes: 0 },
+      webmail: { sha256: "", lines: 1, bytes: 0 },
     },
   }
   writeFileSync(join(directory, "manifest.json"), JSON.stringify(pack))
   writeFileSync(listFile(directory, "sectors"), `${sectors.join("\n")}\n`)
   writeFileSync(listFile(directory, "bad"), "casino.ru\n")
+  writeFileSync(listFile(directory, "webmail"), "postbox.ru\n")
 }
 
 it("takes sectors from the domain-list pack where the built-in table has none, and clears them when a newer pack drops them", async () => {
@@ -278,4 +281,20 @@ it("makes no organization for a free-mail provider of the built-in list", async 
   await store.people.savePeople(MAIL, [{ id: "noreply@seznam.cz", name: "Seznam" }])
   await sorted(store)
   expect(holdings(db)).toEqual([])
+})
+
+it("makes no organization for a mailbox provider of the pack's free-mail list", async () => {
+  try {
+    installPack("2026-11-25", [])
+    const { store, db } = await opened()
+    await store.people.savePeople(MAIL, [
+      { id: "noreply@postbox.ru", name: "Postbox" },
+      { id: "noreply@casino.ru", name: "Casino" },
+    ])
+    await sorted(store)
+    expect((await store.knowledge.organizations()).map(({ name }) => name)).toEqual(["Casino"])
+    expect(holdings(db).map(({ address }) => address)).toEqual(["noreply@casino.ru"])
+  } finally {
+    rmSync(domainListsDirectory(), { recursive: true, force: true })
+  }
 })

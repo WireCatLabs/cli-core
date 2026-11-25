@@ -37,8 +37,9 @@ const UT1_SECTORS: Record<string, string> = {
   arjel: "gaming_gambling",
   games: "gaming_gambling",
   adult: "adult",
-  webmail: "freemail",
 }
+// Mailbox providers: never an organization, so a list of its own rather than a sector.
+const UT1_FREE_MAIL = "webmail"
 // `phishing` says it is no longer kept and only copies `malware`.
 const UT1_BAD = ["malware", "cryptojacking"]
 
@@ -96,7 +97,9 @@ try {
   const response = await fetch(UT1_URL, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(300_000) })
   if (!response.ok) throw new Error(`UT1 answered ${response.status}`)
   writeFileSync(tarball, Buffer.from(await response.arrayBuffer()))
-  const wanted = [...Object.keys(UT1_SECTORS), ...UT1_BAD].map((category) => `blacklists/${category}/domains`)
+  const wanted = [...Object.keys(UT1_SECTORS), UT1_FREE_MAIL, ...UT1_BAD].map(
+    (category) => `blacklists/${category}/domains`,
+  )
   execFileSync("tar", ["-xzf", tarball, "-C", work, "--wildcards", ...wanted], { stdio: "inherit" })
 
   const sectorLines: string[] = []
@@ -106,6 +109,13 @@ try {
   publish(
     { id: "ut1-sectors", title: "UT1 sector lists", signal: "sector", ...UT1, fetched_at: fetchedAt },
     sectorLines,
+  )
+
+  publish(
+    { id: "ut1-webmail", title: "UT1 webmail providers", signal: "freemail", ...UT1, fetched_at: fetchedAt },
+    linesOf(join(work, "blacklists", UT1_FREE_MAIL, "domains")).filter(
+      (line) => getDomain(line) === line && registrable(line) === line,
+    ),
   )
 
   const badLines: string[] = []

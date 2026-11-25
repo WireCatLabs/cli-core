@@ -5,8 +5,11 @@ import { count, id, text, time } from "./fields.js"
 export const domainList = v.strictObject({
   id,
   title: text,
-  /** `sector` gives an organization its sector; `bad` only marks a host known for spam, phishing or malware. */
-  signal: v.picklist(["sector", "bad"]),
+  /**
+   * `sector` gives an organization its sector; `freemail` keeps a mailbox provider from making one; `bad` only marks a
+   * host known for spam, phishing or malware.
+   */
+  signal: v.picklist(["sector", "freemail", "bad"]),
   /** `non-commercial`: WireCat may use it, a paid service built around it may not. */
   class: v.picklist(["commercial-ok", "non-commercial"]),
   licence: text,

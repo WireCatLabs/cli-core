@@ -1,4 +1,4 @@
-import { closeSync, openSync, readFileSync, readSync } from "node:fs"
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { StringDecoder } from "node:string_decoder"
 import { wirecatDirectory } from "../store/path.js"
@@ -19,14 +19,14 @@ export const PACK_MANIFEST_URL = `https://github.com/WireCatLabs/cli-core/releas
 export type LicenceClass = "commercial-ok" | "non-commercial"
 
 /**
- * One list. `sector` files give an organization its sector; `bad` files only say a host is known for spam, phishing
- * or malware, and never set a sector. A line is a domain, or a domain, a tab and a sector (or a source's own
+ * One list. `sector` files give an organization its sector; `freemail` files name mailbox providers, which never
+ * make an organization; `bad` files only say a host is known for spam, phishing or malware, and never set a sector. A line is a domain, or a domain, a tab and a sector (or a source's own
  * category, for `bad`). `upstream` lists may not be redistributed: the command fetches them from their source, whole.
  */
 export interface PackSource {
   id: string
   title: string
-  signal: "sector" | "bad"
+  signal: "sector" | "freemail" | "bad"
   /** The sector or category of a line that names none. */
   tag?: string
   licence: string
@@ -104,7 +104,7 @@ export const lookupDomains = (hosts: ReadonlySet<string>, options: LookupOptions
   if (pack === undefined || hosts.size === 0) return hits
   const directory = domainListsDirectory(options.env)
   for (const source of pack.sources) {
-    if (pack.files[source.id] === undefined) continue
+    if (pack.files[source.id] === undefined || source.signal === "freemail") continue
     if (options.commercialOnly && source.class !== "commercial-ok") continue
     scanLines(listFile(directory, source.id), (line) => {
       const tab = line.indexOf("\t")
@@ -118,6 +118,33 @@ export const lookupDomains = (hosts: ReadonlySet<string>, options: LookupOptions
     })
   }
   return hits
+}
+
+let freeMail: { set: Set<string>; stamp: number } | undefined
+
+const manifestStamp = (env?: NodeJS.ProcessEnv): number => {
+  try {
+    return statSync(join(domainListsDirectory(env), "manifest.json")).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * A mailbox provider from the pack's `freemail` lists (UT1 `webmail`). They are small, so they are held in memory and
+ * read again only when `domain-lists update` replaced the pack.
+ */
+export const isPackFreeMailDomain = (domain: string, env?: NodeJS.ProcessEnv): boolean => {
+  const stamp = manifestStamp(env)
+  if (freeMail?.stamp !== stamp) {
+    const set = new Set<string>()
+    const pack = installedPack(env)
+    for (const source of pack?.sources ?? [])
+      if (source.signal === "freemail" && pack?.files[source.id] !== undefined)
+        scanLines(listFile(domainListsDirectory(env), source.id), (line) => set.add(line.split("\t")[0] ?? line))
+    freeMail = { set, stamp }
+  }
+  return freeMail.set.has(domain)
 }
 
 const scanLines = (path: string, line: (text: string) => void): void => {
