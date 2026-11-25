@@ -2,6 +2,7 @@ import { contextEvidenceFingerprint } from "../../context/evidence.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { int, str } from "./events.js"
+import { OWN_MAIL_ADDRESSES } from "./own-identities.js"
 import type { ColumnMap, Where } from "./query-filter.js"
 
 /** What decides whose turn a thread is, read from its newest email that is not a draft; never its text. */
@@ -10,7 +11,7 @@ export interface NewestEmail {
   /** ms: when it was received, or sent when that is unknown. */
   at: number
   outgoing: boolean
-  /** The mailbox's own address is in To or Cc. */
+  /** One of the mailbox's own addresses (its own, an alias in `mail_own_addresses`) is in To or Cc. */
   addressed: boolean
   /** Filed in the mailbox of mail sent to many. */
   bulk: boolean
@@ -106,7 +107,9 @@ const ACTIVITY = `
     e.external_id, coalesce(e.received_at, e.sent_at) AS at,
     coalesce(e.outgoing, lower(e.from_address) = lower(a.external_id)) AS outgoing,
     EXISTS (SELECT 1 FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')
-      AND lower(r.address) = lower(a.external_id)) AS addressed,
+      AND (lower(r.address) = lower(a.external_id) OR lower(trim(r.address)) IN (SELECT j.value FROM sync_cursors s,
+        json_each(CASE WHEN json_valid(s.value) THEN s.value ELSE '[]' END) j
+        WHERE s.account_id = a.id AND s.key = '${OWN_MAIL_ADDRESSES}'))) AS addressed,
     EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
       WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
     coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) IS NOT NULL AS list,

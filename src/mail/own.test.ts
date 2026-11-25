@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { type MessageStore, openStore } from "../store/index.js"
 import { mailFolders } from "./folders.js"
+import { mailTurn } from "./owed.js"
 import type { MailAccount } from "./sync.js"
 import { syncMail } from "./sync.js"
 import { type FakeMail, type FakeMailbox, fakeMailSource } from "./testing/index.js"
@@ -157,6 +158,21 @@ describe("the owner's mail", () => {
     expect(await outgoing(store)).toEqual({ "9001": false, "9002": true })
     expect(await ownerHolds(store, ME)).toBe(false)
     expect(await ownerHolds(store, ALIAS)).toBe(false)
+  })
+
+  it("owes an answer to mail sent to a configured alias, and to the account, but not to mail for someone else", async () => {
+    const store = await sandbox()
+    const box: FakeMailbox = {
+      messages: [mail(1, { to: [[null, ALIAS]] }), mail(2), mail(3, { to: [["Pat Example", "pat@example.test"]] })],
+    }
+
+    await sync(store, box, { addresses: [ALIAS] })
+
+    const { id } = await store.accounts.storedAccount(KEY)
+    const turns = Object.fromEntries(
+      (await store.mail.threadActivity(id, 0)).map(({ threadId, newest }) => [threadId, mailTurn(newest)]),
+    )
+    expect(turns).toEqual({ "9001": "owed", "9002": "owed", "9003": null })
   })
 })
 

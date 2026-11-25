@@ -135,9 +135,10 @@ points behind it.
 
 Whose turn a thread is, owed or waiting, is `mailTurn` (`src/mail/owed.ts`), the one rule `review --unanswered`,
 `--waiting` and `tasks agenda` over an email account share: owed when the newest email that is not a draft came in and
-names the owner in To or Cc; waiting when the owner wrote it. Mail sent to many counts too (the owner's ruling: look
-at all mail). Each review item's `email` carries `bulk`, `list_id`, `rule_id` and the sender score instead, and the
-query term `bulk:false` leaves out threads whose newest email is bulk, a list's or an envelope (`isBulk`).
+names one of the owner's addresses in To or Cc (the account's, or one under `mail_own_addresses`); waiting when the
+owner wrote it. Mail sent to many counts too (the owner's ruling: look at all mail). Each review item's `email` carries
+`bulk`, `list_id`, `rule_id` and the sender score instead, and the query term `bulk:false` leaves out threads whose
+newest email is bulk, a list's or an envelope (`isBulk`).
 
 ## Processing marks
 
