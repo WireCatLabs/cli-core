@@ -9,7 +9,7 @@ import { calendarWritesOver } from "./calendar.js"
 import { chatPkFor, findChatPk, raiseLastMessageAt, upsertChat, writeMembers } from "./chats.js"
 import { seenIdentity } from "./identities.js"
 import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
-import { tombstone, upsertMessage } from "./messages.js"
+import { linkThreadChildren, tombstone, upsertMessage } from "./messages.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { e164Of } from "./person-matcher.js"
@@ -124,6 +124,7 @@ const saveSms = (projection: Projection, tools: ProjectionTools, revive = false)
     importedBy(source).source,
     revive ? context.now() + 1 : undefined,
   )
+  linkThreadChildren(context, chatKey, [message.id])
   raiseLastMessageAt(context, chatKey, sentAt)
   return formatReference({
     type: "message",

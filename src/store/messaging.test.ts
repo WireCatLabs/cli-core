@@ -54,6 +54,16 @@ it("stores scoped nested chats and connects a reply thread when its root arrives
         )
         .get()?.external_id,
     ).toBe("root")
+    await store.messages.saveMessages(account, "room", [message("late", { threadId: "early" }), message("early")], {
+      via: "history",
+    })
+    expect(
+      db
+        .prepare(
+          "SELECT root.external_id FROM messages reply JOIN messages root ON root.id=reply.thread_root_id WHERE reply.external_id='late'",
+        )
+        .get()?.external_id,
+    ).toBe("early")
     expect(
       db
         .prepare(
@@ -65,7 +75,7 @@ it("stores scoped nested chats and connects a reply thread when its root arrives
       scope: "personal",
       parentChatId: "parent",
     })
-    expect(db.prepare("SELECT message_count FROM chats WHERE external_id='room'").get()?.message_count).toBe(2)
+    expect(db.prepare("SELECT message_count FROM chats WHERE external_id='room'").get()?.message_count).toBe(4)
     await store.messages.markDeleted(account, ["root"], { chatId: "room" })
     await store.messages.keepTranscript(account, "room", "root", "Late transcript", "synthetic")
     expect(await store.messages.transcript(account, "room", "root")).toBeUndefined()

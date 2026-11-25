@@ -181,6 +181,11 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
           if (upsertMessage(key, accountKey, chatKey, message, via, seenAt) && countUnread)
             messageWrites.countUnread(context, chatKey, message)
         }
+        messageWrites.linkThreadChildren(
+          context,
+          chatKey,
+          messages.filter((message) => message.scheduledFor === undefined).map((message) => message.id),
+        )
         for (const { messageId, vote } of votes)
           messageWrites.saveVote(context, accountKey, key.provider, chatKey, messageId, vote)
         for (const { messageId, reaction } of reactions)

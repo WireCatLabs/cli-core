@@ -149,6 +149,21 @@ const fieldsOf = (message: Message, sender: number | null): Fields => ({
   normalizerVersion: NORMALIZER_VERSION,
 })
 
+/**
+ * Points replies saved before their thread's root at it. Run once per page: no index covers `thread_external_id`,
+ * so each run reads the whole chat, and once per message made a sync slow down as the chat grew (tg-cli #917).
+ */
+export const linkThreadChildren = (context: StoreContext, chatKey: number, rootIds: readonly Id[]): void => {
+  if (rootIds.length === 0) return
+  context.database
+    .prepare(
+      `UPDATE messages SET thread_root_id=(SELECT root.id FROM messages root
+         WHERE root.chat_id=messages.chat_id AND root.external_id=messages.thread_external_id)
+       WHERE chat_id=? AND thread_root_id IS NULL AND thread_external_id IN (SELECT value FROM json_each(?))`,
+    )
+    .run(chatKey, JSON.stringify(rootIds.map(String)))
+}
+
 export const upsertMessage = (
   context: StoreContext,
   key: AccountKey,
@@ -277,9 +292,6 @@ export const upsertMessage = (
       )
       .run(chatKey, root, pk)
   }
-  context.database
-    .prepare("UPDATE messages SET thread_root_id=? WHERE chat_id=? AND thread_external_id=? AND thread_root_id IS NULL")
-    .run(pk, chatKey, message.id)
   const heardFirst = context.database
     .prepare(
       "UPDATE message_transcripts SET message_id=? WHERE chat_id=? AND message_external_id=? AND message_id IS NULL",
