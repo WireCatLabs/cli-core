@@ -16,10 +16,10 @@ import {
 } from "../../domain/person-kinds.js"
 import { type CacheDatabase, isQueryOnly, type SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
-import { groupByDomain } from "./domain-organizations.js"
+import { groupByDomain, type Sorted } from "./domain-organizations.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
-import { type HeldBot, ownerPeopleOf, ruleMove, SENDER_BOT_PREFIX, senderBotsOf } from "./sender-bots.js"
+import { ownerPeopleOf, ruleBotsBack, ruleToBot, settleLegacyBots } from "./sender-bots.js"
 import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { mergedAssignees } from "./task-board.js"
 import { hiddenTestPeople } from "./test-people.js"
@@ -64,13 +64,8 @@ export interface ListedPerson {
   messagesFrom: number
   /** The newest of their messages, their mail and their one-to-one chat's last message, as ISO time. */
   lastContact: string | null
-  /** Why they are shown; empty for someone hidden by default, and for a bot. */
+  /** Why they are shown; empty for someone hidden by default. */
   ties: ShownBecause[]
-  /**
-   * The sender bot this row is (`sender-bot:<id>`), listed as `automated` under its person row's ref; `null` for a
-   * person.
-   */
-  bot: string | null
   /** How their messages reached the owner (`senderSignalsOf`); `null` when nothing says. Worked out for the page. */
   reach: Reach | null
   /** What their mail and addresses show about who writes and how it reached the owner. Worked out for the page. */
@@ -305,8 +300,8 @@ interface Candidate {
 
 interface Classified extends Omit<ListedPerson, "lastContact" | "reach" | "signals"> {
   id: number
-  /** What the rules do with this person when the kind is kept: make them a bot, or a rule's bot a person again. */
-  move?: "bot" | "person"
+  /** What the rules do with this person when the kind is kept: give their identities to a sender bot. */
+  move?: "bot"
   /** Worked out once: a collator over 50,000 names takes most of a list's time. */
   nameOrder: string
   emails: string[]
@@ -334,9 +329,6 @@ const PROGRAM_SIGNALS: readonly KindSignal[] = [
   "bulk-never-replied",
 ]
 
-/** What the owner decided for this person: a bot of the owner's, or a person no rule makes a bot. */
-type Held = "bot" | "person" | undefined
-
 /** The first rule that holds; the list's contract in the people-clients-digests plan names the same order. */
 const kindOf = (
   shown: string | null,
@@ -344,7 +336,7 @@ const kindOf = (
   ties: ShownBecause[],
   mail: MailCounts | undefined,
   test: boolean,
-  held?: Held,
+  keptByOwner = false,
 ): { kind: PersonKind; signals: (ShownBecause | KindSignal)[] } => {
   if (test) return { kind: "test", signals: ["test-data"] }
   const emails = facts?.emails ?? []
@@ -361,11 +353,10 @@ const kindOf = (
       ? (["null-return-path"] as const)
       : []),
   ]
-  if (held === "bot") return { kind: "automated", signals: automated.length > 0 ? automated : ["owner-choice"] }
   const always = ties.filter((tie) => (ALWAYS_SHOWN as readonly string[]).includes(tie))
   if (always.length > 0) return { kind: "person", signals: ties }
   // One mailbox's newsletter signal must not hide someone the owner talks to in a private chat.
-  if (held !== "person" && automated.length > 0 && (facts?.bot || !facts?.twoWay))
+  if (!keptByOwner && automated.length > 0 && (facts?.bot || !facts?.twoWay))
     return { kind: "automated", signals: automated }
   const organization: KindSignal[] = [
     ...(facts?.organization ? (["organization"] as const) : []),
@@ -395,9 +386,6 @@ const isProgram = (
   (facts.bot || (!facts.twoWay && !ties.includes("mail"))) &&
   (facts.identities === 1 || facts.programIdentities === facts.identities)
 
-const moveOf = (bot: HeldBot | undefined, program: boolean): Classified["move"] =>
-  bot === undefined ? (program ? "bot" : undefined) : bot.author === "rules" && !program ? "person" : undefined
-
 /** Each person with their kind, contact and counts; the last contact is added for the page alone. */
 const classified = (
   database: CacheDatabase,
@@ -407,7 +395,6 @@ const classified = (
 ): Classified[] => {
   const facts = factsOf(database, scope)
   const test = hiddenTestPeople(database)
-  const bots = senderBotsOf(database)
   const ownerPeople = ownerPeopleOf(database)
   const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
   const mail = new Map(
@@ -424,20 +411,16 @@ const classified = (
     const contact = { username: own?.username ?? null, phone: own?.phone ?? null, email: own?.email ?? null }
     const shown = displayName(name, { ...contact, name: own?.name ?? null })
     const ties = reasons.get(id) ?? []
-    const bot = bots.get(id)
-    const held: Held = bot?.author === "owner" ? "bot" : ownerPeople.has(id) && bot === undefined ? "person" : undefined
-    const worked = kindOf(shown, own, ties, mail.get(id), test.has(id), held)
-    const move =
-      held === undefined && !owner && worked.kind !== "test" ? moveOf(bot, isProgram(worked, own, ties)) : undefined
-    const isBot = (bot !== undefined && move !== "person") || move === "bot"
-    const named = bot?.name ?? shown
+    const kept = ownerPeople.has(id)
+    const worked = kindOf(shown, own, ties, mail.get(id), test.has(id), kept)
+    const toBot = !kept && !owner && worked.kind !== "test" && isProgram(worked, own, ties)
     return {
       id,
-      ...(move === undefined ? {} : { move }),
-      nameOrder: nameOrderOf(named),
+      ...(toBot ? { move: "bot" as const } : {}),
+      nameOrder: nameOrderOf(shown),
       person: `person:${id}`,
       name,
-      displayName: named,
+      displayName: shown,
       kind: worked.kind,
       kindSignals: worked.signals,
       owner,
@@ -447,8 +430,7 @@ const classified = (
       ...contact,
       usernameSource: own?.usernameSource ?? null,
       messagesFrom: (own?.messages ?? 0) + (mail.get(id)?.n ?? 0),
-      ties: isBot ? [] : ties,
-      bot: bot !== undefined && move !== "person" ? `${SENDER_BOT_PREFIX}${bot.id}` : null,
+      ties,
       emails: own?.emails ?? [],
       twoWay: own?.twoWay ?? false,
     }
@@ -548,24 +530,35 @@ const workOut = (database: CacheDatabase, all: boolean, most?: number): Worked[]
 
 const keep = (database: CacheDatabase, worked: Worked[]): void => {
   const at = Date.now()
-  // Before the kinds: a move clears the person's kind through its triggers.
+  settleLegacyBots(database, at)
+  ruleBotsBack(database, at)
+  const bots: Sorted[] = []
   for (const person of worked)
-    if (person.move !== undefined && person.kind !== MERGED)
-      ruleMove(database, person.id, person.move, person.kindSignals.join(", "), at)
+    if (person.move === "bot" && person.kind !== MERGED) {
+      bots.push({
+        id: ruleToBot(database, person.id, person.kindSignals.join(", "), at),
+        displayName: person.displayName,
+        holds: true,
+        bot: true,
+      })
+      person.kind = MERGED
+    }
   const keptAsPeople = ownerPeopleOf(database)
   groupByDomain(
     database,
-    worked
-      .filter((person) => !person.owner && person.kind !== MERGED && person.kind !== "test")
-      .map((person) => ({
-        id: person.id,
-        displayName: person.displayName,
-        holds:
-          !keptAsPeople.has(person.id) &&
-          (person.bot !== null ||
-            person.move === "bot" ||
-            (person.kind === "organization" && person.kindSignals.includes("role-address"))),
-      })),
+    [
+      ...bots,
+      ...worked
+        .filter((person) => !person.owner && person.kind !== MERGED && person.kind !== "test")
+        .map((person) => ({
+          id: person.id,
+          displayName: person.displayName,
+          holds:
+            !keptAsPeople.has(person.id) &&
+            person.kind === "organization" &&
+            person.kindSignals.includes("role-address"),
+        })),
+    ],
     at,
   )
   const row = database.prepare(
@@ -810,7 +803,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
   const byId = new Map(people.map((person) => [person.id, person]))
   const ordered = [...sameName.keys()].flatMap((id) => byId.get(id) ?? [])
   const rows = classified(database, ordered, [...sameName.keys()], ties).filter(
-    ({ kind, bot }) => kind !== "test" && bot === null,
+    ({ kind, move }) => kind !== "test" && move === undefined,
   )
   const same = rows.map(({ id }) => sameName.get(id) === true)
   return withLastContact(database, rows).map((person, at) => ({ ...person, sameName: same[at] === true }))

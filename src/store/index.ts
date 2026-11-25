@@ -16,7 +16,7 @@ export {
   TASK_TYPES,
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
-export { type KindSignal, PERSON_KINDS, type PersonKind } from "../domain/person-kinds.js"
+export { type KindSignal, PERSON_KINDS, type PersonKind, SENDER_BOT_PREFIX } from "../domain/person-kinds.js"
 export type { RefState, RefSummary, RefSummaryKind, RefsStore } from "../domain/ref-summaries.js"
 export type {
   TagConsolidationApplyOptions,
@@ -503,7 +503,14 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
-export type { SenderBot } from "./sqlite/sender-bots.js"
+export type {
+  BotIdentity,
+  BotList,
+  BotListOptions,
+  BotMove,
+  SenderBot,
+  SenderBotDetails,
+} from "./sqlite/sender-bots.js"
 export { REACHES, type Reach, type SenderSignal } from "./sqlite/sender-signals.js"
 export type { ChallengeInput, SourceReviewDecision } from "./sqlite/source-review.js"
 export type {

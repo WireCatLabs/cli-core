@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-147 tables, 28 full-text indexes.
+148 tables, 28 full-text indexes.
 
 ## Conventions
 
@@ -335,18 +335,30 @@ An AI agent or a script that works here: it registers itself, owns projects and 
 
 ### `sender_bots`
 
-A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. Not a person, so it is never proposed as the same person, has no ties and is no task's assignee. Its identities are those of the person row it was sorted from, which `people list` shows as `automated`. Not the `bots` table, which holds agents that work here.
+A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. An entity of its own beside `persons` (`sender-bot:<id>`): it holds its identities in `sender_bot_identities`, never in `identity_links`, so it is never listed or proposed as a person, has no ties and is no task's assignee. Not the `bots` table, which holds agents that work here.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `person_id` | integer | not null, unique |  | the person row whose identities are this bot's; its `person:` uid stays the bot's handle in lists. No foreign key: an older build erasing the person does not know this table, and a trigger drops the bot with it |
+| `person_id` | integer | not null, unique |  | kept for builds before version 75, which read a bot as this person row: negative for every bot since, so it names no person. A positive one is a bot such a build sorted after the upgrade, whose identities the next list moves here |
 | `name` | text |  |  | the owner's name for it; null shows its identities' name |
 | `organization_id` | integer |  |  | the organization it sends for; no foreign key, a trigger clears it when the organization row goes |
 | `author` | text | not null |  | `rules` or `owner`: the owner's bot never goes back by a rule |
 | `reason` | text |  |  | what sorted it: the kind signals, such as `no-reply`, or the owner's words |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+
+### `sender_bot_identities`
+
+The identities a sender bot holds. An identity is here or in `identity_links`, never both: a trigger refuses its link to a person while a bot holds it, so an older build's sync gives it no person again. Its messages and mail keep pointing at the identity.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `identity_id` | integer | PK |  | no foreign key, as the other bot tables: an older build purging an account does not know this table, and a trigger drops the row with the identity |
+| `bot_id` | integer | not null |  | the `sender_bots` row; the bot goes when its last identity does |
+| `created_at` | integer | not null |  | when the bot took it |
+
+*Keys and indexes:* `INDEX (bot_id)`
 
 ### `sender_bot_moves`
 
@@ -364,7 +376,7 @@ Every move of an identity between a person and a sender bot, by the rules or by 
 | `reason` | text |  |  | the kind signals of a rule's move, or the owner's words |
 | `created_at` | integer | not null |  | when it moved |
 
-*Keys and indexes:* `INDEX (identity_id)`
+*Keys and indexes:* `INDEX (identity_id)`, `INDEX (from_person_id)`
 
 ## Chats and messages
 

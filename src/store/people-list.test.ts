@@ -264,6 +264,8 @@ describe("the kind of a person", () => {
         .filter(({ owner }) => !owner)
         .map(({ displayName, kind, kindSignals }) => [displayName, [kind, ...kindSignals]]),
     )
+  const bots = async (store: MessageStore) =>
+    (await store.people.listBots({ limit: 100 })).items.map(({ displayName, reason }) => [displayName, reason])
 
   it("puts programs under automated and companies under organization, even with a tie", async () => {
     const { store, db } = await opened()
@@ -288,15 +290,18 @@ describe("the kind of a person", () => {
     ])
 
     expect(await kinds(store)).toEqual({
-      "Weather Bot": ["automated", "bot"],
       "CZECH AIRLINES": ["organization", "company-name"],
       "Уведомления Госуслуг": ["automated", "automated-name"],
       "ООО «Ромашка»": ["organization", "company-name"],
       Kai: ["person", "chat"],
-      Orders: ["automated", "no-reply"],
       Reception: ["organization", "organization", "role-address"],
       "Mia Holt": ["stranger", "no-tie"],
     })
+    // Programs are bots, apart from people: a messenger's bot flag holds through a chat both wrote in.
+    expect(await bots(store)).toEqual([
+      ["Orders", "no-reply"],
+      ["Weather Bot", "bot"],
+    ])
   })
 
   it("calls a no-reply or notification address automated by any part of it, unless they answer in a chat", async () => {
@@ -320,12 +325,14 @@ describe("the kind of a person", () => {
     await answered(store, TG, "8")
 
     expect(await kinds(store)).toEqual({
-      "Ada Bank": ["automated", "no-reply"],
-      "Bo Shop": ["automated", "no-reply"],
-      "Cy App": ["automated", "notification-address"],
       "Joe Club": ["stranger", "no-tie"],
       "Lu Park": ["person", "chat"],
     })
+    expect(await bots(store)).toEqual([
+      ["Ada Bank", "no-reply"],
+      ["Bo Shop", "no-reply"],
+      ["Cy App", "notification-address"],
+    ])
   })
 
   it("calls a sender automated when most of their mail went to the bulk box", async () => {

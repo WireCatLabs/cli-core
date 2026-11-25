@@ -11,6 +11,16 @@ export const senderBots = sqliteTable("sender_bots", {
   updatedAt: integer("updated_at").notNull(),
 })
 
+export const senderBotIdentities = sqliteTable(
+  "sender_bot_identities",
+  {
+    identityId: integer("identity_id").primaryKey(),
+    botId: integer("bot_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("sender_bot_identities_by_bot_id").on(table.botId)],
+)
+
 export const senderBotMoves = sqliteTable(
   "sender_bot_moves",
   {
@@ -24,5 +34,8 @@ export const senderBotMoves = sqliteTable(
     reason: text("reason"),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [index("sender_bot_moves_by_identity_id").on(table.identityId)],
+  (table) => [
+    index("sender_bot_moves_by_identity_id").on(table.identityId),
+    index("sender_bot_moves_by_from_person_id").on(table.fromPersonId),
+  ],
 )

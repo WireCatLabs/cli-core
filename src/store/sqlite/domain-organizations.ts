@@ -52,13 +52,14 @@ export const companyDomainOf = (address: string): string | undefined => {
 }
 
 /**
- * A person as the kind pass leaves them: `holds` for a bot or a shared mailbox, whose addresses the organization owns;
- * never for one the owner kept as a person.
+ * A person or a sender bot (`bot`, its `sender_bots` id) as the kind pass leaves them: `holds` for a bot or a shared
+ * mailbox, whose addresses the organization owns; never for one the owner kept as a person.
  */
 export interface Sorted {
   id: number
   displayName: string | null
   holds: boolean
+  bot?: boolean
 }
 
 const nameFor = (shown: string | null, domain: string): string => {
@@ -70,19 +71,28 @@ const nameFor = (shown: string | null, domain: string): string => {
     : domain
 }
 
-const mailOf = (database: CacheDatabase, people: readonly number[]) => {
-  const found = new Map<number, { identity: number; domain: string }[]>()
-  for (const row of database
-    .prepare(
-      "SELECT l.person_id AS person, i.id, lower(i.external_id) AS address FROM identity_links l " +
-        "JOIN identities i ON i.id = l.identity_id WHERE i.provider = 'email' " +
-        "AND l.person_id IN (SELECT value FROM json_each(?)) ORDER BY i.id",
-    )
-    .all(JSON.stringify(people))) {
-    const domain = companyDomainOf(String(row.address))
-    if (domain === undefined) continue
-    const person = Number(row.person)
-    found.set(person, [...(found.get(person) ?? []), { identity: Number(row.id), domain }])
+const keyOf = (one: Sorted) => `${one.bot ? "bot" : "person"}:${one.id}`
+
+const mailOf = (database: CacheDatabase, sorted: readonly Sorted[]) => {
+  const found = new Map<string, { identity: number; domain: string }[]>()
+  const held = [
+    { prefix: "person", sql: "SELECT l.person_id AS holder, l.identity_id FROM identity_links l" },
+    { prefix: "bot", sql: "SELECT l.bot_id AS holder, l.identity_id FROM sender_bot_identities l" },
+  ]
+  for (const { prefix, sql } of held) {
+    const ids = sorted.filter((one) => (prefix === "bot") === (one.bot === true)).map(({ id }) => id)
+    if (ids.length === 0) continue
+    for (const row of database
+      .prepare(
+        `SELECT h.holder, i.id, lower(i.external_id) AS address FROM (${sql}) h JOIN identities i ON i.id = h.identity_id ` +
+          "WHERE i.provider = 'email' AND h.holder IN (SELECT value FROM json_each(?)) ORDER BY i.id",
+      )
+      .all(JSON.stringify(ids))) {
+      const domain = companyDomainOf(String(row.address))
+      if (domain === undefined) continue
+      const key = `${prefix}:${Number(row.holder)}`
+      found.set(key, [...(found.get(key) ?? []), { identity: Number(row.id), domain }])
+    }
   }
   return found
 }
@@ -137,7 +147,6 @@ const othersAt = (database: CacheDatabase, domains: ReadonlySet<string>, seen: R
       "SELECT l.person_id AS person, i.id, lower(i.external_id) AS address FROM identity_links l " +
         "JOIN identities i ON i.id = l.identity_id JOIN persons p ON p.id = l.person_id " +
         "WHERE i.provider = 'email' AND p.owner = 0 AND p.kind IS NOT NULL AND p.kind NOT IN ('test', 'merged') " +
-        "AND NOT EXISTS (SELECT 1 FROM sender_bots b WHERE b.person_id = p.id) " +
         "AND NOT EXISTS (SELECT 1 FROM organization_identities oi WHERE oi.identity_id = i.id) ORDER BY i.id",
     )
     .all()) {
@@ -151,17 +160,14 @@ const othersAt = (database: CacheDatabase, domains: ReadonlySet<string>, seen: R
 }
 
 /**
- * Plan step 5: a bot or a shared mailbox at a company domain joins that domain's organization, made when none holds
+ * Plan step 5: a sender bot or a shared mailbox at a company domain joins that domain's organization, made when none holds
  * it; a human there becomes a `member-of` it, never merged. Free mail, throwaway mail and sending platforms make none.
  * An organization holding a domain of the built-in Wikidata list gets its `metadata.sector`.
  * The owner's word holds: a membership the owner removed and a domain whose organization the owner erased are not made
  * again. The caller holds the write lock.
  */
 export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[], at: number): void => {
-  const mail = mailOf(
-    database,
-    people.map(({ id }) => id),
-  )
+  const mail = mailOf(database, people)
   if (mail.size === 0) return
   const { byDomain, held } = holdersOf(database)
   const refused = refusedDomains(database)
@@ -175,7 +181,7 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
       `VALUES (?, ?, '${BY_DOMAIN}', 'rules', ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING`,
   )
   const sends = database.prepare(
-    "UPDATE sender_bots SET organization_id = ?, updated_at = ? WHERE person_id = ? AND organization_id IS NULL",
+    "UPDATE sender_bots SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id IS NULL",
   )
   const holder = (domain: string): number | undefined => {
     const found = byDomain.get(domain)
@@ -183,7 +189,7 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
   }
   for (const person of people) {
     if (!person.holds) continue
-    for (const { identity, domain } of mail.get(person.id) ?? []) {
+    for (const { identity, domain } of mail.get(keyOf(person)) ?? []) {
       let organization = held.get(identity)
       if (organization === undefined) {
         if ((byDomain.get(domain)?.size ?? 0) > 1) continue
@@ -197,7 +203,7 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
         hold.run(identity, organization, at, at)
         held.set(identity, organization)
       }
-      sends.run(organization, at, person.id)
+      if (person.bot) sends.run(organization, at, person.id)
     }
   }
   const removed = removedMemberships(database)
@@ -215,8 +221,9 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
       member.run(person, organization, `writes from ${domain}`, at, at, person, organization)
     }
   }
-  const seen = new Set(people.map(({ id }) => id))
-  for (const person of people) if (!person.holds) join(person.id, mail.get(person.id) ?? [])
+  const humans = people.filter((one) => !one.bot)
+  const seen = new Set(humans.map(({ id }) => id))
+  for (const person of humans) if (!person.holds) join(person.id, mail.get(keyOf(person)) ?? [])
   if (created.size > 0) for (const [person, addresses] of othersAt(database, created, seen)) join(person, addresses)
   setSectors(database, byDomain, at)
 }

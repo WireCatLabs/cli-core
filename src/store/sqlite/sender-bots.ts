@@ -1,42 +1,226 @@
 import { CliError } from "@wirecat/cli-base"
-import type { CacheDatabase } from "../driver.js"
+import { displayName } from "../../domain/display-names.js"
+import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import type { CacheDatabase, SqlValue } from "../driver.js"
+import { fold } from "../normalize.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
-import { releaseDomainHolds } from "./domain-organizations.js"
+import { groupByDomain, releaseDomainHolds } from "./domain-organizations.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { isOwner, mergePerson, move, recordOf, renameAfterLeaving, required, unlinkIdentity } from "./person-links.js"
-import { write } from "./transaction.js"
-
-export const SENDER_BOT_PREFIX = "sender-bot:"
+import { isOwner, mergePerson, move, recordOf, renameAfterLeaving } from "./person-links.js"
+import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
+import { read, write } from "./transaction.js"
 
 export type BotAuthor = "rules" | "owner"
 
-/** A sender bot as the people list reads it, keyed by the person row whose identities are the bot's. */
-export interface HeldBot {
-  id: number
-  author: BotAuthor
+/** @experimental */
+export interface BotIdentity {
+  provider: string
+  id: string
   name: string | null
+  username: string | null
 }
 
+/** A program that writes to the owner, apart from people: it has no ties, no tasks and no merge review. @experimental */
 export interface SenderBot {
+  /** `sender-bot:<id>`. */
   bot: string
-  /** The person row whose identities are the bot's: its handle in `people list` and `people show`. */
-  person: string
+  /** The owner's name for it; `displayName` falls back to its identities'. */
   name: string | null
+  displayName: string | null
+  /** The organization it sends for (`organization:<id>`), from its mail domain or the owner. */
+  organization: string | null
+  /** `owner` when the owner moved it: no rule gives it back to a person. */
+  author: BotAuthor
+  /** The kind signals that sorted it, or the owner's words. */
+  reason: string | null
+  identities: BotIdentity[]
+  /** Messages and mail it sent, every account together. */
+  messagesFrom: number
+  lastContact: string | null
+  reach: Reach | null
+  signals: SenderSignal[]
+}
+
+/** One move of an identity between a person and a bot. @experimental */
+export interface BotMove {
+  identity: IdentityRef
+  /** `person:<uid>` or `sender-bot:<id>`; `null` for none. */
+  from: string | null
+  to: string | null
   author: BotAuthor
   reason: string | null
+  at: string
 }
 
-export const senderBotsOf = (database: CacheDatabase): Map<number, HeldBot> =>
-  new Map(
+/** @experimental */
+export interface SenderBotDetails extends SenderBot {
+  /** Every move to or from this bot, oldest first. */
+  moves: BotMove[]
+}
+
+/** @experimental */
+export interface BotListOptions {
+  /** Part of a name, address or username, at least 3 characters. */
+  query?: string
+  /** `organization:<id>`: the bots that send for it. */
+  organization?: string
+  limit: number
+  offset?: number
+}
+
+/** @experimental */
+export interface BotList {
+  items: SenderBot[]
+  hasMore: boolean
+  total: number
+}
+
+interface Log {
+  author: BotAuthor
+  reason: string | null
+  at: number
+}
+
+interface Side {
+  person?: number
+  bot?: number
+}
+
+const MIN_QUERY = 3
+const HOLDS = "EXISTS (SELECT 1 FROM sender_bot_identities h WHERE h.bot_id = b.id)"
+const SHOWN =
+  "coalesce(b.name, (SELECT coalesce(i.name, i.username, i.external_id) FROM sender_bot_identities s " +
+  "JOIN identities i ON i.id = s.identity_id WHERE s.bot_id = b.id ORDER BY i.name IS NULL, i.id LIMIT 1))"
+
+const refOf = (side: Side): string | null =>
+  side.person !== undefined
+    ? `person:${side.person}`
+    : side.bot !== undefined
+      ? `${SENDER_BOT_PREFIX}${side.bot}`
+      : null
+
+const holderOf = (database: CacheDatabase, identity: number): Side => {
+  const linked = database.prepare("SELECT person_id FROM identity_links WHERE identity_id = ?").get(identity)
+  if (linked !== undefined) return { person: Number(linked.person_id) }
+  const held = database.prepare("SELECT bot_id FROM sender_bot_identities WHERE identity_id = ?").get(identity)
+  return held === undefined ? {} : { bot: Number(held.bot_id) }
+}
+
+const identitiesOf = (database: CacheDatabase, person: number): number[] =>
+  database
+    .prepare("SELECT identity_id FROM identity_links WHERE person_id = ? ORDER BY identity_id")
+    .all(person)
+    .map((row) => Number(row.identity_id))
+
+const botIdentitiesOf = (database: CacheDatabase, bot: number): number[] =>
+  database
+    .prepare("SELECT identity_id FROM sender_bot_identities WHERE bot_id = ? ORDER BY identity_id")
+    .all(bot)
+    .map((row) => Number(row.identity_id))
+
+const logMove = (database: CacheDatabase, identity: number, from: Side, to: Side, { author, reason, at }: Log) =>
+  database
+    .prepare(
+      "INSERT INTO sender_bot_moves (identity_id, from_person_id, from_bot_id, to_person_id, to_bot_id, author, " +
+        "reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(identity, from.person ?? null, from.bot ?? null, to.person ?? null, to.bot ?? null, author, reason, at)
+
+/** `person_id` only keeps builds before version 75 from reading the bot as a person: a negative one names none. */
+const createBot = (database: CacheDatabase, { author, reason, at }: Log, name: string | null = null): number =>
+  Number(
     database
-      .prepare("SELECT id, person_id, author, name FROM sender_bots")
-      .all()
-      .map((row) => [
-        Number(row.person_id),
-        { id: Number(row.id), author: row.author as BotAuthor, name: row.name == null ? null : String(row.name) },
-      ]),
+      .prepare(
+        "INSERT INTO sender_bots (person_id, name, author, reason, created_at, updated_at) " +
+          "VALUES ((SELECT min(0, coalesce(min(person_id), 0)) - 1 FROM sender_bots), ?, ?, ?, ?, ?) RETURNING id",
+      )
+      .get(name, author, reason, at, at)?.id,
   )
+
+/** A person every identity left for a bot is stored as a merge's emptied person is: no list shows them. */
+const retireEmptied = (database: CacheDatabase, people: Iterable<number>) => {
+  const retire = database.prepare(
+    "UPDATE persons SET kind = 'merged' WHERE id = ? AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = ?)",
+  )
+  for (const person of people) retire.run(person, person)
+}
+
+/**
+ * Moves identities to a bot, off a person or another bot, each move logged. Answers the people each left, and which
+ * identities. The caller holds the write lock.
+ */
+const intoBot = (database: CacheDatabase, identities: readonly number[], bot: number, log: Log) => {
+  const left = new Map<number, number[]>()
+  for (const identity of identities) {
+    const from = holderOf(database, identity)
+    if (from.bot === bot) continue
+    if (from.person !== undefined) {
+      database.prepare("DELETE FROM identity_links WHERE identity_id = ?").run(identity)
+      left.set(from.person, [...(left.get(from.person) ?? []), identity])
+    }
+    if (from.bot !== undefined)
+      database.prepare("UPDATE sender_bot_identities SET bot_id = ? WHERE identity_id = ?").run(bot, identity)
+    else
+      database
+        .prepare("INSERT INTO sender_bot_identities (identity_id, bot_id, created_at) VALUES (?, ?, ?)")
+        .run(identity, bot, log.at)
+    logMove(database, identity, from, { bot }, log)
+  }
+  retireEmptied(database, left.keys())
+  return left
+}
+
+/** The person an identity last left for a bot, as that person is now; `undefined` when it came from none. */
+const originOf = (database: CacheDatabase, identity: number): number | undefined => {
+  const row = database
+    .prepare(
+      "SELECT m.from_person_id FROM sender_bot_moves m JOIN persons p ON p.id = m.from_person_id " +
+        "WHERE m.identity_id = ? AND m.to_bot_id IS NOT NULL ORDER BY m.id DESC LIMIT 1",
+    )
+    .get(identity)
+  return row === undefined ? undefined : currentPerson(database, Number(row.from_person_id))
+}
+
+const newPerson = (database: CacheDatabase, identity: number, at: number): number =>
+  Number(
+    database
+      .prepare(
+        "INSERT INTO persons (name, created_at, updated_at) VALUES ((SELECT name FROM identities WHERE id = ?), ?, ?) " +
+          "RETURNING id",
+      )
+      .get(identity, at, at)?.id,
+  )
+
+/**
+ * Gives a bot's identities to a person: `to`, else the person each came from, else a person row of its own. The bot
+ * goes with its last identity. Answers the person each went to. The caller holds the write lock.
+ */
+const outOfBot = (database: CacheDatabase, identities: readonly number[], to: number | undefined, log: Log) => {
+  const by = log.author === "owner" ? "owner" : "rules"
+  const went = new Map<number, number>()
+  for (const identity of identities) {
+    const from = holderOf(database, identity)
+    if (from.bot === undefined) continue
+    database.prepare("DELETE FROM sender_bot_identities WHERE identity_id = ?").run(identity)
+    const target = to ?? originOf(database, identity) ?? newPerson(database, identity, log.at)
+    database
+      .prepare(
+        "INSERT INTO identity_links (identity_id, person_id, method, confidence, created_at, author, updated_at) " +
+          "VALUES (?, ?, 'bot', 1, ?, ?, ?)",
+      )
+      .run(identity, target, log.at, by, log.at)
+    database
+      .prepare(
+        "INSERT INTO identity_link_events (identity_id, from_person_id, to_person_id, method, created_at, author) " +
+          "VALUES (?, NULL, ?, 'bot', ?, ?)",
+      )
+      .run(identity, target, log.at, by)
+    logMove(database, identity, from, { person: target }, log)
+    went.set(identity, target)
+  }
+  return went
+}
 
 /** People holding an identity the owner last moved to a person, or kept as one: no rule makes them a bot. */
 export const ownerPeopleOf = (database: CacheDatabase): Set<number> =>
@@ -51,171 +235,310 @@ export const ownerPeopleOf = (database: CacheDatabase): Set<number> =>
       .map((row) => Number(row.person)),
   )
 
+/** A person every identity left for a bot is no one's assignee: the bot has no tasks. */
 export const refuseBotAssignee = (database: CacheDatabase, person: number): void => {
-  if (database.prepare("SELECT 1 FROM sender_bots WHERE person_id = ?").get(person) !== undefined)
-    throw new CliError("validation_error", `person:${person} is a sender bot, which is no one's assignee`, {
-      reason: "sender-bot.assignee",
-    })
+  const bot = database
+    .prepare(
+      "SELECT m.to_bot_id FROM sender_bot_moves m WHERE m.from_person_id = ? AND m.to_bot_id IS NOT NULL " +
+        "AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = ?) ORDER BY m.id DESC LIMIT 1",
+    )
+    .get(person, person)
+  if (bot !== undefined)
+    throw new CliError(
+      "validation_error",
+      `person:${person} moved to ${SENDER_BOT_PREFIX}${bot.to_bot_id}, which is no one's assignee`,
+      { reason: "sender-bot.assignee" },
+    )
 }
 
-const identitiesOf = (database: CacheDatabase, person: number): number[] =>
-  database
-    .prepare("SELECT identity_id FROM identity_links WHERE person_id = ? ORDER BY identity_id")
-    .all(person)
-    .map((row) => Number(row.identity_id))
-
-interface Side {
-  person?: number
-  bot?: number
+/** A rule's move of a whole person to a new bot; answers the bot. The caller holds the write lock. */
+export const ruleToBot = (database: CacheDatabase, person: number, reason: string, at: number): number => {
+  const log = { author: "rules" as const, reason, at }
+  const bot = createBot(database, log)
+  intoBot(database, identitiesOf(database, person), bot, log)
+  return bot
 }
 
-const logMoves = (
-  database: CacheDatabase,
-  identities: readonly number[],
-  from: Side,
-  to: Side,
-  { author, reason, at }: { author: BotAuthor; reason: string | null; at: number },
-) => {
-  const row = database.prepare(
-    "INSERT INTO sender_bot_moves (identity_id, from_person_id, from_bot_id, to_person_id, to_bot_id, author, reason, " +
-      "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  )
-  for (const identity of identities)
-    row.run(identity, from.person ?? null, from.bot ?? null, to.person ?? null, to.bot ?? null, author, reason, at)
+/**
+ * A rule's bot the owner wrote to, by mail or in a private chat both wrote in, goes back to the people its identities
+ * came from; a messenger's own bot flag holds anyway. The caller holds the write lock.
+ */
+export const ruleBotsBack = (database: CacheDatabase, at: number): void => {
+  const back = database
+    .prepare(
+      "SELECT b.id FROM sender_bots b WHERE b.author = 'rules' AND NOT EXISTS (SELECT 1 FROM sender_bot_identities s " +
+        "JOIN identities i ON i.id = s.identity_id WHERE s.bot_id = b.id AND i.bot = 1) " +
+        "AND EXISTS (SELECT 1 FROM sender_bot_identities s WHERE s.bot_id = b.id AND (" +
+        "EXISTS (SELECT 1 FROM email_recipients r JOIN emails e ON e.id = r.email_id WHERE r.identity_id = s.identity_id " +
+        "AND e.outgoing = 1 AND e.deleted_at IS NULL AND e.draft IS NOT 1) OR " +
+        "EXISTS (SELECT 1 FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.sender_identity_id = s.identity_id " +
+        "AND m.outgoing IS NOT 1 AND c.kind = 'dialog' AND EXISTS (SELECT 1 FROM messages o WHERE o.chat_id = c.id " +
+        "AND o.outgoing = 1))))",
+    )
+    .all()
+  const log = { author: "rules" as const, reason: "the owner wrote to it", at }
+  for (const row of back) outOfBot(database, botIdentitiesOf(database, Number(row.id)), undefined, log)
 }
 
-const createBot = (
-  database: CacheDatabase,
-  person: number,
-  { author, reason, at, name = null }: { author: BotAuthor; reason: string | null; at: number; name?: string | null },
-): number =>
-  Number(
+/**
+ * A bot a build before version 75 sorted after the upgrade holds its person row's identities there: they move to the
+ * bot, as the upgrade moved the others. The caller holds the write lock.
+ */
+export const settleLegacyBots = (database: CacheDatabase, at: number): void => {
+  const legacy = database.prepare("SELECT id, person_id, author, reason FROM sender_bots WHERE person_id > 0").all()
+  for (const row of legacy) {
+    const bot = Number(row.id)
+    const identities = identitiesOf(database, Number(row.person_id))
     database
       .prepare(
-        "INSERT INTO sender_bots (person_id, name, author, reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) " +
-          "RETURNING id",
+        "UPDATE sender_bots SET person_id = (SELECT min(0, coalesce(min(person_id), 0)) - 1 FROM sender_bots) WHERE id = ?",
       )
-      .get(person, name, author, reason, at, at)?.id,
-  )
-
-/** A rule's move of a whole person to a bot, or of a rule's bot back to a person; the caller holds the write lock. */
-export const ruleMove = (
-  database: CacheDatabase,
-  person: number,
-  to: "bot" | "person",
-  reason: string,
-  at: number,
-): void => {
-  const identities = identitiesOf(database, person)
-  const options = { author: "rules" as const, reason, at }
-  if (to === "bot") {
-    const bot = createBot(database, person, options)
-    logMoves(database, identities, { person }, { bot }, options)
-    return
+      .run(bot)
+    const log = { author: row.author as BotAuthor, reason: "sorted by a build before store version 75", at }
+    intoBot(database, identities, bot, log)
+    if (identities.length === 0) database.prepare("DELETE FROM sender_bots WHERE id = ?").run(bot)
   }
-  const held = database.prepare("SELECT id FROM sender_bots WHERE person_id = ? AND author = 'rules'").get(person)
-  if (held === undefined) return
-  database.prepare("DELETE FROM sender_bots WHERE id = ?").run(Number(held.id))
-  logMoves(database, identities, { bot: Number(held.id) }, { person }, options)
 }
 
-const botRow = (database: CacheDatabase, ref: string) => {
+const botIdOf = (database: CacheDatabase, ref: string): number => {
   const id = ref.startsWith(SENDER_BOT_PREFIX) ? ref.slice(SENDER_BOT_PREFIX.length) : ""
   const row = /^[1-9]\d*$/.test(id)
-    ? database.prepare("SELECT id, person_id FROM sender_bots WHERE id = ?").get(Number(id))
+    ? database.prepare("SELECT id FROM sender_bots WHERE id = ?").get(Number(id))
     : undefined
   if (row === undefined)
     throw new CliError("not_found", `no ${ref} in the store`, { reason: "sender-bot.not-found", reference: ref })
-  return { id: Number(row.id), person: Number(row.person_id) }
+  return Number(row.id)
 }
 
-const botOfPerson = (database: CacheDatabase, person: number): number | undefined => {
-  const row = database.prepare("SELECT id FROM sender_bots WHERE person_id = ?").get(person)
-  return row === undefined ? undefined : Number(row.id)
-}
-
-const personRow = (database: CacheDatabase, ref: string): number => {
+const personIdOf = (database: CacheDatabase, ref: string): number => {
   const uid = ref.startsWith("person:") ? ref.slice("person:".length) : ""
   const found = /^[1-9]\d*$/.test(uid) ? database.prepare("SELECT id FROM persons WHERE id = ?").get(uid) : undefined
   if (found === undefined) throw new CliError("not_found", `no ${ref} in the store`, { reference: ref })
   return currentPerson(database, Number(found.id))
 }
 
-/** What a move names: a whole person or bot, or one identity and the person it sits on. */
-const subjectOf = (context: StoreContext, subject: string | IdentityRef) => {
-  const { database } = context
-  if (typeof subject !== "string") {
-    const found = required(context, subject)
-    const alone = identitiesOf(database, found.personPk).length === 1
-    return alone ? { person: found.personPk } : { person: found.personPk, identity: found.pk, ref: subject }
-  }
-  if (subject.startsWith(SENDER_BOT_PREFIX)) return { person: botRow(database, subject).person }
-  return { person: personRow(database, subject) }
+const identityIdOf = (database: CacheDatabase, { provider, id }: IdentityRef): number => {
+  const row = database.prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?").get(provider, id)
+  if (row === undefined) throw new CliError("not_found", `no ${provider} identity ${id} in the store`)
+  return Number(row.id)
 }
 
-const senderBotOf = (database: CacheDatabase, id: number): SenderBot => {
-  const row = database.prepare("SELECT person_id, name, author, reason FROM sender_bots WHERE id = ?").get(id)
-  return {
-    bot: `${SENDER_BOT_PREFIX}${id}`,
-    person: `person:${Number(row?.person_id)}`,
-    name: row?.name == null ? null : String(row.name),
-    author: row?.author as BotAuthor,
-    reason: row?.reason == null ? null : String(row.reason),
+/** What a move names: a person's identities, a bot's, or one identity. */
+const subjectOf = (database: CacheDatabase, subject: string | IdentityRef) => {
+  if (typeof subject !== "string") return { identities: [identityIdOf(database, subject)] }
+  if (subject.startsWith(SENDER_BOT_PREFIX)) {
+    const bot = botIdOf(database, subject)
+    return { bot, identities: botIdentitiesOf(database, bot) }
   }
+  const person = personIdOf(database, subject)
+  const identities = identitiesOf(database, person)
+  const took = identities.length === 0 ? botThatTook(database, person) : undefined
+  return took === undefined ? { person, identities } : { bot: took, identities: botIdentitiesOf(database, took) }
 }
+
+/** The bot that took every identity of a person, so their `person:` ref still names it. */
+const botThatTook = (database: CacheDatabase, person: number): number | undefined => {
+  const row = database
+    .prepare(
+      "SELECT s.bot_id FROM sender_bot_moves m JOIN sender_bot_identities s ON s.identity_id = m.identity_id " +
+        "WHERE m.from_person_id = ? AND m.to_bot_id IS NOT NULL ORDER BY m.id DESC LIMIT 1",
+    )
+    .get(person)
+  return row === undefined ? undefined : Number(row.bot_id)
+}
+
+const botsOf = (database: CacheDatabase, ids: readonly number[]): SenderBot[] => {
+  if (ids.length === 0) return []
+  const json = JSON.stringify(ids)
+  const rows = new Map(
+    database
+      .prepare(
+        "SELECT id, name, organization_id, author, reason FROM sender_bots WHERE id IN (SELECT value FROM json_each(?))",
+      )
+      .all(json)
+      .map((row) => [Number(row.id), row]),
+  )
+  const identities = new Map<number, (BotIdentity & { phone: string | null })[]>()
+  for (const row of database
+    .prepare(
+      "SELECT s.bot_id, i.provider, i.external_id, i.name, i.username, i.phone FROM sender_bot_identities s " +
+        "JOIN identities i ON i.id = s.identity_id WHERE s.bot_id IN (SELECT value FROM json_each(?)) ORDER BY i.id",
+    )
+    .all(json)) {
+    const held = identities.get(Number(row.bot_id)) ?? []
+    held.push({
+      provider: String(row.provider),
+      id: String(row.external_id),
+      name: row.name == null ? null : String(row.name),
+      username: row.username == null ? null : String(row.username),
+      phone: row.phone == null ? null : String(row.phone),
+    })
+    identities.set(Number(row.bot_id), held)
+  }
+  const counts = new Map<number, { n: number; at: number | null }>()
+  for (const row of database
+    .prepare(
+      "SELECT s.bot_id AS bot, count(*) AS n, max(m.sent_at) AS at FROM sender_bot_identities s " +
+        "JOIN messages m ON m.sender_identity_id = s.identity_id WHERE s.bot_id IN (SELECT value FROM json_each(?)) " +
+        "AND m.deleted_at IS NULL AND m.outgoing IS NOT 1 GROUP BY 1 UNION ALL " +
+        "SELECT s.bot_id, count(*), max(coalesce(e.sent_at, e.received_at)) FROM sender_bot_identities s " +
+        "JOIN emails e ON e.from_identity_id = s.identity_id WHERE s.bot_id IN (SELECT value FROM json_each(?)) " +
+        "AND e.deleted_at IS NULL AND e.outgoing IS NOT 1 GROUP BY 1",
+    )
+    .all(json, json)) {
+    const was = counts.get(Number(row.bot)) ?? { n: 0, at: null }
+    const at = row.at == null ? was.at : Math.max(Number(row.at), was.at ?? 0)
+    counts.set(Number(row.bot), { n: was.n + Number(row.n), at })
+  }
+  const sent = sentMailOf(database, ids, "bot")
+  return ids.flatMap((id) => {
+    const row = rows.get(id)
+    if (row === undefined) return []
+    const held = identities.get(id) ?? []
+    const first = held.find((one) => one.name !== null) ?? held[0]
+    const emails = held.flatMap((one) => (one.provider === "email" ? [one.id] : []))
+    const name = row.name == null ? null : String(row.name)
+    const counted = counts.get(id)
+    return [
+      {
+        bot: `${SENDER_BOT_PREFIX}${id}`,
+        name,
+        displayName: displayName(name, {
+          name: first?.name ?? null,
+          username: first?.username ?? null,
+          phone: first?.phone ?? null,
+          email: emails[0] ?? null,
+        }),
+        organization: row.organization_id == null ? null : `organization:${Number(row.organization_id)}`,
+        author: row.author as BotAuthor,
+        reason: row.reason == null ? null : String(row.reason),
+        identities: held.map(({ phone: _, ...one }) => one),
+        messagesFrom: counted?.n ?? 0,
+        lastContact: counted?.at == null ? null : new Date(counted.at).toISOString(),
+        ...senderSignalsOf(sent.get(id) ?? [], { addresses: emails, ownerWrote: false, chatted: false }),
+      },
+    ]
+  })
+}
+
+const movesOf = (database: CacheDatabase, bot: number): BotMove[] =>
+  database
+    .prepare(
+      "SELECT m.*, i.provider, i.external_id FROM sender_bot_moves m JOIN identities i ON i.id = m.identity_id " +
+        "WHERE m.from_bot_id = ? OR m.to_bot_id = ? ORDER BY m.id",
+    )
+    .all(bot, bot)
+    .map((row) => ({
+      identity: { provider: String(row.provider), id: String(row.external_id) },
+      from: refOf({
+        ...(row.from_person_id == null ? {} : { person: Number(row.from_person_id) }),
+        ...(row.from_bot_id == null ? {} : { bot: Number(row.from_bot_id) }),
+      }),
+      to: refOf({
+        ...(row.to_person_id == null ? {} : { person: Number(row.to_person_id) }),
+        ...(row.to_bot_id == null ? {} : { bot: Number(row.to_bot_id) }),
+      }),
+      author: row.author as BotAuthor,
+      reason: row.reason == null ? null : String(row.reason),
+      at: new Date(Number(row.created_at)).toISOString(),
+    }))
+
+const detailsOf = (database: CacheDatabase, bot: number): SenderBotDetails => {
+  const [found] = botsOf(database, [bot])
+  if (found === undefined)
+    throw new CliError("not_found", `no ${SENDER_BOT_PREFIX}${bot} in the store`, { reason: "sender-bot.not-found" })
+  return { ...found, moves: movesOf(database, bot) }
+}
+
+/** The sender bots, by name; a bot a build before version 75 sorted shows once a list has settled it. */
+export const listBots = (database: CacheDatabase, options: BotListOptions): BotList => {
+  const { limit, offset = 0 } = options
+  const where = [HOLDS]
+  const params: SqlValue[] = []
+  if (options.query !== undefined) {
+    const text = options.query.trim()
+    if (text.length < MIN_QUERY)
+      throw new CliError(
+        "validation_error",
+        `a bots search takes at least ${MIN_QUERY} characters, got "${options.query}"`,
+        { reason: "query.short-text" },
+      )
+    const like = (form: string) => `%${form.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    where.push(
+      "(b.name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM sender_bot_identities s JOIN identities i ON " +
+        "i.id = s.identity_id WHERE s.bot_id = b.id AND (i.name_folded LIKE ? ESCAPE '\\' " +
+        "OR i.external_id LIKE ? ESCAPE '\\' OR i.username LIKE ? ESCAPE '\\')))",
+    )
+    params.push(like(text), like(fold(text)), like(text), like(text))
+  }
+  if (options.organization !== undefined) {
+    const id = options.organization.startsWith("organization:")
+      ? options.organization.slice("organization:".length)
+      : ""
+    if (!/^[1-9]\d*$/.test(id))
+      throw new CliError("validation_error", `an organization is organization:<id>, got "${options.organization}"`)
+    where.push("b.organization_id = ?")
+    params.push(Number(id))
+  }
+  return read(database, () => {
+    const filter = where.join(" AND ")
+    const total = Number(database.prepare(`SELECT count(*) AS n FROM sender_bots b WHERE ${filter}`).get(...params)?.n)
+    const ids = database
+      .prepare(`SELECT b.id FROM sender_bots b WHERE ${filter} ORDER BY ${SHOWN} COLLATE NOCASE, b.id LIMIT ? OFFSET ?`)
+      .all(...params, limit, offset)
+      .map((row) => Number(row.id))
+    return { items: botsOf(database, ids), hasMore: total > offset + limit, total }
+  })
+}
+
+/** One sender bot with its identities and every move to or from it. */
+export const showBot = (database: CacheDatabase, ref: string): SenderBotDetails =>
+  read(database, () => detailsOf(database, botIdOf(database, ref)))
 
 /**
- * The owner's word that a person, or one of their identities, is a program, for its whole history: its messages stay
- * where they are, and no rule moves it back. `bot` joins it to a bot already stored; one identity of a person with
- * others gets a person row of its own first.
+ * The owner's word that a person, a bot or one identity is a program, for its whole history: its messages stay where
+ * they are, and no rule gives it back. `bot` joins it to a stored bot; else a bot that already holds it keeps it, or a
+ * new one takes it. A person every identity left is hidden, and a move back gives their uid back.
  */
 export const moveToBot = (
   context: StoreContext,
   subject: string | IdentityRef,
   options: { bot?: string; name?: string; reason?: string } = {},
-): SenderBot => {
+): SenderBotDetails => {
   const { database } = context
   return write(database, () => {
     const at = context.now()
+    settleLegacyBots(database, at)
     const log = { author: "owner" as const, reason: options.reason ?? null, at }
-    const chosen = subjectOf(context, subject)
-    if (isOwner(context, chosen.person))
+    const chosen = subjectOf(database, subject)
+    const people = new Set(chosen.identities.flatMap((one) => holderOf(database, one).person ?? []))
+    if ([...people].some((person) => isOwner(context, person)))
       throw new CliError("validation_error", "the owner's own person is never a bot", { reason: "sender-bot.owner" })
-    const target = options.bot === undefined ? undefined : botRow(database, options.bot)
-    const from = { person: chosen.person, bot: botOfPerson(database, chosen.person) }
-    const claim = (bot: number) =>
-      database
-        .prepare("UPDATE sender_bots SET author = 'owner', name = coalesce(?, name), updated_at = ? WHERE id = ?")
-        .run(options.name ?? null, at, bot)
-    if (target !== undefined && target.person !== chosen.person) {
-      const moving = chosen.identity === undefined ? identitiesOf(database, chosen.person) : [chosen.identity]
-      if (chosen.identity === undefined) {
-        mergePerson(context, chosen.person, target.person, { method: "bot", by: "owner" })
-        if (from.bot !== undefined) database.prepare("DELETE FROM sender_bots WHERE id = ?").run(from.bot)
-      } else {
-        move(context, chosen.identity, chosen.person, target.person, { method: "bot", by: "owner" })
-        renameAfterLeaving(context, chosen.person, [chosen.identity])
-      }
-      claim(target.id)
-      logMoves(database, moving, from, { bot: target.id }, log)
-      return senderBotOf(database, target.id)
-    }
-    if (chosen.identity !== undefined && chosen.ref !== undefined) {
-      const alone = Number(unlinkIdentity(context, chosen.ref, { method: "unlink", by: "owner" }).uid)
-      const bot = createBot(database, alone, { ...log, name: options.name ?? null })
-      logMoves(database, [chosen.identity], from, { bot }, log)
-      return senderBotOf(database, bot)
-    }
-    const held = from.bot ?? createBot(database, chosen.person, { ...log, name: options.name ?? null })
-    if (from.bot !== undefined) claim(held)
-    logMoves(database, identitiesOf(database, chosen.person), from, { bot: held }, log)
-    return senderBotOf(database, held)
+    if (chosen.identities.length === 0)
+      throw new CliError("validation_error", `${String(subject)} holds no identity to move`, {
+        reason: "sender-bot.empty",
+      })
+    const held = new Set(chosen.identities.flatMap((one) => holderOf(database, one).bot ?? []))
+    const target =
+      options.bot !== undefined
+        ? botIdOf(database, options.bot)
+        : (chosen.bot ?? (held.size === 1 && people.size === 0 ? [...held][0] : undefined))
+    const bot = target ?? createBot(database, log, options.name ?? null)
+    database
+      .prepare("UPDATE sender_bots SET author = 'owner', name = coalesce(?, name), updated_at = ? WHERE id = ?")
+      .run(options.name ?? null, at, bot)
+    const left = intoBot(database, chosen.identities, bot, log)
+    for (const [person, gone] of left)
+      if (identitiesOf(database, person).length > 0) renameAfterLeaving(context, person, gone)
+    groupByDomain(database, [{ id: bot, displayName: options.name ?? null, holds: true, bot: true }], at)
+    return detailsOf(database, bot)
   })
 }
 
 /**
  * The owner's word that a bot, a person or one identity is a person, for its whole history; no rule makes it a bot
- * again. `person` joins it to that person; one identity of a bot with others gets a person row of its own.
+ * again. `person` takes it; else each identity goes back to the person it came from, or a person of its own. Said of a
+ * person, it keeps them one. Answers the person the first identity is on.
  */
 export const moveToPerson = (
   context: StoreContext,
@@ -225,39 +548,35 @@ export const moveToPerson = (
   const { database } = context
   return write(database, () => {
     const at = context.now()
+    settleLegacyBots(database, at)
     const log = { author: "owner" as const, reason: options.reason ?? null, at }
-    const chosen = subjectOf(context, subject)
-    const bot = botOfPerson(database, chosen.person)
-    const from = { person: chosen.person, bot }
-    const target = options.person === undefined ? undefined : personRow(database, options.person)
-    if (target !== undefined && botOfPerson(database, target) !== undefined)
-      throw new CliError("validation_error", `${options.person} is a bot; name a person`, {
-        reason: "sender-bot.not-a-person",
-        reference: options.person,
+    const chosen = subjectOf(database, subject)
+    const target = options.person === undefined ? undefined : personIdOf(database, options.person)
+    if (chosen.identities.length === 0)
+      throw new CliError("validation_error", `${String(subject)} holds no identity to move`, {
+        reason: "sender-bot.empty",
       })
-    if (target !== undefined && target !== chosen.person) {
-      const moving = chosen.identity === undefined ? identitiesOf(database, chosen.person) : [chosen.identity]
-      if (chosen.identity === undefined) mergePerson(context, chosen.person, target, { method: "manual", by: "owner" })
-      else {
-        move(context, chosen.identity, chosen.person, target, { method: "manual", by: "owner" })
-        renameAfterLeaving(context, chosen.person, [chosen.identity])
-      }
-      if (bot !== undefined && identitiesOf(database, chosen.person).length === 0)
-        database.prepare("DELETE FROM sender_bots WHERE id = ?").run(bot)
-      releaseDomainHolds(database, moving)
-      logMoves(database, moving, from, { person: target }, log)
+    if (chosen.person !== undefined && target !== undefined && target !== chosen.person) {
+      for (const identity of chosen.identities)
+        logMove(database, identity, { person: chosen.person }, { person: target }, log)
+      mergePerson(context, chosen.person, target, { method: "manual", by: "owner" })
       return recordOf(context, target)
     }
-    if (chosen.identity !== undefined && chosen.ref !== undefined && bot !== undefined) {
-      const alone = Number(unlinkIdentity(context, chosen.ref, { method: "unlink", by: "owner" }).uid)
-      releaseDomainHolds(database, [chosen.identity])
-      logMoves(database, [chosen.identity], from, { person: alone }, log)
-      return recordOf(context, alone)
+    const went = outOfBot(database, chosen.identities, target, log)
+    for (const identity of chosen.identities) {
+      if (went.has(identity)) continue
+      const person = holderOf(database, identity).person
+      if (person === undefined) continue
+      const to = target ?? person
+      if (to !== person) {
+        move(context, identity, person, to, { method: "manual", by: "owner" })
+        renameAfterLeaving(context, person, [identity])
+      }
+      logMove(database, identity, { person }, { person: to }, log)
+      went.set(identity, to)
     }
-    if (bot !== undefined) database.prepare("DELETE FROM sender_bots WHERE id = ?").run(bot)
-    const moving = chosen.identity === undefined ? identitiesOf(database, chosen.person) : [chosen.identity]
-    releaseDomainHolds(database, moving)
-    logMoves(database, moving, from, { person: chosen.person }, log)
-    return recordOf(context, chosen.person)
+    releaseDomainHolds(database, chosen.identities)
+    const first = went.get(chosen.identities[0] as number)
+    return recordOf(context, first ?? target ?? (chosen.person as number))
   })
 }

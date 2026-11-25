@@ -713,7 +713,7 @@ describe("the same name on a bot, a program or a company", () => {
             "AND external_id = ? ON CONFLICT DO UPDATE SET mail_signals = excluded.mail_signals",
         )
         .run(account, id)
-    expect((await store.people.list({ limit: 10, kind: "automated" })).total).toBe(4)
+    expect((await store.people.listBots({ limit: 10 })).total).toBe(4)
 
     await store.people.scanMatches()
     expect(await nameProposals(store)).toEqual([])
@@ -721,9 +721,8 @@ describe("the same name on a bot, a program or a company", () => {
     const scan = await store.people.scanMatches({ full: true })
 
     expect(await nameProposals(store)).toEqual([])
-    expect(scan.skipped).toEqual(
-      expect.arrayContaining([expect.objectContaining({ signal: "name", reason: "identity.not-a-person" })]),
-    )
+    // A bot's identities sit on no person, so no scan sees them.
+    expect(scan.proposed).toEqual([])
   })
 
   it("never proposes a bot or an organization, and still proposes two people of that name", async () => {

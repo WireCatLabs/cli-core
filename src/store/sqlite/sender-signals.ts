@@ -92,15 +92,23 @@ export const LIST_SENDERS =
 const senderKey = (address: string) => address.toLowerCase().replace(/\+[^@]*@/, "@")
 
 /**
- * The mail each of these people sent the owner, as `senderSignalsOf` reads it. Asked for a page of people only: the
- * senders of their List-Ids tell a discussion list from a newsletter.
+ * The mail each of these people, or sender bots, sent the owner, as `senderSignalsOf` reads it. Asked for a page
+ * only: the senders of their List-Ids tell a discussion list from a newsletter.
  */
-export const sentMailOf = (database: CacheDatabase, people: readonly number[]): Map<number, SentMail[]> => {
+export const sentMailOf = (
+  database: CacheDatabase,
+  people: readonly number[],
+  holder: "person" | "bot" = "person",
+): Map<number, SentMail[]> => {
   const found = new Map<number, SentMail[]>()
   if (people.length === 0) return found
+  const held =
+    holder === "person"
+      ? { owner: "l.person_id", join: "identity_links l" }
+      : { owner: "l.bot_id", join: "sender_bot_identities l" }
   const rows = database
     .prepare(
-      "SELECT l.person_id AS person, " +
+      `SELECT ${held.owner} AS person, ` +
         `${LIST_ID} AS list, json_extract(e.headers, '$."auto-submitted"') IS NOT NULL AS auto, ` +
         "json_extract(e.headers, '$.\"null-return-path\"') IS 1 AS null_return, " +
         "json_extract(e.headers, '$.\"list-unsubscribe-post\"') IS 1 AS one_click, " +
@@ -109,8 +117,8 @@ export const sentMailOf = (database: CacheDatabase, people: readonly number[]): 
         "WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk, " +
         "CASE WHEN json_extract(e.metadata, '$.rule') IS NOT NULL THEN NULL ELSE " +
         "(SELECT count(*) FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) END AS recipients " +
-        "FROM emails e JOIN identity_links l ON l.identity_id = e.from_identity_id " +
-        "WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND l.person_id IN (SELECT value FROM json_each(?))",
+        `FROM emails e JOIN ${held.join} ON l.identity_id = e.from_identity_id ` +
+        `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${held.owner} IN (SELECT value FROM json_each(?))`,
     )
     .all(JSON.stringify(people))
   const lists = [...new Set(rows.flatMap((row) => (typeof row.list === "string" ? [row.list] : [])))]

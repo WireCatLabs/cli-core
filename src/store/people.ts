@@ -37,6 +37,7 @@ import {
   type PeopleListOptions,
   type SimilarPerson,
   similarPeople,
+  storeKinds,
 } from "./sqlite/people-list.js"
 import {
   type KeptPerson,
@@ -58,7 +59,16 @@ import { type ShownBecause, shownReasons } from "./sqlite/person-ties.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
-import { moveToBot, moveToPerson, type SenderBot, senderBotsOf } from "./sqlite/sender-bots.js"
+import {
+  type BotList,
+  type BotListOptions,
+  listBots,
+  moveToBot,
+  moveToPerson,
+  type SenderBot,
+  type SenderBotDetails,
+  showBot,
+} from "./sqlite/sender-bots.js"
 import { write } from "./sqlite/transaction.js"
 import type {
   AccountKey,
@@ -234,13 +244,22 @@ export interface PeopleStore extends AccountPeople {
   counts(query?: string): Promise<Record<PersonKind, number>>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */
   similar(name: string, options?: { limit?: number }): Promise<SimilarPerson[]>
-  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie, or a bot. */
+  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
   ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>
   /**
-   * The owner says a sender is a program: a person (`person:<uid>`) or one identity moves to a sender bot for its
-   * whole history, listed as `automated` under its person row's ref, and no rule moves it back. One identity of a person
-   * with others gets a person row of its own; `bot` (`sender-bot:<id>`) joins a stored bot instead. The owner's alone;
-   * refused for the owner's own person.
+   * The sender bots: programs that write to the owner, apart from people (`sender-bot:<id>`), by name. `query` looks in
+   * their names, addresses and usernames; `organization` (`organization:<id>`) keeps the ones that send for it.
+   * @experimental
+   */
+  listBots(options: BotListOptions): Promise<BotList>
+  /** One sender bot (`sender-bot:<id>`), its identities and every move to or from it. @experimental */
+  showBot(bot: string): Promise<SenderBotDetails>
+  /**
+   * The owner says a sender is a program: a person (`person:<uid>`), a bot (`sender-bot:<id>`) or one identity moves
+   * to a sender bot for its whole history, and no rule gives it back. Its messages keep pointing at the identity. `bot`
+   * joins a stored bot; else a bot already holding it keeps it, or a new one takes it. A person every identity left is
+   * hidden from lists, and a move back gives their uid back. The owner's alone; refused for the owner's own person.
+   * @experimental
    */
   moveToBot(
     subject: string | IdentityRef,
@@ -248,9 +267,9 @@ export interface PeopleStore extends AccountPeople {
     options?: { bot?: string; name?: string; reason?: string },
   ): Promise<SenderBot>
   /**
-   * The owner says a sender is a person: a bot (`sender-bot:<id>` or its `person:<uid>`), or one identity of it, moves
-   * to a person for its whole history, and no rule makes it a bot again. Said of a person who is no bot, it keeps them
-   * a person. `person` joins that person instead. The owner's alone.
+   * The owner says a sender is a person: a bot (`sender-bot:<id>`) or one identity of it moves to a person for its
+   * whole history, and no rule makes it a bot again. `person` takes it; else each identity goes back to the person it
+   * came from, or a person of its own. Said of a person, it keeps them one. The owner's alone. @experimental
    */
   moveToPerson(
     subject: string | IdentityRef,
@@ -416,14 +435,13 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     similar: async (name, { limit = 8 } = {}) => similarPeople(database, name, limit),
     ties: async (people) => {
       const reasons = shownReasons(database)
-      const bots = senderBotsOf(database)
-      return Object.fromEntries(
-        people.map((ref) => {
-          const id = Number(ref.replace(/^person:/, ""))
-          return [ref, bots.has(id) ? [] : (reasons.get(id) ?? [])]
-        }),
-      )
+      return Object.fromEntries(people.map((ref) => [ref, reasons.get(Number(ref.replace(/^person:/, ""))) ?? []]))
     },
+    listBots: async (options) => {
+      storeKinds(database)
+      return listBots(database, options)
+    },
+    showBot: async (bot) => showBot(database, bot),
     moveToBot: async (subject, by, options) => {
       ownerOnly(by, "moves a sender to a bot")
       return moveToBot(context, subject, options)

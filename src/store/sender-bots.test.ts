@@ -2,10 +2,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { rollBackTo } from "../testing/older-store.js"
 import type { CacheDatabase } from "./driver.js"
 import { openCache } from "./open.js"
-import { LIST_SENDERS } from "./sqlite/sender-signals.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 
 const TG: AccountKey = { provider: "telegram", account: "1" }
@@ -31,18 +29,22 @@ const opened = async (path = join(mkdtempSync(join(tmpdir(), "sender-bots-")), "
 const uidOf = async (store: MessageStore, provider: string, id: string) =>
   `person:${(await store.people.personOf({ provider, id }))?.uid}`
 
-const automated = async (store: MessageStore) =>
-  (await store.people.list({ limit: 100, kind: "automated" })).items.map(({ person, displayName, bot, ties }) => ({
-    person,
+const people = async (store: MessageStore) =>
+  (await store.people.list({ limit: 100, kind: "all" })).items.map(({ displayName }) => displayName)
+
+const bots = async (store: MessageStore) =>
+  (await store.people.listBots({ limit: 100 })).items.map(({ displayName, identities, author }) => ({
     displayName,
-    bot,
-    ties,
+    identities: identities.map(({ provider, id }) => `${provider}:${id}`),
+    author,
   }))
 
 const moves = (db: CacheDatabase) =>
   db.prepare("SELECT from_person_id, from_bot_id, to_person_id, to_bot_id, author, reason FROM sender_bot_moves").all()
 
-it("moves a program's address to a bot, lists it as automated under its person ref, and a sync keeps it there", async () => {
+const count = (db: CacheDatabase, sql: string) => Number(db.prepare(sql).get()?.n)
+
+it("gives a program's identities to a bot of its own, apart from people, and a sync gives it no person again", async () => {
   const { store, db } = await opened()
   await store.people.savePeople(MAIL, [
     { id: "noreply-4471@bank.ru", name: "Bank" },
@@ -53,113 +55,114 @@ it("moves a program's address to a bot, lists it as automated under its person r
     { id: "51", name: "Weather Notifications" },
   ])
   const bank = await uidOf(store, "email", "noreply-4471@bank.ru")
-  const helper = await uidOf(store, "telegram", "50")
 
-  const listed = await automated(store)
+  const listed = await people(store)
 
-  expect(listed).toEqual(
-    expect.arrayContaining([
-      { person: bank, displayName: "Bank", bot: expect.stringMatching(/^sender-bot:\d+$/), ties: [] },
-      { person: helper, displayName: "Helper", bot: expect.stringMatching(/^sender-bot:\d+$/), ties: [] },
-      // A name alone may be a human's newsletter: marked, not moved.
-      { person: await uidOf(store, "telegram", "51"), displayName: "Weather Notifications", bot: null, ties: [] },
-    ]),
-  )
-  expect(listed).toHaveLength(3)
+  // A name alone may be a human's newsletter: marked, not moved.
+  expect(listed).toEqual(expect.arrayContaining(["Lena Marsh", "Weather Notifications"]))
+  expect(listed).not.toContain("Bank")
+  expect(listed).not.toContain("Helper")
+  expect(await bots(store)).toEqual([
+    { displayName: "Bank", identities: ["email:noreply-4471@bank.ru"], author: "rules" },
+    { displayName: "Helper", identities: ["telegram:50"], author: "rules" },
+  ])
+  expect(await store.people.personOf({ provider: "email", id: "noreply-4471@bank.ru" })).toBeUndefined()
+  await expect(
+    store.people.linkIdentities(
+      { provider: "email", id: "lena@acme.ru" },
+      { provider: "email", id: "noreply-4471@bank.ru" },
+      { method: "manual", by: "owner" },
+    ),
+  ).rejects.toMatchObject({
+    details: { reason: "sender-bot.not-a-person" },
+  })
   expect(moves(db)).toEqual(
     expect.arrayContaining([expect.objectContaining({ author: "rules", reason: "no-reply", to_person_id: null })]),
   )
-  const before = db.prepare("SELECT id, person_id, author FROM sender_bots ORDER BY id").all()
+  const persons = count(db, "SELECT count(*) AS n FROM persons")
 
   await store.people.savePeople(MAIL, [{ id: "noreply-4471@bank.ru", name: "Bank" }])
   await store.people.savePeople(TG, [{ id: "50", name: "Helper", isBot: true }])
 
-  expect(await automated(store)).toEqual(listed)
-  expect(db.prepare("SELECT id, person_id, author FROM sender_bots ORDER BY id").all()).toEqual(before)
-  expect((await store.people.list({ limit: 0, kind: "automated" })).counts.automated).toBe(3)
+  expect(count(db, "SELECT count(*) AS n FROM persons")).toBe(persons)
+  expect(await bots(store)).toHaveLength(2)
+  expect((await store.people.list({ limit: 0, kind: "automated" })).counts.automated).toBe(1)
   expect(await store.people.ties([bank])).toEqual({ [bank]: [] })
   expect((await store.people.similar("Bank")).map(({ person }) => person)).not.toContain(bank)
+  // The person ref a reader kept from before still names the bot, and a move back gives it back.
+  expect(`person:${(await store.people.moveToPerson(bank, "owner")).uid}`).toBe(bank)
+  expect(await people(store)).toContain("Bank")
 })
 
-it("keeps the owner's choice both ways, through the rules and a change of them, and logs each move", async () => {
+it("keeps the owner's choice both ways, through the rules and a change of them, and gives the uid back", async () => {
   const { store, db } = await opened()
   await store.people.savePeople(MAIL, [
-    { id: "alerts@shop.ru", name: "Shop" },
+    { id: "mark@shop.ru", name: "Shop" },
     { id: "noreply@bank.ru", name: "Bank" },
   ])
-  const shop = await uidOf(store, "email", "alerts@shop.ru")
-  const bank = await uidOf(store, "email", "noreply@bank.ru")
+  const shop = await uidOf(store, "email", "mark@shop.ru")
   await store.people.list({ limit: 0 })
 
   await expect(store.people.moveToBot(shop, { bot: "agent", reason: "guess" })).rejects.toMatchObject({
     details: { reason: "identity.owner-only" },
   })
   const shopBot = await store.people.moveToBot(shop, "owner", { name: "Shop alerts", reason: "a program" })
-  const bankPerson = await store.people.moveToPerson(bank, "owner", { reason: "my banker writes from it" })
+  const bankPerson = await store.people.moveToPerson({ provider: "email", id: "noreply@bank.ru" }, "owner", {
+    reason: "my banker writes from it",
+  })
   db.prepare("UPDATE store_settings SET value = '6' WHERE key = 'people.kind_rules'").run()
 
-  expect(shopBot).toMatchObject({ person: shop, name: "Shop alerts", author: "owner" })
-  expect(await automated(store)).toEqual([{ person: shop, displayName: "Shop alerts", bot: shopBot.bot, ties: [] }])
-  expect(bankPerson.uid).toBe(bank.replace("person:", ""))
-  const listed = (await store.people.list({ limit: 100, kind: "all" })).items.find(({ person }) => person === bank)
-  expect(listed).toMatchObject({ kind: "organization", bot: null })
+  expect(shopBot).toMatchObject({ name: "Shop alerts", displayName: "Shop alerts", author: "owner" })
+  expect(await store.people.showBot(shopBot.bot)).toMatchObject({
+    identities: [{ provider: "email", id: "mark@shop.ru" }],
+    moves: [{ identity: { provider: "email", id: "mark@shop.ru" }, from: shop, to: shopBot.bot, author: "owner" }],
+  })
+  expect(await people(store)).toEqual(["Me", "Bank"])
+  expect(await bots(store)).toEqual([
+    { displayName: "Shop alerts", identities: ["email:mark@shop.ru"], author: "owner" },
+  ])
 
   const back = await store.people.moveToPerson(shopBot.bot, "owner")
   expect(`person:${back.uid}`).toBe(shop)
-  expect(await automated(store)).toEqual([])
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bots").get()).toEqual({ n: 0 })
-  expect(
-    moves(db)
-      .filter(({ author }) => author === "owner")
-      .map(({ to_bot_id, to_person_id }) => [to_bot_id !== null, to_person_id !== null]),
-  ).toEqual([
-    [true, false],
-    [false, true],
-    [false, true],
-  ])
+  expect(`person:${bankPerson.uid}`).toBe(await uidOf(store, "email", "noreply@bank.ru"))
+  expect(await bots(store)).toEqual([])
+  expect(count(db, "SELECT count(*) AS n FROM sender_bots")).toBe(0)
+  expect(await people(store)).toEqual(expect.arrayContaining(["Shop", "Bank"]))
   await expect(store.people.moveToBot("person:1", "owner")).rejects.toMatchObject({
     details: { reason: "sender-bot.owner" },
   })
 })
 
-it("moves one identity of a person with others to a bot of its own, and into a bot already stored", async () => {
-  const { store } = await opened()
+it("moves one identity of a person with others to a bot, and another into the same bot, with no person row", async () => {
+  const { store, db } = await opened()
   await store.people.savePeople(TG, [
     { id: "60", name: "Ola" },
     { id: "61", name: "Ola" },
     { id: "62", name: "Ola" },
   ])
-  await store.people.linkIdentities(
-    { provider: "telegram", id: "60" },
-    { provider: "telegram", id: "61" },
-    { method: "manual", by: "owner" },
-  )
-  await store.people.linkIdentities(
-    { provider: "telegram", id: "60" },
-    { provider: "telegram", id: "62" },
-    { method: "manual", by: "owner" },
-  )
+  for (const id of ["61", "62"])
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "60" },
+      { provider: "telegram", id },
+      { method: "manual", by: "owner" },
+    )
   const ola = await uidOf(store, "telegram", "60")
+  const persons = count(db, "SELECT count(*) AS n FROM persons")
 
   const bot = await store.people.moveToBot({ provider: "telegram", id: "61" }, "owner")
   const joined = await store.people.moveToBot({ provider: "telegram", id: "62" }, "owner", { bot: bot.bot })
 
   expect(joined.bot).toBe(bot.bot)
-  expect(bot.person).not.toBe(ola)
+  expect(joined.identities.map(({ id }) => id)).toEqual(["61", "62"])
   expect(await uidOf(store, "telegram", "60")).toBe(ola)
-  expect(await uidOf(store, "telegram", "61")).toBe(bot.person)
-  expect(await uidOf(store, "telegram", "62")).toBe(bot.person)
-  expect((await automated(store)).map(({ person }) => person)).toEqual([bot.person])
-  await expect(
-    store.people.moveToPerson({ provider: "telegram", id: "61" }, "owner", { person: bot.person }),
-  ).rejects.toMatchObject({ details: { reason: "sender-bot.not-a-person" } })
+  expect(count(db, "SELECT count(*) AS n FROM persons")).toBe(persons)
 
   const home = await store.people.moveToPerson({ provider: "telegram", id: "61" }, "owner", { person: ola })
   expect(`person:${home.uid}`).toBe(ola)
-  expect(await uidOf(store, "telegram", "62")).toBe(bot.person)
+  expect((await store.people.showBot(bot.bot)).identities.map(({ id }) => id)).toEqual(["62"])
 })
 
-it("never joins a bot to a person by an address, nor makes it a task's assignee", async () => {
+it("never joins a bot to a person by an address, nor makes the person it left a task's assignee", async () => {
   const { store, db } = await opened()
   await store.people.savePeople(CRM, [{ id: "contact/20", name: "Alice Example", email: "alice@acme.example" }])
   await store.people.savePeople(TG, [{ id: "5", name: "Alice" }])
@@ -171,9 +174,8 @@ it("never joins a bot to a person by an address, nor makes it a task's assignee"
 
   const scan = await store.people.scanMatches()
 
-  expect(await uidOf(store, "telegram", "5")).toBe(tg)
   expect(scan.merged).toEqual([])
-  expect(scan.skipped).toEqual(expect.arrayContaining([expect.objectContaining({ reason: "identity.not-a-person" })]))
+  expect(await store.people.personOf({ provider: "telegram", id: "5" })).toBeUndefined()
   await store.knowledge.addProject({ name: "Harbour", key: "HRB", type: "work" })
   const task = await store.tasks.create({ project: "HRB", title: "Ship", type: "chore" }, "owner")
   await expect(store.tasks.assign(task.id, { to: tg, role: "assignee" }, "owner")).rejects.toMatchObject({
@@ -181,39 +183,11 @@ it("never joins a bot to a person by an address, nor makes it a task's assignee"
   })
 })
 
-it("gives a version 73 store the bot tables and the List-Id index, and moves its programs on the next list", async () => {
-  const { store, path } = await opened()
-  await store.people.savePeople(MAIL, [{ id: "no-reply@service.ru", name: "Service" }])
-  await store.people.list({ limit: 0 })
-  await store.close()
-  handles.splice(handles.indexOf(store), 1)
-  const old = await openCache(path)
-  rollBackTo(old, 74)
-  old.prepare("UPDATE store_settings SET value = '6' WHERE key = 'people.kind_rules'").run()
-  expect(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'sender_bots'").get()).toBeUndefined()
-  old.close()
-
-  const upgraded = await openStore({ path })
-  handles.push(upgraded)
-  const service = await uidOf(upgraded, "email", "no-reply@service.ru")
-
-  expect((await automated(upgraded)).map(({ person, bot }) => [person, bot?.startsWith("sender-bot:")])).toEqual([
-    [service, true],
-  ])
-  const db = await openCache(path)
-  handles.push(db)
-  const plan = db
-    .prepare(`EXPLAIN QUERY PLAN ${LIST_SENDERS}`)
-    .all('["<news.example>"]')
-    .map((row) => String(row.detail))
-  expect(plan.join(" ")).toContain("emails_by_list_id")
-})
-
-it("gives a rule's bot back to a person once the owner writes to it, and logs the rule's move", async () => {
+it("gives a rule's bot back to the person it came from once the owner writes to it", async () => {
   const { store, db } = await opened()
   await store.people.savePeople(MAIL, [{ id: "noreply@bank.ru", name: "Bank" }])
   const bank = await uidOf(store, "email", "noreply@bank.ru")
-  expect((await automated(store)).map(({ person }) => person)).toEqual([bank])
+  expect(await bots(store)).toHaveLength(1)
   const account = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'email'").get()?.id)
   const at = Date.now()
   const thread = db
@@ -232,10 +206,13 @@ it("gives a rule's bot back to a person once the owner writes to it, and logs th
     "INSERT INTO email_recipients (email_id, identity_id, address, role, position, created_at, updated_at) " +
       "VALUES (?, ?, 'noreply@bank.ru', 'to', 0, ?, ?)",
   ).run(sent, identity, at, at)
+  db.prepare("UPDATE persons SET kind = NULL WHERE owner = 1").run()
 
+  expect(await bots(store)).toEqual([])
+  expect(await uidOf(store, "email", "noreply@bank.ru")).toBe(bank)
+  const listed = (await store.people.list({ limit: 10, kind: "automated" })).items
   // Still marked by its address, but the owner wrote to it: a person, not a bot.
-  expect(await automated(store)).toEqual([{ person: bank, displayName: "Bank", bot: null, ties: ["mail"] }])
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bots").get()).toEqual({ n: 0 })
+  expect(listed.map(({ person, ties }) => ({ person, ties }))).toEqual([{ person: bank, ties: ["mail"] }])
   expect(
     moves(db).map(({ author, to_bot_id, to_person_id }) => [author, to_bot_id !== null, to_person_id !== null]),
   ).toEqual([
@@ -244,28 +221,26 @@ it("gives a rule's bot back to a person once the owner writes to it, and logs th
   ])
 })
 
-it("lets an account purge and a person's erasure take a bot's rows with them", async () => {
+it("lets an account purge take a bot's rows with its identities", async () => {
   const { store, db } = await opened()
   await store.people.savePeople(TG, [
     { id: "50", name: "Helper", isBot: true },
     { id: "51", name: "Notifier", isBot: true },
   ])
-  await store.people.list({ limit: 0 })
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bots").get()).toEqual({ n: 2 })
+  expect(await bots(store)).toHaveLength(2)
 
-  await store.people.erase(await uidOf(store, "telegram", "51"), "owner", { apply: true })
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bots").get()).toEqual({ n: 1 })
   await store.accounts.purge(TG)
 
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bots").get()).toEqual({ n: 0 })
-  expect(db.prepare("SELECT count(*) AS n FROM sender_bot_moves").get()).toEqual({ n: 0 })
+  expect(count(db, "SELECT count(*) AS n FROM sender_bots")).toBe(0)
+  expect(count(db, "SELECT count(*) AS n FROM sender_bot_identities")).toBe(0)
+  expect(count(db, "SELECT count(*) AS n FROM sender_bot_moves")).toBe(0)
 })
 
-it("never proposes a bot as the same person by name", async () => {
+it("never proposes the person a bot left as the same person by name", async () => {
   const { store } = await opened()
   await store.people.savePeople(MAIL, [{ id: "noreply@lane.ru", name: "Pat Lane" }])
-  await store.people.savePeople(TG, [{ id: "70", name: "Pat Lane" }])
   const bot = await uidOf(store, "email", "noreply@lane.ru")
+  await store.people.savePeople(TG, [{ id: "70", name: "Pat Lane" }])
   await store.people.list({ limit: 0 })
 
   const scan = await store.people.scanMatches({ full: true })
@@ -275,5 +250,23 @@ it("never proposes a bot as the same person by name", async () => {
     ...scan.proposed.flatMap((one) => one.persons),
   ]
   expect(named).not.toContain(bot.replace("person:", ""))
-  expect(await uidOf(store, "email", "noreply@lane.ru")).toBe(bot)
+})
+
+it("finds bots by name and address and by the organization of their domain", async () => {
+  const { store } = await opened()
+  await store.people.savePeople(MAIL, [
+    { id: "noreply@mail.bank.ru", name: "Bank" },
+    { id: "alerts@shop.ru", name: "Shop" },
+  ])
+  const all = await store.people.listBots({ limit: 1 })
+  const [bank] = (await store.people.listBots({ limit: 10, query: "bank.ru" })).items
+
+  expect(all).toMatchObject({ total: 2, hasMore: true })
+  expect(bank).toMatchObject({ displayName: "Bank", organization: expect.stringMatching(/^organization:\d+$/) })
+  expect(
+    (await store.people.listBots({ limit: 10, organization: String(bank?.organization) })).items.map(({ bot }) => bot),
+  ).toEqual([bank?.bot])
+  await expect(store.people.listBots({ limit: 10, query: "ba" })).rejects.toMatchObject({
+    details: { reason: "query.short-text" },
+  })
 })

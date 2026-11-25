@@ -692,27 +692,36 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   tie; mail the owner wrote them or a private chat both wrote in makes it `direct`, and with no mail a one-to-one chat
   or a small group does. `null` when nothing says. The page reads the List-Ids of its people's mail, and the senders of
   those lists through the index `emails_by_list_id` (version 74).
-- **Sender bots** (`sender-bots.ts`, version 74): a program that writes to the owner is a `sender_bots` row, not a
-  person. A bot keeps the person row it was sorted from: its identities stay linked there, so ingest, merges, purges and
-  `people show person:<uid>` work as before, and `people.list` lists it as `automated` under that ref with
-  `bot: "sender-bot:<id>"` and no ties. Kept kinds move a person to a bot by rule when their kind is `automated` by a
-  program's signal (`PROGRAM_SIGNALS`: the platform's bot flag, a no-reply or notification address, a signed
-  `Auto-Submitted`, an empty Return-Path, `bulk_never_replied`), the owner wrote them nothing (no mail tie, no private
-  chat both wrote in; the platform's flag holds against both), no `ALWAYS_SHOWN` reason holds, and every identity of
-  theirs is the program's, or they have one. A name or a bulk mailbox alone marks a person `automated` and moves
-  nothing: a newsletter a human writes stays a person. A rule's bot goes back to a person when those rules stop holding.
-  The owner's `moveToBot` and `moveToPerson` move a person, a bot or one identity (one of several gets a person row of
-  its own first) for its whole history, and win over the rules and every `KIND_RULES` bump: a bot the owner made has
-  `author = 'owner'`, and an identity whose latest move is the owner's to a person is never moved by a rule. Every move
-  is a `sender_bot_moves` row. A bot is never joined to anyone by the matcher (`identity.not-a-person`), never assigned a
-  task (`sender-bot.assignee`), never offered by `people.similar` and has no ties in `people.ties`. Neither table has a
-  foreign key, so an older build erasing a person or purging an account still can; triggers drop their rows.
+- **Sender bots** (`sender-bots.ts`, versions 74 and 75): a program that writes to the owner is a sender bot
+  (`sender-bot:<id>`, a `sender_bots` row), an entity apart from people. Its identities are `sender_bot_identities` rows
+  and leave `identity_links`: an identity belongs to one person or one bot, never both, and its messages and mail keep
+  pointing at the identity. A bot has a name, identities and an optional organization; it has no ties, no tasks, no
+  merge review, and never appears in `people.list`, its counts, `people.similar` or `people.ties`. `people.listBots` and
+  `people.showBot` read them (`showBot` with every move). `bot:` stays the agents' ref (the `bots` table). Kept kinds
+  move a person's identities to a new bot by rule when their kind is `automated` by a program's signal
+  (`PROGRAM_SIGNALS`: the platform's bot flag, a no-reply or notification address, a signed `Auto-Submitted`, an empty
+  Return-Path, `bulk_never_replied`), the owner wrote them nothing (no mail tie, no private chat both wrote in; the
+  platform's flag holds against both), no `ALWAYS_SHOWN` reason holds, and every identity of theirs is the program's,
+  or they have one. A name or a bulk mailbox alone marks a person `automated` and moves nothing: a newsletter a human
+  writes stays a person. A rule's bot goes back to the people its identities came from once the owner writes to it
+  (`ruleBotsBack`). The owner's `moveToBot` and `moveToPerson` move a person, a bot or one identity for its whole
+  history, and win over the rules and every `KIND_RULES` bump: a bot the owner made has `author = 'owner'`, and an
+  identity whose latest move is the owner's to a person is never moved by a rule. Every move is a `sender_bot_moves`
+  row. **The person row a bot emptied stays**, stored with kind `merged` and hidden as a merge's emptied person is
+  (`mergedAwaySql`), so a move back gives its uid back and the rows that name it keep their meaning; its `person:` ref
+  still names the bot in a move, `tasks.assign` refuses it (`sender-bot.assignee`), and the matcher never sees a bot's
+  identities. `sender_bots.person_id` only keeps builds before version 75 from reading a bot as a person: negative
+  since. Those builds still write to a migrated store, so triggers keep them apart: a bot's identity gets no link to a
+  person (`RAISE(IGNORE)`), the person row their ingest made for it goes again, a bot holding identities is not deleted,
+  and a hidden person's kind stays `merged`. A positive `person_id` is a bot such a build sorted after the upgrade; the
+  next kept list moves its identities to it (`settleLegacyBots`). No table has a foreign key, so an older build purging
+  an account still can; triggers drop a bot's rows with its last identity.
 - **Organizations from mail domains** (`domain-organizations.ts`, plan step 5): when kinds are kept, a bot or a shared
   mailbox (every address a role address) at a company domain joins the organization of its registrable domain
   (`registrableOf`, so `mail.bank.example` is `bank.example`): the organization already holding an address there, else
   a new `company` named by the sender when the name is a company's or the domain's own word, else by the domain. Its
   addresses go to `organization_identities` with method `domain`, author `rules`, and a bot's `sender_bots.organization_id`
-  is set. A human with an address there gets a `member-of` link (author `rule`), never a merge and never a proposal; a
+  is set (`people.listBots` filters by it). A human with an address there gets a `member-of` link (author `rule`), never a merge and never a proposal; a
   human alone makes no organization. Free mail (`FREE_MAIL`), throwaway mail (`disposable-email-domains-js`) and
   sending platforms (`SENDING_PLATFORMS`) are never a company domain. Two organizations holding one domain leave it
   ungrouped. Each organization holding a company domain takes that domain's `metadata.sector` (`Organization.sector`:
