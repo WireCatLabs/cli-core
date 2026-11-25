@@ -79,9 +79,10 @@ feeds `tie`. For that it is worked out per message, not only per sender (review 
 Data quality is not a kind. These become marks on the row: `owner`, `incomplete` (no name, or a deleted account),
 `test`.
 
-**A newsletter a human writes stays a person** with reach `broadcast` (owner, 2026-11-25). The owner can answer
-the author, and the author may be someone the owner also writes to directly. A company's newsletter sent through a
-mailing service is a bot.
+**A sender who only sends a newsletter is a bot**, even when a human writes it (owner, 2026-11-25, replacing the
+earlier ruling that it stays a person; review on #3323). Once there is a direct exchange (the owner writes to that
+address, or a 1-to-1 mail arrives), the identity moves to a person and only its newsletter mails keep reach
+`broadcast`. A company's newsletter sent through a mailing service is a bot.
 
 ### What the screen shows
 
@@ -280,5 +281,5 @@ software.
    Radar, abuse.ch for commercial use) are out now. Answer (owner, 2026-11-25): WireCat stays free and paid services
    are built around it, so non-commercial lists may be used by WireCat but never by a paid service. Each such list is
    marked in the data pack, and its own terms are checked for how they define commercial use.
-7. **A bot's ref.** `sender-bot:<id>` as built, or `bot:<id>` after the AI agents' `bot:` ref is renamed in a major
-   release?
+7. ~~A bot's ref.~~ Decided (owner, 2026-11-25): `bot:<id>`. The AI agents' ref that holds `bot:` today is renamed
+   (to `agent:`), and `sender-bot:` stays readable as an alias.
