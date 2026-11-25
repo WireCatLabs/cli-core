@@ -5,6 +5,7 @@ import { MAIL_TYPES, type MailType, type MailTypeOf, mailTypeOf, schemaTypesOf }
 import { sortRuleFor } from "../../mail/sort-rules.js"
 import { type CacheDatabase, isQueryOnly } from "../driver.js"
 import { typeRulesOf } from "./mail-sorting.js"
+import { NEWSLETTER_ONLY } from "./sender-bots.js"
 import { LIST_ID, LIST_SENDERS, REACHES, type Reach, senderKey } from "./sender-signals.js"
 import { read, writeBatch } from "./transaction.js"
 
@@ -27,7 +28,8 @@ const INPUTS =
   "WHERE a.attachable_type = 'email' AND a.attachable_id = e.id AND a.mime IS NOT NULL) AS parts, " +
   "e.outgoing IS 1 OR EXISTS (SELECT 1 FROM email_recipients r JOIN emails o ON o.id = r.email_id " +
   "WHERE r.identity_id = e.from_identity_id AND o.outgoing = 1) AS owner_wrote, " +
-  "EXISTS (SELECT 1 FROM sender_bot_identities b WHERE b.identity_id = e.from_identity_id) AS bot, " +
+  "EXISTS (SELECT 1 FROM sender_bot_identities b JOIN sender_bots s ON s.id = b.bot_id " +
+  `WHERE b.identity_id = e.from_identity_id AND s.reason IS NOT '${NEWSLETTER_ONLY}') AS bot, ` +
   "(SELECT json_extract(g.metadata, '$.sector') FROM organization_identities oi " +
   "JOIN organizations g ON g.id = oi.organization_id " +
   "WHERE oi.identity_id = e.from_identity_id AND g.deleted_at IS NULL ORDER BY g.id LIMIT 1) AS sector " +

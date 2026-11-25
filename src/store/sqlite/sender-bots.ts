@@ -8,7 +8,8 @@ import { groupByDomain, releaseDomainHolds } from "./domain-organizations.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { isOwner, mergePerson, move, recordOf, renameAfterLeaving } from "./person-links.js"
-import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
+import { SMALL_GROUP_MEMBERS } from "./person-ties.js"
+import { LIST_ID, type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { read, write } from "./transaction.js"
 
 export type BotAuthor = "rules" | "owner"
@@ -269,25 +270,42 @@ export const ruleToBot = (database: CacheDatabase, person: number, reason: strin
   return bot
 }
 
+/** The reason of a bot that only sent a newsletter: a mail written to the owner alone gives it back to a person. */
+export const NEWSLETTER_ONLY = "newsletter-only"
+
+/** Mail from the identity `s` that no list sent, to the owner and at most a small group. */
+const ONE_TO_ONE =
+  "EXISTS (SELECT 1 FROM emails e WHERE e.from_identity_id = s.identity_id AND e.outgoing IS NOT 1 " +
+  `AND e.deleted_at IS NULL AND ${LIST_ID} IS NULL AND json_extract(e.headers, '$."list-unsubscribe"') IS NOT 1 ` +
+  "AND json_extract(e.headers, '$.\"list-unsubscribe-post\"') IS NOT 1 " +
+  "AND json_extract(e.headers, '$.\"feedback-id\"') IS NOT 1 " +
+  "AND json_extract(e.headers, '$.precedence') IS NOT 'bulk' AND json_extract(e.headers, '$.precedence') IS NOT 'junk' " +
+  "AND NOT EXISTS (SELECT 1 FROM email_mailboxes m " +
+  "JOIN mailboxes x ON x.id = m.mailbox_id WHERE m.email_id = e.id AND x.kind = 'bulk') " +
+  "AND (SELECT count(*) FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) " +
+  `BETWEEN 1 AND ${SMALL_GROUP_MEMBERS})`
+
 /**
- * A rule's bot the owner wrote to, by mail or in a private chat both wrote in, goes back to the people its identities
+ * A rule's bot the owner wrote to, or a newsletter's that wrote to the owner alone, by mail or in a private chat both wrote in, goes back to the people its identities
  * came from; a messenger's own bot flag holds anyway. The caller holds the write lock.
  */
 export const ruleBotsBack = (database: CacheDatabase, at: number): void => {
   const back = database
     .prepare(
-      "SELECT b.id FROM sender_bots b WHERE b.author = 'rules' AND NOT EXISTS (SELECT 1 FROM sender_bot_identities s " +
-        "JOIN identities i ON i.id = s.identity_id WHERE s.bot_id = b.id AND i.bot = 1) " +
+      "SELECT b.id, b.reason FROM sender_bots b WHERE b.author = 'rules' AND NOT EXISTS (SELECT 1 FROM " +
+        "sender_bot_identities s JOIN identities i ON i.id = s.identity_id WHERE s.bot_id = b.id AND i.bot = 1) " +
         "AND EXISTS (SELECT 1 FROM sender_bot_identities s WHERE s.bot_id = b.id AND (" +
         "EXISTS (SELECT 1 FROM email_recipients r JOIN emails e ON e.id = r.email_id WHERE r.identity_id = s.identity_id " +
         "AND e.outgoing = 1 AND e.deleted_at IS NULL AND e.draft IS NOT 1) OR " +
         "EXISTS (SELECT 1 FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.sender_identity_id = s.identity_id " +
         "AND m.outgoing IS NOT 1 AND c.kind = 'dialog' AND EXISTS (SELECT 1 FROM messages o WHERE o.chat_id = c.id " +
-        "AND o.outgoing = 1))))",
+        `AND o.outgoing = 1)) OR (b.reason = '${NEWSLETTER_ONLY}' AND ${ONE_TO_ONE})))`,
     )
     .all()
-  const log = { author: "rules" as const, reason: "the owner wrote to it", at }
-  for (const row of back) outOfBot(database, botIdentitiesOf(database, Number(row.id)), undefined, log)
+  for (const row of back) {
+    const reason = row.reason === NEWSLETTER_ONLY ? "a 1-to-1 mail or the owner wrote to it" : "the owner wrote to it"
+    outOfBot(database, botIdentitiesOf(database, Number(row.id)), undefined, { author: "rules", reason, at })
+  }
 }
 
 /** Whether a build before version 75 sorted a bot onto a person row since the last kept list. */

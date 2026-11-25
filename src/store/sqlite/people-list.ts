@@ -19,8 +19,15 @@ import { fold } from "../normalize.js"
 import { groupByDomain, type Sorted } from "./domain-organizations.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
-import { hasLegacyBots, ownerPeopleOf, ruleBotsBack, ruleToBot, settleLegacyBots } from "./sender-bots.js"
-import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
+import {
+  hasLegacyBots,
+  NEWSLETTER_ONLY,
+  ownerPeopleOf,
+  ruleBotsBack,
+  ruleToBot,
+  settleLegacyBots,
+} from "./sender-bots.js"
+import { LIST_ID, type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { mergedAssignees } from "./task-board.js"
 import { hiddenTestPeople } from "./test-people.js"
 import { read, writeBatch } from "./transaction.js"
@@ -144,12 +151,16 @@ const TWO_WAY =
   "AND EXISTS (SELECT 1 FROM messages o WHERE o.chat_id = c.id AND o.outgoing = 1))"
 
 const MAIL_COUNTS = (scope: Scope) =>
-  "SELECT l.person_id AS person, count(*) AS n, sum(EXISTS (SELECT 1 FROM email_mailboxes m " +
-  "JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id AND b.kind = 'bulk')) AS bulk, " +
-  "sum(json_extract(e.headers, '$.\"auto-submitted\"') IS NOT NULL) AS auto, " +
-  "sum(json_extract(e.headers, '$.\"null-return-path\"') IS 1) AS null_return " +
+  "SELECT person, count(*) AS n, sum(bulk) AS bulk, sum(auto) AS auto, sum(null_return) AS null_return, " +
+  "sum(bulk OR listed) AS listed FROM (SELECT l.person_id AS person, EXISTS (SELECT 1 FROM email_mailboxes m " +
+  "JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk, " +
+  "json_extract(e.headers, '$.\"auto-submitted\"') IS NOT NULL AS auto, " +
+  "json_extract(e.headers, '$.\"null-return-path\"') IS 1 AS null_return, " +
+  `${LIST_ID} IS NOT NULL OR json_extract(e.headers, '$."list-unsubscribe"') IS 1 ` +
+  "OR json_extract(e.headers, '$.\"list-unsubscribe-post\"') IS 1 OR json_extract(e.headers, '$.\"feedback-id\"') IS 1 " +
+  "OR json_extract(e.headers, '$.precedence') IN ('bulk', 'junk') AS listed " +
   "FROM emails e JOIN identity_links l ON l.identity_id = e.from_identity_id " +
-  `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${IN_SCOPE(scope, "l.person_id")} GROUP BY 1`
+  `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${IN_SCOPE(scope, "l.person_id")}) GROUP BY 1`
 
 const IDENTITIES = (scope: Scope) =>
   "SELECT l.person_id AS person, i.id, i.provider, i.external_id, i.name, i.username, i.phone, i.email, i.bot " +
@@ -185,6 +196,8 @@ interface Facts {
   identities: number
   /** Identities a program holds by their own mark: the platform's bot flag, a no-reply or notification address. */
   programIdentities: number
+  /** Identities of a messenger, a CRM or another source than mail. */
+  notMail: number
 }
 
 const perIdentity = (database: CacheDatabase, sql: string, params: SqlValue[]): Map<number, number> =>
@@ -238,6 +251,7 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       messages: 0,
       identities: held.length,
       programIdentities: 0,
+      notMail: 0,
     }
     const source = (row: Record<string, unknown>) => ({
       provider: String(row.provider),
@@ -257,6 +271,7 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       one.organization ||= owned.has(identity)
       one.twoWay ||= twoWay.has(identity)
       one.messages += messages.get(identity) ?? 0
+      if (row.provider !== "email") one.notMail += 1
       if (Number(row.bot) === 1 || (email !== null && (isNoReplyAddress(email) || isNotificationAddress(email))))
         one.programIdentities += 1
     }
@@ -302,6 +317,8 @@ interface Classified extends Omit<ListedPerson, "lastContact" | "reach" | "signa
   id: number
   /** What the rules do with this person when the kind is kept: give their identities to a sender bot. */
   move?: "bot"
+  /** The bot's reason: the kind signals, or `NEWSLETTER_ONLY`, which a 1-to-1 mail gives back. */
+  botReason?: string
   /** Worked out once: a collator over 50,000 names takes most of a list's time. */
   nameOrder: string
   emails: string[]
@@ -314,6 +331,8 @@ interface MailCounts {
   /** Mail with an `Auto-Submitted` its own domain signed, and mail with an empty Return-Path (`mailHeadersOf`). */
   auto: number
   nullReturn: number
+  /** Mail a list sent, as a mail's own reach reads it: List-Id, List-Unsubscribe, Feedback-ID, bulk Precedence. */
+  listed: number
 }
 
 /** One misfiled letter is no newsletter. */
@@ -337,10 +356,12 @@ const kindOf = (
   mail: MailCounts | undefined,
   test: boolean,
   keptByOwner = false,
+  newsletterOnly = false,
 ): { kind: PersonKind; signals: (ShownBecause | KindSignal)[] } => {
   if (test) return { kind: "test", signals: ["test-data"] }
   const emails = facts?.emails ?? []
   const automated: KindSignal[] = [
+    ...(newsletterOnly ? ([NEWSLETTER_ONLY] as const) : []),
     ...(facts?.bot ? (["bot"] as const) : []),
     ...(emails.some(isNoReplyAddress) ? (["no-reply"] as const) : []),
     ...(emails.some(isNotificationAddress) ? (["notification-address"] as const) : []),
@@ -386,6 +407,27 @@ const isProgram = (
   (facts.bot || (!facts.twoWay && !ties.includes("mail"))) &&
   (facts.identities === 1 || facts.programIdentities === facts.identities)
 
+/**
+ * The owner ruled on 2026-11-25 that a sender who only sends a newsletter is a bot, a human author too: all their mail
+ * came as a list's, and they and the owner never exchanged a word. Any tie keeps them a person.
+ */
+const mayBeNewsletterOnly = (facts: Facts | undefined, ties: ShownBecause[], mail: MailCounts | undefined) =>
+  facts !== undefined &&
+  mail !== undefined &&
+  ties.length === 0 &&
+  !facts.bot &&
+  !facts.twoWay &&
+  facts.messages === 0 &&
+  facts.notMail === 0 &&
+  mail.n > 0 &&
+  mail.listed === mail.n
+
+/** A candidate whose mail came through a discussion list writes to a group, not to subscribers. */
+const newsletterOnlyOf = (database: CacheDatabase, candidates: readonly number[]): Set<number> => {
+  const sent = sentMailOf(database, candidates)
+  return new Set(candidates.filter((id) => (sent.get(id) ?? []).every((one) => !one.discussionList)))
+}
+
 /** Each person with their kind, contact and counts; the last contact is added for the page alone. */
 const classified = (
   database: CacheDatabase,
@@ -403,8 +445,25 @@ const classified = (
       .all(...scopeParams(scope))
       .map((row) => [
         Number(row.person),
-        { n: Number(row.n), bulk: Number(row.bulk), auto: Number(row.auto), nullReturn: Number(row.null_return) },
+        {
+          n: Number(row.n),
+          bulk: Number(row.bulk),
+          auto: Number(row.auto),
+          nullReturn: Number(row.null_return),
+          listed: Number(row.listed),
+        },
       ]),
+  )
+  const newsletters = newsletterOnlyOf(
+    database,
+    people.flatMap(({ id, owner }) =>
+      !owner &&
+      !ownerPeople.has(id) &&
+      !test.has(id) &&
+      mayBeNewsletterOnly(facts.get(id), reasons.get(id) ?? [], mail.get(id))
+        ? [id]
+        : [],
+    ),
   )
   return people.map(({ id, name, owner }) => {
     const own = facts.get(id)
@@ -412,11 +471,16 @@ const classified = (
     const shown = displayName(name, { ...contact, name: own?.name ?? null })
     const ties = reasons.get(id) ?? []
     const kept = ownerPeople.has(id)
-    const worked = kindOf(shown, own, ties, mail.get(id), test.has(id), kept)
-    const toBot = !kept && !owner && worked.kind !== "test" && isProgram(worked, own, ties)
+    const worked = kindOf(shown, own, ties, mail.get(id), test.has(id), kept, newsletters.has(id))
+    const program = !kept && !owner && worked.kind !== "test" && isProgram(worked, own, ties)
+    const botReason = program
+      ? worked.signals.filter((signal) => signal !== NEWSLETTER_ONLY).join(", ")
+      : newsletters.has(id)
+        ? NEWSLETTER_ONLY
+        : undefined
     return {
       id,
-      ...(toBot ? { move: "bot" as const } : {}),
+      ...(botReason === undefined ? {} : { move: "bot" as const, botReason }),
       nameOrder: nameOrderOf(shown),
       person: `person:${id}`,
       name,
@@ -452,7 +516,7 @@ const withLastContact = (
     database,
     people.map(({ id }) => id),
   )
-  return people.map(({ id, nameOrder: _, emails, twoWay, move: __, ...person }) => {
+  return people.map(({ id, nameOrder: _, emails, twoWay, move: __, botReason: ___, ...person }) => {
     const time = at.get(id)
     const { ties } = person
     return {
@@ -477,7 +541,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "9"
+const KIND_RULES = "10"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
@@ -536,7 +600,7 @@ const keep = (database: CacheDatabase, worked: Worked[]): void => {
   for (const person of worked)
     if (person.move === "bot" && person.kind !== MERGED) {
       bots.push({
-        id: ruleToBot(database, person.id, person.kindSignals.join(", "), at),
+        id: ruleToBot(database, person.id, person.botReason ?? person.kindSignals.join(", "), at),
         displayName: person.displayName,
         holds: true,
         bot: true,
