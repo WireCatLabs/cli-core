@@ -44,11 +44,16 @@ const synced = async (messages: FakeMail[]) => {
   opened.push(store)
   await syncMail(fakeMailSource({ messages }), store, { account: { address: ME }, since: SINCE, now: () => NOW })
   const { items } = await store.people.list({ kind: "all", limit: 100 })
-  return Object.fromEntries(
-    items
+  const bots = (await store.people.listBots({ limit: 100 })).items.map(({ identities, reason, reach, signals }) => [
+    identities[0]?.id,
+    { kind: "bot", kindSignals: reason?.split(", ") ?? [], reach, signals },
+  ])
+  return Object.fromEntries([
+    ...items
       .filter(({ owner }) => !owner)
       .map(({ email, kind, kindSignals, reach, signals }) => [email, { kind, kindSignals, reach, signals }]),
-  )
+    ...bots,
+  ])
 }
 
 describe("a sender's signals from mail headers", () => {
@@ -71,13 +76,13 @@ describe("a sender's signals from mail headers", () => {
     ])
 
     expect(people["statements@bank.example.com"]).toMatchObject({
-      kind: "automated",
+      kind: "bot",
       kindSignals: ["auto-submitted"],
       signals: ["auto-submitted"],
       reach: "direct",
     })
     expect(people["ola@forged.example.com"]).toMatchObject({ kind: "stranger", signals: [] })
-    expect(people["system@hosting.example.com"]).toMatchObject({ kind: "automated", kindSignals: ["null-return-path"] })
+    expect(people["system@hosting.example.com"]).toMatchObject({ kind: "bot", kindSignals: ["null-return-path"] })
     expect(people["pia@office.example.com"]).toMatchObject({ kind: "stranger", signals: [] })
   })
 

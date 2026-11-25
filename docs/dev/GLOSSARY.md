@@ -76,6 +76,7 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | project | the owner's work unit with a task key | entity | `entity:` references still parse for old files |
 | organization | a company, team, family or community | entity | none |
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
+| bot | a program that writes to the owner: a no-reply or alert address, a messenger's bot, a service's mail; an entity apart from people, with a name, identities and an optional organization, and no ties, tasks or merge review (`sender-bot:<id>`, the `sender_bots` table). Not an agent: `bot:<id>` and the `bots` table are agents that work here | automated person, sender (for a bot) | `people list kind:automated` still lists people a name or a bulk mailbox marks; memo's `{ bot }` author and `bot list` mean agents and a messenger's bot account |
 | contact | one person as one source knows them: a mail correspondent, a Telegram user, a Drive owner, a calendar attendee; an `identities` row | user | none found beyond the above |
 | entity | the thing the owner means — a person, an event, a document; it carries no provider id ([WC-DATA-2](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)) | record, object | none |
 | source record | one source's copy of an entity, keyed by account and `external_id`: a contact, a Zoom meeting, an email, a message | entity, item | none |

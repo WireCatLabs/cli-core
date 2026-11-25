@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { isEmailAddress, isRoleAddress } from "../../domain/addresses.js"
 import { displayName, noFallbacks, takeFallbacks } from "../../domain/display-names.js"
 import type { Id, Page } from "../../domain/models.js"
+import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
 import type {
   IdentityRef,
   LinkedIdentity,
@@ -40,8 +41,23 @@ const identityRow = ({ orm }: StoreContext, { provider, id }: IdentityRef) =>
 
 export const required = (context: StoreContext, ref: IdentityRef) => {
   const found = identityRow(context, ref)
-  if (!found) throw new CliError("not_found", `no ${ref.provider} person ${ref.id} in the store`)
-  return found
+  if (found) return found
+  const bot = context.database
+    .prepare(
+      "SELECT s.bot_id FROM sender_bot_identities s JOIN identities i ON i.id = s.identity_id " +
+        "WHERE i.provider = ? AND i.external_id = ?",
+    )
+    .get(ref.provider, ref.id)
+  if (bot !== undefined)
+    throw new CliError(
+      "validation_error",
+      `${ref.provider} ${ref.id} is ${SENDER_BOT_PREFIX}${bot.bot_id}, not a person`,
+      {
+        reason: "sender-bot.not-a-person",
+        reference: `${SENDER_BOT_PREFIX}${bot.bot_id}`,
+      },
+    )
+  throw new CliError("not_found", `no ${ref.provider} person ${ref.id} in the store`)
 }
 
 /** Every phone and address an identity holds: the source's lists, else the one `phone` and `email`. */

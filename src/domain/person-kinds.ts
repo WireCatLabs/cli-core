@@ -23,7 +23,12 @@ export type KindSignal =
   | "company-name"
   | "no-tie"
   | "no-name"
-  | "owner-choice"
+
+/**
+ * A sender bot's reference, `sender-bot:<id>`: a program that writes to the owner, an entity apart from people.
+ * `bot:` names the agents of the `bots` table. @experimental
+ */
+export const SENDER_BOT_PREFIX = "sender-bot:"
 
 const AUTOMATED_WORDS = new Set([
   "noreply",

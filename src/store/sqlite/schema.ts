@@ -362,7 +362,7 @@ export const bots = sqliteTable(
   ],
 )
 
-export { senderBotMoves, senderBots } from "./schema/sender-bots.js"
+export { senderBotIdentities, senderBotMoves, senderBots } from "./schema/sender-bots.js"
 
 export const chats = sqliteTable(
   "chats",

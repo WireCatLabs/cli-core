@@ -416,6 +416,8 @@ PeopleStore · interface · similar(name: string, options?: {
 PeopleStore · interface · limit?: number;
 PeopleStore · interface · }): Promise<SimilarPerson[]>;
 PeopleStore · interface · ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>;
+PeopleStore · interface · listBots(options: BotListOptions): Promise<BotList>;
+PeopleStore · interface · showBot(bot: string): Promise<SenderBotDetails>;
 PeopleStore · interface · moveToBot(subject: string | IdentityRef, by: Decider, options?: {
 PeopleStore · interface · bot?: string;
 PeopleStore · interface · name?: string;

@@ -313,9 +313,14 @@ const touchesOwner = ({ context, result }: Pass, from: number, to: number, signa
   return true
 }
 
-/** A sender bot is never proposed as the same person, by any signal; the owner moves it by hand. */
+/** A person every identity left for a sender bot is never proposed as the same person; the owner moves it by hand. */
 const touchesBot = ({ context, result }: Pass, from: number, to: number, signal: string): boolean => {
-  const held = context.database.prepare("SELECT 1 FROM sender_bots WHERE person_id IN (?, ?) LIMIT 1").get(from, to)
+  const held = context.database
+    .prepare(
+      "SELECT 1 FROM sender_bot_moves m WHERE m.from_person_id IN (?, ?) AND m.to_bot_id IS NOT NULL " +
+        "AND NOT EXISTS (SELECT 1 FROM identity_links l WHERE l.person_id = m.from_person_id) LIMIT 1",
+    )
+    .get(from, to)
   if (held === undefined) return false
   result.skipped.push({ persons: [String(from), String(to)], signal, reason: "identity.not-a-person" })
   return true

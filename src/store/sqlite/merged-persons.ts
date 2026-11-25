@@ -22,12 +22,14 @@ export const mergeSql = (event: string): string =>
   `AND w.id > ${event}.id))))`
 
 /**
- * A person every identity left by a merge, so another person holds them now. The row stays so that undoing the merge
- * gives the uid back; a person added by name has no identity and no move, and stays visible.
+ * A person every identity left by a merge or a move to a sender bot, so another person or a bot holds them now. The
+ * row stays so that undoing the merge or the move gives the uid back; a person added by name has no identity and no
+ * move, and stays visible.
  */
 export const mergedAwaySql = (person: string): string =>
   `(${person}.owner = 0 AND NOT EXISTS (SELECT 1 FROM identity_links ml WHERE ml.person_id = ${person}.id) ` +
-  `AND EXISTS (SELECT 1 FROM identity_link_events me WHERE me.from_person_id = ${person}.id AND ${mergeSql("me")}))`
+  `AND (EXISTS (SELECT 1 FROM identity_link_events me WHERE me.from_person_id = ${person}.id AND ${mergeSql("me")}) ` +
+  `OR EXISTS (SELECT 1 FROM sender_bot_moves mb WHERE mb.from_person_id = ${person}.id AND mb.to_bot_id IS NOT NULL)))`
 
 const LATEST_MOVE = (person: string) =>
   `(SELECT e.to_person_id FROM identity_link_events e WHERE e.from_person_id = ${person}.id AND ${mergeSql("e")}

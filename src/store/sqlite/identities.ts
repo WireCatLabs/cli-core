@@ -23,6 +23,7 @@ import {
   identityRevisions,
   messages,
   persons,
+  senderBotIdentities,
 } from "./schema.js"
 import { trigramPart } from "./trigram-match.js"
 import { toIso } from "./values.js"
@@ -141,10 +142,21 @@ const revise = (orm: Orm, identity: number, next: Profile, at: number, before?: 
   return last !== undefined
 }
 
-/** A new identity's own person, as ingest gives every identity; one already linked keeps its person. */
+/**
+ * A new identity's own person, as ingest gives every identity; one already linked keeps its person, and a sender
+ * bot's has none.
+ */
 export const ensurePerson = (orm: Orm, identity: number, name: string | null, at: number): void => {
   if (
     orm.select({ id: identityLinks.identityId }).from(identityLinks).where(eq(identityLinks.identityId, identity)).get()
+  )
+    return
+  if (
+    orm
+      .select({ id: senderBotIdentities.identityId })
+      .from(senderBotIdentities)
+      .where(eq(senderBotIdentities.identityId, identity))
+      .get()
   )
     return
   const person = Number(

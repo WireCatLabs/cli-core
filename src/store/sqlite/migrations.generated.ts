@@ -2114,5 +2114,32 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER person_kind_sender_bot_au AFTER UPDATE OF person_id, author, name ON sender_bots BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (OLD.person_id, NEW.person_id);\nEND;",
       "CREATE TRIGGER person_kind_sender_bot_move_ai AFTER INSERT ON sender_bot_moves BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT person_id FROM identity_links WHERE identity_id = NEW.identity_id);\nEND;"
     ]
+  },
+  {
+    "name": "20261125111113_version-75-bot-identities",
+    "statements": [
+      "CREATE TABLE `sender_bot_identities` (\n\t`identity_id` integer PRIMARY KEY,\n\t`bot_id` integer NOT NULL,\n\t`created_at` integer NOT NULL\n);",
+      "CREATE INDEX `sender_bot_identities_by_bot_id` ON `sender_bot_identities` (`bot_id`);",
+      "CREATE INDEX `sender_bot_moves_by_from_person_id` ON `sender_bot_moves` (`from_person_id`);"
+    ]
+  },
+  {
+    "name": "20261125111118_version-75-bot-identities-moved",
+    "statements": [
+      "-- A bot of version 74 is a person row holding the bot's identities. Each identity moves to the bot, the move is logged\n-- with the bot's author, and the person row stays, emptied and hidden, so a move back gives its uid back.\nINSERT INTO sender_bot_identities (identity_id, bot_id, created_at)\nSELECT l.identity_id, b.id, CAST(unixepoch('subsec') * 1000 AS INTEGER)\nFROM sender_bots b JOIN identity_links l ON l.person_id = b.person_id;",
+      "INSERT INTO sender_bot_moves (identity_id, from_person_id, from_bot_id, to_person_id, to_bot_id, author, reason, created_at)\nSELECT s.identity_id, b.person_id, NULL, NULL, b.id, b.author, 'store version 75: a bot holds its own identities',\n  CAST(unixepoch('subsec') * 1000 AS INTEGER)\nFROM sender_bot_identities s JOIN sender_bots b ON b.id = s.bot_id;",
+      "DELETE FROM identity_links WHERE identity_id IN (SELECT identity_id FROM sender_bot_identities);",
+      "-- Negative: a build before 75 reads a bot as its person row, and this names none.\nUPDATE sender_bots SET person_id = -id;",
+      "-- Stored as a merge's emptied person is, so every build's people list leaves it out.\nCREATE TRIGGER person_kind_sender_bot_origin_au AFTER UPDATE OF kind ON persons\nWHEN NEW.kind IS NOT 'merged' AND NEW.owner = 0\n  AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = NEW.id)\n  AND EXISTS (SELECT 1 FROM sender_bot_moves WHERE from_person_id = NEW.id AND to_bot_id IS NOT NULL) BEGIN\n  UPDATE persons SET kind = 'merged' WHERE id = NEW.id;\nEND;",
+      "UPDATE persons SET kind = 'merged' WHERE owner = 0\n  AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = persons.id)\n  AND EXISTS (SELECT 1 FROM sender_bot_moves WHERE from_person_id = persons.id AND to_bot_id IS NOT NULL);",
+      "-- An older build's sync links an identity with no person to a new one: a bot's identity gets none.\nCREATE TRIGGER sender_bot_identity_link_bi BEFORE INSERT ON identity_links\nWHEN EXISTS (SELECT 1 FROM sender_bot_identities WHERE identity_id = NEW.identity_id) BEGIN\n  SELECT RAISE(IGNORE);\nEND;",
+      "-- A re-key moves a person's link onto an identity a bot holds: the bot keeps it, and the move is logged.\nCREATE TRIGGER sender_bot_identity_link_au AFTER UPDATE OF identity_id ON identity_links\nWHEN EXISTS (SELECT 1 FROM sender_bot_identities WHERE identity_id = NEW.identity_id) BEGIN\n  INSERT INTO sender_bot_moves (identity_id, from_person_id, from_bot_id, to_person_id, to_bot_id, author, reason, created_at)\n  SELECT NEW.identity_id, NEW.person_id, NULL, NULL, s.bot_id, 'rules', 'the source re-keyed the identity',\n    CAST(unixepoch('subsec') * 1000 AS INTEGER)\n  FROM sender_bot_identities s WHERE s.identity_id = NEW.identity_id;\n  DELETE FROM identity_links WHERE identity_id = NEW.identity_id;\nEND;",
+      "-- ...and the person row it made for it, with its log row, goes again.\nCREATE TRIGGER sender_bot_identity_person_ai AFTER INSERT ON identity_link_events\nWHEN NEW.from_person_id IS NULL\n  AND EXISTS (SELECT 1 FROM sender_bot_identities WHERE identity_id = NEW.identity_id)\n  AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = NEW.to_person_id) BEGIN\n  DELETE FROM identity_link_events WHERE id = NEW.id;\n  DELETE FROM persons WHERE id = NEW.to_person_id AND owner = 0\n    AND NOT EXISTS (SELECT 1 FROM identity_link_events WHERE from_person_id = NEW.to_person_id OR to_person_id = NEW.to_person_id);\nEND;",
+      "CREATE TRIGGER sender_bot_identities_linked_bi BEFORE INSERT ON sender_bot_identities\nWHEN EXISTS (SELECT 1 FROM identity_links WHERE identity_id = NEW.identity_id) BEGIN\n  SELECT RAISE(ABORT, 'sender_bot_identities: the identity is linked to a person; unlink it first');\nEND;",
+      "-- An older build gives a bot back by deleting its row; one that still holds identities stays.\nCREATE TRIGGER sender_bots_holding_bd BEFORE DELETE ON sender_bots\nWHEN EXISTS (SELECT 1 FROM sender_bot_identities WHERE bot_id = OLD.id) BEGIN\n  SELECT RAISE(IGNORE);\nEND;",
+      "CREATE TRIGGER sender_bot_identities_identity_ad AFTER DELETE ON identities BEGIN\n  DELETE FROM sender_bot_identities WHERE identity_id = OLD.id;\nEND;",
+      "CREATE TRIGGER sender_bots_emptied_ad AFTER DELETE ON sender_bot_identities\nWHEN NOT EXISTS (SELECT 1 FROM sender_bot_identities WHERE bot_id = OLD.bot_id) BEGIN\n  DELETE FROM sender_bots WHERE id = OLD.bot_id;\nEND;",
+      "CREATE TRIGGER sender_bots_emptied_au AFTER UPDATE OF bot_id ON sender_bot_identities\nWHEN NOT EXISTS (SELECT 1 FROM sender_bot_identities WHERE bot_id = OLD.bot_id) BEGIN\n  DELETE FROM sender_bots WHERE id = OLD.bot_id;\nEND;"
+    ]
   }
 ]

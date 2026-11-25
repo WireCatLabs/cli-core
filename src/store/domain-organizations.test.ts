@@ -146,7 +146,7 @@ it("keeps the owner's separations: a removed membership, an erased organization,
   await store.knowledge.removeRelation(null, String(relation?.id), "owner")
   const bank = Number(db.prepare("SELECT id FROM organizations WHERE name = 'Bank'").get()?.id)
   await store.knowledge.eraseOrganization(`organization:${bank}`, "owner", { apply: true })
-  await store.people.moveToPerson(`person:${await uidOf(store, "email", "noreply@shop.ru")}`, "owner")
+  await store.people.moveToPerson({ provider: "email", id: "noreply@shop.ru" }, "owner")
   await resort(store, db)
 
   expect(memberships(db)).toEqual([])

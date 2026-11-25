@@ -516,8 +516,9 @@ headings.
 | `selection.invalid` | `validation_error` | the selection is not valid |  |
 | `selection.out-of-scope` | `permission_error` | the selection reaches outside what this profile may read |  |
 | `sender-bot.assignee` | `validation_error` | a sender bot is no one's assignee; move it to a person first |  |
-| `sender-bot.not-a-person` | `validation_error` | the person named is a sender bot; name a person |  |
-| `sender-bot.not-found` | `not_found` | no sender bot has that id; people list kind:automated lists them |  |
+| `sender-bot.empty` | `validation_error` | the person or bot named holds no identity to move |  |
+| `sender-bot.not-a-person` | `validation_error` | the identity named is a sender bot's, not a person's; name a person |  |
+| `sender-bot.not-found` | `not_found` | no sender bot has that id; the bots list names them |  |
 | `sender-bot.owner` | `validation_error` | the owner's own person is never a bot |  |
 | `serve.outdated` | `configuration_error` | the store or the installed version is newer than this serve; it stopped so its unit starts the installed one |  |
 | `session.duplicate` | `conflict` | another profile here already signs in to this account as this user |  |
