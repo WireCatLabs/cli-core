@@ -115,6 +115,22 @@ export const manifestVerify =
     return { id: String(id), account: { id: String(id), ...(typeof name === "string" ? { name } : {}) } }
   }
 
+const UNREADABLE = new Set(["keyring.unreachable", "oauth.not-saved", "oauth.invalid", "session.unreadable"])
+
+/**
+ * `session list`'s row for a profile whose sign-in cannot be read: a keyring this run cannot reach or a broken entry
+ * must not hide the other profiles (WC-ACCT-12), and `session status` names the cause. Warns once per cause.
+ */
+export const unknownSignIn = (warn: (message: string) => void) => {
+  const warned = new Set<string>()
+  return (profile: string, error: unknown) => {
+    if (!(error instanceof CliError) || !UNREADABLE.has(String(error.details.reason))) throw error
+    if (!warned.has(error.message)) warn(error.message)
+    warned.add(error.message)
+    return { profile, signed_in: null, state: "unknown" } as const
+  }
+}
+
 export const storageOf = (raw: string): TokenStorage => {
   if (raw === "keyring" || raw === "file") return raw
   throw new CliError("validation_error", `--credential-storage takes keyring or file; got ${raw}`)
@@ -268,9 +284,19 @@ export const tokenSessionCommand = (options: TokenSessionOptions): Command => {
         ...(environment.keyring ? { keyring: environment.keyring } : {}),
         warn: outputFor(this).renderer.warn,
       })
+      const unknown = unknownSignIn(outputFor(this).renderer.warn)
       const items = profilesHere(app, configuredProfiles, env).map((profile) => {
-        const saved = tokens.read(profile)
-        return { profile, signed_in: saved !== undefined, token_from: saved?.source ?? null }
+        try {
+          const saved = tokens.read(profile)
+          return {
+            profile,
+            signed_in: saved !== undefined,
+            state: saved ? "saved" : "missing",
+            token_from: saved?.source ?? null,
+          }
+        } catch (error) {
+          return { ...unknown(profile, error), token_from: null }
+        }
       })
       renderAnswer(
         this,

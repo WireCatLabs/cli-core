@@ -24,6 +24,7 @@ export {
   driveSessionCodec,
   type EncodeInput,
   googleTokenCodec,
+  type LegacyAccount,
   oauthAccount,
   type StoredTokens,
   standardCodec,

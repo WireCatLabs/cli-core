@@ -1,11 +1,19 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { PassThrough } from "node:stream"
 import { CliError, captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
-import type { Command } from "commander"
-import { afterEach, describe, expect, it } from "vitest"
-import { oauthFlowOf, oauthPreset, oauthSessionCommand } from "./oauth-session.js"
+import { type Command, Option } from "commander"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { driveSessionCodec, zoomTokenCodec } from "../oauth/storage.js"
+import {
+  type OAuthSessionOptions,
+  type OAuthSignedIn,
+  oauthFlowOf,
+  oauthPreset,
+  oauthSessionCommand,
+} from "./oauth-session.js"
 import { run } from "./program.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
@@ -28,8 +36,19 @@ const manifest: ServiceApiManifest = {
 }
 const OWNER_ENTRY = "crm-cli:oauth:crm:personal"
 
+// Every test folder is a moved run; the owner's own run, which copies an old entry, is only reached this way.
+const owner = vi.hoisted(() => ({ run: false }))
+vi.mock("@wirecat/cli-base", async (original) => {
+  const base = await original<typeof import("@wirecat/cli-base")>()
+  return {
+    ...base,
+    isMovedRun: (options: Parameters<typeof base.isMovedRun>[0]) => !owner.run && base.isMovedRun(options),
+  }
+})
+
 const roots: string[] = []
 afterEach(() => {
+  owner.run = false
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -44,7 +63,18 @@ const visit = (url: string) => {
   return fetch(callback)
 }
 
-const setup = (keyring: KeyringStore = memoryKeyring()) => {
+const callbackOf = (url: string) => {
+  const authorization = new URL(url)
+  const callback = new URL(authorization.searchParams.get("redirect_uri") ?? "")
+  callback.search = new URLSearchParams({ state: authorization.searchParams.get("state") ?? "", code: "c" }).toString()
+  return callback.toString()
+}
+
+const setup = (
+  keyring: KeyringStore = memoryKeyring(),
+  more: Partial<OAuthSessionOptions> = {},
+  browser: (url: string) => Promise<unknown> = visit,
+) => {
   const root = mkdtempSync(join(tmpdir(), "oauth-session-"))
   roots.push(root)
   mkdirSync(join(root, "config"), { recursive: true })
@@ -57,6 +87,8 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
   }
   const tokenCalls: URLSearchParams[] = []
   const verified: string[] = []
+  const opened: string[] = []
+  const stdin = new PassThrough()
   const service = (async (_url: string | URL | Request, init?: RequestInit) => {
     tokenCalls.push(new URLSearchParams(String(init?.body)))
     return Response.json({
@@ -91,6 +123,7 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
               verify?.()
               return { id: "workspace-1", account: { workspace: "Synthetic" } }
             },
+            ...more,
           }),
         ],
       },
@@ -100,7 +133,11 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
         env,
         keyring,
         fetch: service,
-        openBrowser: async (url: string, _command?: Command) => void (await visit(url)),
+        stdin,
+        openBrowser: async (url: string, _command?: Command) => {
+          opened.push(url)
+          await browser(url)
+        },
       } as never,
     )
     const out = streams.stdout.join("")
@@ -115,8 +152,19 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
         .map((line) => JSON.parse(line).error)[0],
     }
   }
-  return { cli, keyring, tokenCalls, verified }
+  return { cli, keyring, tokenCalls, verified, opened, stdin }
 }
+
+const zmEntry = JSON.stringify({
+  accessToken: "synthetic-access-old",
+  refreshToken: "synthetic-refresh-old",
+  expiresAt: Date.UTC(2030, 0, 1),
+  scopes: ["record_permission:read"],
+})
+const OLD_SERVICE = "crm-cli:/old/config"
+const legacyAccounts = (_env: NodeJS.ProcessEnv, profile: string) => [
+  { service: OLD_SERVICE, account: `c1:${profile}` },
+]
 
 describe("oauthFlowOf and oauthPreset", () => {
   it("reads the authorization code flow and checks each scope the CLI asks for", () => {
@@ -175,6 +223,7 @@ describe("oauthSessionCommand", () => {
     expect((await cli(["session", "list", "--json"])).json.items).toContainEqual({
       profile: "personal",
       signed_in: true,
+      state: "saved",
     })
 
     expect((await cli(["personal", "session", "end", "--json"])).json.item).toMatchObject({ ended: true })
@@ -229,5 +278,129 @@ describe("oauthSessionCommand", () => {
     expect(ended.json.item).toMatchObject({ ended: false })
     expect(ended.json.item.why).toContain("moved folders")
     expect(memory.get("crm-cli", "oauth:crm:personal")).toBe(owner)
+  })
+})
+
+describe("oauthSessionCommand for a CLI that kept its own sign-ins", () => {
+  it("reads an entry in the CLI's own format, with the access token's end", async () => {
+    const { cli } = setup(memoryKeyring({ [OWNER_ENTRY]: zmEntry }), { codec: zoomTokenCodec })
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({
+      state: "saved",
+      scopes: ["record_permission:read"],
+      expires_at: "2030-01-01T00:00:00.000Z",
+    })
+  })
+
+  it("copies an older entry under another service to the profile's own, and session end removes both", async () => {
+    owner.run = true
+    const keyring = memoryKeyring({ [`${OLD_SERVICE}:c1:personal`]: zmEntry })
+    const { cli } = setup(keyring, { codec: zoomTokenCodec, legacyAccounts })
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "saved" })
+    expect(keyring.get("crm-cli", "oauth:crm:personal")).toBe(zmEntry)
+    expect(keyring.get(OLD_SERVICE, "c1:personal")).toBe(zmEntry)
+
+    expect((await cli(["personal", "session", "end", "--json"])).json.item).toMatchObject({ ended: true })
+    expect(keyring.get("crm-cli", "oauth:crm:personal")).toBeNull()
+    expect(keyring.get(OLD_SERVICE, "c1:personal")).toBeNull()
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
+  })
+
+  it("in a run with moved folders reads the older entry but never copies or removes it", async () => {
+    const keyring = memoryKeyring({ [`${OLD_SERVICE}:c1:personal`]: zmEntry })
+    const { cli } = setup(keyring, { codec: zoomTokenCodec, legacyAccounts })
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "saved" })
+    expect(keyring.get("crm-cli", "oauth:crm:personal")).toBeNull()
+    const ended = await cli(["personal", "session", "end", "--json"])
+    expect(ended.json.item).toMatchObject({ ended: false })
+    expect(ended.json.item.why).toContain("moved folders")
+    expect(keyring.get(OLD_SERVICE, "c1:personal")).toBe(zmEntry)
+  })
+
+  it("passes a start option to the preset, saves verify's extra and hands the client to afterSignIn", async () => {
+    const after: OAuthSignedIn[] = []
+    const { cli, keyring, opened } = setup(memoryKeyring(), {
+      codec: driveSessionCodec,
+      startOptions: [new Option("--grant <scopes>", "more to ask")],
+      preset: (command) =>
+        oauthPreset(oauthFlowOf(manifest), {
+          id: "crm",
+          name: "Crm",
+          client: { clientId: "own-client" },
+          scopes: [
+            "record_permission:read",
+            ...(command.opts<{ grant?: string }>().grant === "members" ? ["user_management:read"] : []),
+          ],
+          redirect: { kind: "loopback" },
+        }),
+      verify: async () => ({
+        id: "member-1",
+        account: { member: "Synthetic" },
+        extra: { principal: "synthetic-principal" },
+      }),
+      afterSignIn: (_command, signedIn) => void after.push(signedIn),
+    })
+    const started = await cli(["personal", "session", "start", "--grant", "members", "--json"])
+    expect(started.error).toBeUndefined()
+    expect(new URL(opened[0] ?? "").searchParams.get("scope")).toBe("record_permission:read user_management:read")
+    expect(JSON.parse(keyring.get("crm-cli", "oauth:crm:personal") ?? "")).toMatchObject({
+      principal: "synthetic-principal",
+      clientId: "own-client",
+    })
+    expect(after).toEqual([
+      expect.objectContaining({
+        profile: "personal",
+        id: "member-1",
+        account: { member: "Synthetic" },
+        client: { clientId: "own-client" },
+      }),
+    ])
+  })
+
+  it("with --answer-stdin lets the preset ask for the client and reads the pasted redirect", async () => {
+    const after: OAuthSignedIn[] = []
+    let feed = (_line: string) => {}
+    const { cli, tokenCalls, stdin } = setup(
+      memoryKeyring(),
+      {
+        preset: async (_command, steps) => {
+          const clientId = steps?.answers
+            ? await steps.ask({ field: "client_id", secret: false, prompt: "client" })
+            : ""
+          return oauthPreset(oauthFlowOf(manifest), {
+            id: "crm",
+            name: "Crm",
+            client: { clientId },
+            scopes: ["record_permission:read"],
+            redirect: { kind: "loopback" },
+          })
+        },
+        afterSignIn: (_command, signedIn) => void after.push(signedIn),
+      },
+      async (url) => feed(`${callbackOf(url)}\n`),
+    )
+    feed = (line) => stdin.write(line)
+    stdin.write("asked-client\n")
+    const started = await cli(["personal", "session", "start", "--json", "--answer-stdin"])
+    expect(started.error).toBeUndefined()
+    expect(started.err).toContain('"field":"redirect"')
+    expect(tokenCalls[0]?.get("client_id")).toBe("asked-client")
+    expect(after[0]?.client.clientId).toBe("asked-client")
+  })
+
+  it("lists every profile when the keyring cannot be reached, and takes the CLI's own profiles", async () => {
+    const keyring: KeyringStore = {
+      get: () => {
+        throw new Error("synthetic: no secret service")
+      },
+      set: () => {},
+      delete: () => false,
+    }
+    const { cli } = setup(keyring, { profiles: () => ["personal", "work"] })
+    const listed = await cli(["session", "list", "--json"])
+    expect(listed.code).toBe(0)
+    expect(listed.json.items).toEqual([
+      { profile: "personal", signed_in: null, state: "unknown" },
+      { profile: "work", signed_in: null, state: "unknown" },
+    ])
   })
 })

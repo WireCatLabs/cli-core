@@ -196,6 +196,34 @@ describe("zm's existing entry", () => {
   })
 })
 
+describe("an older entry kept in the private file", () => {
+  it("is copied within the file, never into the keyring", () => {
+    const configDir = folder()
+    const keyring = memoryKeyring()
+    const options = { service: "drive-cli", configDir, keyring, env: {}, warn: () => {} }
+    const tokens = { accessToken: "a", refreshToken: "r", expiresAt: NOW, scopes: ["s"] }
+    credentialStorage({
+      credentials: { ...options, storage: "file" },
+      account: "personal",
+      codec: driveSessionCodec,
+    }).write({ tokens, client: { clientId: "c" }, extra: { principal: "synthetic-principal" } })
+    const storage = credentialStorage({
+      credentials: options,
+      account: oauthAccount("google", "personal"),
+      legacyAccounts: ["personal"],
+      codec: driveSessionCodec,
+    })
+    expect(storage.read()?.tokens.refreshToken).toBe("r")
+    expect(keyring.get("drive-cli", "oauth:google:personal")).toBeNull()
+    expect(Object.keys(JSON.parse(readFileSync(join(configDir, "credentials.json"), "utf8")))).toEqual([
+      "personal",
+      "oauth:google:personal",
+    ])
+    expect(storage.remove()).toEqual(["file"])
+    expect(storage.read()).toBeUndefined()
+  })
+})
+
 describe("new entries", () => {
   it("keep the app's source, and the secret only of WireCat's public app", () => {
     const keyring = memoryKeyring()

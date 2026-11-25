@@ -259,12 +259,18 @@ export const zoomTokenCodec: TokenCodec = {
   },
 }
 
+/** An older entry: an account under the same service, or one an older version kept under another service. */
+export type LegacyAccount = string | { service: string; account: string }
+
 export interface CredentialStorageOptions {
   /** What the CLI passes `Credentials` today; the same options address the same entry. */
   credentials: CredentialsOptions
   account: string
-  /** Older accounts read when `account` is empty; a hit is copied to `account` and left in place. */
-  legacyAccounts?: readonly string[]
+  /**
+   * Older entries read when `account` is empty. A hit is copied to `account`, in the store it was read from, and left
+   * in place; `remove` removes them too. A run with moved folders only reads them.
+   */
+  legacyAccounts?: readonly LegacyAccount[]
   codec: TokenCodec
 }
 
@@ -297,15 +303,21 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     options.credentials.configDir,
     options.credentials.isolated,
   )
-  const raw = (name: string) => {
+  const legacies = (options.legacyAccounts ?? []).map((legacy) =>
+    typeof legacy === "string"
+      ? { account: legacy, store: credentials }
+      : { account: legacy.account, store: new Credentials({ ...options.credentials, service: legacy.service }) },
+  )
+  const sourced = (name: string, store = credentials) => {
     try {
-      return credentials.read(name)?.secret
+      return store.read(name)
     } catch (error) {
       // cli-base's own error already says what to do, in words safe for the answer.
       if (error instanceof CliError) throw error
       throw keyringFailure(error)
     }
   }
+  const raw = (name: string) => sourced(name)?.secret
   // A sign-in on a machine with no keyring writes to the file, so an old entry it cannot read is no old entry. With
   // `storage: "keyring"` there is no file to fall back on: the save would fail too, after the browser.
   const fallsBack = options.credentials.storage !== "keyring"
@@ -327,12 +339,19 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
   const current = () => {
     const own = raw(account)
     if (own !== undefined) return own
-    for (const legacy of options.legacyAccounts ?? []) {
-      const found = raw(legacy)
+    for (const legacy of legacies) {
+      const found = sourced(legacy.account, legacy.store)
       if (found === undefined) continue
-      codec.decode(found)
-      if (!moved) save(found)
-      return found
+      codec.decode(found.secret)
+      // A sign-in the owner kept in the file must not move to the keyring by being copied.
+      if (!moved && found.source === "file")
+        try {
+          new Credentials({ ...options.credentials, storage: "file" }).write(account, found.secret)
+        } catch (error) {
+          throw keyringFailure(error, found.secret)
+        }
+      else if (!moved) save(found.secret)
+      return found.secret
     }
     return undefined
   }
@@ -354,7 +373,9 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       ),
     remove: () => {
       try {
-        return credentials.remove(account)
+        // The next read would copy an older entry back and sign the profile in again.
+        const older = moved ? [] : legacies.flatMap((legacy) => legacy.store.remove(legacy.account))
+        return [...new Set([...credentials.remove(account), ...older])]
       } catch (error) {
         throw keyringFailure(error)
       }
