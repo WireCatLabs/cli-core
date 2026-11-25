@@ -80,7 +80,6 @@ const SIGN_IN: Entry[] = [
   ["account-rename.unconfirmed", "confirmation_required", "renaming a profile asks first; add --yes"],
   ["account-rename.moved-run", "permission_error", "a run with moved folders never renames a profile"],
   ["account-rename.unpaired", "configuration_error", "the tool named different paths for the old and new name"],
-  ["account-rename.config", "configuration_error", "the config file cannot be read"],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
@@ -337,6 +336,7 @@ const OTHERS: Entry[] = [
   validation("push.too-many-files", "the folder holds more files than one push takes"),
   validation("push.unreadable", "the folder to push could not be read"),
   validation("spreadsheet.unreadable", "the workbook could not be read"),
+  ["config.unreadable", "configuration_error", "the config file cannot be read"],
   [
     "config.unrepairable",
     "configuration_error",

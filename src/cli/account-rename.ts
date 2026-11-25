@@ -198,7 +198,7 @@ export const accountRenameCommand = (
       const read = readConfigFile(settings.configPath)
       if ("issue" in read)
         throw new CliError("configuration_error", `${settings.configPath} cannot be read — fix it first`, {
-          reason: "account-rename.config",
+          reason: "config.unreadable",
         })
       const sections = [["profiles"], ["personal", "profiles"]].filter(
         (path) => at(read.raw, [...path, profile]) !== undefined,

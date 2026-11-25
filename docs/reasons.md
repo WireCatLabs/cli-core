@@ -43,7 +43,6 @@ headings.
 | `account-remove.unknown-profile` | `not_found` | no profile by this name on this computer |  |
 | `account-rename.bot` | `conflict` | the profile is also a bot profile, which keeps its name |  |
 | `account-rename.busy` | `conflict` | a serve, a background service, a schedule or a sync uses this profile |  |
-| `account-rename.config` | `configuration_error` | the config file cannot be read |  |
 | `account-rename.moved-run` | `permission_error` | a run with moved folders never renames a profile |  |
 | `account-rename.taken` | `conflict` | the new name, or a file or keyring entry under it, already exists |  |
 | `account-rename.unconfirmed` | `confirmation_required` | renaming a profile asks first; add --yes |  |
@@ -77,6 +76,7 @@ headings.
 | `chat-sending.denied` | `permission_error` | models chats is denied: chat text never goes to a model off this computer, even with --yes |  |
 | `chat-sending.owner-only` | `permission_error` | only the owner makes models chats less strict, not an agent |  |
 | `chat.not-read` | `not_found` | a chat shared with this person is not held whole in the store |  |
+| `config.unreadable` | `configuration_error` | the config file cannot be read |  |
 | `config.unrepairable` | `configuration_error` | the settings file's damage has more than one reading; nothing was changed, so it is fixed by hand |  |
 | `content.already-published` | `validation_error` | a published post cannot be scheduled; unpublish it first |  |
 | `content.conflict` | `validation_error` | the post changed at the source since the last sync; sync, then write again |  |
