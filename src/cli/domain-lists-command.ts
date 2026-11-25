@@ -98,8 +98,8 @@ export const domainListsCommand = (app: AppIdentity, options: DomainListsCommand
       })
       options.diagnostic(
         done.updated
-          ? `domain lists ${done.pack.version} in place${done.previous ? ` (was ${done.previous})` : ""}; the next ` +
-              "sync gives organizations their sectors from them"
+          ? `domain lists ${done.pack.version} in place${done.previous ? ` (was ${done.previous})` : ""}; ` +
+              "organizations take their sectors from them the next time a sync sorts a new sender"
           : `domain lists ${done.pack.version} are already the newest`,
       )
       const items = itemsOf(done.pack, env)
