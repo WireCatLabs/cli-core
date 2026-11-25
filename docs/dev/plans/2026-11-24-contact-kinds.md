@@ -65,7 +65,7 @@ over the rules.
 Data quality is not a kind. These become marks on the row: `owner`, `incomplete` (no name, or a deleted account),
 `test`.
 
-**A newsletter a human writes stays a person** with reach `broadcast` (open question 1). The owner can answer
+**A newsletter a human writes stays a person** with reach `broadcast` (owner, 2026-11-25). The owner can answer
 the author, and the author may be someone the owner also writes to directly. A company's newsletter sent through a
 mailing service is a bot.
 
@@ -189,12 +189,11 @@ after the headers and the address, and it is matched on both the `From` domain a
 
 ## Open questions
 
-1. **A newsletter a human writes.** A person with reach `broadcast` (this plan), or a bot like a company's newsletter?
-2. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
+1. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
    tabs right, or should Bots sit inside Organizations?
-3. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
+2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
    reach `direct`, or two senders split by address?
-4. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
+3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
    one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
-5. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
+4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
    a `models`-style command the owner runs?
