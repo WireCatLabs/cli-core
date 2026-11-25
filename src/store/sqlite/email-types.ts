@@ -8,8 +8,11 @@ import { read, writeBatch } from "./transaction.js"
 /** Bump when what decides a mail type changes in code: every stored one is worked out again on the next read. */
 const TYPE_RULES = "1"
 const RULES_KEY = "mail.type_rules"
-/** About a quarter of a second of work per batch: far inside another writer's 5 s wait for the lock. */
-const BATCH = 2_000
+/**
+ * Working out 5,000 types takes about 40 ms; the commit's sync to disk costs more, so fewer and larger batches finish
+ * sooner and still hold the lock well inside another writer's 5 s wait.
+ */
+const BATCH = 5_000
 
 const INPUTS =
   "SELECT e.id, e.from_address, e.subject, e.headers, e.body_html, " +
@@ -39,18 +42,27 @@ const parsed = (value: unknown): Record<string, unknown> => {
 }
 
 /** The type, reach and signal of each of these emails, worked out from the store; nothing is written. */
-export const typesOf = (database: CacheDatabase, ids: readonly number[]): Map<number, MailTypeOf> => {
+/**
+ * `senders` carries each List-Id's sender count from batch to batch: a newsletter's every issue would read all its
+ * issues again.
+ */
+export const typesOf = (
+  database: CacheDatabase,
+  ids: readonly number[],
+  senders = new Map<string, number>(),
+): Map<number, MailTypeOf> => {
   const found = new Map<number, MailTypeOf>()
   if (ids.length === 0) return found
   const rows = database.prepare(INPUTS).all(JSON.stringify(ids))
-  const lists = [...new Set(rows.flatMap((row) => (typeof row.list === "string" ? [row.list] : [])))]
-  const senders = new Map<string, Set<string>>()
-  if (lists.length > 0)
-    for (const row of database.prepare(LIST_SENDERS).all(JSON.stringify(lists))) {
-      const held = senders.get(String(row.list)) ?? new Set<string>()
-      held.add(senderKey(String(row.address)))
-      senders.set(String(row.list), held)
-    }
+  const lists = [
+    ...new Set(rows.flatMap((row) => (typeof row.list === "string" && !senders.has(row.list) ? [row.list] : []))),
+  ]
+  if (lists.length > 0) {
+    const held = new Map<string, Set<string>>(lists.map((list) => [list, new Set<string>()]))
+    for (const row of database.prepare(LIST_SENDERS).all(JSON.stringify(lists)))
+      held.get(String(row.list))?.add(senderKey(String(row.address)))
+    for (const [list, addresses] of held) senders.set(list, addresses.size)
+  }
   for (const row of rows) {
     const headers = parsed(row.headers)
     found.set(
@@ -62,7 +74,7 @@ export const typesOf = (database: CacheDatabase, ids: readonly number[]): Map<nu
         recipients: row.recipients == null ? null : Number(row.recipients),
         parts: JSON.parse(String(row.parts ?? "[]")) as string[],
         schemaTypes: schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
-        listSenders: typeof row.list === "string" ? (senders.get(row.list)?.size ?? 0) : 0,
+        listSenders: typeof row.list === "string" ? (senders.get(row.list) ?? 0) : 0,
         ownerWrote: Number(row.owner_wrote) === 1,
         bot: Number(row.bot) === 1,
         sector: typeof row.sector === "string" ? (row.sector as Sector) : null,
@@ -102,13 +114,14 @@ export const storeMailTypes = (database: CacheDatabase): boolean => {
         .run(RULES_KEY, TYPE_RULES, Date.now())
     })
   const keep = database.prepare("UPDATE emails SET mail_type = ?, reach = ?, type_signal = ? WHERE id = ?")
+  const senders = new Map<string, number>()
   for (;;) {
     const more = writeBatch(database, () => {
       const ids = database
         .prepare("SELECT id FROM emails WHERE mail_type IS NULL LIMIT ?")
         .all(BATCH)
         .map((row) => Number(row.id))
-      for (const [id, { type, reach, signal }] of typesOf(database, ids)) keep.run(type, reach, signal, id)
+      for (const [id, { type, reach, signal }] of typesOf(database, ids, senders)) keep.run(type, reach, signal, id)
       return ids.length === BATCH
     })
     if (!more) return true
@@ -162,8 +175,9 @@ export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: s
       .all()
       .map((row) => Number(row.id))
     const kept: number[] = []
+    const senders = new Map<string, number>()
     for (let at = 0; at < ids.length; at += BATCH)
-      for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH)))
+      for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH), senders))
         if (passes(filter, typed.type, typed.reach)) kept.push(id)
     return kept
   })
@@ -234,8 +248,9 @@ export const mailSenders = (
     if (complete) return all
     const missing = all.filter((row) => row.mail_type == null).map((row) => Number(row.id))
     const found = new Map<number, MailTypeOf>()
+    const senders = new Map<string, number>()
     for (let at = 0; at < missing.length; at += BATCH)
-      for (const [id, typed] of typesOf(database, missing.slice(at, at + BATCH))) found.set(id, typed)
+      for (const [id, typed] of typesOf(database, missing.slice(at, at + BATCH), senders)) found.set(id, typed)
     return all.map((row) => {
       const typed = found.get(Number(row.id))
       return typed === undefined ? row : { ...row, mail_type: typed.type, reach: typed.reach }

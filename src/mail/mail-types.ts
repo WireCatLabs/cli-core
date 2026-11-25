@@ -138,14 +138,17 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   const precedence = typeof headers.precedence === "string" ? headers.precedence : ""
   const bulkPrecedence = precedence === "bulk" || precedence === "junk"
   const autoSubmitted = headers["auto-submitted"] !== undefined
-  const discussion = listId && input.listSenders >= DISCUSSION_SENDERS
+  // With a List-Id, its senders decide: one sender, even under `+tag` addresses, writes a newsletter.
+  const discussion = listId
+    ? input.listSenders >= DISCUSSION_SENDERS
+    : precedence === "list" && !feedbackId && !MARKETING_SENDER.test(from)
   const mass = listUnsubscribe || bulkPrecedence || listId || oneClick
   const transactional = !mass && !feedbackId
   const noReply = from !== "" && isNoReplyAddress(from)
   const person = input.ownerWrote && !input.bot
   // A forged `security@` would lend a phishing mail the look of a real alert.
   const trusted = headers.dmarc !== "fail" && headers.dkim !== "fail"
-  const weak = !person && !oneClick
+  const weak = !person && !oneClick && !listId
   const reach = reachOfOne({
     autoSubmitted,
     nullReturnPath: headers["null-return-path"] === true,
@@ -175,7 +178,8 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   if (weak && EVENT_SUBJECT.test(subject)) return typed("event_ticket", "ticket-subject")
   if (schema("Order") !== undefined) return typed("order", "schema:Order")
   if (weak && ORDER_SENDER.test(from)) return typed("order", "order-address")
-  if (weak && ORDER_SUBJECT.test(subject)) return typed("order", "order-subject")
+  // "Your order has shipped" names the order but reports the parcel.
+  if (weak && ORDER_SUBJECT.test(subject) && !SHIPPING_SUBJECT.test(subject)) return typed("order", "order-subject")
   if (schema("ParcelDelivery") !== undefined) return typed("shipping", "schema:ParcelDelivery")
   if (weak && SHIPPING_SENDER.test(from)) return typed("shipping", "shipping-address")
   if (weak && SHIPPING_SUBJECT.test(subject)) return typed("shipping", "shipping-subject")
@@ -185,9 +189,7 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   if (weak && BILL_SUBJECT.test(subject)) return typed("bill", "bill-subject")
 
   if (!person && input.sector === "social") return typed("social_notification", "sector:social")
-  if (discussion) return typed("discussion_list", "discussion-list")
-  if (precedence === "list" && !feedbackId && !MARKETING_SENDER.test(from))
-    return typed("discussion_list", "precedence-list")
+  if (discussion) return typed("discussion_list", listId ? "discussion-list" : "precedence-list")
   // Transactional mail sometimes carries List-Unsubscribe: an automated sender with no campaign marker sends notices.
   const automated = AUTOMATED_SENDER.test(from) && !MARKETING_SENDER.test(from)
   if (listUnsubscribe && !oneClick && !feedbackId && !bulkPrecedence && automated)
