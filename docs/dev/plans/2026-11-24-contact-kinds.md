@@ -91,12 +91,20 @@ Subscriptions can list any mail under any filter. A mail gets its own category, 
 receipts and promotions land in different places. Rules and the owner's corrections work on two levels, the address
 and the domain: a person rarely writes from a newsletter address, but may write from the same domain.
 
+Contacts has three tabs and answers "who is this" (owner, 2026-11-25, NEED-118 B, from the review on #3323). Each
+sender appears once:
+
 | Tab | Who | Filters inside |
 |---|---|---|
-| **People** | persons, reach `direct` or `group` | Known (tie) · Not known (no tie, today's Strangers) |
-| **Subscriptions** | persons and bots with reach `broadcast` | Newsletters · Channels · Marketing |
-| **Bots** | bots, reach `direct` | Alerts and codes · Receipts · Messenger bots |
+| **People** | persons | Known (tie) · Not known (no tie, today's Strangers) · reach `group` |
+| **Bots** | bots | Alerts and codes · Receipts · Newsletters · Marketing · Messenger bots |
 | **Organizations** | the `organizations` table | Its people, shared mailboxes and bots, grouped under it |
+
+**Subscriptions is a view beside mail, not a Contacts tab.** It answers "what is sent to me and what do I leave":
+mail and channels with reach `broadcast`, grouped by list (`List-Id`, else the sender), with the count of mails, the
+newest one and the unsubscribe action, as HEY's Feed does. A shop is one bot in Contacts, under its organization, and
+its promotions show in Subscriptions. It is built from the per-mail types and reach of #3358
+(`store.mail.mailSenders`), with no table of its own.
 
 `incomplete` rows are a filter on every tab ("Show incomplete"), off by default. Today's `kind` stays on
 `people.list` while memo and Desktop move: a bot is listed as `automated`, worked out from the new tables.
@@ -249,22 +257,18 @@ software.
    `PeopleStore.moveToBot` and `moveToPerson`; memo has no command for it yet.
 5. Organizations from domains, with the three exceptions above (built in #3347: `From` domain only, no `List-Id`
    grouping yet), then their sector from the domain lists (built in #3350 from Wikidata only, as `sector` in the
-   organization's metadata: `category` already means client, supplier or partner; UT1 not shipped; DKIM signing
-   domain not matched yet; a sector is never cleared). #3349 made the throwaway-domain check one prebuilt set.
+   organization's metadata: `category` already means client, supplier or partner; UT1 came later in the data pack of
+   #3359; DKIM signing domain not matched yet). #3349 made the throwaway-domain check one prebuilt set.
 6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
-7. Desktop: four tabs and their filters; this closes
+7. Desktop: three Contacts tabs and a Subscriptions view beside mail, with their filters; this closes
    [desktop#319](https://github.com/WireCatLabs/wirecat-desktop/issues/319) (bot filter) and touches
    [desktop#320](https://github.com/WireCatLabs/wirecat-desktop/issues/320) (filters). The public page
    `content/docs/desktop/contacts.mdx` in cli-docs and its RU and ES copies change with it.
 
 ## Open questions
 
-1. **Tab names.** People / Subscriptions / Bots / Organizations (RU: Люди / Подписки / Боты / Организации). Are four
-   tabs right, or should Bots sit inside Organizations? Proposed in review: three tabs (People, Bots, Organizations),
-   with Subscriptions a filter, since a subscription is a way of delivery, not a sender, and one bot (a shop) sends
-   both receipts and promotions, so a tab per sender splits its mail badly. People then needs the same filter, or
-   newsletter authors fill it again. Answer (owner, 2026-11-25): tabs are views over per-mail categories, so four
-   tabs stay and a shop's mail splits by category, not by sender.
+1. ~~Tab names.~~ Decided (owner, 2026-11-25, NEED-118 B): Contacts has People, Bots and Organizations
+   (RU: Люди / Боты / Организации); Subscriptions (Подписки) is a view beside mail.
 2. **Reach of a mixed sender.** Someone who writes to the owner directly and also sends a newsletter: one sender with
    reach `direct`, or two senders split by address? Answer (owner, 2026-11-25): one person, `reach` per mail. A person
    rarely writes from a newsletter address, so rules work by address first and by domain second.
