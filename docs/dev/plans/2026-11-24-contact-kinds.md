@@ -204,6 +204,11 @@ code says what the shop is, the bank's category says what the payment was. Resea
   applies. HEY refuses such rules outright.
 - **A correction asks its scope:** this mail, this address, this domain or this list, and whether to apply it to past
   mail (Outlook's "Move" and "Always move").
+- **Built in #3358 (store version 76):** every email has `mailType`, `reach` and `typeSignal`, kept lazily and
+  cleared by triggers; `store.mail.emails({ types, reaches })` filters and `store.mail.mailSenders` sums a sender's
+  mail by type and reach. Two changes to the order above: `system_alert` before `account_notice`, and an automated
+  address with a plain unsubscribe link is `account_notice`, not `promotion`. Not yet stored by mail sync: schema.org
+  markup (no HTML kept), `Auto-Submitted: auto-replied`, `List-Post`, the calendar method.
 - **Screening first-time senders**, as HEY does, only for people the owner has never written to. Later step.
 
 The domain lists above grow from the catalogue: UT1 (about 100 categories), the OpenStreetMap brand index, FDIC
