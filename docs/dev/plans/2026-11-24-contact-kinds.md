@@ -1,6 +1,6 @@
 # Plan: who sent it and how it reached you
 
-Status: draft for review. The bug fixes (step 1) are built; the rest is not. It answers the RFC in
+Status: draft for review. Steps 1 and 2 are built; the rest is not. It answers the RFC in
 [#3314](https://github.com/WireCatLabs/cli-core/issues/3314) and replaces its proposal.
 
 ## The problem
@@ -175,10 +175,12 @@ after the headers and the address, and it is matched on both the `From` domain a
 2. Signals with no store change: mail sync reads `Auto-Submitted`, `List-Unsubscribe-Post` and `Feedback-ID` into the
    stored headers (today [`mail/headers.ts`](../../../src/mail/headers.ts) reads `LIST-ID`, `LIST-UNSUBSCRIBE`,
    `PRECEDENCE`), trusted only under a passed DKIM signature of the `From` domain; `reach` is worked out from
-   `email_recipients` for the page a list returns. Strong program signals already feed today's `automated`.
+   `email_recipients` for the page a list returns. Strong program signals already feed today's `automated`. Built
+   in #3334.
 3. Store: the `bots` table, `identities` pointing at a person or a bot, the move log, and `reach` and the marks kept
    like `kind` today (lazily, cleared by triggers). Identities that today make a person `automated` move to bots.
-   The migration takes the next free number after the 1.0 store (73, cli-core#3288).
+   The migration takes the next free number after the 1.0 store (73, cli-core#3288), and also indexes the
+   List-Id that #3334 reads for every page.
 4. The owner's choice: move an identity to a person or a bot, for its whole history.
 5. Organizations from domains, with the three exceptions above, then their `category` from the domain lists.
 6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
