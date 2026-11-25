@@ -204,7 +204,7 @@ The domain lists above grow from the catalogue: UT1 (about 100 categories), the 
 banks, the GLEIF bank codes joined to Wikidata, a free-mail list. Spam lists say "bad", never a sector, and many are
 non-commercial or work only as a lookup per sender, which this plan rules out. Distribution: a small core in the
 package, a versioned data pack from a WireCat release fetched by a command for larger and share-alike lists, so data
-updates without a package release. Both wait on the owner (open questions 4 and 6).
+updates without a package release. Decided by the owner, open questions 4 and 6.
 
 ## Out of scope
 
@@ -250,7 +250,10 @@ updates without a package release. Both wait on the owner (open questions 4 and 
 3. **Discussion lists.** A mailing list where people answer each other: are its members People (reach `group`) or
    one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
 4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
-   a `models`-style command the owner runs?
+   a `models`-style command the owner runs? Answer (owner, 2026-11-25): both. A small permissive core stays in the
+   package (Wikidata sectors, the Public Suffix List, free-mail and throwaway-mail lists). Larger, often updated and
+   share-alike lists (UT1, spam lists) ship as a versioned data pack on a WireCat GitHub release, fetched and updated
+   by a command, with a checksum and a licence per source.
 5. ~~The full split of bots.~~ Decided (owner, 2026-11-25): a bot is its own entity with its own table and `bot:`
    reference; the person-anchored form of #3339 is replaced.
 6. **Paid product.** Will WireCat ever be sold? If so, non-commercial lists (Stop Forum Spam, DuckDuckGo Tracker
