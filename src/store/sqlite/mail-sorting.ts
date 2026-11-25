@@ -513,11 +513,11 @@ const ruleById = (database: CacheDatabase, id: number): SortRule => {
   return ruleOf(row)
 }
 
-/** Applies a rule just made live: its mail is typed again, and the senders it names settle. */
-const applyRule = (context: StoreContext, rule: SortRule) => {
+/** Makes a rule live: its mail is typed again. Answers the senders it names, for `settleInChunks`. */
+const applyRule = (context: StoreContext, rule: SortRule): number[] => {
   const { database } = context
   clearRuleTypes(database, rule)
-  if (rule.sender === null && rule.organization === null) return
+  if (rule.sender === null && rule.organization === null) return []
   const identities = [
     ...new Set(
       inScope(database, rule.scope, rule.value).flatMap((row) => (row.identity === null ? [] : [row.identity])),
@@ -536,7 +536,16 @@ const applyRule = (context: StoreContext, rule: SortRule) => {
           at: context.now(),
         })
     }
-  settleSenders(context, identities)
+  return identities
+}
+
+/** Each move takes about 10 ms: 100 per write keeps another writer's 5 s wait for the lock far away. */
+const SETTLE_CHUNK = 100
+
+/** Settles senders a write at a time; a sender already settled is skipped, so a stopped run resumes on the next. */
+const settleInChunks = (context: StoreContext, identities: readonly number[]) => {
+  for (let at = 0; at < identities.length; at += SETTLE_CHUNK)
+    write(context.database, () => settleSenders(context, identities.slice(at, at + SETTLE_CHUNK)))
 }
 
 /** A change's time, later than every change before it, so undo takes changes back in order within one millisecond. */
@@ -609,12 +618,12 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
           freeMail: choice.scope === "domain" && isSharedMailDomain(choice.value),
         }))
       }),
-    add: async (input, by, options = {}) =>
-      write(database, () => {
+    add: async (input, by, options = {}) => {
+      const { identities, ...result } = write(database, () => {
         const rule = checked(database, input, by)
         const at = stampOf(context)
         const preview = previewOf(database, rule, at)
-        if (options.dryRun) return { applied: false, preview }
+        if (options.dryRun) return { applied: false, preview, identities: [] }
         if (preview.freeMail && options.confirm !== preview.confirm)
           fail(
             `${rule.value} is a free-mail domain: the rule would sort ${preview.addresses} addresses and ` +
@@ -643,9 +652,11 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
             )?.id,
         )
         const made = ruleById(database, id)
-        applyRule(context, made)
-        return { applied: true, preview, rule: made }
-      }),
+        return { applied: true, preview, rule: made, identities: applyRule(context, made) }
+      })
+      settleInChunks(context, identities)
+      return result
+    },
     remove: async (id, by) =>
       write(database, () => {
         const rule = ruleById(database, id)
@@ -654,8 +665,8 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         if (rule.removedAt !== null) return rule
         return takeOut(context, rule, false)
       }),
-    undo: async (by) =>
-      write(database, () => {
+    undo: async (by) => {
+      const { identities, undone } = write(database, () => {
         ownerOnly(by, "undoes a sorting change")
         const row = database
           .prepare(
@@ -663,17 +674,20 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
               "ORDER BY updated_at DESC, id DESC LIMIT 1",
           )
           .get()
-        if (row === undefined) return null
+        if (row === undefined) return { identities: [], undone: null }
         const rule = ruleOf(row)
-        if (rule.removedAt === null) return { undid: "add" as const, rule: takeOut(context, rule, true) }
+        if (rule.removedAt === null)
+          return { identities: [], undone: { undid: "add" as const, rule: takeOut(context, rule, true) } }
         // Back as it was added: its add is the next change an undo takes back.
         database
           .prepare("UPDATE mail_sort_rules SET removed_at = NULL, updated_at = created_at WHERE id = ?")
           .run(rule.id)
         const back = ruleById(database, rule.id)
-        applyRule(context, back)
-        return { undid: "remove" as const, rule: back }
-      }),
+        return { identities: applyRule(context, back), undone: { undid: "remove" as const, rule: back } }
+      })
+      settleInChunks(context, identities)
+      return undone
+    },
     reset: async (sender, by) =>
       write(database, () => {
         ownerOnly(by, "resets the manual sorting of a sender")
