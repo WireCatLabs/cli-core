@@ -3258,7 +3258,7 @@ tasksCommand · const · export declare const tasksCommand: (messenger: import("
 termField · const · export declare const termField: (name: string, type: FieldType, example: string, more?: Pick<FieldSpec, "values" | "relation">) => FieldSpec;
 terminalAsker · const · export declare const terminalAsker: (command: Command) => Asker;
 timeLimit · const · export declare const timeLimit: (ms: number) => TimeLimit;
-tokenSessionCommand · const · export declare const tokenSessionCommand: (options: import("./token-session.js").TokenSessionOptions) => import("commander").Command;
+tokenSessionCommand · const · export declare const tokenSessionCommand: (options: TokenSessionOptions) => Command;
 typedQuery · const · export declare const typedQuery: (words: QueryWords) => string;
 unfilteredQuery · const · export declare const unfilteredQuery: (entity: string, schema: Parameters<typeof queryFieldsOf>[0]) => QueryRegistry;
 upgradeCommand · const · export declare const upgradeCommand: (app: import("./entry.js").AppIdentity, packageName: string, contextFor: (command: import("commander").Command) => import("./upgrade-command.js").UpgradeContext) => import("commander").Command;

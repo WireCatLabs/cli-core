@@ -805,7 +805,6 @@ export {
   tasksCommand,
   tasksStatsCommand,
   templatesCommand,
-  tokenSessionCommand,
   topicsCommand,
   unpinCommand,
   upgradeCommand,
@@ -830,5 +829,6 @@ export {
   signedInSite,
   storageOf,
   type TokenSessionOptions,
+  tokenSessionCommand,
 } from "./token-session.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

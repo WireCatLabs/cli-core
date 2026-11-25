@@ -81,7 +81,6 @@ import { setupCommand as setupCommandDefinition } from "./setup-command.js"
 import { sharedCommand as protectedCommand } from "./shared-contracts.js"
 
 import { skillCommand as skillCommandDefinition } from "./skill-command.js"
-import { tokenSessionCommand as tokenSessionCommandDefinition } from "./token-session.js"
 import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js"
 
 const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
@@ -103,7 +102,6 @@ export const botMcpCommand = sharedCommand(botMcpCommandDefinition)
 /** @experimental */
 export const botMessagesCommand = sharedCommand(botMessagesCommandDefinition)
 export const commandsCommand = sharedCommand(commandsCommandDefinition)
-export const tokenSessionCommand = sharedCommand(tokenSessionCommandDefinition)
 /** @experimental */
 export const oauthSessionCommand = sharedCommand(oauthSessionCommandDefinition)
 export const configCommand = sharedCommand(configCommandDefinition)

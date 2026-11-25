@@ -11,9 +11,9 @@ import { run } from "./program.js"
 import { hostsFetch } from "./service-api-call.js"
 import type { ServiceApiManifest } from "./service-api-manifest.js"
 import { settingsFor } from "./settings.js"
-import { tokenSessionCommand } from "./shared-command-exports.js"
+
 import { hasSharedContract } from "./shared-contracts.js"
-import { manifestVerify, type TokenSessionOptions } from "./token-session.js"
+import { manifestVerify, type TokenSessionOptions, tokenSessionCommand } from "./token-session.js"
 
 const app = { command: "pages", appName: "pages-cli", envPrefix: "PAGES", description: "synthetic", version: "1.0.0" }
 const roots: string[] = []
