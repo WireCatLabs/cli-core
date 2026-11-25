@@ -174,7 +174,7 @@ const searchCommand = (mail: MailReads): Command => {
       "after",
       `
 Fields: from: to: cc: bcc: subject: body: mailbox: (or label:) list: (a List-Id or its domain) is:unread|read|starred
-has:attachment, filename:, content: (the text of attachments), size>, date: — \`${mail.app.command} personal search messages 'content:invoice'\`.
+type: (order, bill, promotion… — what the email is) reach:direct|group|broadcast has:attachment, filename:, content: (the text of attachments), size>, date: — \`${mail.app.command} personal search messages 'content:invoice'\`.
 chat: names a thread by its subject. Mail sent to many is in the mailbox bulk; NOT mailbox:bulk leaves it out.
 Mail from senders with signs of fraud comes after the rest of the page; --plain-order keeps it in place.
 --json: the list is items; each hit's reference is ref (msg:email/…), which messages show reads.${

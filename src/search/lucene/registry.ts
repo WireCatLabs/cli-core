@@ -12,6 +12,8 @@ import {
 } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { tagOf } from "../../domain/tags.js"
+import { MAIL_TYPES } from "../../mail/mail-types.js"
+import { REACHES } from "../../store/sqlite/sender-signals.js"
 import { MOST_WORDS_APART, QUERY_LIMITS, SEARCH_QUERY, searchError } from "./types.js"
 
 export const FIELD_VERSION = 2
@@ -172,6 +174,29 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       "lowercase; read and unread are mail only; starred is a flagged email or a message the owner starred; an unknown state matches neither read nor unread",
     support: "A1",
     values: ["unread", "read", "starred"],
+  },
+  {
+    name: "type",
+    example: "type:order OR type:bill",
+    index: "emails.mail_type (emails_by_mail_type)",
+    aliases: [],
+    type: "enum",
+    operators: terms,
+    normalization:
+      "lowercase; what one email is, apart from its sender; mail not typed yet is typed before the search; mail only",
+    support: "A1",
+    values: MAIL_TYPES,
+  },
+  {
+    name: "reach",
+    example: "reach:direct",
+    index: "emails.reach",
+    aliases: [],
+    type: "enum",
+    operators: terms,
+    normalization: "lowercase; how one email reached the owner; mail only",
+    support: "A1",
+    values: REACHES,
   },
   {
     name: "chat",

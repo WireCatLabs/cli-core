@@ -1,9 +1,11 @@
+import { walkQuery } from "@wirecat/cli-base/query"
 import type { Page } from "../domain/models.js"
 import type { QueryExecution } from "../search/lucene/resolved.js"
 import type { Stemmer, Stemmers } from "../search/stem.js"
 import { type AdminStoreRequest, type AdminStoreResult, adminStatisticsQuery } from "./sqlite/admin-statistics.js"
 import { type ConversationEligibility, conversationEligibility } from "./sqlite/conversation-eligibility.js"
 import { drainEmailIndex } from "./sqlite/email-index.js"
+import { storeMailTypes } from "./sqlite/email-types.js"
 import type { QueryGroup, QueryGrouping } from "./sqlite/lucene.js"
 import * as lucene from "./sqlite/lucene.js"
 import type { StoreContext } from "./sqlite/open.js"
@@ -37,9 +39,15 @@ export interface QueriesStore {
   waitingChats(scope: ChatScope, waits: (newest: NewestMessage) => boolean, cap: number): Promise<WaitingChat[]>
 }
 
+// Outside the search's read and its time limit: the first such search after an upgrade types every email.
+const asksMailType = ({ root }: QueryExecution): boolean =>
+  walkQuery(root).some(({ field }) => field === "type" || field === "reach")
+
 export const queriesStoreOver = (context: StoreContext, stemmerFor: (stemmers: Stemmers) => Stemmer): QueriesStore => {
   const mailIndexed = (execution: QueryExecution) => {
-    if (execution.corpus === "mail") drainEmailIndex(context.database, stemmerFor)
+    if (execution.corpus !== "mail") return execution
+    drainEmailIndex(context.database, stemmerFor)
+    if (asksMailType(execution)) storeMailTypes(context.database)
     return execution
   }
   return {

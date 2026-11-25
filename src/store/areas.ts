@@ -2,6 +2,8 @@
  * Store area types and constants some CLIs use beyond the stable `@wirecat/cli-core/store`: experimental, so a
  * minor release may change them.
  */
+
+export { MAIL_TYPES, type MailType } from "../mail/mail-types.js"
 export {
   type AddedSource,
   type AddedSourceContent,
@@ -51,6 +53,7 @@ export type {
   SenderBot,
   SenderBotDetails,
 } from "./sqlite/sender-bots.js"
+export { REACHES, type Reach } from "./sqlite/sender-signals.js"
 export type { SubscriptionFilter } from "./sqlite/subscriptions.js"
 export { PROJECT_TASK_FIELDS, TASK_SORTS, type TaskSort } from "./sqlite/task-board.js"
 export { TASK_RELATION_KINDS, type TaskRelationKind } from "./sqlite/task-relations.js"

@@ -794,6 +794,7 @@ const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key
     thread: formatReference({ type: "chat", provider: key.provider, account: key.account, chat: thread }),
     read: email.read,
     flagged: email.flagged,
+    ...(email.mailType === null || email.reach === null ? {} : { mailType: email.mailType, reach: email.reach }),
     ...(scored === undefined
       ? {}
       : {
@@ -818,11 +819,15 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
        FROM emails e JOIN email_threads t ON t.id = e.email_thread_id JOIN accounts a ON a.id = e.account_id
        WHERE e.id = ?`,
   )
-  return pks.flatMap((pk) => {
-    const row = read.get(pk)
-    if (!row) return []
+  const rows = pks.map((pk) => read.get(pk)).filter((row) => row !== undefined)
+  const emails = withTypes(
+    database,
+    rows.map((row) => emailOf(database, row)),
+  )
+  return rows.flatMap((row, at) => {
+    const email = emails[at]
+    if (!email) return []
     const thread = String(row.thread)
-    const email = emailOf(database, row)
     const message = messageOfEmail(email, thread)
     const key = { provider: String(row.provider), account: String(row.account) }
     return [

@@ -118,6 +118,8 @@ export const messageItem = (message: ReadMessage, reader: AccountKey): MessageIt
             thread: message.email.thread,
             read: message.email.read,
             flagged: message.email.flagged,
+            mail_type: message.email.mailType,
+            reach: message.email.reach,
             sender_score: message.email.senderScore,
           },
     provider_metadata: message.providerMetadata,

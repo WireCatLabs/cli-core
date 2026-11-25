@@ -140,6 +140,7 @@ export const hitText = (
         mail.to.length ? `to ${names(mail.to)}` : "",
         mail.cc.length ? `cc ${names(mail.cc)}` : "",
         mail.labels.join(", "),
+        [mail.mailType, mail.reach].filter(Boolean).join(", "),
       ]
         .filter(Boolean)
         .join(" · ")

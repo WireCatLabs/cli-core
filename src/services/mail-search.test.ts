@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import type { AttachmentInput, EmailInput } from "../store/index.js"
+import { openCache } from "../store/open.js"
 import { type AccountKey, type MessageStore, openStore, type ScoredHit } from "../store/store.js"
 import { storeOnlyDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
@@ -288,6 +289,60 @@ describe("search mail over the mail tables", () => {
     expect(await found(store, 'link:"budget"')).toEqual(["<two@example.com>"])
     expect(await found(store, "domain:example.com")).toHaveLength(2)
     expect(await found(store, "link:click?id=1")).toEqual(["<news@example.com>"])
+  })
+
+  it("filters by mail type and reach, typing the mail the store has not typed yet", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "mail-types-search-")), "store.db")
+    const typed = await openStore({ path })
+    live.push(typed)
+    const owner = await typed.accounts.saveAccount(MAIL, { name: null })
+    await typed.mail.saveThread({
+      accountId: owner,
+      externalId: "thread-9",
+      now: at(10),
+      emails: [
+        email("<order@example.com>", {
+          subject: "Thank you for your order #4411",
+          from: { address: "orders@shop.example.com", name: "Shop" },
+        }),
+        email("<bill@example.com>", {
+          subject: "Your bill is ready",
+          from: { address: "billing@phone.example.com", name: "Phone Co" },
+        }),
+        email("<team@example.com>", {
+          subject: "All hands",
+          to: Array.from({ length: 12 }, (_, i) => ({ address: `colleague${i}@example.com`, name: null })),
+        }),
+      ],
+    })
+    const untyped = await openCache(path)
+    live.push({ close: async () => untyped.close() } as MessageStore)
+    const left = () => Number(untyped.prepare("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL").get()?.n)
+    const sorted = async (text: string, on = typed) =>
+      (await searchStore(on, MAIL, { text, kind: "mail", limit: 10 })).items.map(({ id }) => id).sort()
+
+    expect(await sorted("roadmap")).toHaveLength(3)
+    expect(left()).toBe(3)
+
+    const readOnly = await openStore({ path, readOnly: true })
+    live.push(readOnly)
+    expect(await sorted("type:order OR type:BILL", readOnly)).toEqual(["<bill@example.com>", "<order@example.com>"])
+    expect(left()).toBe(3)
+
+    expect(await sorted("type:order OR type:BILL")).toEqual(["<bill@example.com>", "<order@example.com>"])
+    expect(left()).toBe(0)
+    expect(await sorted("reach:group")).toEqual(["<team@example.com>"])
+    expect(await sorted("roadmap -type:bill -reach:group")).toEqual(["<order@example.com>"])
+    expect(await sorted("bill type:bill")).toEqual(["<bill@example.com>"])
+    expect(await sorted("bill type:order")).toEqual([])
+
+    const [hit] = (await searchStore(typed, MAIL, { text: "type:order", kind: "mail", limit: 1 })).items
+    expect(hit?.email).toMatchObject({ mailType: "order", reach: "direct" })
+    await expect(search(typed, "type:receipt")).rejects.toThrow("type takes auto_reply")
+    await expect(search(typed, "reach:everyone")).rejects.toThrow("reach takes direct, group, broadcast")
+    await expect(
+      searchStore(typed, { provider: "tg", account: "1" }, { text: "type:order", limit: 5 }),
+    ).rejects.toThrow("type: is a mail field")
   })
 
   it("refuses messenger-only fields", async () => {

@@ -16,7 +16,7 @@ export {
   TASK_TYPES,
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
-export { type KindSignal, PERSON_KINDS, type PersonKind } from "../domain/person-kinds.js"
+export { type KindSignal, PERSON_KINDS, type PersonKind, SENDER_BOT_PREFIX } from "../domain/person-kinds.js"
 export type { RefState, RefSummary, RefSummaryKind, RefsStore } from "../domain/ref-summaries.js"
 export type {
   TagConsolidationApplyOptions,
