@@ -755,7 +755,7 @@
       }
     },
     {
-      "includes": ["src/domain/phone-plans.generated.ts"],
+      "includes": ["src/domain/phone-plans.generated.ts", "src/domain/organization-sectors.generated.ts"],
       "linter": {
         "rules": {
           "security": {

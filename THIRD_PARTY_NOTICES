@@ -802,3 +802,7 @@ SPDX-License-Identifier: Unicode-3.0
 
 EmbeddingGemma (Google) is used under the Gemma Terms of Use, https://ai.google.dev/gemma/terms, including its use
 restrictions (https://ai.google.dev/gemma/prohibited_use_policy).
+
+The domain-to-sector table (src/domain/organization-sectors.generated.ts) is built from Wikidata
+(https://www.wikidata.org), whose structured data is available under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). The export date is in the file's header.

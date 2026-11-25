@@ -715,7 +715,12 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   is set. A human with an address there gets a `member-of` link (author `rule`), never a merge and never a proposal; a
   human alone makes no organization. Free mail (`FREE_MAIL`), throwaway mail (`disposable-email-domains-js`) and
   sending platforms (`SENDING_PLATFORMS`) are never a company domain. Two organizations holding one domain leave it
-  ungrouped. The owner's word holds: a removed `member-of` leaves a rejected `relationship` proposal the rule checks;
+  ungrouped. Each organization holding a company domain takes that domain's `metadata.sector` (`Organization.sector`:
+  `airline`, `bank`, `financial`, `telecom`, `social`, `shop`, `delivery`, `news`, `government`; the first in that
+  order when its domains differ), from `src/domain/organization-sectors.generated.ts`. That table is built into the
+  package at release by `scripts/organization-sectors.ts` from the official websites (P856) of Wikidata items (CC0),
+  so nothing is looked up per sender. A sector is what an organization does; `Category` (client, supplier, …) is what
+  it is to the owner. The owner's word holds: a removed `member-of` leaves a rejected `relationship` proposal the rule checks;
   `knowledge.eraseOrganization` leaves a rejected `organization-domain` proposal per domain, so the rule never remakes
   it; `moveToPerson` drops the rule's holds on the moved identities, and a person the owner kept as one holds nothing.
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;

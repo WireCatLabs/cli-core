@@ -1,5 +1,6 @@
 import { getDomainWithoutSuffix } from "tldts"
 import { isReadable } from "../../domain/display-names.js"
+import { SECTORS, sectorOfDomain } from "../../domain/organization-sectors.js"
 import { isCompanyName } from "../../domain/person-kinds.js"
 import { FREE_MAIL, isDisposableDomain, registrableOf } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
@@ -152,6 +153,7 @@ const othersAt = (database: CacheDatabase, domains: ReadonlySet<string>, seen: R
 /**
  * Plan step 5: a bot or a shared mailbox at a company domain joins that domain's organization, made when none holds
  * it; a human there becomes a `member-of` it, never merged. Free mail, throwaway mail and sending platforms make none.
+ * An organization holding a domain of the built-in Wikidata list gets its `metadata.sector`.
  * The owner's word holds: a membership the owner removed and a domain whose organization the owner erased are not made
  * again. The caller holds the write lock.
  */
@@ -216,6 +218,24 @@ export const groupByDomain = (database: CacheDatabase, people: readonly Sorted[]
   const seen = new Set(people.map(({ id }) => id))
   for (const person of people) if (!person.holds) join(person.id, mail.get(person.id) ?? [])
   if (created.size > 0) for (const [person, addresses] of othersAt(database, created, seen)) join(person, addresses)
+  setSectors(database, byDomain, at)
+}
+
+/** Each organization holding a company domain takes that domain's sector, the first in `SECTORS` order if several. */
+const setSectors = (database: CacheDatabase, byDomain: ReadonlyMap<string, ReadonlySet<number>>, at: number) => {
+  const found = new Map<number, number>()
+  for (const [domain, organizations] of byDomain) {
+    const sector = sectorOfDomain(domain)
+    if (sector === undefined) continue
+    const rank = SECTORS.indexOf(sector)
+    for (const organization of organizations)
+      if (rank < (found.get(organization) ?? SECTORS.length)) found.set(organization, rank)
+  }
+  const set = database.prepare(
+    "UPDATE organizations SET metadata = json_set(coalesce(metadata, '{}'), '$.sector', ?), updated_at = ? " +
+      "WHERE id = ? AND deleted_at IS NULL AND json_extract(metadata, '$.sector') IS NOT ?",
+  )
+  for (const [organization, rank] of found) set.run(SECTORS[rank] ?? null, at, organization, SECTORS[rank] ?? null)
 }
 
 /** The owner erased an organization: no rule makes one for the company domains it held again. */

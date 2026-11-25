@@ -22,7 +22,7 @@ import { idsOf } from "./merged-persons.js"
 import { holdingText } from "./note-index.js"
 import { hasBothEnds, insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
+import { type Organization, type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import {
@@ -97,14 +97,7 @@ export const ORGANIZATION_KINDS = ["company", "team", "family", "community"] as 
 export const PROJECT_TYPES = ["work", "client", "personal", "oss", "other"] as const
 export const SCOPES = ["personal", "work"] as const
 
-export interface Organization {
-  id: string
-  ref: string
-  kind: (typeof ORGANIZATION_KINDS)[number]
-  name: string
-  scope: (typeof SCOPES)[number]
-  createdAt: string
-}
+export type { Organization } from "./organizations.js"
 
 export interface Project {
   id: string

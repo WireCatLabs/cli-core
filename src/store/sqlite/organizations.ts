@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { evaluate, type QueryAst, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
+import type { Sector } from "../../domain/organization-sectors.js"
 import type { Decider } from "../decisions.js"
 import { ORGANIZATIONS_QUERY } from "../knowledge-query.js"
 import { refuseDomainsOf } from "./domain-organizations.js"
-import type { Organization } from "./knowledge.js"
+import type { ORGANIZATION_KINDS, SCOPES } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
 import { categorySql, type OrganizationFilter } from "./organization-categories.js"
 import { eraseOrganization, type OrganizationErasure } from "./organization-erase.js"
@@ -13,12 +14,24 @@ import { write } from "./transaction.js"
 
 type Row = Record<string, unknown>
 
+export interface Organization {
+  id: string
+  ref: string
+  kind: (typeof ORGANIZATION_KINDS)[number]
+  name: string
+  scope: (typeof SCOPES)[number]
+  /** What it does, from the company domains it holds (`domain-organizations.ts`); none for most. */
+  sector: Sector | null
+  createdAt: string
+}
+
 export const organizationOf = (row: Row): Organization => ({
   id: String(row.id),
   ref: `organization:${row.id}`,
   kind: row.kind as Organization["kind"],
   name: String(row.name),
   scope: row.scope as Organization["scope"],
+  sector: (JSON.parse(String(row.metadata ?? "{}")) as { sector?: Sector }).sector ?? null,
   createdAt: new Date(Number(row.created_at)).toISOString(),
 })
 

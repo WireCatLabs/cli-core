@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { SECTORS } from "../domain/organization-sectors.js"
 import { id, reference, text, time } from "./fields.js"
 
 /** @experimental */
@@ -8,6 +9,7 @@ export const organization = v.strictObject({
   kind: v.picklist(["company", "team", "family", "community"]),
   name: text,
   scope: v.picklist(["personal", "work"]),
+  sector: v.nullable(v.picklist(SECTORS)),
   created_at: time,
 })
 /** @experimental */
