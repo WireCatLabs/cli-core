@@ -984,9 +984,9 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       database
         .prepare(
           "SELECT e.actor_type, e.actor_id, e.kind, e.changes, e.created_at, " +
-            "CASE e.actor_type WHEN 'person' THEN p.name WHEN 'bot' THEN b.name END AS actor_name FROM task_events e " +
+            "CASE e.actor_type WHEN 'person' THEN p.name WHEN 'agent' THEN b.name END AS actor_name FROM task_events e " +
             "LEFT JOIN persons p ON e.actor_type = 'person' AND p.id = e.actor_id " +
-            "LEFT JOIN bots b ON e.actor_type = 'bot' AND b.id = e.actor_id WHERE e.task_id = ? ORDER BY e.id",
+            "LEFT JOIN bots b ON e.actor_type = 'agent' AND b.id = e.actor_id WHERE e.task_id = ? ORDER BY e.id",
         )
         .all(required(id))
         .map((row) => ({

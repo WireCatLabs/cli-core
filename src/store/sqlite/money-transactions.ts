@@ -147,7 +147,7 @@ const TRANSACTIONS =
   "SELECT t.*, w.name AS wallet_name, b.name AS author_name, b.kind AS author_kind, " +
   "(SELECT coalesce(sum(amount), 0) FROM transaction_splits WHERE transaction_id = t.id) AS split " +
   "FROM financial_transactions t JOIN financial_accounts w ON w.id = t.financial_account_id " +
-  "LEFT JOIN bots b ON t.author_type = 'bot' AND b.id = t.author_id"
+  "LEFT JOIN bots b ON t.author_type = 'agent' AND b.id = t.author_id"
 
 const MAX_SPLITS = 100
 

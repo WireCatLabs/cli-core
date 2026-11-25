@@ -179,7 +179,7 @@ export const decisionsOver = (context: StoreContext) => {
   const mayChangeParts = (row: Row, by: Author, message: string, reason = "finance.owner-only") => {
     if (by === "owner") return
     const own =
-      row.author_type === "bot" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
+      row.author_type === "agent" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
     if (row.review !== "proposed" || !own) throw new CliError("permission_error", message, { reason })
   }
 

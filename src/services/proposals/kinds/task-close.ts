@@ -16,7 +16,7 @@ const rowOf = (task: TaskDetails): ProposalRow | undefined => {
     subject: task.ref,
     object: null,
     summary: `close as ${suggestion.as}: ${task.title}`,
-    proposedBy: { type: "bot", id: suggestion.by, name: suggestion.by, kind: "agent" },
+    proposedBy: { type: "agent", id: suggestion.by, name: suggestion.by, kind: "agent" },
     reason: suggestion.reason,
     evidence: task.source === null ? [] : [task.source],
     score: suggestion.certainty,

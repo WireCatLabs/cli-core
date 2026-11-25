@@ -197,7 +197,7 @@ describe("provider-neutral document annotation transfer", () => {
     expect(older).toMatchObject({
       status: "superseded",
       scope: "work",
-      author: { type: "bot", name: "synthetic-reader" },
+      author: { type: "agent", name: "synthetic-reader" },
       model: "synthetic-model",
     })
     expect(newer).toMatchObject({

@@ -52,8 +52,8 @@ export interface EvidenceFindingsBatch {
   status: "proposed" | "reviewed"
   /** Only the owner decides it, whatever `agent_decisions` says: it was staged so, or it records a payment. */
   ownerOnly: boolean
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
-  decidedBy: { type: "person" | "bot"; id: string } | null
+  author: { type: "person" | "agent"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  decidedBy: { type: "person" | "agent"; id: string } | null
   decidedAt: string | null
   previous: FindingOutcome[]
   /** What a review of this still waiting batch already decided; the other findings wait for the owner. */

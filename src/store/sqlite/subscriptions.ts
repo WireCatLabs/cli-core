@@ -169,10 +169,10 @@ type Row = Record<string, unknown>
 
 const SUBSCRIPTIONS =
   "SELECT s.*, b.name AS author_name, b.kind AS author_kind FROM subscriptions s " +
-  "LEFT JOIN bots b ON s.author_type = 'bot' AND b.id = s.author_id"
+  "LEFT JOIN bots b ON s.author_type = 'agent' AND b.id = s.author_id"
 const PRICES =
   "SELECT p.*, b.name AS author_name, b.kind AS author_kind FROM subscription_prices p " +
-  "LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
+  "LEFT JOIN bots b ON p.author_type = 'agent' AND b.id = p.author_id"
 const PRICE_REF = /^subscription_price:([1-9]\d{0,15})$/
 
 type SubscriptionOperations = {

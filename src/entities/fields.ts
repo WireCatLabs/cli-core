@@ -37,7 +37,7 @@ export const evidenceSource = v.strictObject({
 export const sourceReview = v.nullable(v.strictObject({ id, cause: v.picklist(SOURCE_REVIEW_CAUSES) }))
 
 export const author = v.strictObject({
-  type: v.picklist(["person", "bot"]),
+  type: v.picklist(["person", "agent"]),
   id,
   name: v.nullable(text),
 })

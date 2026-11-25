@@ -19,7 +19,7 @@ export const authorNamed = (database: StoreContext["database"], row: Row): Named
   if (row.author_type == null) return null
   const named = database
     .prepare(
-      row.author_type === "bot"
+      row.author_type === "agent"
         ? "SELECT name, 0 AS owner FROM bots WHERE id = ?"
         : "SELECT name, owner FROM persons WHERE id = ?",
     )

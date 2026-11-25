@@ -52,7 +52,7 @@ it("imports a payment once as a proposal, and the same import again writes nothi
 
   const row = await store.finance.payment(first.proposed[0] as string)
   expect(row).toMatchObject({ review: "proposed", amount: "50000.00", payer: { name: "ООО Ромашка" } })
-  expect(row.author).toMatchObject({ type: "bot", name: "import" })
+  expect(row.author).toMatchObject({ type: "agent", name: "import" })
   expect((await store.finance.payments({ review: "confirmed" })).items).toEqual([])
   const inbox = await proposalRegistry(store).list({ kinds: ["payment"], limit: 10, offset: 0 })
   expect(inbox.items.map((item) => item.id)).toEqual(first.proposed)

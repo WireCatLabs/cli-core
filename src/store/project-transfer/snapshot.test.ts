@@ -52,7 +52,7 @@ it("reads one project's annotation history through a native read-only handle wit
       expect.objectContaining({
         ref: f.proposed.ref,
         status: "proposed",
-        author: `bot:${f.proposed.author.id}`,
+        author: `agent:${f.proposed.author.id}`,
         model: "synthetic-model",
       }),
       expect.objectContaining({

@@ -128,7 +128,7 @@ export interface FactsStore {
 
 type Row = Record<string, unknown>
 const NAMED =
-  "SELECT f.*, b.name AS author_name, b.kind AS author_kind FROM facts f LEFT JOIN bots b ON f.author_type = 'bot' AND b.id = f.author_id"
+  "SELECT f.*, b.name AS author_name, b.kind AS author_kind FROM facts f LEFT JOIN bots b ON f.author_type = 'agent' AND b.id = f.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {

@@ -109,7 +109,7 @@ it("saves a deal with its status from its stage, its company as an organization 
     externalId: "d1",
     account: PORTAL,
     source: "crm",
-    author: { type: "bot", name: "example-crm", kind: "rule" },
+    author: { type: "agent", name: "example-crm", kind: "rule" },
     people: [{ role: "decision-maker", name: "Ana Example" }],
   })
   expect(deal?.organization?.ref).not.toBe(same.ref)

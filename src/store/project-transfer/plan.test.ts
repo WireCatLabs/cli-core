@@ -8,11 +8,11 @@ const target = (): ProjectAnnotationsTarget => ({
   revision_sha256: "b".repeat(64),
   annotation_count: 0,
   external: [
-    { ref: "bot:71", content_sha256: null },
+    { ref: "agent:71", content_sha256: null },
     { ref: "document:80", content_sha256: "a".repeat(64) },
   ],
 })
-const bindings = () => ({ "project:11": "project:91", "bot:4": "bot:71", "document:8": "document:80" })
+const bindings = () => ({ "project:11": "project:91", "agent:4": "agent:71", "document:8": "document:80" })
 
 it("plans explicit bindings to different IDs without changing its inputs", () => {
   const t = target(),
@@ -30,15 +30,15 @@ it("plans explicit bindings to different IDs without changing its inputs", () =>
 })
 
 it("lists missing bindings and refuses stale, wrong-kind and populated target snapshots", () => {
-  expect(planProjectAnnotations(json(), target(), {}).missing_bindings).toEqual(["project:11", "bot:4", "document:8"])
+  expect(planProjectAnnotations(json(), target(), {}).missing_bindings).toEqual(["project:11", "agent:4", "document:8"])
   const t = target()
   t.annotation_count = 1
   t.external = []
-  const result = planProjectAnnotations(json(), t, { ...bindings(), "bot:4": "person:7" })
+  const result = planProjectAnnotations(json(), t, { ...bindings(), "agent:4": "person:7" })
   expect(result).toMatchObject({
     ready: false,
     conflicts: expect.arrayContaining([
-      { reference: "bot:4", reason: "wrong_kind" },
+      { reference: "agent:4", reason: "wrong_kind" },
       { reference: "document:8", reason: "missing" },
       { reference: "project:91", reason: "populated" },
     ]),
@@ -70,8 +70,8 @@ it("refuses collapsing different source actors into one destination actor", () =
   const m = projectAnnotationsFixture()
   const first = m.facts[0]
   if (!first) throw new Error("missing fixture")
-  m.facts.push({ ...first, ref: "fact:21", author: "bot:5" })
-  m.external.push({ ref: "bot:5", content_sha256: null })
-  const result = planProjectAnnotations(JSON.stringify(m), target(), { ...bindings(), "bot:5": "bot:71" })
-  expect(result).toMatchObject({ ready: false, conflicts: [{ reference: "bot:5", reason: "duplicate" }] })
+  m.facts.push({ ...first, ref: "fact:21", author: "agent:5" })
+  m.external.push({ ref: "agent:5", content_sha256: null })
+  const result = planProjectAnnotations(JSON.stringify(m), target(), { ...bindings(), "agent:5": "agent:71" })
+  expect(result).toMatchObject({ ready: false, conflicts: [{ reference: "agent:5", reason: "duplicate" }] })
 })

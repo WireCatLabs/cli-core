@@ -267,7 +267,8 @@ const READERS = {
     deleted: "x.deleted_at",
     body: bodyOr(body, "x.statement"),
   })),
-  bot: byId("bot", "bots", () => ({ title: "x.name" })),
+  agent: byId("agent", "bots", () => ({ title: "x.name" })),
+  bot: byId("bot", "sender_bots", () => ({ title: "x.name" })),
   // Money is formatted with its currency's scale in JS, so SQL hands `titleOf` the fields as JSON.
   invoice: byId("invoice", "invoices", () => ({
     title:

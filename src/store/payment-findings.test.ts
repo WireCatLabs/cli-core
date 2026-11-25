@@ -74,7 +74,7 @@ describe("payment findings", () => {
       date: "2026-10-30",
       reference: "September",
       project: f.project,
-      author: { type: "bot", name: "claude-code" },
+      author: { type: "agent", name: "claude-code" },
       confirmedBy: { type: "person" },
       reason: "1 200 EUR to us from organization:1 for September (paid)",
       evidence: [ASK, REMINDER],

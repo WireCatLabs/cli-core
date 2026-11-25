@@ -31,7 +31,7 @@ export const projectAnnotationsFixture = (): ProjectAnnotations => ({
       subject: null,
       occurred_at: 900,
       supersedes: null,
-      author: "bot:4",
+      author: "agent:4",
       model: null,
       confirmed_by: null,
       scope: "work",
@@ -59,7 +59,7 @@ export const projectAnnotationsFixture = (): ProjectAnnotations => ({
     },
   ],
   external: [
-    { ref: "bot:4", content_sha256: null },
+    { ref: "agent:4", content_sha256: null },
     { ref: "document:8", content_sha256: "a".repeat(64) },
   ],
 })

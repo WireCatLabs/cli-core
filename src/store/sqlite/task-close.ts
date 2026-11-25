@@ -72,7 +72,7 @@ export const saveAgentClose = (
 export const closeSuggestionOf = (database: CacheDatabase, row: Record<string, unknown>): CloseSuggestion | null => {
   if (row.close_suggested_as == null) return null
   const name =
-    row.close_suggested_by_type === "bot"
+    row.close_suggested_by_type === "agent"
       ? database.prepare("SELECT name FROM bots WHERE id = ?").get(Number(row.close_suggested_by_id))?.name
       : "owner"
   return {

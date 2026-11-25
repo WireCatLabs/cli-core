@@ -5,20 +5,20 @@ import type { Decision, ProposalFilter, ProposalKind, ProposalRow } from "../typ
 
 /** A stored author as a proposer, with the kind read from its bot row. */
 export const proposerOfAuthor = (author: {
-  type: "person" | "bot"
+  type: "person" | "agent"
   id: string
   name: string | null
   kind: "agent" | "rule" | null
 }): Proposer => {
   if (author.type === "person") return { type: "person", id: author.id }
   if (author.name === null) return { type: "unknown" }
-  return { type: "bot", id: author.id, name: author.name, kind: author.kind ?? "agent" }
+  return { type: "agent", id: author.id, name: author.name, kind: author.kind ?? "agent" }
 }
 
 const byMatches = (row: ProposalRow, by: ProposalFilter["by"]): boolean => {
   if (by === undefined) return true
   const proposer = row.proposedBy
-  if (proposer.type !== "bot") return false
+  if (proposer.type !== "agent") return false
   if (by === "agent" || by === "rule") return proposer.kind === by
   return proposer.name === by.bot
 }

@@ -282,8 +282,8 @@ it("keeps an agent's memory and fact from a meeting as proposals for the owner",
     { apply: true },
   )
 
-  expect(fact.result).toMatchObject({ status: "proposed", author: { type: "bot" } })
-  expect(memory.result).toMatchObject({ status: "proposed", author: { type: "bot" } })
+  expect(fact.result).toMatchObject({ status: "proposed", author: { type: "agent" } })
+  expect(memory.result).toMatchObject({ status: "proposed", author: { type: "agent" } })
 })
 
 it("takes a run that names no author for an agent's, so its memory waits for the owner", async () => {

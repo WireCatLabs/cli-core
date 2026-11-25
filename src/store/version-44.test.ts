@@ -78,20 +78,20 @@ it("moves an older build's agent and rule suggestions into proposals and keeps D
       reason: "writes in the client group",
       createdAt: agent.createdAt,
       target: studio.ref,
-      proposedBy: { type: "bot", name: "codex", kind: "agent" },
+      proposedBy: { type: "agent", name: "codex", kind: "agent" },
       payload: { from: studio.ref, to: project.ref, kind: "member-of", role: "client" },
     })
     expect(byLink(rule.id)).toMatchObject({
       kind: "relationship",
       createdAt: rule.createdAt,
-      proposedBy: { type: "bot", name: "rule", kind: "rule" },
+      proposedBy: { type: "agent", name: "rule", kind: "rule" },
       payload: { suggestedLink: { provenance: "rule:email-domain-v1;confidence:weak" } },
     })
     expect(byLink(key.id)).toMatchObject({
       kind: "key_document",
       reason: "the plan",
       createdAt: key.createdAt,
-      proposedBy: { type: "bot", name: "claude-code", kind: "agent" },
+      proposedBy: { type: "agent", name: "claude-code", kind: "agent" },
       payload: { ref: plan.ref, project: project.ref },
     })
 

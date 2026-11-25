@@ -94,7 +94,7 @@ export const planTransfer = (
     else if (external.bot) {
       const bot = database.prepare("SELECT id,kind FROM bots WHERE name=?").get(external.bot.name)
       if (bot && bot.kind !== external.bot.kind) conflicts.add(`destination bot kind differs for ${external.reference}`)
-      if (bot) found = { type: "bot", id: Number(bot.id) }
+      if (bot) found = { type: "agent", id: Number(bot.id) }
       // A new author handle is created without copying credentials, settings or metadata.
       else continue
     } else if (external.collection && external.external_id) {

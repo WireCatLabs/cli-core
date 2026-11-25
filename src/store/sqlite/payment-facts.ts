@@ -33,7 +33,7 @@ export const movePaymentFacts = (context: StoreContext): number => {
     const rows = database
       .prepare(
         "SELECT f.*, b.name AS bot_name, b.kind AS bot_kind FROM facts f " +
-          "LEFT JOIN bots b ON f.author_type = 'bot' AND b.id = f.author_id WHERE f.type = 'payment' ORDER BY f.id",
+          "LEFT JOIN bots b ON f.author_type = 'agent' AND b.id = f.author_id WHERE f.type = 'payment' ORDER BY f.id",
       )
       .all()
     const nextState = (id: number) =>
@@ -54,7 +54,7 @@ export const movePaymentFacts = (context: StoreContext): number => {
       const payment = paymentOf(row.metadata)
       if (!payment) continue
       const by: Author =
-        row.author_type === "bot" && row.bot_name != null
+        row.author_type === "agent" && row.bot_name != null
           ? {
               bot: String(row.bot_name),
               kind: row.bot_kind === "rule" ? "rule" : "agent",

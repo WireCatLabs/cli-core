@@ -70,7 +70,7 @@ describe("the findings kind", () => {
         kind: "findings",
         status: "proposed",
         summary: "2 findings",
-        proposedBy: { type: "bot", name: "claude-code", kind: "agent" },
+        proposedBy: { type: "agent", name: "claude-code", kind: "agent" },
         evidence: [f.doc.ref],
         parts: [
           { id: "launch", kind: "fact", outcome: null },

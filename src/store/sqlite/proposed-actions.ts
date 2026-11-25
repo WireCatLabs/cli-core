@@ -95,7 +95,7 @@ const STATUS =
   "AND json_array_length(p.result, '$.accepted') = 0 THEN 'rejected' ELSE p.status END"
 const NAMED =
   `SELECT p.*, ${STATUS} AS shown_status, b.name AS proposer_name, b.kind AS proposer_kind FROM proposed_actions p ` +
-  "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
+  "LEFT JOIN bots b ON p.proposed_by_type = 'agent' AND b.id = p.proposed_by_id"
 
 type ProposalOperations = Omit<
   {
@@ -119,7 +119,7 @@ export const proposerOfAction = ({ proposedBy, payload }: ProposedAction): Propo
     : proposedBy.name === null
       ? { type: "unknown" }
       : {
-          type: "bot",
+          type: "agent",
           id: proposedBy.id,
           name: proposedBy.name,
           kind: proposedBy.kind ?? "agent",
@@ -153,7 +153,7 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         id: String(row.proposed_by_id),
         name: row.proposer_name == null ? null : String(row.proposer_name),
         kind:
-          row.proposed_by_type !== "bot"
+          row.proposed_by_type !== "agent"
             ? null
             : row.proposer_kind === "rule" || row.proposer_name === "rule"
               ? "rule"

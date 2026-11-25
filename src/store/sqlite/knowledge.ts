@@ -366,6 +366,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       parsed.type === "entity" ||
       parsed.type === "memory" ||
       parsed.type === "fact" ||
+      parsed.type === "agent" ||
       parsed.type === "bot" ||
       parsed.type === "event" ||
       parsed.type === "meeting" ||

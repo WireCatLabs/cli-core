@@ -132,13 +132,13 @@ it("reports absent and wrong-kind explicit references rather than resolving name
     bindings = {
       ...f.bindings,
       [f.source.document.ref]: "document:999999",
-      [`bot:${f.source.proposed.author.id}`]: "person:1",
+      [`agent:${f.source.proposed.author.id}`]: "person:1",
     }
   const result = await previewProjectAnnotationSnapshot({ ...request(f), bindings })
   expect(result.ready).toBe(false)
   expect(result.plan.conflicts).toContainEqual({ reference: f.source.document.ref, reason: "missing" })
   expect(result.plan.conflicts).toContainEqual({
-    reference: `bot:${f.source.proposed.author.id}`,
+    reference: `agent:${f.source.proposed.author.id}`,
     reason: "wrong_kind",
   })
 })

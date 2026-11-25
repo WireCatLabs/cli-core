@@ -183,7 +183,7 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
         const identity = database.prepare("SELECT person_id FROM identity_links WHERE identity_id=?").get(thing.id)
         if (identity?.person_id != null) depend("person", identity.person_id)
       }
-      if (thing.type === "bot") {
+      if (thing.type === "agent") {
         const bot = database.prepare("SELECT name,kind FROM bots WHERE id=?").get(thing.id)
         if (bot) item.bot = { name: String(bot.name), kind: String(bot.kind) }
       }

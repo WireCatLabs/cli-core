@@ -110,7 +110,7 @@ type Row = Record<string, unknown>
 
 const CONTRACTS =
   "SELECT k.*, b.name AS author_name, b.kind AS author_kind FROM contracts k " +
-  "LEFT JOIN bots b ON k.author_type = 'bot' AND b.id = k.author_id"
+  "LEFT JOIN bots b ON k.author_type = 'agent' AND b.id = k.author_id"
 
 const DAY_MS = 86_400_000
 

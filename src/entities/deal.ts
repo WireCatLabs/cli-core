@@ -100,7 +100,7 @@ export const deal = v.strictObject({
   ),
   people: v.array(v.strictObject({ ...party.entries, role: v.picklist(DEAL_ROLES) })),
   author: v.strictObject({
-    type: v.picklist(["person", "bot"]),
+    type: v.picklist(["person", "agent"]),
     id,
     name: nullableText,
     kind: v.nullable(v.picklist(["agent", "rule"])),

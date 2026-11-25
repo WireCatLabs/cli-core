@@ -25,7 +25,7 @@ const REFERABLE: Partial<Record<EntityType, { tombstone: boolean }>> = {
   task: { tombstone: true },
   memory: { tombstone: true },
   fact: { tombstone: true },
-  bot: { tombstone: false },
+  agent: { tombstone: false },
   event: { tombstone: true },
   message: { tombstone: true },
   email: { tombstone: true },

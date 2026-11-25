@@ -283,7 +283,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
               return stale()
           }
         }
-        if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
+        if (proposal.proposedBy.type !== "agent" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {
           bot: proposal.proposedBy.name,

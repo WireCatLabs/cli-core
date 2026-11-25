@@ -13,8 +13,8 @@ export interface MailFindingsBatch {
   input: MailFindingsInput
   fingerprint: string
   status: "proposed" | "reviewed"
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
-  decidedBy: { type: "person" | "bot"; id: string } | null
+  author: { type: "person" | "agent"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  decidedBy: { type: "person" | "agent"; id: string } | null
   decidedAt: string | null
   previous: FindingOutcome[]
   /** What a review of this still waiting batch already decided; the other findings wait for the owner. */

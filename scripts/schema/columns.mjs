@@ -11,7 +11,7 @@ export const poly = (name, note) => [
   c(`${name}_id`, "integer", { notnull: true }),
 ]
 export const actor = (name, o = {}) => [
-  c(`${name}_type`, "text", { note: "`person` or `bot`", ...o }),
+  c(`${name}_type`, "text", { note: "`person` or `agent`", ...o }),
   c(`${name}_id`, "integer", o),
 ]
 export const fts = (name, doc, cols) => {

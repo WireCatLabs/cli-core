@@ -350,7 +350,7 @@ describe("scanProjectLinks", () => {
     expect(row).toMatchObject({
       kind: "relationship",
       status: "proposed",
-      proposedBy: { type: "bot", name: SCAN_BOT.bot, kind: "rule" },
+      proposedBy: { type: "agent", name: SCAN_BOT.bot, kind: "rule" },
       score: 0.7,
       signals: [{ scorer: "chat-title@1", weight: 0.7, why: "the chat title names the project (key)" }],
     })

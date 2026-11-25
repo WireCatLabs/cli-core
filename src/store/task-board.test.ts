@@ -263,7 +263,7 @@ describe("the task board", () => {
   it("names who added a task, and keeps an agent's comment in the agent's name", async () => {
     const { store } = await board()
     const task = await store.tasks.create({ project: "HRB", title: "Book", type: "chore" }, { bot: "claude-desktop" })
-    expect(task.createdBy).toMatchObject({ type: "bot", name: "claude-desktop", owner: false })
+    expect(task.createdBy).toMatchObject({ type: "agent", name: "claude-desktop", owner: false })
     expect(
       (await store.tasks.create({ project: "HRB", title: "Mine", type: "chore" }, "owner")).createdBy,
     ).toMatchObject({ type: "person", owner: true })

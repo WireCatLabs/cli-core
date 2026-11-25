@@ -18,7 +18,8 @@ export type Reference =
 
 /**
  * Things named by their store id (a task also by its key or the task package's id). `entity` is the name
- * before organizations and projects: it still parses, so an old file's reference resolves as not found.
+ * before organizations and projects: it still parses, so an old file's reference resolves as not found. `agent` is an
+ * agent of the `bots` table, `bot` a sender bot (`bot:` named agents before store version 78).
  */
 export const SIMPLE_REFERENCES = [
   "note",
@@ -29,6 +30,7 @@ export const SIMPLE_REFERENCES = [
   "task",
   "memory",
   "fact",
+  "agent",
   "bot",
   "event",
   "invoice",
@@ -93,20 +95,26 @@ const MEETING_SHAPE = "meeting:<account>/<meeting>[/<transcript>[/<cue>]] with s
 
 const kind = <R extends Reference>(spec: RefKindSpec<R>) => spec as unknown as RefKindSpec
 
-const simple = (prefix: SimpleReference) =>
+/** `agent:claude` is an author's name, stored long before `agent:` named a row: only an id makes it a reference. */
+const BY_NUMBER_ONLY: ReadonlySet<string> = new Set(["agent"])
+
+const simple = (prefix: SimpleReference, type: SimpleReference = prefix) =>
   kind<{ type: SimpleReference; id: string }>({
     prefix,
-    type: prefix,
-    shape: `${prefix}:<id>`,
+    type,
+    shape: BY_NUMBER_ONLY.has(prefix) ? `${prefix}:<number>` : `${prefix}:<id>`,
     parse: (rest, text) => {
-      if (!rest.trim())
+      if (!rest.trim() || (BY_NUMBER_ONLY.has(prefix) && !/^[1-9]\d*$/.test(rest)))
         throw new CliError("validation_error", `"${singleLine(text)}" names no ${prefix}`, {
           reason: "ref.malformed",
         })
-      return { type: prefix, id: rest }
+      return { type, id: rest }
     },
     format: (reference) => `${reference.type}:${reference.id}`,
   })
+
+/** Prefixes still read and never offered: a sender bot's ref before store version 78. */
+const ALIASES = new Set(["sender-bot"])
 
 /** Every kind of reference. A new kind is one row here; nothing else switches on the prefix. @experimental */
 export const REF_KINDS: readonly RefKindSpec[] = [
@@ -173,14 +181,15 @@ export const REF_KINDS: readonly RefKindSpec[] = [
     },
     format: formatMeetingReference,
   }),
-  ...SIMPLE_REFERENCES.map(simple),
+  simple("sender-bot" as SimpleReference, "bot"),
+  ...SIMPLE_REFERENCES.map((prefix) => simple(prefix)),
 ]
 
 const byPrefix = new Map(REF_KINDS.map((spec) => [spec.prefix, spec]))
 const byType = new Map(REF_KINDS.map((spec) => [spec.type as string, spec]))
 
 /** The prefixes people are told about: `entity` only still parses. */
-const offered = REF_KINDS.map(({ prefix }) => prefix).filter((prefix) => prefix !== "entity")
+const offered = REF_KINDS.map(({ prefix }) => prefix).filter((prefix) => prefix !== "entity" && !ALIASES.has(prefix))
 
 const distance = (a: string, b: string): number => {
   let row = Array.from({ length: b.length + 1 }, (_, at) => at)
@@ -232,6 +241,7 @@ export const canonicalReference = (text: string): string => formatReference(pars
  * @experimental
  */
 export const looksLikeReference = (text: string): boolean => {
-  const match = /^([a-z]+):\S+$/.exec(text.trim())
-  return match !== null && byPrefix.has(match[1] as string)
+  const match = /^([a-z][a-z-]*):(\S+)$/.exec(text.trim())
+  if (match === null || !byPrefix.has(match[1] as string)) return false
+  return !BY_NUMBER_ONLY.has(match[1] as string) || /^[1-9]\d*$/.test(match[2] as string)
 }

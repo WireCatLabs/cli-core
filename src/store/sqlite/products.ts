@@ -97,7 +97,7 @@ type Row = Record<string, unknown>
 
 const PRODUCTS =
   "SELECT c.*, b.name AS author_name, b.kind AS author_kind FROM catalog_items c " +
-  "LEFT JOIN bots b ON c.author_type = 'bot' AND b.id = c.author_id"
+  "LEFT JOIN bots b ON c.author_type = 'agent' AND b.id = c.author_id"
 
 type ProductOperations = {
   [K in keyof ProductsStore]: ProductsStore[K] extends (...args: infer A) => Promise<infer R>

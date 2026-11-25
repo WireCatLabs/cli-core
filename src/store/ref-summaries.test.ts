@@ -30,7 +30,7 @@ const SEED = [
   "INSERT INTO organizations (id, kind, name, created_at, updated_at) VALUES (62, 'company', 'Example Ltd', 0, 0)",
   "INSERT INTO projects (id, key, name, type, created_at, updated_at) VALUES (63, 'DEMO', 'DemoRent', 'work', 0, 0)",
   "INSERT INTO tasks (id, project_id, number, key, title, type, status, author_type, author_id, source, due_at, " +
-    `created_at, updated_at) VALUES (64, 63, 1, 'DEMO-1', 'Ship the catalog', 'task', 'open', 'bot', 1, 'cli', ${AT}, 0, 0)`,
+    `created_at, updated_at) VALUES (64, 63, 1, 'DEMO-1', 'Ship the catalog', 'task', 'open', 'agent', 1, 'cli', ${AT}, 0, 0)`,
   "INSERT INTO notes (id, notable_type, notable_id, title, body, created_at, updated_at, deleted_at) VALUES " +
     `(71, 'project', 63, 'Call notes', 'note body', 0, ${AT}, NULL), (72, 'project', 63, 'Old', 'x', 0, 0, 9)`,
   "INSERT INTO documents (id, account_id, external_id, kind, title, body, external_updated_at, created_at, " +
@@ -39,7 +39,7 @@ const SEED = [
     `created_at, updated_at) VALUES (91, 'summary', '${"Lena prefers Friday calls. ".repeat(10)}', 'person', 61, ` +
     `'bot', 1, 'active', 'work', ${AT}, 0)`,
   "INSERT INTO facts (id, type, statement, status, subject_type, subject_id, author_type, author_id, source, " +
-    `created_at, updated_at) VALUES (92, 'decision', 'The launch is in March', 'accepted', 'project', 63, 'bot', 1, ` +
+    `created_at, updated_at) VALUES (92, 'decision', 'The launch is in March', 'accepted', 'project', 63, 'agent', 1, ` +
     `'agent', ${AT}, 0)`,
   "INSERT INTO meetings (id, account_id, external_id, title, description, started_at, created_at, updated_at) " +
     `VALUES (101, 15, 'm1', 'Weekly sync', 'agenda', ${AT}, 0, 0)`,
@@ -101,7 +101,7 @@ describe("store.refs.summaries", () => {
       "meeting:15/101/102/0",
       "event:111",
       "folder:14/plans",
-      "bot:2",
+      "agent:2",
     ]
     const summaries = await store.refs.summaries(refs)
     expect([...summaries.keys()]).toEqual(refs)
@@ -136,7 +136,7 @@ describe("store.refs.summaries", () => {
       ["meeting", "Weekly sync", "Zoom work", new Date(AT + 60000).toISOString(), "zoom", null, "available"],
       ["event", "Launch call", "Work calendar", iso, "google-calendar", null, "available"],
       ["folder", "Vault/plans", null, null, "local", null, "available"],
-      ["bot", "agent", null, null, null, null, "available"],
+      ["agent", "agent", null, null, null, null, "available"],
     ])
     expect(summaries.get("memory:91")?.title?.length).toBe(80)
     expect(summaries.get("msg:max/34871122/63488582/10")).toMatchObject({ account: "34871122" })

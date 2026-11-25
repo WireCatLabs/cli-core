@@ -26,10 +26,17 @@ export type KindSignal =
   | "no-name"
 
 /**
- * A sender bot's reference, `sender-bot:<id>`: a program that writes to the owner, an entity apart from people.
- * `bot:` names the agents of the `bots` table. @experimental
+ * A sender bot's reference, `bot:<id>`: a program that writes to the owner, an entity apart from people. The agents of
+ * the `bots` table are `agent:<id>` since store version 78. @experimental
  */
-export const SENDER_BOT_PREFIX = "sender-bot:"
+export const SENDER_BOT_PREFIX = "bot:"
+
+/** A sender bot's reference before store version 78, still read. @experimental */
+export const OLD_SENDER_BOT_PREFIX = "sender-bot:"
+
+/** `sender-bot:<id>` as `bot:<id>`; any other text as it is. @experimental */
+export const senderBotRef = (ref: string): string =>
+  ref.startsWith(OLD_SENDER_BOT_PREFIX) ? `${SENDER_BOT_PREFIX}${ref.slice(OLD_SENDER_BOT_PREFIX.length)}` : ref
 
 const AUTOMATED_WORDS = new Set([
   "noreply",

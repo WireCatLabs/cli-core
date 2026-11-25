@@ -196,7 +196,7 @@ export const agentMergeOf = (context: StoreContext, merge: string): AgentMerge |
   const proposer = proposerOfAction(action)
   return {
     proposal: action.id,
-    bot: proposer.type === "bot" ? proposer.name : "unknown",
+    bot: proposer.type === "agent" ? proposer.name : "unknown",
     run: payload.run ?? null,
     reason: action.reason,
     evidence: payload.strength ?? null,

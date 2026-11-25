@@ -41,7 +41,7 @@ export const projectTransferPairFixture = async () => {
       [source.project.ref]: project.ref,
       [source.org.ref]: organization.ref,
       [source.document.ref]: document.ref,
-      [`bot:${source.proposed.author.id}`]: `bot:${actor.author.id}`,
+      [`agent:${source.proposed.author.id}`]: `agent:${actor.author.id}`,
       "person:1": "person:1",
     }
     const db = await openCache(path)

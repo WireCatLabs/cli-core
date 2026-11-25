@@ -161,7 +161,7 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
   })
   expect(reviewed).toMatchObject({
     status: "reviewed",
-    decidedBy: { type: "bot" },
+    decidedBy: { type: "agent" },
     receipt: {
       accepted: ["launch"],
       decision: { by: "agent", bot: "evidence-reviewer", model: "m", reason: "the message states it plainly" },

@@ -46,7 +46,7 @@ const mailSortEffectsTable = {
     }),
     c("action", "text", { notnull: true, note: "`sender` or `organization`" }),
     c("before", "text", {
-      note: "`person:<id>` or `sender-bot:<id>` it was held by, then who put it there: `sender-bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was",
+      note: "`person:<id>` or `bot:<id>` (`sender-bot:<id>` before store version 78) it was held by, then who put it there: `bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was",
     }),
     c("after", "text", { note: "where the rule put it; equal to `before` when the rule left it, as for past senders" }),
     c("created_at", "integer", { notnull: true }),

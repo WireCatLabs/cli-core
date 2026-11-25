@@ -71,7 +71,7 @@ describe("memories", () => {
       confidence: 0.8,
     })
     expect(first).toMatchObject({ status: "proposed", scope: "work", model: "synthetic-model-1", evidence: [note.ref] })
-    expect(first.author).toMatchObject({ type: "bot", name: "digest-writer" })
+    expect(first.author).toMatchObject({ type: "agent", name: "digest-writer" })
     expect((await store.memories.search("friday")).items.map(({ author }) => author.name)).toEqual(["digest-writer"])
     expect((await store.memories.search("friday", { scope: "personal" })).items).toEqual([])
 
@@ -459,7 +459,7 @@ describe("facts", () => {
       type: "decision",
       status: "proposed",
       confirmedBy: null,
-      author: { type: "bot", name: "digest-writer" },
+      author: { type: "agent", name: "digest-writer" },
       model: "synthetic-model-1",
       evidence: [note.ref],
       project: project.ref,
@@ -569,7 +569,7 @@ describe("facts", () => {
       {
         step: "revoked",
         by: "owner",
-        confirmedBy: { type: "bot" },
+        confirmedBy: { type: "agent" },
         decision: { by: "agent", bot: "reviewer", reason: "the thread says so" },
         reason: "not sure yet",
       },

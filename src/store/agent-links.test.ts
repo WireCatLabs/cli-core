@@ -97,7 +97,12 @@ describe("an agent's link", () => {
 
     expect(done).toMatchObject({ outcome: "proposed", evidence: { strong: false, weak: "landline" } })
     const [row] = (await store.people.linkProposals({ limit: 10, offset: 0 })).items
-    expect(row).toMatchObject({ id: done.proposal, signal: "agent", reason: agent.reason, proposedBy: { type: "bot" } })
+    expect(row).toMatchObject({
+      id: done.proposal,
+      signal: "agent",
+      reason: agent.reason,
+      proposedBy: { type: "agent" },
+    })
     expect(await store.people.agentMerges({ limit: 10, offset: 0 })).toEqual({ items: [], hasMore: false })
   })
 

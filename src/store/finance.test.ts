@@ -219,7 +219,7 @@ it("makes an agent's payment a proposal that counts only once the owner confirms
       object: f.romashka.ref,
       summary: "Payment · 50 000.00 RUB from ООО Ромашка, 14.11 (proposed)",
       reason: "Анна написала: оплатили счёт 42",
-      proposedBy: { type: "bot", name: "claude-code", kind: "agent" },
+      proposedBy: { type: "agent", name: "claude-code", kind: "agent" },
     },
   ])
   const own = await f.registry.decide([proposed.ref], { confirm: true, by: { ...claude, reason: "paid" } })

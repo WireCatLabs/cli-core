@@ -130,7 +130,7 @@ type Row = Record<string, unknown>
 
 const ORDERS =
   "SELECT o.*, b.name AS author_name, b.kind AS author_kind FROM orders o " +
-  "LEFT JOIN bots b ON o.author_type = 'bot' AND b.id = o.author_id"
+  "LEFT JOIN bots b ON o.author_type = 'agent' AND b.id = o.author_id"
 
 type OrderOperations = {
   [K in keyof OrdersStore]: OrdersStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never

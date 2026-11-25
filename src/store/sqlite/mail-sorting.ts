@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { isPackFreeMailDomain } from "../../domain/domain-lists.js"
 import { isFreeMailDomain } from "../../domain/organization-sectors.js"
-import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import { SENDER_BOT_PREFIX, senderBotRef } from "../../domain/person-kinds.js"
 import { listIdOf } from "../../mail/headers.js"
 import { MAIL_TYPES, type MailType } from "../../mail/mail-types.js"
 import { FREE_MAIL, isDisposableDomain } from "../../mail/score.js"
@@ -602,8 +602,9 @@ const ownerOnly = (by: Decider, what: string) => {
   if (by !== "owner") fail(`only the owner ${what}`, "mail-sort.owner-only")
 }
 
-const addressesOf = (database: CacheDatabase, sender: string): string[] => {
-  if (sender.includes("@") && !sender.includes(":")) return [sender.trim().toLowerCase()]
+const addressesOf = (database: CacheDatabase, given: string): string[] => {
+  if (given.includes("@") && !given.includes(":")) return [given.trim().toLowerCase()]
+  const sender = senderBotRef(given)
   const bot = sender.startsWith(SENDER_BOT_PREFIX) ? Number(sender.slice(SENDER_BOT_PREFIX.length)) : undefined
   const person = sender.startsWith("person:") ? Number(sender.slice("person:".length)) : undefined
   if (bot === undefined && person === undefined)

@@ -4,7 +4,7 @@ import type { CacheDatabase } from "../driver.js"
 
 /** Who made or owns something: the store's polymorphic actor pair. */
 export interface Actor {
-  type: "person" | "bot"
+  type: "person" | "agent"
   id: number
 }
 
@@ -32,11 +32,11 @@ export const botNamed = (
   if (!BOT_KINDS.includes(kind))
     throw new CliError("validation_error", `a bot's kind is one of ${BOT_KINDS.join(", ")}`)
   const found = database.prepare("SELECT id FROM bots WHERE name = ?").get(handle)
-  if (found) return { type: "bot", id: Number(found.id) }
+  if (found) return { type: "agent", id: Number(found.id) }
   const made = database
     .prepare("INSERT INTO bots (name, kind, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id")
     .get(handle, kind, now, now)
-  return { type: "bot", id: Number(made?.id) }
+  return { type: "agent", id: Number(made?.id) }
 }
 
 /**
@@ -47,7 +47,7 @@ export const actorOfOrigin = (database: CacheDatabase, origin: Origin): Actor =>
   if (origin === "owner") return ownerPerson(database)
   const found = database.prepare("SELECT id FROM bots WHERE name = ?").get(origin)
   if (!found) throw new CliError("configuration_error", `the store has no bot ${origin}`)
-  return { type: "bot", id: Number(found.id) }
+  return { type: "agent", id: Number(found.id) }
 }
 
 export const originOfActor = (database: CacheDatabase, type: unknown, id: unknown): Origin | undefined => {
@@ -59,11 +59,11 @@ export const originOfActor = (database: CacheDatabase, type: unknown, id: unknow
 /** Who proposed a stored row, from its actor pair; the seeded bot `rule` and a bot of kind `rule` are rules. */
 export const proposerOf = (database: CacheDatabase, type: unknown, id: unknown): Proposer => {
   if (type === "person" && id != null) return { type: "person", id: String(id) }
-  if (type !== "bot" || id == null) return { type: "unknown" }
+  if (type !== "agent" || id == null) return { type: "unknown" }
   const bot = database.prepare("SELECT name, kind FROM bots WHERE id = ?").get(Number(id))
   if (!bot) return { type: "unknown" }
   const name = String(bot.name)
-  return { type: "bot", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
+  return { type: "agent", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
 }
 
 /** Who proposed something, as a list filter: any agent, any rule, or one bot by its handle. */
@@ -77,7 +77,7 @@ export const proposedBySql = (
 ): { sql: string; params: string[] } => {
   if (by === undefined) return { sql: "1", params: [] }
   const bot = (condition: string) =>
-    `${type} = 'bot' AND EXISTS (SELECT 1 FROM bots pb WHERE pb.id = ${id} AND ${condition})`
+    `${type} = 'agent' AND EXISTS (SELECT 1 FROM bots pb WHERE pb.id = ${id} AND ${condition})`
   if (by === "rule") return { sql: bot("(pb.kind = 'rule' OR pb.name = 'rule')"), params: [] }
   if (by === "agent") return { sql: bot("pb.kind <> 'rule' AND pb.name <> 'rule'"), params: [] }
   return { sql: bot("pb.name = ?"), params: [by.bot] }
