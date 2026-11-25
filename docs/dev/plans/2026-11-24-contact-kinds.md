@@ -215,7 +215,12 @@ The domain lists above grow from the catalogue: UT1 (about 100 categories), the 
 banks, the GLEIF bank codes joined to Wikidata, a free-mail list. Spam lists say "bad", never a sector, and many are
 non-commercial or work only as a lookup per sender, which this plan rules out. Distribution: a small core in the
 package, a versioned data pack from a WireCat release fetched by a command for larger and share-alike lists, so data
-updates without a package release. Decided by the owner, open questions 4 and 6.
+updates without a package release. Decided by the owner, open questions 4 and 6. Built in #3359 and
+#3362: `domain-lists update [--commercial-only]` fetches the pack from the `domain-lists` GitHub release (first pack
+2026-11-25: UT1 sectors and webmail, UT1 malware hosts, FDIC banks; Stop Forum Spam fetched from its source, since it
+may not be redistributed), published weekly by `.github/workflows/domain-lists.yml`. Webmail domains never make an
+organization. Nothing reads the bad lists yet; no source yet for travel, health, education, utility, insurance or
+software.
 
 ## Out of scope
 
