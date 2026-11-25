@@ -90,6 +90,7 @@ describe("store version 73", () => {
     const after = new Map(objects(database).map((object) => [object.name, object.sql]))
     for (const object of before) expect(after.get(object.name), object.name).toBe(object.sql)
     expect([...after.keys()].filter((name) => !before.some((object) => object.name === name))).toEqual([
+      "messages_by_thread_external_id",
       "taggings_by_taggable_type_taggable_id",
     ])
     expect(database.prepare("SELECT id, text FROM messages ORDER BY id").all()).toEqual([
