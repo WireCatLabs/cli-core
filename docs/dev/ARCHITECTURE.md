@@ -701,8 +701,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   move a person's identities to a new bot by rule when their kind is `automated` by a program's signal
   (`PROGRAM_SIGNALS`: the platform's bot flag, a no-reply or notification address, a signed `Auto-Submitted`, an empty
   Return-Path, `bulk_never_replied`), the owner wrote them nothing (no mail tie, no private chat both wrote in; the
-  platform's flag holds against both), no `ALWAYS_SHOWN` reason holds, and every identity of theirs is the program's,
-  or they have one. A name or a bulk mailbox alone marks a person `automated` and moves nothing: a newsletter a human
+  platform's flag holds against both), no `ALWAYS_SHOWN` reason holds, and every identity of theirs is the program's, or
+  they have one. A name or a bulk mailbox alone marks a person `automated` and moves nothing: a newsletter a human
   writes stays a person. A rule's bot goes back to the people its identities came from once the owner writes to it
   (`ruleBotsBack`). The owner's `moveToBot` and `moveToPerson` move a person, a bot or one identity for its whole
   history, and win over the rules and every `KIND_RULES` bump: a bot the owner made has `author = 'owner'`, and an
@@ -713,9 +713,12 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   identities. `sender_bots.person_id` only keeps builds before version 75 from reading a bot as a person: negative
   since. Those builds still write to a migrated store, so triggers keep them apart: a bot's identity gets no link to a
   person (`RAISE(IGNORE)`), the person row their ingest made for it goes again, a bot holding identities is not deleted,
-  and a hidden person's kind stays `merged`. A positive `person_id` is a bot such a build sorted after the upgrade; the
-  next kept list moves its identities to it (`settleLegacyBots`). No table has a foreign key, so an older build purging
-  an account still can; triggers drop a bot's rows with its last identity.
+  a re-keyed link onto a bot's identity moves to the bot, and a hidden person's kind stays `merged` (checked against
+  cli-core 1.0.0 itself). A re-key of a bot's identity onto a person's gives the bot the one that stays
+  (`rekeyIntoBot`), and a purge removes the person rows its bots emptied. A positive `person_id` is a bot such a build
+  sorted after the upgrade; the next writable list moves its identities to it (`settleLegacyBots`), even when every
+  stored kind is current. No table has a foreign key, so an older build purging an account still can; triggers drop a
+  bot's rows with its last identity.
 - **Organizations from mail domains** (`domain-organizations.ts`, plan step 5): when kinds are kept, a bot or a shared
   mailbox (every address a role address) at a company domain joins the organization of its registrable domain
   (`registrableOf`, so `mail.bank.example` is `bank.example`): the organization already holding an address there, else
