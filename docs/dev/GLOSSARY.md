@@ -127,9 +127,9 @@ email itself carries (a part, schema.org markup, list headers), never by an addr
 | `personal` | a person writing, to the owner or to a few people | primary, direct |
 | `other` | a program's mail no rule above names | unknown |
 
-A sorting rule decides before these: the first scope that has a rule wins (one mail; a List-Id or a subject pattern; an
-address; a domain), and within a scope the owner's rule beats the program's and the newest wins. A domain rule may say
-it beats the address rules. Addresses match whole and domains on a label boundary: `ann@` never matches `joann@`. A
+A sorting rule decides before these. Every rule of the owner's comes before every rule of the program's, whatever its
+scope. Within one author the first scope that has a rule wins (one mail; a List-Id or a subject pattern; an address; a
+domain), and within a scope the newest wins. A domain rule may say it beats the same author's address rules. Addresses match whole and domains on a label boundary: `ann@` never matches `joann@`. A
 domain rule on a free-mail or throwaway domain (`gmail.com`) is the owner's only and is set only after a dry run.
 
 ## Output keys

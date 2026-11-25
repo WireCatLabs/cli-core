@@ -2,7 +2,7 @@ import { c, id, ts } from "./columns.mjs"
 
 const mailSortRulesTable = {
   name: "mail_sort_rules",
-  doc: "A sorting rule over mail, the owner's or the program's: what one mail, a List-Id, a subject pattern, an address or a registrable domain is. The first scope that matches wins in that order, then the header classifier; within a scope the owner's rule beats the program's and the newest wins. Not `mail_rules`, which decides how one account's sync stores mail.",
+  doc: "A sorting rule over mail, the owner's or the program's: what one mail, a List-Id, a subject pattern, an address or a registrable domain is. Every owner's rule comes before every program's; within one author the first scope that matches wins in that order, and within a scope the newest; then the header classifier. Not `mail_rules`, which decides how one account's sync stores mail.",
   cols: [
     id(),
     c("scope", "text", { notnull: true, note: "`mail`, `list`, `subject`, `address` or `domain`" }),
@@ -36,7 +36,7 @@ const mailSortRulesTable = {
 
 const mailSortEffectsTable = {
   name: "mail_sort_effects",
-  doc: "What a sorting rule did to one sender identity beyond its mail types: the sender moved to a bot or a person, or its address filed under an organization. A removal of the rule puts back `before`. A trigger drops an identity's rows with it.",
+  doc: "What a sorting rule did to one sender identity beyond its mail types: the sender moved to a bot or a person, or its address filed under an organization. A removal of the rule puts back `before`, author included, unless the sender moved since. A trigger drops an identity's rows with it.",
   cols: [
     id(),
     c("rule_id", "integer", { notnull: true, note: "the `mail_sort_rules` row" }),
@@ -46,7 +46,7 @@ const mailSortEffectsTable = {
     }),
     c("action", "text", { notnull: true, note: "`sender` or `organization`" }),
     c("before", "text", {
-      note: "`person:<id>` or `sender-bot:<id>` it was held by; for `organization`, `held` when it already was",
+      note: "`person:<id>` or `sender-bot:<id>` it was held by, then who put it there: `sender-bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was",
     }),
     c("after", "text", { note: "where the rule put it; equal to `before` when the rule left it, as for past senders" }),
     c("created_at", "integer", { notnull: true }),

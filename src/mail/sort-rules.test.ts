@@ -34,14 +34,28 @@ describe("which sorting rule decides a mail", () => {
     expect(winner(all, mail("news@mail.shop.example"))).toBe(domain.id)
   })
 
-  it("puts the owner's rule over the program's within a scope, then the newest", () => {
+  it("puts every owner's rule over every program's, at any scope, then the newest", () => {
     const owner = rule("address", "ann@shop.example")
     const program = rule("address", "ann@shop.example", { author: "program" })
     const newer = rule("address", "ann@shop.example")
     expect(winner([owner, program], mail("ann@shop.example"))).toBe(owner.id)
     expect(winner([owner, program, newer], mail("ann@shop.example"))).toBe(newer.id)
     const programMail = rule("mail", "1", { author: "program" })
-    expect(winner([newer, programMail], mail("ann@shop.example"))).toBe(programMail.id)
+    const programList = rule("list", "deals.shop.example", { author: "program" })
+    const ownerDomain = rule("domain", "shop.example")
+    expect(winner([newer, programMail], mail("ann@shop.example"))).toBe(newer.id)
+    expect(
+      winner([ownerDomain, programMail, programList], mail("bob@shop.example", { list: "deals.shop.example" })),
+    ).toBe(ownerDomain.id)
+    expect(winner([programMail, programList], mail("bob@shop.example", { list: "deals.shop.example" }))).toBe(
+      programMail.id,
+    )
+  })
+
+  it("lets a program's rule at a subdomain lose to the owner's at the domain", () => {
+    const program = rule("domain", "mail.shop.example", { author: "program" })
+    const owner = rule("domain", "shop.example")
+    expect(winner([program, owner], mail("news@mail.shop.example"))).toBe(owner.id)
   })
 
   it("lets a domain rule beat the address rules only when it says so", () => {

@@ -841,7 +841,7 @@ A mail rule of one account: conditions an email must match, and what to do with 
 
 ### `mail_sort_rules`
 
-A sorting rule over mail, the owner's or the program's: what one mail, a List-Id, a subject pattern, an address or a registrable domain is. The first scope that matches wins in that order, then the header classifier; within a scope the owner's rule beats the program's and the newest wins. Not `mail_rules`, which decides how one account's sync stores mail.
+A sorting rule over mail, the owner's or the program's: what one mail, a List-Id, a subject pattern, an address or a registrable domain is. Every owner's rule comes before every program's; within one author the first scope that matches wins in that order, and within a scope the newest; then the header classifier. Not `mail_rules`, which decides how one account's sync stores mail.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -865,7 +865,7 @@ A sorting rule over mail, the owner's or the program's: what one mail, a List-Id
 
 ### `mail_sort_effects`
 
-What a sorting rule did to one sender identity beyond its mail types: the sender moved to a bot or a person, or its address filed under an organization. A removal of the rule puts back `before`. A trigger drops an identity's rows with it.
+What a sorting rule did to one sender identity beyond its mail types: the sender moved to a bot or a person, or its address filed under an organization. A removal of the rule puts back `before`, author included, unless the sender moved since. A trigger drops an identity's rows with it.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -873,7 +873,7 @@ What a sorting rule did to one sender identity beyond its mail types: the sender
 | `rule_id` | integer | not null |  | the `mail_sort_rules` row |
 | `identity_id` | integer | not null |  | no foreign key, as the bot tables: an older build purging an account does not know this table |
 | `action` | text | not null |  | `sender` or `organization` |
-| `before` | text |  |  | `person:<id>` or `sender-bot:<id>` it was held by; for `organization`, `held` when it already was |
+| `before` | text |  |  | `person:<id>` or `sender-bot:<id>` it was held by, then who put it there: `sender-bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was |
 | `after` | text |  |  | where the rule put it; equal to `before` when the rule left it, as for past senders |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `undone_at` | integer |  |  | put back when the rule was removed |
