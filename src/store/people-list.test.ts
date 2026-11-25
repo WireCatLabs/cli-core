@@ -355,7 +355,8 @@ describe("the kind of a person", () => {
         )
         .get(account, NOW, NOW)?.id,
     )
-    for (const n of [1, 2, 3]) {
+    // One mail outside the bulk box: all of it there would make her a newsletter's bot.
+    for (const n of [1, 2, 3, 4]) {
       const email = Number(
         db
           .prepare(
@@ -364,18 +365,19 @@ describe("the kind of a person", () => {
           )
           .get(account, thread, `m${n}`, identityPk(db, "email", "lena@acme.ru"), NOW + n, NOW, NOW)?.id,
       )
-      db.prepare("INSERT INTO email_mailboxes (email_id, mailbox_id, created_at) VALUES (?, ?, ?)").run(
-        email,
-        bulk,
-        NOW,
-      )
+      if (n < 4)
+        db.prepare("INSERT INTO email_mailboxes (email_id, mailbox_id, created_at) VALUES (?, ?, ?)").run(
+          email,
+          bulk,
+          NOW,
+        )
     }
 
     const [lena] = (await store.people.list({ limit: 10, kind: "automated" })).items
     expect(lena).toMatchObject({
       kindSignals: ["bulk-mail"],
-      messagesFrom: 3,
-      lastContact: new Date(NOW + 3).toISOString(),
+      messagesFrom: 4,
+      lastContact: new Date(NOW + 4).toISOString(),
       contact: "lena@acme.ru",
     })
   })

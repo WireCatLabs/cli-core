@@ -17,6 +17,7 @@ export type KindSignal =
   | "null-return-path"
   | "bulk-mail"
   | "bulk-never-replied"
+  | "newsletter-only"
   | "automated-name"
   | "organization"
   | "role-address"
