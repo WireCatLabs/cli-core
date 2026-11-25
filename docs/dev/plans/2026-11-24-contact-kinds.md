@@ -209,6 +209,11 @@ code says what the shop is, the bank's category says what the payment was. Resea
   mail by type and reach. Two changes to the order above: `system_alert` before `account_notice`, and an automated
   address with a plain unsubscribe link is `account_notice`, not `promotion`. Not yet stored by mail sync: schema.org
   markup (no HTML kept), `Auto-Submitted: auto-replied`, `List-Post`, the calendar method.
+- **Built in #3366 (store version 77):** `store.mail.sorting` with `add` (dry run and a `confirm` code, required for
+  a free-mail domain, owner only there), `rules`, `scopes`, `remove`, `undo` and `reset`; a rule sets a mail type,
+  moves a sender to a bot or a person through `moveToBot`/`moveToPerson`, or files it under an organization; a typed
+  mail says `typeSignal: "rule:<id>"`. Follow-up: the owner's rules win across levels, and a removed rule puts senders
+  back with their earlier author.
 - **Screening first-time senders**, as HEY does, only for people the owner has never written to. Later step.
 
 The domain lists above grow from the catalogue: UT1 (about 100 categories), the OpenStreetMap brand index, FDIC
