@@ -242,6 +242,38 @@ describe("issues, projects and comments by meaning", () => {
     })
   })
 
+  it("finds issues by meaning in issues search once embedded, and before that says sync --embed builds the vectors", async () => {
+    download()
+    const store = await trackerStore()
+    const search = async (...words: string[]) =>
+      (await cliOf(store)("issues", "search", ...words)) as unknown as {
+        items: { external_id: string; found_by: string[] }[]
+        missing?: { field: string; why: string }[]
+        next?: { args: Record<string, unknown> }[]
+      }
+    const before = await search("kitten")
+    expect(before.items).toEqual([])
+    expect(before.missing).toEqual([
+      {
+        field: "found_by",
+        why: expect.stringMatching(/^found by words only: no issue, project or comment has vectors.*sync --embed/),
+      },
+    ])
+    expect(before.next?.[0]?.args).toEqual({ embed: true })
+
+    await embedTracker(store, { threads: 1 })
+    const after = await search("kitten")
+    expect(after.items.map(({ external_id, found_by }) => [external_id, found_by])).toEqual([["i1", ["meaning"]]])
+    expect(after.missing).toBeUndefined()
+    expect((await search("cat")).items[0]).toMatchObject({ external_id: "i1", found_by: ["words", "meaning"] })
+    for (const query of ["cat", "kitten OR zebra", "fish"]) {
+      const all = await tracker(store, query, { scope: { tracker: [LINEAR] } })
+      expect((await search(query)).items.map(({ external_id }) => external_id)).toEqual(
+        all.items.map(({ ref }) => ref.split("/").at(-1)),
+      )
+    }
+  })
+
   it("keeps the sync's report when --embed finds no model, naming the model in meta.issues", async () => {
     const store = await trackerStore()
     const done = await cliOf(store)("sync", "--embed")

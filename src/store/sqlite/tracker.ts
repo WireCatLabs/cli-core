@@ -49,15 +49,15 @@ export interface TrackerItem<K extends TrackerKind = TrackerKind> {
 export interface TrackerFilter {
   /** A comment's issue, an issue's, a state's or a label's team. */
   parent?: string
-  /** Issues only. */
-  assignee?: string | null
-  project?: string
-  state?: string
+  /** Issues only; several ids match any of them, as a name every team's state has. */
+  assignee?: string | readonly string[] | null
+  project?: string | readonly string[]
+  state?: string | readonly string[]
   /** Issues whose state is of one of these types. */
   stateTypes?: readonly StateType[]
-  label?: string
+  label?: string | readonly string[]
   /** Issues only; `null`, the issues in no sprint. */
-  sprint?: string | null
+  sprint?: string | readonly string[] | null
   /** Archived rows too; absent, only the live ones. */
   archived?: boolean
   limit?: number
@@ -473,13 +473,17 @@ export const trackerStoreOver = (context: StoreContext): TrackerStore => {
       if (value === undefined) continue
       if (value === null) sql += ` AND json_extract(t.data, '$.${field}') IS NULL`
       else {
-        sql += ` AND json_extract(t.data, '$.${field}') = ?`
-        params.push(value)
+        const ids = typeof value === "string" ? [value] : value
+        sql += ids.length ? ` AND json_extract(t.data, '$.${field}') IN (${ids.map(() => "?").join(", ")})` : " AND 0"
+        for (const id of ids) params.push(id)
       }
     }
     if (filter.label !== undefined) {
-      sql += " AND EXISTS (SELECT 1 FROM json_each(t.data, '$.labels') l WHERE l.value = ?)"
-      params.push(filter.label)
+      const ids = typeof filter.label === "string" ? [filter.label] : filter.label
+      sql += ids.length
+        ? ` AND EXISTS (SELECT 1 FROM json_each(t.data, '$.labels') l WHERE l.value IN (${ids.map(() => "?").join(", ")}))`
+        : " AND 0"
+      for (const id of ids) params.push(id)
     }
     if (filter.stateTypes?.length) {
       sql +=

@@ -5,25 +5,17 @@ import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
-import { hasGlobalItemIds, holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
-import { type TrackerIssue, trackerBodyOf, trackerTitleOf } from "../domain/tracker.js"
+import { holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import { formatMeetingReference } from "../meetings/index.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting, type ListedAccount, listedHolds } from "../search/account-list.js"
 import { RRF_K } from "../search/fusion.js"
-import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
-import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
-import { type Period, questionPeriod } from "../search/question-period.js"
-import {
-  isFunctionWord,
-  words as plainWords,
-  planQuestion,
-  questionLookup,
-  questionText,
-} from "../search/question-plan.js"
+import { MESSAGE_PARSING } from "../search/lucene/types.js"
+import { questionPeriod } from "../search/question-period.js"
+import { planQuestion, questionLookup, questionText } from "../search/question-plan.js"
 import type {
   AccountKey,
   BusinessKind,
@@ -31,8 +23,6 @@ import type {
   CopyViewer,
   MessageStore,
   StoredAccount,
-  TrackerItem,
-  TrackerNearest,
 } from "../store/store.js"
 import { nearestCrmActivities } from "./crm-meaning.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
@@ -44,10 +34,21 @@ import type { SearchCoverage } from "./messages-search.js"
 import { importAccounts, notesScopeOf, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
+import {
+  contentWords,
+  fusedLane,
+  insidePeriodFirst,
+  meaningWordsOf,
+  oneList,
+  PERIOD_DEPTH,
+  titleWords,
+} from "./search-all-rank.js"
+import { trackerLane } from "./search-all-tracker.js"
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
-import { nearestTracker } from "./tracker-meaning.js"
+
+export { titleWords } from "./search-all-rank.js"
 
 export const RESOURCES_SEARCHED = [
   "messages",
@@ -256,37 +257,6 @@ const filtersBeside = (text: string): string | undefined => {
     : undefined
 }
 
-/**
- * What a deal or a lead is found by: plain words or phrases, all of them, or any with OR. Anything else is refused,
- * so `search all` skips deals with the reason instead of matching a field they do not have.
- */
-export const titleWords = (
-  text: string,
-  refused = "deals and leads are found by the words of their title, company, contacts and activities only",
-): { words: string[]; anyWord: boolean } => {
-  const { root } = parseLucene(text, SEARCH_QUERY)
-  const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
-  const words = clauses.map(({ node, occur }) =>
-    occur !== "must_not" &&
-    node.kind === "predicate" &&
-    (node.field === "text" || node.field === "title") &&
-    (node.operator === "term" || node.operator === "phrase")
-      ? // A title holds "invoice", not the question mark of "invoice?".
-        node.value.replace(/\?+$/u, "") || node.value
-      : (() => {
-          throw new CliError("validation_error", refused)
-        })(),
-  )
-  return { words, anyWord: clauses.length > 1 && clauses.every(({ occur }) => occur === "should") }
-}
-
-/** A question finds by any of its words, so «что», «кто» or "the" would match nearly every record. */
-const contentWords = (found: { words: string[]; anyWord: boolean }, discover: boolean) => {
-  if (!discover) return found
-  const content = found.words.filter((word) => !plainWords(word).every(isFunctionWord))
-  return content.length ? { ...found, words: content } : found
-}
-
 /** The single words of an all-words query, when it has two to eight of them; none for OR, fields or phrases. */
 const strictWords = (text: string): string[] => {
   try {
@@ -366,89 +336,9 @@ const copyViewers = async (store: MessageStore): Promise<CopyViewer[]> => {
 /** A tracker hit's kind: a comment is named for the issue it is on, beside a CRM's and a message's kinds. */
 export type TrackerHitKind = "issue" | "project" | "issue_comment"
 
-const TRACKER_HIT_KINDS = { issue: "issue", project: "project", comment: "issue_comment" } as const
-
 /** The accounts of every tracker the store holds copies of. */
 export const trackerAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "tracker"))
-
-/** An issue is titled as people say it, `ENG-12 Fix login`; anything else by its name or its first line. */
-const trackerTitle = ({ kind, record }: TrackerItem): string => {
-  const title = trackerTitleOf(kind, record)
-  const key = kind === "issue" ? (record as TrackerIssue).key : undefined
-  return key ? `${key} ${title}` : title
-}
-
-/**
- * What the meaning half embeds: the words and phrases asked for, OR included, as notes take them. `title:` narrows to
- * the title, which a hit by meaning cannot be held to, so such a query is searched by words only.
- */
-const meaningWordsOf = (text: string): string | undefined => {
-  try {
-    const { root } = parseLucene(text, SEARCH_QUERY)
-    const nodes = root.kind === "boolean" ? root.clauses.map(({ node }) => node) : [root]
-    if (!nodes.every((node) => node.kind === "predicate" && node.field === "text")) return undefined
-    return meaningWords(root) || undefined
-  } catch {
-    return undefined
-  }
-}
-
-const trackerExcerpt = ({ kind, record }: TrackerItem, query: string): string =>
-  excerpt([trackerTitleOf(kind, record), trackerBodyOf(kind, record)].filter(Boolean).join("\n"), query)
-
-/**
- * One hit per tracker item, best first: the copies other sign-ins hold of one item (`items` maps a hit's ref to the
- * item, for a provider whose ids name one item across its accounts) join the best-placed one, which names every account and takes the best cosine and every way any was found.
- */
-const oneHitPerItem = (
-  ordered: SearchAllRecordItem[],
-  cosines: Map<string, number>,
-  items: Map<string, string>,
-): SearchAllRecordItem[] => {
-  const kept = new Map<string, SearchAllRecordItem>()
-  for (const hit of ordered) {
-    const key = items.get(hit.ref) ?? hit.ref
-    const held = kept.get(key)
-    if (!held) {
-      kept.set(key, hit)
-      continue
-    }
-    held.accounts = [...(held.accounts ?? [held.account]), hit.account]
-    held.foundBy = (["words", "meaning"] as const).filter((by) =>
-      [held, hit].some(({ foundBy }) => foundBy.includes(by)),
-    )
-    const cosine = cosines.get(hit.ref)
-    if (cosine !== undefined && cosine > (cosines.get(held.ref) ?? Number.NEGATIVE_INFINITY))
-      cosines.set(held.ref, cosine)
-  }
-  return [...kept.values()]
-}
-
-/**
- * One list for a lane found both ways, as notes and messages fuse theirs: each hit's rank in either list votes, a
- * question's hit voting once; a hit found both ways keeps its words' text and is found by meaning too.
- */
-const fusedLane = (
-  byWords: SearchAllRecordItem[],
-  byMeaning: { hit: SearchAllRecordItem; score: number }[],
-  discover: boolean,
-  cosines: Map<string, number>,
-): SearchAllRecordItem[] => {
-  const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
-  byWords.forEach((item, rank) => {
-    fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
-  })
-  byMeaning.forEach(({ hit, score }, rank) => {
-    cosines.set(hit.ref, score)
-    const held = fused.get(hit.ref)
-    if (held && !held.item.foundBy.includes("meaning")) held.item.foundBy = [...held.item.foundBy, "meaning"]
-    const vote = 1 / (RRF_K + rank + 1)
-    if (held && discover) held.score = Math.max(held.score, vote)
-    else fused.set(hit.ref, { item: held?.item ?? hit, score: (held?.score ?? 0) + vote })
-  })
-  return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
-}
 
 /** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
@@ -780,79 +670,20 @@ export const searchAll = async (
           // accounts do not account for.
           const read = scope?.tracker ?? (await trackerAccounts(store))
           if (!read.length) continue
-          const { words, anyWord } = contentWords(
-            titleWords(
-              request.text,
-              "issues, projects and comments are found by the words and meaning of their title and text only",
-            ),
-            discover,
-          )
-          // Two sign-ins to one workspace hold each item twice, and the copies fold into one hit: read deep enough
-          // that the folded list still fills the page.
-          const deep = Math.min(depth * read.length, 500)
-          const found = await store.tracker.find({
-            words,
-            anyWord: anyWord || discover,
-            ...(request.exact ? { exact: true } : {}),
-            kinds: ["issue", "project", "comment"],
-            limit: deep,
+          const found = await trackerLane(store, {
+            text: request.text,
             accounts: read,
+            depth,
+            discover,
+            cosines,
+            embedders,
+            ...(request.exact ? { exact: true } : {}),
+            ...(command === undefined ? {} : { command }),
+            ...(request.env === undefined ? {} : { env: request.env }),
           })
           hasMore ||= found.hasMore
-          const items = new Map<string, string>()
-          const hitOf = (
-            at: AccountKey,
-            item: TrackerItem,
-            text: string,
-            foundBy: SearchAllRecordItem["foundBy"],
-          ): SearchAllRecordItem => {
-            const ref = `tracker:${at.provider}/${at.account}/${item.kind}/${item.record.externalId}`
-            if (hasGlobalItemIds(at.provider))
-              items.set(ref, JSON.stringify([at.provider, item.kind, item.record.externalId]))
-            return {
-              kind: TRACKER_HIT_KINDS[item.kind as keyof typeof TRACKER_HIT_KINDS],
-              // Two sign-ins see the same issue under the same id, so the account keeps their hits apart.
-              ref,
-              provider: at.provider,
-              account: at.account,
-              ...((item.record as { url?: string | null }).url ? { url: (item.record as { url: string }).url } : {}),
-              title: trackerTitle(item),
-              timestamp: new Date(item.record.updatedAt ?? item.syncedAt).toISOString(),
-              text,
-              foundBy,
-            }
-          }
-          const byWords = found.items.map(({ account: at, item, excerpt: text }) => hitOf(at, item, text, ["words"]))
-          const plain = meaningWordsOf(discover ? questionText(request.text) : request.text)
-          let near: TrackerNearest[] | undefined
-          let meaningSkipped: string | undefined
-          if (request.exact) meaningSkipped = "--exact searches words as written"
-          else if (plain === undefined) meaningSkipped = "the query names a title, which meaning cannot follow"
-          else
-            try {
-              near = await nearestTracker(store, plain, {
-                limit: deep,
-                accounts: read,
-                embedders,
-                ...(command === undefined ? {} : { command }),
-                ...(request.env === undefined ? {} : { env: request.env }),
-              })
-            } catch (error) {
-              if (!(error instanceof CliError && error.code === "not_found")) throw error
-              meaningSkipped = error.message
-            }
-          tracker = {
-            by: near === undefined ? "words" : "words and meaning",
-            ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
-          }
-          if (near === undefined) lists.push(oneHitPerItem(byWords, cosines, items))
-          else {
-            const byMeaning = near.map(({ account: at, item, score }) => ({
-              hit: hitOf(at, item, trackerExcerpt(item, request.text), ["meaning"]),
-              score,
-            }))
-            lists.push(oneHitPerItem(fusedLane(byWords, byMeaning, discover, cosines), cosines, items))
-          }
+          tracker = found.tracker
+          lists.push(found.hits)
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else if (resource === "business") {
           const { words, anyWord } = contentWords(titleWords(request.text, BUSINESS_WORDS_ONLY), discover)
@@ -977,50 +808,4 @@ const withMeetingDocuments = async (
       ]
     }),
   )
-}
-
-/** Passages of one meeting share its `ref`, the reference evidence cites; each is still a hit of its own. */
-const hitKey = (item: SearchAllItem): string =>
-  item.kind === "meeting" ? `${item.ref}\u0000${item.scope}\u0000${item.id}` : item.ref
-
-/**
- * Every source's hits as one list: each source's best hit first, then every other hit by cosine, then by its rank in
- * its source. Taking turns by rank (MEMO-37) gave each of two sources half of a ten-hit page however weak its hits;
- * one model scores every source, so cosine compares across them. A hit only words found takes the cosine of
- * the hit above it in its source: its source ranked it there, and with none it would follow every hit meaning found.
- */
-const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): SearchAllItem[] => {
-  const place = new Map<string, { item: SearchAllItem; rank: number; cosine: number }>()
-  for (const list of lists) {
-    let above = Number.NEGATIVE_INFINITY
-    list.forEach((item, rank) => {
-      const key = hitKey(item)
-      above = cosines.get(item.ref) ?? above
-      const held = place.get(key)
-      if (!held || rank < held.rank) place.set(key, { item, rank, cosine: above })
-    })
-  }
-  const head = (rank: number) => Math.min(rank, 1)
-  return [...place.values()]
-    .sort((a, b) => head(a.rank) - head(b.rank) || b.cosine - a.cosine || a.rank - b.rank)
-    .map(({ item }) => item)
-}
-
-const PERIOD_DEPTH = 100
-const PERIOD_BOOST = 0.5
-
-/**
- * A hit dated inside the question's period gains 0.5 over its place, 1 - rank/100: by rank, because only some hits have
- * a cosine to compare. One scale for every page, so paging past the first 100 never reorders what came before.
- */
-const insidePeriodFirst = (ordered: SearchAllItem[], period: Period | undefined): SearchAllItem[] => {
-  if (!period) return ordered
-  const inside = ({ timestamp }: SearchAllItem) => {
-    const at = timestamp === null ? Number.NaN : Date.parse(timestamp)
-    return at >= period.from && at < period.to
-  }
-  return ordered
-    .map((item, rank) => ({ item, score: 1 - rank / PERIOD_DEPTH + (inside(item) ? PERIOD_BOOST : 0) }))
-    .sort((a, b) => b.score - a.score)
-    .map(({ item }) => item)
 }

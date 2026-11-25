@@ -119,6 +119,75 @@ describe("tracker commands", () => {
     expect(ids(await cli("issues", "list", "sprint:none")).sort()).toEqual(["issue-2", "issue-3"])
   })
 
+  it("searches a quoted argument as words in any order, a quoted phrase as a phrase, and says it used words only", async () => {
+    const { cli } = await setup()
+    await cli("sync")
+    const any = await cli("issues", "search", "currency invoices")
+    expect(ids(any)).toEqual(["issue-1"])
+    expect(any.items[0]?.found_by).toEqual(["words"])
+    expect(any.missing).toEqual([
+      { field: "found_by", why: expect.stringMatching(/^found by words only: .* not downloaded/) },
+    ])
+    expect(ids(await cli("issues", "search", "currency", "invoices"))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "search", '"currency invoices"'))).toEqual([])
+    expect(ids(await cli("issues", "search", '"invoices fail"'))).toEqual(["issue-1"])
+    await expect(cli("issues", "search", "from:ada")).rejects.toThrow(/found by the words and meaning/)
+  })
+
+  it("narrows issues by a label's, state's, user's, team's, project's or sprint's name, and refuses an unknown one", async () => {
+    const { cli } = await setup()
+    await cli("sync")
+    expect(ids(await cli("issues", "list", "label:bug"))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", 'state:"in progress"'))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", 'assignee:"ada owner"'))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", "assignee:bob@example.com"))).toEqual(["issue-2"])
+    expect(ids(await cli("issues", "list", "team:eng", 'project:"billing revamp"', "sprint:1"))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", 'sprint:"Sprint 1"'))).toEqual(["issue-1"])
+    expect(ids(await cli("issues", "list", "label:label-bug"))).toEqual(["issue-1"])
+    const typo = cli("issues", "list", "label:bgu")
+    await expect(typo).rejects.toMatchObject({
+      code: "validation_error",
+      message: expect.stringContaining("no label bgu in the copy; close names: Bug"),
+      details: { reason: "tracker.reference", candidates: [{ id: "label-bug", name: "Bug" }] },
+    })
+    await expect(cli("issues", "list", "state:Shipped")).rejects.toMatchObject({
+      details: { reason: "tracker.reference" },
+    })
+    await expect(cli("issues", "list", "team:Design")).rejects.toThrow(/no team Design in the copy/)
+  })
+
+  it("a state's name every team has matches each team's, and team: narrows it to one", async () => {
+    const { cli, store } = await setup()
+    await cli("sync")
+    await store.tracker.save(ACCOUNT, "team", [{ externalId: "team-2", key: "OPS", name: "Operations" }], NOW)
+    await store.tracker.save(
+      ACCOUNT,
+      "state",
+      [{ externalId: "state-ops-doing", name: "In Progress", type: "started", team: "team-2" }],
+      NOW,
+    )
+    await store.tracker.save(
+      ACCOUNT,
+      "issue",
+      [
+        {
+          externalId: "issue-ops",
+          key: "OPS-1",
+          title: "Rotate keys",
+          state: "state-ops-doing",
+          team: "team-2",
+          labels: [],
+        },
+      ],
+      NOW,
+    )
+    expect(ids(await cli("issues", "list", 'state:"In Progress"')).sort()).toEqual(["issue-1", "issue-ops"])
+    expect(ids(await cli("issues", "list", "team:OPS", 'state:"In Progress"'))).toEqual(["issue-ops"])
+    await expect(cli("issues", "list", "state:Doen")).rejects.toMatchObject({
+      details: { candidates: [{ id: "state-done", name: "Done", team: "team-1" }] },
+    })
+  })
+
   it("names a kind the sign-in could not read in meta.issues, and still answers the sync complete", async () => {
     const { cli } = await setup((source) => ({
       ...source,
