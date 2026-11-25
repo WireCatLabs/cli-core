@@ -1,4 +1,4 @@
-### Changed
+### Changed — experimental
 
 - **A sender of a newsletter only is a bot, a human author too.** The owner's ruling of 25.11.2026, in place of the
   earlier one that kept a human-written newsletter a person. A person all of whose mail came from a list (List-Id,
