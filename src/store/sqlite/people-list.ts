@@ -16,6 +16,7 @@ import {
 } from "../../domain/person-kinds.js"
 import { type CacheDatabase, isQueryOnly, type SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
+import { groupByDomain } from "./domain-organizations.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import { type HeldBot, ownerPeopleOf, ruleMove, SENDER_BOT_PREFIX, senderBotsOf } from "./sender-bots.js"
@@ -494,7 +495,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "7"
+const KIND_RULES = "8"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
@@ -551,6 +552,22 @@ const keep = (database: CacheDatabase, worked: Worked[]): void => {
   for (const person of worked)
     if (person.move !== undefined && person.kind !== MERGED)
       ruleMove(database, person.id, person.move, person.kindSignals.join(", "), at)
+  const keptAsPeople = ownerPeopleOf(database)
+  groupByDomain(
+    database,
+    worked
+      .filter((person) => !person.owner && person.kind !== MERGED && person.kind !== "test")
+      .map((person) => ({
+        id: person.id,
+        displayName: person.displayName,
+        holds:
+          !keptAsPeople.has(person.id) &&
+          (person.bot !== null ||
+            person.move === "bot" ||
+            (person.kind === "organization" && person.kindSignals.includes("role-address"))),
+      })),
+    at,
+  )
   const row = database.prepare(
     "UPDATE persons SET kind = ?, name_order = ?, messages_from = ?, task_count = ?, last_contact = ? WHERE id = ?",
   )

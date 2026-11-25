@@ -294,7 +294,7 @@ describe("the kind of a person", () => {
       "ООО «Ромашка»": ["organization", "company-name"],
       Kai: ["person", "chat"],
       Orders: ["automated", "no-reply"],
-      Reception: ["organization", "role-address"],
+      Reception: ["organization", "organization", "role-address"],
       "Mia Holt": ["stranger", "no-tie"],
     })
   })

@@ -303,7 +303,7 @@ A phone, an address or an account an organization owns: a shop's number, `info@`
 | `id` | integer | PK |  |  |
 | `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
 | `organization_id` | integer | not null | → `organizations.id` | the `organization` it belongs to |
-| `method` | text | not null |  | how it was decided: `mention`, `owner`, an import |
+| `method` | text | not null |  | how it was decided: `mention`, `owner`, an import, `domain` |
 | `author` | text | not null |  | `owner`, an agent by name, `rules` |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |

@@ -707,6 +707,17 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   is a `sender_bot_moves` row. A bot is never joined to anyone by the matcher (`identity.not-a-person`), never assigned a
   task (`sender-bot.assignee`), never offered by `people.similar` and has no ties in `people.ties`. Neither table has a
   foreign key, so an older build erasing a person or purging an account still can; triggers drop their rows.
+- **Organizations from mail domains** (`domain-organizations.ts`, plan step 5): when kinds are kept, a bot or a shared
+  mailbox (every address a role address) at a company domain joins the organization of its registrable domain
+  (`registrableOf`, so `mail.bank.example` is `bank.example`): the organization already holding an address there, else
+  a new `company` named by the sender when the name is a company's or the domain's own word, else by the domain. Its
+  addresses go to `organization_identities` with method `domain`, author `rules`, and a bot's `sender_bots.organization_id`
+  is set. A human with an address there gets a `member-of` link (author `rule`), never a merge and never a proposal; a
+  human alone makes no organization. Free mail (`FREE_MAIL`), throwaway mail (`disposable-email-domains-js`) and
+  sending platforms (`SENDING_PLATFORMS`) are never a company domain. Two organizations holding one domain leave it
+  ungrouped. The owner's word holds: a removed `member-of` leaves a rejected `relationship` proposal the rule checks;
+  `knowledge.eraseOrganization` leaves a rejected `organization-domain` proposal per domain, so the rule never remakes
+  it; `moveToPerson` drops the rule's holds on the moved identities, and a person the owner kept as one holds nothing.
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;
   a `name:` search looks for the typed text in both scripts (`spellings`). Each row's `usernameSource` names the
   messenger its `@username` belongs to.

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { evaluate, type QueryAst, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import type { Decider } from "../decisions.js"
 import { ORGANIZATIONS_QUERY } from "../knowledge-query.js"
+import { refuseDomainsOf } from "./domain-organizations.js"
 import type { Organization } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
 import { categorySql, type OrganizationFilter } from "./organization-categories.js"
@@ -42,7 +43,12 @@ export interface OrganizationsStore {
 
 export const organizationsStoreOver = (context: StoreContext): OrganizationsStore => ({
   eraseOrganization: async (organization, by, { apply }) =>
-    write(context.database, () => eraseOrganization(context, organization, by, apply)),
+    write(context.database, () => {
+      const id = Number(/([1-9]\d*)$/u.exec(organization.trim())?.[1])
+      // Read before the erase takes the addresses; kept only if the erase goes through.
+      if (apply && Number.isInteger(id)) refuseDomainsOf(context.database, id, context.now())
+      return eraseOrganization(context, organization, by, apply)
+    }),
   ...organizationsReadsOver(context),
 })
 
