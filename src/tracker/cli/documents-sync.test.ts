@@ -21,6 +21,7 @@ import { addTrackerCommands } from "./index.js"
 
 const embedNotesWith = vi.hoisted(() => [] as object[])
 const embedTrackerWith = vi.hoisted(() => [] as object[])
+const trackerLeft = vi.hoisted(() => ({ on: false }))
 vi.mock("../../services/notes-search.js", async (original) => {
   const real = await original<typeof import("../../services/notes-search.js")>()
   return {
@@ -37,6 +38,7 @@ vi.mock("../../services/tracker-meaning.js", async (original) => {
     ...real,
     embedTracker: (store: MessageStore, options: Parameters<typeof real.embedTracker>[1] = {}) => {
       embedTrackerWith.push(options)
+      if (trackerLeft.on) return Promise.resolve({ model: "example-model", embedded: 600, left: true, remaining: 40 })
       return real.embedTracker(store, options)
     },
   }
@@ -367,6 +369,22 @@ describe("one sync for a tracker that holds documents too", () => {
     const within = expect.objectContaining({ deadline: expect.objectContaining({ ms: 300_000 }) })
     expect(embedNotesWith).toEqual([within])
     expect(embedTrackerWith).toEqual([within])
+  })
+
+  it("offers sync --embed again while the tracker's items have chunks left without vectors", async () => {
+    const { answer, env } = setup()
+    env.WIRECAT_STATE_DIR = join(String(env.LIN_STATE_DIR), "wirecat")
+    trackerLeft.on = true
+    try {
+      const synced = await answer(["sync", "--embed"])
+      expect(synced.item.embeddings).toMatchObject({ left: true, remaining: 40 })
+      expect(synced.next).toContainEqual(
+        expect.objectContaining({ step: "tracker.sync", args: expect.objectContaining({ embed: true }) }),
+      )
+      expect(synced.next?.find(({ step }) => step === "tracker.sync")?.why).toContain("40 chunks")
+    } finally {
+      trackerLeft.on = false
+    }
   })
 
   it("goes on with one step when --max-pages stops a part, passing it and --timeout on", async () => {

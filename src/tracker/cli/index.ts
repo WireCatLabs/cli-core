@@ -239,7 +239,15 @@ const trackerNext = (report: TrackerReport, opts: SyncOptions): NextStep[] =>
             : "the sync stopped before its end; running it again goes on from there",
         ),
       ]
-    : []
+    : report.embeddings?.left
+      ? [
+          resumeStep(
+            { ...opts, embed: true },
+            `${report.embeddings.remaining ?? "some"} chunks of issues, projects and comments have no vectors yet, so ` +
+              "search all may miss them by meaning; running sync --embed again embeds the next ones",
+          ),
+        ]
+      : []
 
 /** Why `--embed` failed after the sync saved its report: a model not downloaded. */
 const embeddingIssue = (error: unknown) => {
