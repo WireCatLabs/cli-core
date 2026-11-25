@@ -44,6 +44,16 @@ account `{ provider: "email", account: <address, lower case> }`.
   (`store.mail.markOwnMail`), and the account is saved again, so `linkOwnIdentities` joins their identities to the
   owner. Partial completion, `readEmailWhole` and a server search read the same list. A mail tie needs mail the owner
   wrote, so this is what gives the people an alias writes to their tie. Nothing is taken from a name.
+- **Stored headers.** An email stored in full keeps some header fields as JSON in `emails.headers`
+  (`mailHeadersOf`, `src/mail/headers.ts`): `list-id`, `list-unsubscribe`, `precedence`, `reply-to`, Gmail's `spf`,
+  `dkim` and `dmarc`, and what marks a program or a list. Those last are `auto-submitted` (its value, unless `no` or
+  `auto-replied`, [RFC 3834](https://www.rfc-editor.org/rfc/rfc3834)), `list-unsubscribe-post` (one-click,
+  [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058)) and `feedback-id`. The sender writes every header itself, so
+  they are kept only when a DKIM signature Gmail passed covers them and the signature's domain has the From's
+  registrable domain (`signedFieldsOf`). **Gap:** only Gmail's own `mx.google.com` stamp is read, so mail of an IMAP
+  server never keeps these three; another server's Authentication-Results may be the sender's own. An empty
+  Return-Path, which the receiving server writes, is kept as `null-return-path` unless the mail is an auto-reply: a
+  person's out-of-office comes that way too. Mail stored before these keys keeps none of them until read again.
 - **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists the UID, flags,
   date and size of every message in the window, and reads the raw bytes of the newest `max` not done and not located
   (a budgeted run: `fetchBatch` a round). It takes the id from the Message-ID, so stored mail keeps its id and the same

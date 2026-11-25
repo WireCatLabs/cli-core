@@ -503,6 +503,7 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
+export { REACHES, type Reach, type SenderSignal } from "./sqlite/sender-signals.js"
 export type { ChallengeInput, SourceReviewDecision } from "./sqlite/source-review.js"
 export type {
   PriceFilter,

@@ -1,4 +1,5 @@
 import { decodeWords } from "postal-mime"
+import { registrableOf } from "./score.js"
 
 /**
  * The header fields memo reads at list time: enough to group mail by sender, apply the owner's rules and keep
@@ -41,11 +42,15 @@ const fieldsOf = (unfolded: string, name: string): string[] =>
   [...unfolded.matchAll(new RegExp(`^${name}:[ \\t]*(.*?)\\r?$`, "gim"))].map(([, value]) => value as string)
 
 /**
- * The verdicts in Gmail's own Authentication-Results. Only the copy Gmail stamps as mx.google.com counts: a sender
- * can add one under any other name, and Gmail removes forged copies under its own (RFC 8601 §5).
+ * Gmail's own Authentication-Results. Only the copy Gmail stamps as mx.google.com counts: a sender can add one under
+ * any other name, and Gmail removes forged copies under its own (RFC 8601 §5).
  */
+const gmailStampOf = (unfolded: string): string | undefined =>
+  fieldsOf(unfolded, "Authentication-Results").find((value) => /^mx\.google\.com\s*;/i.test(value))
+
+/** The verdicts in Gmail's own Authentication-Results. */
 export const authOf = (unfolded: string): AuthVerdicts | undefined => {
-  const stamped = fieldsOf(unfolded, "Authentication-Results").find((value) => /^mx\.google\.com\s*;/i.test(value))
+  const stamped = gmailStampOf(unfolded)
   if (stamped === undefined) return undefined
   const results = [...stamped.matchAll(/\b(spf|dkim|dmarc)=([a-z]+)/gi)].map(([, method, result]) => [
     (method as string).toLowerCase(),
@@ -58,6 +63,61 @@ export const authOf = (unfolded: string): AuthVerdicts | undefined => {
     if (verdicts[key] === undefined || result === "pass") verdicts[key] = result
   }
   return Object.keys(verdicts).length ? verdicts : undefined
+}
+
+const tagsOf = (value: string): Map<string, string> =>
+  new Map(
+    value.split(";").flatMap((tag) => {
+      const at = tag.indexOf("=")
+      return at === -1 ? [] : [[tag.slice(0, at).trim().toLowerCase(), tag.slice(at + 1).replace(/\s+/g, "")]]
+    }),
+  )
+
+/**
+ * The header fields a DKIM signature Gmail passed covers, when that signature's domain is the From's own (its
+ * registrable domain). A sender writes every header itself; only a signature of its own domain vouches for one.
+ * Without Gmail's stamp nothing is trusted: other servers' Authentication-Results may be the sender's own.
+ */
+export const signedFieldsOf = (unfolded: string, from: string | undefined): Set<string> => {
+  const stamped = gmailStampOf(unfolded)
+  if (stamped === undefined || from === undefined) return new Set()
+  const passed = [...stamped.matchAll(/\bdkim=pass\b[^;]*?\bheader\.[id]=([^\s;]+)/gi)].map(([, identity]) =>
+    (identity as string).slice((identity as string).lastIndexOf("@") + 1).toLowerCase(),
+  )
+  const own = registrableOf(from)
+  const signed = new Set<string>()
+  for (const signature of fieldsOf(unfolded, "DKIM-Signature")) {
+    const tags = tagsOf(signature)
+    const domain = tags.get("d")?.toLowerCase()
+    if (domain === undefined || registrableOf(domain) !== own) continue
+    if (!passed.some((one) => one === domain || one.endsWith(`.${domain}`))) continue
+    for (const name of (tags.get("h") ?? "").split(":")) if (name !== "") signed.add(name.toLowerCase())
+  }
+  return signed
+}
+
+/**
+ * What says a program or a list sent the mail, each only when DKIM vouches for it (`signedFieldsOf`):
+ * `Auto-Submitted` other than `no` (RFC 3834), the one-click unsubscribe of RFC 8058 and Google's `Feedback-ID`.
+ * An empty Return-Path is the receiving server's, not the sender's, and marks a program unless it is an auto-reply,
+ * which RFC 3834 sends that way too: a person's out-of-office makes no bot.
+ */
+const programSignalsOf = (unfolded: string, from: string | undefined): Record<string, string | boolean> => {
+  const signed = signedFieldsOf(unfolded, from)
+  const submitted = field(unfolded, "Auto-Submitted")
+    ?.trim()
+    .toLowerCase()
+    .split(/[\s;(]/)[0]
+  const generated = submitted !== undefined && submitted !== "" && submitted !== "no" && submitted !== "auto-replied"
+  const oneClick = /list-unsubscribe\s*=\s*one-click/i.test(field(unfolded, "List-Unsubscribe-Post") ?? "")
+  return {
+    ...(generated && signed.has("auto-submitted") ? { "auto-submitted": submitted } : {}),
+    ...(oneClick && signed.has("list-unsubscribe-post") ? { "list-unsubscribe-post": true } : {}),
+    ...(field(unfolded, "Feedback-ID") !== undefined && signed.has("feedback-id") ? { "feedback-id": true } : {}),
+    ...(/^\s*<\s*>/.test(field(unfolded, "Return-Path") ?? "") && submitted !== "auto-replied"
+      ? { "null-return-path": true }
+      : {}),
+  }
 }
 
 export const addressesOf = (value: string | undefined): string[] => {
@@ -115,19 +175,22 @@ const headTextOf = (raw: Uint8Array): string => {
 export const headersOfRaw = (raw: Uint8Array): MailHeaders => headersOf(headTextOf(raw))
 
 /**
- * List-Id, the bulk-mail fields, Reply-To and Gmail's SPF, DKIM and DMARC verdicts of a whole email, kept on mail
- * stored in full so a rule or a sender score can be worked out from the store later. Names are lower case.
+ * List-Id, the bulk-mail fields, Reply-To, Gmail's SPF, DKIM and DMARC verdicts and what marks a program or a list
+ * (`programSignalsOf`) of a whole email, kept on mail stored in full so a rule, a sender score or a person's kind can
+ * be worked out from the store later. Names are lower case.
  */
 export const mailHeadersOf = (raw: Uint8Array): Record<string, string | boolean> => {
   const unfolded = unfold(headTextOf(raw))
   const listId = listIdOf(field(unfolded, "List-Id"))
   const precedence = field(unfolded, "Precedence")?.trim().toLowerCase()
   const [replyTo] = addressesOf(field(unfolded, "Reply-To"))
+  const [from] = addressesOf(field(unfolded, "From"))
   return {
     ...(listId ? { "list-id": listId } : {}),
     ...(replyTo === undefined ? {} : { "reply-to": replyTo }),
     ...authOf(unfolded),
     ...(field(unfolded, "List-Unsubscribe") === undefined ? {} : { "list-unsubscribe": true }),
     ...(precedence ? { precedence } : {}),
+    ...programSignalsOf(unfolded, from),
   }
 }

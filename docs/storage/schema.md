@@ -732,7 +732,7 @@ One email.
 | `flagged` | integer |  |  | 1 when it is flagged or starred |
 | `draft` | integer |  |  | 1 for a draft not yet sent |
 | `size` | integer |  |  | the raw email's size, in bytes |
-| `headers` | text |  |  | JSON: every header, as received |
+| `headers` | text |  |  | JSON: the header fields `mailHeadersOf` keeps (docs/dev/MAIL.md) |
 | `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |

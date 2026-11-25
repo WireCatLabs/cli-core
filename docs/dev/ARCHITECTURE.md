@@ -660,7 +660,9 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   one kind and lists one kind at a time. The owner, people added by hand and task assignees are a `person`; then
   `automated` (a bot, a no-reply address, whose local part has a no-reply word as one of its parts or, `bounce`
   aside, starts or ends with one; a notification address, with `notify`, `notification(s)` or `alert(s)` as one part;
-  mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
+  mostly bulk mail, memo's `bulk_never_replied`, a notification name; most of their mail with an `Auto-Submitted`
+  their own domain signed or an empty Return-Path ([MAIL.md](MAIL.md#syncmailsource-store-options)), unless the owner
+  wrote to them); then
   `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
   `person` with a tie; a named one with no tie is a `stranger`;
   one with nothing to show as a name is `unsorted`. Before any of these, `test` holds what a test run left
@@ -682,6 +684,13 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   (`PRAGMA data_version`), else the list answers from memory. `KIND_RULES` in `people-list.ts`
   is bumped when the rules change in code, which works out everyone again; a read-only open with anything to work out
   answers from memory (cli-testing `performance/memo/people-list`).
+  Each row of a page also carries `reach` and `signals` (`sender-signals.ts`), worked out for that page only and
+  never stored: `broadcast` for mail with a one-click unsubscribe or a `Feedback-ID` its domain signed, in the bulk
+  box, or with no To or Cc; `group` for a List-Id that `DISCUSSION_SENDERS` (3) addresses send to, `+tag` aside, or
+  more than `SMALL_GROUP_MEMBERS` recipients; else `direct`. The owner missing from a To or Cc that names others says
+  nothing, since an alias the store does not know looks the same. The reach most of their mail had wins, the wider on a
+  tie; mail the owner wrote them or a private chat both wrote in makes it `direct`, and with no mail a one-to-one chat
+  or a small group does. `null` when nothing says. The page reads every stored email's List-Id once for this.
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;
   a `name:` search looks for the typed text in both scripts (`spellings`). Each row's `usernameSource` names the
   messenger its `@username` belongs to.

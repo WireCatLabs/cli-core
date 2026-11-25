@@ -658,7 +658,7 @@ const NEW = {
         c("flagged", "integer"),
         c("draft", "integer"),
         c("size", "integer"),
-        c("headers", "text", { note: "JSON: every header, as received" }),
+        c("headers", "text", { note: "JSON: the header fields `mailHeadersOf` keeps (docs/dev/MAIL.md)" }),
         meta(),
         ...ts(),
         del(),
