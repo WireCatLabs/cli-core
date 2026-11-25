@@ -153,6 +153,7 @@ const OTHERS: Entry[] = [
   ["enrichment.owner-only", "permission_error", "only the owner turns enrichment on, not an agent"],
   ["search-harder.owner-only", "permission_error", "only the owner allows search all --harder, not an agent"],
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
+  ["domain-lists.offline", "permission_error", "updating the domain lists needs the network; --offline was requested"],
   ["model.key-rejected", "invalid_response", "the model provider refused the API key (401 or 403)"],
   ["model.unreachable", "invalid_response", "the model provider could not be reached over the network"],
   [

@@ -760,6 +760,7 @@ export {
   conversationsCommand,
   deleteCommand,
   doctorCommand,
+  domainListsCommand,
   editCommand,
   floodCommand,
   forwardCommand,

@@ -1,7 +1,8 @@
-import { mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
+import { domainListsDirectory, type InstalledPack, listFile } from "../domain/domain-lists.js"
 import type { CacheDatabase } from "./driver.js"
 import { openCache } from "./open.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
@@ -201,4 +202,80 @@ it("gives an organization the sector of its domain from the Wikidata list, and n
   const before = db.prepare("SELECT * FROM organizations").all()
   await resort(store, db)
   expect(db.prepare("SELECT * FROM organizations").all()).toEqual(before)
+})
+
+/** A pack in place as `domain-lists update` leaves it: one sector list, one bad list. */
+const installPack = (version: string, sectors: string[]) => {
+  const directory = domainListsDirectory()
+  rmSync(directory, { recursive: true, force: true })
+  mkdirSync(directory, { recursive: true })
+  const source = {
+    title: "test",
+    licence: "CC0",
+    licence_url: "https://example.org",
+    class: "commercial-ok" as const,
+    attribution: "test",
+    homepage: "https://example.org",
+    url: "https://example.org/list.gz",
+  }
+  const pack: InstalledPack = {
+    version,
+    built_at: "2026-11-25T00:00:00.000Z",
+    installed_at: "2026-11-25T00:00:00.000Z",
+    commercial_only: false,
+    sources: [
+      { ...source, id: "sectors", signal: "sector" },
+      { ...source, id: "bad", signal: "bad", tag: "malware" },
+    ],
+    files: {
+      sectors: { sha256: "", lines: sectors.length, bytes: 0 },
+      bad: { sha256: "", lines: 1, bytes: 0 },
+    },
+  }
+  writeFileSync(join(directory, "manifest.json"), JSON.stringify(pack))
+  writeFileSync(listFile(directory, "sectors"), `${sectors.join("\n")}\n`)
+  writeFileSync(listFile(directory, "bad"), "casino.ru\n")
+}
+
+it("takes sectors from the domain-list pack where the built-in table has none, and clears them when a newer pack drops them", async () => {
+  try {
+    installPack("2026-11-24", ["casino.ru\tgaming_gambling", "hsbc.com\tadult", "shop.ru\tshop"])
+    const { store, db } = await opened()
+    await store.people.savePeople(MAIL, [
+      { id: "noreply@casino.ru", name: "Casino" },
+      { id: "noreply@hsbc.com", name: "HSBC" },
+      { id: "noreply@shop.ru", name: "Shop" },
+    ])
+    await sorted(store)
+    const sectors = async () => (await store.knowledge.organizations()).map(({ name, sector }) => ({ name, sector }))
+    expect(await sectors()).toEqual([
+      { name: "Casino", sector: "gaming_gambling" },
+      { name: "HSBC", sector: "bank" },
+      { name: "Shop", sector: "shop" },
+    ])
+    db.prepare(
+      "UPDATE organizations SET metadata = json_set(metadata, '$.sector', 'news', '$.sector_by', 'owner') WHERE name = 'Shop'",
+    ).run()
+
+    installPack("2026-11-25", [])
+    await resort(store, db)
+
+    expect(await sectors()).toEqual([
+      { name: "Casino", sector: null },
+      { name: "HSBC", sector: "bank" },
+      { name: "Shop", sector: "news" },
+    ])
+    const before = db.prepare("SELECT * FROM organizations").all()
+    await resort(store, db)
+    expect(db.prepare("SELECT * FROM organizations").all()).toEqual(before)
+  } finally {
+    rmSync(domainListsDirectory(), { recursive: true, force: true })
+  }
+})
+
+it("makes no organization for a free-mail provider of the built-in list", async () => {
+  const { store, db } = await opened()
+  await store.people.savePeople(MAIL, [{ id: "noreply@seznam.cz", name: "Seznam" }])
+  await sorted(store)
+  expect(holdings(db)).toEqual([])
 })
