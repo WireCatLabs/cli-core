@@ -18,6 +18,7 @@ import { type CacheDatabase, isQueryOnly, type SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
+import { type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { mergedAssignees } from "./task-board.js"
 import { hiddenTestPeople } from "./test-people.js"
 import { read, writeBatch } from "./transaction.js"
@@ -63,6 +64,10 @@ export interface ListedPerson {
   lastContact: string | null
   /** Why they are shown; empty for someone hidden by default. */
   ties: ShownBecause[]
+  /** How their messages reached the owner (`senderSignalsOf`); `null` when nothing says. Worked out for the page. */
+  reach: Reach | null
+  /** What their mail and addresses show about who writes and how it reached the owner. Worked out for the page. */
+  signals: SenderSignal[]
 }
 
 export interface PeopleList {
@@ -138,7 +143,9 @@ const TWO_WAY =
 
 const MAIL_COUNTS = (scope: Scope) =>
   "SELECT l.person_id AS person, count(*) AS n, sum(EXISTS (SELECT 1 FROM email_mailboxes m " +
-  "JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id AND b.kind = 'bulk')) AS bulk " +
+  "JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id AND b.kind = 'bulk')) AS bulk, " +
+  "sum(json_extract(e.headers, '$.\"auto-submitted\"') IS NOT NULL) AS auto, " +
+  "sum(json_extract(e.headers, '$.\"null-return-path\"') IS 1) AS null_return " +
   "FROM emails e JOIN identity_links l ON l.identity_id = e.from_identity_id " +
   `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${IN_SCOPE(scope, "l.person_id")} GROUP BY 1`
 
@@ -282,10 +289,20 @@ interface Candidate {
   owner: boolean
 }
 
-interface Classified extends Omit<ListedPerson, "lastContact"> {
+interface Classified extends Omit<ListedPerson, "lastContact" | "reach" | "signals"> {
   id: number
   /** Worked out once: a collator over 50,000 names takes most of a list's time. */
   nameOrder: string
+  emails: string[]
+  twoWay: boolean
+}
+
+interface MailCounts {
+  n: number
+  bulk: number
+  /** Mail with an `Auto-Submitted` its own domain signed, and mail with an empty Return-Path (`mailHeadersOf`). */
+  auto: number
+  nullReturn: number
 }
 
 /** One misfiled letter is no newsletter. */
@@ -296,7 +313,7 @@ const kindOf = (
   shown: string | null,
   facts: Facts | undefined,
   ties: ShownBecause[],
-  mail: { n: number; bulk: number } | undefined,
+  mail: MailCounts | undefined,
   test: boolean,
 ): { kind: PersonKind; signals: (ShownBecause | KindSignal)[] } => {
   if (test) return { kind: "test", signals: ["test-data"] }
@@ -310,6 +327,11 @@ const kindOf = (
     ...(mail !== undefined && mail.n >= BULK_MIN && mail.bulk * 2 > mail.n ? (["bulk-mail"] as const) : []),
     ...(facts?.neverReplied ? (["bulk-never-replied"] as const) : []),
     ...(isAutomatedName(shown) ? (["automated-name"] as const) : []),
+    // A guess from headers never outweighs mail the owner wrote them.
+    ...(mail !== undefined && !ties.includes("mail") && mail.auto * 2 > mail.n ? (["auto-submitted"] as const) : []),
+    ...(mail !== undefined && !ties.includes("mail") && mail.nullReturn * 2 > mail.n
+      ? (["null-return-path"] as const)
+      : []),
   ]
   // One mailbox's newsletter signal must not hide someone the owner talks to in a private chat.
   if (automated.length > 0 && (facts?.bot || !facts?.twoWay)) return { kind: "automated", signals: automated }
@@ -340,7 +362,10 @@ const classified = (
     database
       .prepare(MAIL_COUNTS(scope))
       .all(...scopeParams(scope))
-      .map((row) => [Number(row.person), { n: Number(row.n), bulk: Number(row.bulk) }]),
+      .map((row) => [
+        Number(row.person),
+        { n: Number(row.n), bulk: Number(row.bulk), auto: Number(row.auto), nullReturn: Number(row.null_return) },
+      ]),
   )
   return people.map(({ id, name, owner }) => {
     const own = facts.get(id)
@@ -364,6 +389,8 @@ const classified = (
       usernameSource: own?.usernameSource ?? null,
       messagesFrom: (own?.messages ?? 0) + (mail.get(id)?.n ?? 0),
       ties,
+      emails: own?.emails ?? [],
+      twoWay: own?.twoWay ?? false,
     }
   })
 }
@@ -379,9 +406,22 @@ const withLastContact = (
       database,
       people.map(({ id }) => id),
     )
-  return people.map(({ id, nameOrder: _, ...person }) => {
+  const sent = sentMailOf(
+    database,
+    people.map(({ id }) => id),
+  )
+  return people.map(({ id, nameOrder: _, emails, twoWay, ...person }) => {
     const time = at.get(id)
-    return { ...person, lastContact: time === undefined ? null : new Date(time).toISOString() }
+    const { ties } = person
+    return {
+      ...person,
+      lastContact: time === undefined ? null : new Date(time).toISOString(),
+      ...senderSignalsOf(sent.get(id) ?? [], {
+        addresses: emails,
+        ownerWrote: twoWay || ties.includes("mail"),
+        chatted: ties.includes("chat") || ties.includes("small-group"),
+      }),
+    }
   })
 }
 
@@ -395,7 +435,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "5"
+const KIND_RULES = "6"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000

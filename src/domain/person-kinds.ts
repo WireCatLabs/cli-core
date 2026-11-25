@@ -11,6 +11,8 @@ export type KindSignal =
   | "bot"
   | "no-reply"
   | "notification-address"
+  | "auto-submitted"
+  | "null-return-path"
   | "bulk-mail"
   | "bulk-never-replied"
   | "automated-name"
