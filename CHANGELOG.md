@@ -7,6 +7,101 @@ shape of this file.
 
 ## 1.0.0 — 25.11.2026
 
+### Added
+
+- **Sender bots, apart from people (store version 74).** A program that writes to the owner becomes a `sender_bots`
+  row. That covers a no-reply or alert address, a messenger bot, and a service's signed automatic mail. A bot is never
+  proposed as the same person and never offered by `people.similar`. It has no ties, and `tasks.assign` refuses it
+  with `sender-bot.assignee`. The owner's `store.people.moveToBot` and `moveToPerson` move a person, a bot or one
+  identity for its whole history. The owner's choice wins over the rules, and every move is logged in
+  `sender_bot_moves`. See [ARCHITECTURE.md, "Sender bots"](docs/dev/ARCHITECTURE.md) and
+  [schema.md](docs/storage/schema.md#sender_bots).
+- **A page of people reads its List-Ids through an index** (`emails_by_list_id`). It no longer reads the List-Id of
+  every stored email.
+- **An organization says what it does: `Organization.sector`.** An organization holding a company mail domain gets
+  `bank`, `airline`, `shop`, `news`, `government`, `telecom`, `social`, `delivery` or `financial` from a table of
+  domains built into the package from Wikidata (CC0), so no sender is looked up online. It is stored in the
+  organization's `metadata.sector`; free mail and sending platforms never give one. The first list after the
+  upgrade sets it for the organizations already stored
+  ([ARCHITECTURE](docs/dev/ARCHITECTURE.md#entities-and-source-records)).
+- **Organizations from mail domains.** A sender bot or a shared mailbox at a company domain joins that domain's
+  organization when people are listed: the one already holding an address there, else a new one, named by the sender
+  when the name is a company's, else by the domain. Subdomains count as their registrable domain. A human writing
+  from that domain gets a `member-of` link to it and is never merged. Free mail, throwaway mail and sending platforms
+  (newsletter hosts and mail services) make no organization. The owner's word holds: a membership the owner removed,
+  an organization the owner erased and a bot the owner moved to a person are not grouped again. See
+  [ARCHITECTURE.md, "Organizations from mail domains"](docs/dev/ARCHITECTURE.md).
+- **`issues search` finds issues, projects and comments by meaning too**, once `sync --embed` built their vectors, and
+  ranks them as the `tracker` lane of `search all` does: the same lane, now `searchTracker` in
+  `src/services/search-all-tracker.ts`. A question finds what holds some of its words. Each hit has `found_by`;
+  searched by words only, the answer says why in `missing` (`field: found_by`) with a `sync --embed` step
+  ([TRACKER.md](docs/dev/TRACKER.md#commands)). The linear rivals benchmark found 7 of 27 with this command and 27
+  of 27 with memo's `search all` over the same copy
+  ([cli-testing](https://github.com/WireCatLabs/cli-testing/blob/main/performance/tracker/linear-rivals/README.md)).
+- **A label, state, user, team or project made after the last sync is found for a write.** A deleted one is not. `issues create` and
+  `issues update` look a name the copy lacks up in one `changes` call from that kind's last sync cursor, and keep the
+  row in the copy; with no cursor, or more changes than one page, the refusal says it is not in the copy and to run
+  sync. A name no row has is refused with the nearest names as `candidates`, each with its team.
+- **`store.tracker.save` and `removeUnlisted` take sync state to save in the same transaction**: `save(key, kind,
+  records, now, state?)` and `removeUnlisted(..., { state })`, as `mail.saveThreads` takes its states. `syncTracker`
+  saves a page's cursor this way, so a wrapper around `store.tracker` must pass `state` on. A dry run of
+  `removeUnlisted` now only reads
+  ([TRACKER.md](docs/dev/TRACKER.md#synctrackersource-store-account-options)).
+
+### Changed — may break callers
+
+- **`account rename` refuses an unreadable config file with `config.unreadable`, not `account-rename.config`.** The
+  family audit found one failure, "the config file cannot be read", under two names: this one and mail-cli's
+  `mail.config-unreadable`. `config.unreadable` is the one name for it, and mail-cli raises it too.
+
+### Changed — experimental
+
+- **`people.list` rows have `bot`**: `sender-bot:<id>` for a sender bot, else `null`. A bot is still listed as
+  `automated` under its `person:<uid>` ref, so `people list kind:automated` and `people show` keep working. A bot's
+  `ties` are empty.
+- **`KindSignal` gains `owner-choice`**: the signal of a bot the owner made when nothing else marks it.
+- **`KIND_RULES` goes to 7.** The first list after the upgrade works out every kind again and moves the programs it
+  finds.
+- **`KIND_RULES` goes to 8.** The first list after the upgrade works out every kind again and groups the senders it
+  finds under their organizations. A shared mailbox an organization now holds gains the `organization` kind signal.
+The tracker commands are not in the stable API; these may still break a caller that relied on the old answers.
+
+- **A quoted argument to `issues search` is words in any order, not a phrase.** `issues search "invoice currency"`
+  now matches as `issues search invoice currency` does, as its help says. Quote marks inside the query
+  (`'"invoice currency"'`) still match a phrase, as in `search all`. A query naming a field (`from:`) is refused.
+- **An `issues list` filter value the copy holds no row of is refused** (`validation_error`, `tracker.reference`)
+  instead of answering no issues. A caller that passed an id of a row not yet synced gets the error and runs sync.
+
+### Fixed
+
+- **A question in `search all` no longer finds deals, leads, tracker items or business records by its function
+  words.** A question is searched by any of its words, so «что с логотипом?» also found a deal titled «Что мы
+  обещали», and «кто ругался что мы…» put a note ranked by «что» first. The CRM, tracker and business lanes now
+  leave out words like «что», «кто», «мы», "the", the same list the message search uses; a question made only of
+  them is searched as typed.
+- **A CRM's own address field is copied.** A typed entry of type `location` (Attio) was skipped, so the field never
+  reached the store. It is now one line of the parts present, street to country, and a search finds the record by its
+  city. See [CRM.md](docs/dev/CRM.md).
+- **A tracker's `sync --embed` offers to run again while chunks are left without vectors.** One run embeds at most
+  600 chunks; past that it answered `left: true` and no next step, so an agent stopped with part of the issues,
+  projects and comments missing from `search all` by meaning. It now adds a `tracker.sync` step with `embed: true`
+  and the count left, as a CRM CLI's `sync --embed` does.
+- **`issues list` filters by name.** `label:Bug`, `state:"In Progress"`, `assignee:"Ada Owner"`, `team:ENG`,
+  `project:"Billing revamp"` and `sprint:12` match a name in any letter case, or the id as before; a name several
+  rows have (every team's "In Progress") matches each. An unknown name is `tracker.reference` with the nearest names
+  in `candidates`, no longer an empty list. `TrackerFilter`'s `assignee`, `project`, `state`, `label` and `sprint`
+  take several ids too.
+- **Scoring mail senders no longer rebuilds the throwaway-domain list for each sender.** The spam score
+  (`scoreGroup`) and the organizations from mail domains now share one set built on first use
+  (`isDisposableDomain`). Scoring 20,000 senders took about 7 s and now takes about 0.2 s.
+- **A tracker sync commits half as often** (#3336). Each page of changes is saved with the cursor after it in one
+  transaction, the end of an id pass with its marks, and the end of the run in one more. Each commit waits for the
+  disk: the strict fake's 8 kinds of 3 rows went from 79 commits to 38 (median 354 → 214 ms on a busy disk), 2,000
+  issues from 101 to 53
+  ([sync-writes](https://github.com/WireCatLabs/cli-testing/tree/main/performance/tracker/sync-writes)). What is
+  stored is the same. A page is now saved with its cursor or not at all; before, a crash between the two read the
+  page again.
+
 ## 1.0.0-rc.0 — 25.11.2026
 
 ### Added
