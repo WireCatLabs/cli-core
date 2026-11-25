@@ -136,7 +136,10 @@ interface Run {
   report: TrackerSyncReport
 }
 
-/** Reads one kind's changes from where it stood, page by page, saving each page and the cursor after it. */
+/**
+ * Reads one kind's changes from where it stood, page by page, saving each page and the cursor after it in one
+ * transaction: a page is saved with its cursor or not at all, and each commit waits for the disk.
+ */
 const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, mode: Mode) => {
   const { source, store, account, budget } = run
   const name = trackerCursorName(kind)
@@ -144,10 +147,11 @@ const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResul
   let round = mode.drop
     ? { from: null, page: null }
     : (cursor.round ?? { from: mode.full ? null : cursor.token, page: null })
-  const save = (patch: Partial<TrackerCursor>) => {
+  const moved = (patch: Partial<TrackerCursor>) => {
     cursor = { ...cursor, ...patch }
-    return store.sync.setSyncState(account, name, JSON.stringify(cursor))
+    return { [name]: JSON.stringify(cursor) }
   }
+  const save = (patch: Partial<TrackerCursor>) => store.sync.setSyncState(account, name, moved(patch)[name] as string)
   const pages = new Set<string>()
   for (;;) {
     result.round = round.from === null ? "full" : "changes"
@@ -170,23 +174,30 @@ const syncChanges = async (run: Run, kind: TrackerKind, result: TrackerSyncResul
       pages.clear()
       continue
     }
+    const broken = !page.hasMore
+      ? undefined
+      : page.nextCursor === undefined
+        ? `${source.provider} said there are more ${kind}s but gave no cursor`
+        : pages.has(page.nextCursor)
+          ? `${source.provider} gave the same page of ${kind}s twice`
+          : undefined
+    // A cursor past a broken page would skip the rows the tracker failed to list.
+    let state: Record<string, string> | undefined
+    if (!broken) {
+      if (page.hasMore) {
+        pages.add(page.nextCursor as string)
+        round = { ...round, page: page.nextCursor as string }
+      }
+      state = moved(page.hasMore ? { round } : { token: page.cursor ?? null, round: null })
+    }
     if (page.items.length) {
-      const changed = await store.tracker.save(account, kind, page.items, run.now)
+      const changed = await store.tracker.save(account, kind, page.items, run.now, state)
       result.saved += changed
       run.report.progress.saved += changed
-    }
+    } else if (state) await store.sync.setSyncState(account, name, state[name] as string)
     run.report.progress.steps += 1
-    if (!page.hasMore) {
-      await save({ token: page.cursor ?? null, round: null })
-      return null
-    }
-    if (page.nextCursor === undefined)
-      throw new CliError("invalid_response", `${source.provider} said there are more ${kind}s but gave no cursor`)
-    if (pages.has(page.nextCursor))
-      throw new CliError("invalid_response", `${source.provider} gave the same page of ${kind}s twice`)
-    pages.add(page.nextCursor)
-    round = { ...round, page: page.nextCursor }
-    await save({ round })
+    if (broken) throw new CliError("invalid_response", broken)
+    if (!page.hasMore) return null
   }
 }
 
@@ -228,6 +239,10 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, m
       await store.sync.setSyncState(account, name, JSON.stringify(pass))
       continue
     }
+    const cursorName = trackerCursorName(kind)
+    const cursor = parsed<TrackerCursor>((await store.sync.syncState(account, cursorName))?.value) ?? fresh()
+    // Apart, a crash between them would run a pass again whose marks are saved, or drop one without its `passAt`.
+    const state = { [name]: "null", [cursorName]: JSON.stringify({ ...cursor, passAt: pass.started }) }
     const stored = await store.tracker.count(account, kind)
     const unlisted = await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now, {
       dryRun: true,
@@ -244,14 +259,11 @@ const passIds = async (run: Run, kind: TrackerKind, result: TrackerSyncResult, m
         : `${source.provider} listed ${pass.ids.length} ${kind} ids, so ${unlisted} of the ${stored} stored would be ` +
           `marked deleted; nothing was. Check the sign-in's rights, then run sync --allow-deletions ${unlisted} to ` +
           "let them through"
+      await store.sync.applyDelta(account, { state })
     } else {
-      result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now)
+      result.unlisted += await store.tracker.removeUnlisted(account, kind, pass.ids, pass.started, run.now, { state })
       result.pass = "complete"
     }
-    await store.sync.setSyncState(account, name, "null")
-    const cursor =
-      parsed<TrackerCursor>((await store.sync.syncState(account, trackerCursorName(kind)))?.value) ?? fresh()
-    await store.sync.setSyncState(account, trackerCursorName(kind), JSON.stringify({ ...cursor, passAt: pass.started }))
     return null
   }
 }
@@ -357,12 +369,14 @@ export const syncTracker = async (
     result.state = "complete"
     done.add(kind)
   }
-  await store.sync.setSyncState(
-    account,
-    RESUME,
-    report.stopped ? JSON.stringify({ v: 1, done: [...done], ...(mode.full ? { rescan: true } : {}) }) : "null",
-  )
-  await store.sync.setSyncState(account, GAPS, JSON.stringify(report.gaps))
+  await store.sync.applyDelta(account, {
+    state: {
+      [RESUME]: report.stopped
+        ? JSON.stringify({ v: 1, done: [...done], ...(mode.full ? { rescan: true } : {}) })
+        : "null",
+      [GAPS]: JSON.stringify(report.gaps),
+    },
+  })
   const passes = await Promise.all(
     kinds.map(
       async (kind) =>
