@@ -25,7 +25,7 @@ export interface BotIdentity {
 
 /** A program that writes to the owner, apart from people: it has no ties, no tasks and no merge review. @experimental */
 export interface SenderBot {
-  /** `sender-bot:<id>`. */
+  /** `bot:<id>`. */
   bot: string
   /** The owner's name for it; `displayName` falls back to its identities'. */
   name: string | null
@@ -47,7 +47,7 @@ export interface SenderBot {
 /** One move of an identity between a person and a bot. @experimental */
 export interface BotMove {
   identity: IdentityRef
-  /** `person:<uid>` or `sender-bot:<id>`; `null` for none. */
+  /** `person:<uid>` or `bot:<id>`; `null` for none. */
   from: string | null
   to: string | null
   author: BotAuthor

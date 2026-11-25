@@ -58,7 +58,7 @@ describe("the log allow-list", () => {
     const record = agentActionRecord(
       {
         id: "12",
-        actor: { type: "bot", id: "3", name: "tg-mcp" },
+        actor: { type: "agent", id: "3", name: "tg-mcp" },
         tool: "messages_send",
         tier: "write-public",
         target: { type: "chat", id: "9" },
@@ -81,7 +81,7 @@ describe("the log allow-list", () => {
         tool: "messages_send",
         tier: "write-public",
         outcome: "refused",
-        actor_type: "bot",
+        actor_type: "agent",
         actor_id: "3",
         agent: "tg-mcp",
         target_type: "chat",
