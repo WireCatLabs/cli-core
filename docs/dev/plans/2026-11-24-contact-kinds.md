@@ -1,6 +1,6 @@
 # Plan: who sent it and how it reached you
 
-Status: draft for review. Steps 1 and 2 are built; the rest is not. It answers the RFC in
+Status: draft for review. Steps 1 to 4 are built, step 3 in a first form (below); the rest is not. It answers the RFC in
 [#3314](https://github.com/WireCatLabs/cli-core/issues/3314) and replaces its proposal.
 
 ## The problem
@@ -50,6 +50,11 @@ proposed as "the same person", cannot be a task's assignee and never counts as s
 
 A bot has a name, its identities and an optional organization. It has no ties, no tasks and no merge review: two
 bots of one organization are grouped under it, not merged.
+
+**Built so far (#3339, store version 74).** A bot is a `sender_bots` row anchored on one person, and its identities
+stay on that person, so ingest, merges and `person:` references keep working. A bot is always listed as
+`automated`. This is the plan's separation in a first form: lists still tell bots apart by kind. The full form gives
+a bot its own reference (`bot:`) and moves its identities off the person; memo and Desktop change with it.
 
 **Moving between entities.** A rule can be wrong, so an identity can move from a person to a bot and back. Its
 messages stay where they are (they point at the identity), the move is logged, and the owner's choice always wins
@@ -179,9 +184,10 @@ after the headers and the address, and it is matched on both the `From` domain a
    in #3334.
 3. Store: the `bots` table, `identities` pointing at a person or a bot, the move log, and `reach` and the marks kept
    like `kind` today (lazily, cleared by triggers). Identities that today make a person `automated` move to bots.
-   The migration takes the next free number after the 1.0 store (73, cli-core#3288), and also indexes the
-   List-Id that #3334 reads for every page.
-4. The owner's choice: move an identity to a person or a bot, for its whole history.
+   Built in #3339 as `sender_bots` anchored on a person (store version 74), with the move log and the List-Id
+   index; the full split is open (question 5).
+4. The owner's choice: move an identity to a person or a bot, for its whole history. Built in #3339 as
+   `PeopleStore.moveToBot` and `moveToPerson`; memo has no command for it yet.
 5. Organizations from domains, with the three exceptions above, then their `category` from the domain lists.
 6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
 7. Desktop: four tabs and their filters; this closes
@@ -199,3 +205,5 @@ after the headers and the address, and it is matched on both the `From` domain a
    one Subscription? Until answered: a `List-Id` with three or more distinct senders is `group`.
 4. **Where the domain lists live.** Built into the package at release (no network at run time), or downloaded once by
    a `models`-style command the owner runs?
+5. **The full split of bots.** Give a bot its own `bot:` reference and move its identities off the person (memo and
+   Desktop change), or keep the person-anchored form of #3339?
