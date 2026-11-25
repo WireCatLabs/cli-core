@@ -10,6 +10,7 @@ export type KindSignal =
   | "test-data"
   | "bot"
   | "no-reply"
+  | "notification-address"
   | "bulk-mail"
   | "bulk-never-replied"
   | "automated-name"

@@ -4,11 +4,12 @@ import { variantKey } from "../../domain/name-variants.js"
 import { BARE_INTERNATIONAL_PROVIDERS, isMobilePhone, nationalPhone, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
 import type { IdentityLinkSignal, MatchScan, SharedMailbox } from "../identity-links.js"
-import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
+import { type LinkIndex, linkIndex, linkRows, settleLinks } from "./identity-link-rows.js"
 import { type Opening, openIdentityLink } from "./identity-proposals.js"
 import type { Author } from "./memories.js"
 import { peopleByNameKey, type SharedTrace, sharedTraces } from "./name-traces.js"
 import type { StoreContext } from "./open.js"
+import { storeKinds } from "./people-list.js"
 import { isOwner, mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
 import { resolvePersonLinks } from "./person-resolution.js"
@@ -27,7 +28,7 @@ const MOST_SHARING = 6
 const CURSOR = "people.scan"
 
 /** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
-const RULES = 6
+const RULES = 7
 
 /**
  * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
@@ -262,6 +263,8 @@ interface Pass {
   result: MatchScan
   /** Shared mailboxes, proposed after the phones: an open proposal would keep a phone from joining the pair. */
   shared: SharedGroup[]
+  /** Bots and people whose kind is `automated` or `organization`: one name never makes them one person. */
+  notByName: ReadonlySet<number>
 }
 
 /**
@@ -481,7 +484,14 @@ const strongEnough = (context: StoreContext, from: number, to: number, trace: Sh
  * One name and a shared trace (a phone, an address, a chat, a company's domain) only proposes: a name is common, so
  * the owner decides every merge. More than `MOST_SHARING` people on one name is too common to propose from.
  */
-const sameName = (pass: Pass, people: number[], name: string) => {
+const sameName = (pass: Pass, named: number[], name: string) => {
+  const people = named.filter((one) => !pass.notByName.has(one))
+  if (people.length < named.length)
+    pass.result.skipped.push({
+      persons: named.filter((one) => pass.notByName.has(one)).map(String),
+      signal: "name",
+      reason: "identity.not-a-person",
+    })
   if (people.length > MOST_SHARING) {
     pass.result.skipped.push({ persons: people.map(String), signal: "name", reason: "identity.common-name" })
     return
@@ -538,7 +548,7 @@ const sameNameInChats = (pass: Pass, holders: { identity: number; provider: stri
   const people = new Map<number, { identity: number; provider: string; name: string }>()
   for (const holder of holders) {
     const person = personOf(pass.context, holder.identity)
-    if (person !== undefined && !people.has(person)) people.set(person, holder)
+    if (person !== undefined && !pass.notByName.has(person) && !people.has(person)) people.set(person, holder)
   }
   if (people.size < 2) return
   if (people.size > MOST_SHARING) {
@@ -640,6 +650,30 @@ const guestRows = (database: CacheDatabase) =>
     }))
 
 /**
+ * Kinds are worked out first, since a join above clears them; anyone whose kind is still not worked out (another
+ * writer won the race) is taken for a person this pass.
+ */
+const notByNameOf = (database: CacheDatabase): Set<number> => {
+  storeKinds(database)
+  return new Set(
+    database
+      .prepare(
+        "SELECT id FROM persons WHERE kind IN ('automated', 'organization') UNION SELECT l.person_id " +
+          `FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE NOT (${NOT_A_BOT})`,
+      )
+      .all()
+      .map((row) => Number(row.id)),
+  )
+}
+
+/** Open name proposals made before one side was known to be no person, which nobody should review now. */
+const forgetNameProposals = (database: CacheDatabase, notByName: ReadonlySet<number>) => {
+  for (const row of linkRows(database, ["proposed"]))
+    if (row.payload.signal === "name" && row.pair?.some((person) => notByName.has(person)))
+      database.prepare("DELETE FROM proposed_actions WHERE id = ?").run(Number(row.id))
+}
+
+/**
  * One pass of the people matcher. It reads what may match outside any transaction and takes the write lock only for
  * each group it changes, so other writers are never kept waiting for the whole pass. After the first pass, only the
  * values of identities changed since the last one are looked at, unless `full`. The owner's separations and
@@ -657,6 +691,7 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
     index: linkIndex(database),
     result: { full: changed === undefined, merged: [], proposed: [], skipped: [] },
     shared: [],
+    notByName: new Set(),
   }
   for (const [address, holders] of emailHolders(database))
     if (holders.length > 1 && touched(holders)) write(database, () => sameEmail(pass, address, holders))
@@ -666,6 +701,8 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
   for (const row of guestRows(database))
     if ((changed === undefined || changed.has(row.identity)) && !pass.index.names(row.ref))
       write(database, () => guestEmail(pass, row))
+  pass.notByName = notByNameOf(database)
+  write(database, () => forgetNameProposals(database, pass.notByName))
   const changedPeople = changed === undefined ? undefined : peopleOfIdentities(context, changed)
   for (const { people, name } of peopleByNameKey(database).values())
     if (people.length > 1 && (changedPeople === undefined || people.some((one) => changedPeople.has(one))))
@@ -695,6 +732,7 @@ export const linkPhones = (context: StoreContext, identities: ReadonlySet<number
     index: linkIndex(database),
     result: { full: false, merged: [], proposed: [], skipped: [] },
     shared: [],
+    notByName: new Set(),
   }
   for (const [phone, holders] of phoneHolders(database))
     if (holders.length > 1 && holders.some(({ identity }) => identities.has(identity)))
