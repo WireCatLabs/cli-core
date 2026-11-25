@@ -273,6 +273,20 @@ describe("mail sorting rules", () => {
     expect(await bots()).toEqual({ "noreply@shop.ru": "rules" })
   })
 
+  it("puts more senders back than one write takes, and finishes a stopped put-back on the next removal", async () => {
+    const { store, db } = await opened(Array.from({ length: 120 }, (_, i) => email(`desk${i}@bigshop.ru`, `Note ${i}`)))
+    const held = () => Number(db.prepare("SELECT count(*) AS n FROM sender_bot_identities").get()?.n)
+    const { rule } = await store.mail.sorting.add(
+      { scope: "domain", value: "bigshop.ru", sender: "bot", applyTo: "all" },
+      "owner",
+    )
+    expect(held()).toBe(120)
+    db.prepare("UPDATE mail_sort_rules SET removed_at = 1 WHERE id = ?").run(rule?.id as number)
+    expect(held()).toBe(120)
+    await store.mail.sorting.remove(rule?.id as number, "owner")
+    expect(held()).toBe(0)
+  })
+
   it("files a sender under an organization and takes it out again", async () => {
     const { store, db } = await opened([email("orders@shop.example", "Receipt")])
     const organization = Number(

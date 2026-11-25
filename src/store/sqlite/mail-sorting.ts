@@ -344,6 +344,12 @@ const moveSender = (context: StoreContext, address: string, rule: SortRule) => {
 /** Each move takes about 10 ms: 100 per write keeps another writer's 5 s wait for the lock far away. */
 const SETTLE_CHUNK = 100
 
+/**
+ * A waiting writer polls the lock every 100 ms at most (SQLite's busy handler): back-to-back writes never let it in,
+ * and it gives up after 5 s however short each write is. A pause longer than its poll does.
+ */
+const letOthersIn = () => new Promise((resolve) => setTimeout(resolve, 150))
+
 /** Whether the sender is still where the rule put it: else the owner moved it since, and that stands. */
 const stillAfter = (database: CacheDatabase, identity: number, after: string | null): boolean => {
   const now = holderOf(database, identity)
@@ -356,8 +362,8 @@ const stillAfter = (database: CacheDatabase, identity: number, after: string | n
 
 /**
  * Puts back what removed rules did to up to `SETTLE_CHUNK` senders, newest effect first, each to its holder and author
- * before the rule, then lets the rules still live settle them. Answers whether any were left. The caller holds the
- * write lock.
+ * before the rule, then lets the rules still live settle them. Answers whether more may be left. The caller holds
+ * the write lock.
  */
 const putBackChunk = (context: StoreContext): boolean => {
   const { database } = context
@@ -391,12 +397,12 @@ const putBackChunk = (context: StoreContext): boolean => {
     database.prepare("UPDATE mail_sort_effects SET undone_at = ? WHERE id = ?").run(at, Number(effect.id))
   }
   settleSenders(context, identities)
-  return true
+  return identities.length === SETTLE_CHUNK
 }
 
 /** Each removed rule's senders put back a write at a time; a stopped run resumes on the next change of rules. */
-const putBackInChunks = (context: StoreContext) => {
-  for (let more = true; more; ) more = write(context.database, () => putBackChunk(context))
+const putBackInChunks = async (context: StoreContext) => {
+  while (write(context.database, () => putBackChunk(context))) await letOthersIn()
 }
 
 const clearTypes = (database: CacheDatabase, ids: readonly number[]) =>
@@ -571,9 +577,11 @@ const applyRule = (context: StoreContext, rule: SortRule): number[] => {
 }
 
 /** Settles senders a write at a time; a sender already settled is skipped, so a stopped run resumes on the next. */
-const settleInChunks = (context: StoreContext, identities: readonly number[]) => {
-  for (let at = 0; at < identities.length; at += SETTLE_CHUNK)
+const settleInChunks = async (context: StoreContext, identities: readonly number[]) => {
+  for (let at = 0; at < identities.length; at += SETTLE_CHUNK) {
+    if (at > 0) await letOthersIn()
     write(context.database, () => settleSenders(context, identities.slice(at, at + SETTLE_CHUNK)))
+  }
 }
 
 /** A change's time, later than every change before it, so undo takes changes back in order within one millisecond. */
@@ -681,7 +689,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         const made = ruleById(database, id)
         return { applied: true, preview, rule: made, identities: applyRule(context, made) }
       })
-      settleInChunks(context, identities)
+      await settleInChunks(context, identities)
       return result
     },
     remove: async (id, by) => {
@@ -692,7 +700,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         if (rule.removedAt !== null) return rule
         return takeOut(context, rule, false)
       })
-      putBackInChunks(context)
+      await putBackInChunks(context)
       return removed
     },
     undo: async (by) => {
@@ -715,8 +723,8 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         const back = ruleById(database, rule.id)
         return { identities: applyRule(context, back), undone: { undid: "remove" as const, rule: back } }
       })
-      putBackInChunks(context)
-      settleInChunks(context, identities)
+      await putBackInChunks(context)
+      await settleInChunks(context, identities)
       return undone
     },
     reset: async (sender, by) => {
@@ -738,7 +746,7 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
           .all(JSON.stringify(addresses), JSON.stringify(mails))
           .map((row) => takeOut(context, ruleOf(row), false))
       })
-      putBackInChunks(context)
+      await putBackInChunks(context)
       return removed
     },
   }
