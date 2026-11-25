@@ -4,7 +4,6 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { syncMail } from "../mail/sync.js"
 import { type FakeMail, type FakeMailbox, fakeMailSource } from "../mail/testing/index.js"
-import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const ME = "owner@home.example.com"
@@ -53,9 +52,7 @@ const opened = async (messages: FakeMail[]) => {
   const sync = () =>
     syncMail(fakeMailSource(mailbox), store, { account: { address: ME }, since: SINCE, now: () => NOW })
   await sync()
-  const db = await openCache(path)
-  handles.push(db)
-  return { store, db, mailbox, sync }
+  return { store, mailbox, sync }
 }
 
 const sorted = async (store: MessageStore) => {
@@ -88,7 +85,7 @@ it("makes a sender of a newsletter only a bot, a human author too, and keeps its
 })
 
 it("gives the bot back once the owner replies, and only its newsletter mail keeps reach broadcast", async () => {
-  const { store, db, mailbox, sync } = await opened([issue("Notes from the road")])
+  const { store, mailbox, sync } = await opened([issue("Notes from the road")])
   expect(await botNames(store)).toHaveLength(1)
 
   mailbox.messages.push(
@@ -96,7 +93,6 @@ it("gives the bot back once the owner replies, and only its newsletter mail keep
     mail(AUTHOR, "Re: Re: Notes from the road"),
   )
   await sync()
-  db.prepare("UPDATE persons SET kind = NULL WHERE owner = 1").run()
 
   expect(await botNames(store)).toEqual([])
   const ada = (await store.people.list({ limit: 50, kind: "all" })).items.find(
@@ -110,12 +106,11 @@ it("gives the bot back once the owner replies, and only its newsletter mail keep
 })
 
 it("gives the bot back after a 1-to-1 mail from its address, though the owner never wrote", async () => {
-  const { store, db, mailbox, sync } = await opened([issue("Notes from the road")])
+  const { store, mailbox, sync } = await opened([issue("Notes from the road")])
   expect(await botNames(store)).toHaveLength(1)
 
   mailbox.messages.push(mail(AUTHOR, "A question for you"))
   await sync()
-  db.prepare("UPDATE persons SET kind = NULL WHERE owner = 1").run()
 
   expect(await botNames(store)).toEqual([])
   expect(await listed(store)).toContain("Ada Quill")

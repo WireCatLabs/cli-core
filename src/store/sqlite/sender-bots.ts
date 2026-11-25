@@ -308,6 +308,41 @@ export const ruleBotsBack = (database: CacheDatabase, at: number): void => {
   }
 }
 
+const MAIL_CHECKED = "people.newsletter_bots_mail_checked"
+
+/**
+ * Mail a newsletter's bot sent since the last check: no trigger makes a kind stale for it, so a 1-to-1 mail would wait
+ * for someone else's change to give the bot back. Answers the newest email id to check up to, or `undefined`.
+ */
+export const newsletterBotsMail = (database: CacheDatabase): number | undefined => {
+  const newest = Number(database.prepare("SELECT coalesce(max(id), 0) AS n FROM emails").get()?.n)
+  const checked = Number(
+    database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CHECKED)?.value ?? 0,
+  )
+  return newest > checked ? newest : undefined
+}
+
+/** Gives back the newsletter bots a 1-to-1 mail came from, and keeps how far the mail was checked. */
+export const settleNewsletterBots = (database: CacheDatabase, newest: number, at: number): void => {
+  const checked = Number(
+    database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CHECKED)?.value ?? 0,
+  )
+  const sent = database
+    .prepare(
+      "SELECT 1 FROM sender_bots b CROSS JOIN sender_bot_identities s ON s.bot_id = b.id CROSS JOIN emails e " +
+        `ON e.from_identity_id = s.identity_id WHERE b.author = 'rules' AND b.reason = '${NEWSLETTER_ONLY}' ` +
+        "AND e.id > ? AND e.id <= ? LIMIT 1",
+    )
+    .get(checked, newest)
+  if (sent !== undefined) ruleBotsBack(database, at)
+  database
+    .prepare(
+      "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) " +
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = excluded.at",
+    )
+    .run(MAIL_CHECKED, String(newest), at)
+}
+
 /** Whether a build before version 75 sorted a bot onto a person row since the last kept list. */
 export const hasLegacyBots = (database: CacheDatabase): boolean =>
   database.prepare("SELECT 1 FROM sender_bots WHERE person_id > 0 LIMIT 1").get() !== undefined

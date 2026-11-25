@@ -22,10 +22,12 @@ import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import {
   hasLegacyBots,
   NEWSLETTER_ONLY,
+  newsletterBotsMail,
   ownerPeopleOf,
   ruleBotsBack,
   ruleToBot,
   settleLegacyBots,
+  settleNewsletterBots,
 } from "./sender-bots.js"
 import { LIST_ID, type Reach, type SenderSignal, senderSignalsOf, sentMailOf } from "./sender-signals.js"
 import { mergedAssignees } from "./task-board.js"
@@ -338,7 +340,10 @@ interface MailCounts {
 /** One misfiled letter is no newsletter. */
 const BULK_MIN = 3
 
-/** A program writes: enough to move a sender to a bot. A name or a bulk mailbox alone may be a human's newsletter. */
+/**
+ * A program writes: enough to move a sender to a bot. A name or a bulk mailbox alone does not; a sender all of whose
+ * mail a list sent becomes a bot by `NEWSLETTER_ONLY` instead, which a 1-to-1 mail gives back.
+ */
 const PROGRAM_SIGNALS: readonly KindSignal[] = [
   "bot",
   "no-reply",
@@ -648,6 +653,8 @@ export const storeKinds = (database: CacheDatabase): boolean => {
   // A 1.0 build keeps the kinds of the people it sorts onto a bot, so nothing else would bring their bot here.
   if (!isQueryOnly(database) && hasLegacyBots(database))
     writeBatch(database, () => settleLegacyBots(database, Date.now()))
+  const newest = isQueryOnly(database) ? undefined : newsletterBotsMail(database)
+  if (newest !== undefined) writeBatch(database, () => settleNewsletterBots(database, newest, Date.now()))
   if (isQueryOnly(database))
     return (
       rulesOf(database) === KIND_RULES &&
