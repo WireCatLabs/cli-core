@@ -171,7 +171,7 @@ export interface Messenger extends ServiceMessenger {
   /**
    * A profile's state, read from the messenger's own files without connecting: `signed-in` has a session, `signed-out`
    * has none yet, `bot` speaks for a bot. `<tool> mcp` with no profile offers the personal ones and marks those not
-   * signed in; `account list` and the profile errors say so too. Unset: every profile counts as signed in.
+   * signed in; `session list` and the profile errors say so too. Unset: every profile counts as signed in.
    */
   profileState?: (profile: string, env: NodeJS.ProcessEnv) => ProfileState
   /** Opts in to `account remove`: what signing out and forgetting a profile means for this messenger. */

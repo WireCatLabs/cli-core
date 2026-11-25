@@ -17,7 +17,7 @@ import { type Messenger, messengerContext } from "./context.js"
 const storeOf = async (env: NodeJS.ProcessEnv) =>
   existsSync(storePath(env)) ? await openStore({ env }).catch(() => undefined) : undefined
 
-/** What `account list` and `session list` answer: the profiles here and the account each is logged in as. */
+/** What `session list` answers: the profiles here and the account each is logged in as. */
 export const listProfiles = async (command: Command, messenger: Messenger, words: string[], label: string) => {
   const terms = queryTerms(words, ACCOUNT_PROFILES_QUERY, label)
   const context = messengerContext(command, messenger, { needsProfile: false })

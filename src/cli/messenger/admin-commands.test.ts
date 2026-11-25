@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard, Id, MembershipState } from "../../domain/models.js"
@@ -13,6 +14,7 @@ import { openStore } from "../../store/store.js"
 import { commandsCommand } from "../commands-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
+import { messengerSessionCommands } from "../shared-command-exports.js"
 import { accountCommand } from "./account-command.js"
 import { rememberAccount } from "./accounts.js"
 import { groupCommands } from "./admin-commands.js"
@@ -77,6 +79,10 @@ const call = async (
         chatsCommand(messenger),
         contactsCommand(messenger),
         accountCommand(messenger),
+        messengerSessionCommands(messenger).reduce(
+          (session, command) => session.addCommand(command),
+          new Command("session").addCommand(new Command("start")),
+        ),
         commandsCommand(app),
       ],
     },
@@ -1042,13 +1048,13 @@ describe("chats create, join and leave", () => {
     const offline: MessengerAdapter = {
       ...base,
       me: async () => {
-        throw new Error("account list must not ask the messenger")
+        throw new Error("session list must not ask the messenger")
       },
     }
 
     const { CHAT_PROFILE: _, ...unnamed } = env
-    const listed = await call(["account", "list", "--json"], offline, unnamed)
-    const named = await call(["work", "account", "list", "--json"], offline, unnamed)
+    const listed = await call(["session", "list", "--json"], offline, unnamed)
+    const named = await call(["work", "session", "list", "--json"], offline, unnamed)
 
     expect(listed.code).toBe(0)
     expect(answer(listed).items).toEqual([
@@ -1057,14 +1063,14 @@ describe("chats create, join and leave", () => {
     ])
     expect(answer(named).items.map((item: { current: boolean }) => item.current)).toEqual([false, true])
     for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
-    const byProfile = await call(["account", "list", "profile:work", "--json=profile,account"], offline, unnamed)
+    const byProfile = await call(["session", "list", "profile:work", "--json=profile,account"], offline, unnamed)
     expect(byProfile.code).toBe(0)
     expect(answer(byProfile).items).toEqual([{ profile: "work", account: "501" }])
-    const withoutCurrent = await call(["account", "list", "current:true", "--json"], offline, unnamed)
+    const withoutCurrent = await call(["session", "list", "current:true", "--json"], offline, unnamed)
     expect(answer(withoutCurrent).items).toEqual([])
-    const currentOnly = await call(["work", "account", "list", "current:true", "--json"], offline, unnamed)
+    const currentOnly = await call(["work", "session", "list", "current:true", "--json"], offline, unnamed)
     expect(answer(currentOnly).items).toEqual([{ profile: "work", current: true, account: "501", name: null }])
-    const unsupported = await call(["account", "list", "name:Owner", "--json"], offline, unnamed)
+    const unsupported = await call(["session", "list", "name:Owner", "--json"], offline, unnamed)
     expect(unsupported.code).toBe(2)
     expect(unsupported.stderr.join("\n")).toContain("query.unsupported-field")
   })
@@ -1074,7 +1080,7 @@ describe("chats create, join and leave", () => {
     rememberAccount(app, "work", "501", env)
     rememberAccount(app, "old", "502", env)
     const { CHAT_PROFILE: _, ...unnamed } = env
-    const listed = await call(["account", "list", "--json"], base, unnamed, {
+    const listed = await call(["session", "list", "--json"], base, unnamed, {
       profileState: (profile) => (profile === "old" ? "signed-out" : "signed-in"),
     })
     expect(
@@ -1099,7 +1105,7 @@ describe("chats create, join and leave", () => {
     rememberAccount(app, "work", "501", env)
     const { CHAT_PROFILE: _, ...unnamed } = env
 
-    const listed = await call(["account", "list", "--json"], base, unnamed, { profileState: () => "signed-out" })
+    const listed = await call(["session", "list", "--json"], base, unnamed, { profileState: () => "signed-out" })
 
     expect(listed.code).toBe(0)
     expect(answer(listed).items).toEqual([

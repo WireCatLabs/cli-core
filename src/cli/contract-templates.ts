@@ -11,6 +11,7 @@ import type { Messenger } from "./messenger/context.js"
 import { doctorCommand } from "./messenger/doctor-command.js"
 import { mcpCommand } from "./messenger/mcp-command.js"
 import { searchCommand } from "./messenger/search-command.js"
+import { messengerSessionCommands } from "./messenger/session-commands.js"
 import { pagingOf } from "./paging.js"
 import { settingsFor } from "./settings.js"
 
@@ -103,6 +104,7 @@ export const sharedCommandTemplate = (
         .description("link this account")
         .argument("[method]", "login method")
       annotate(session.command("end"), { effects: REMOTE_WRITE }).description("end this account's login")
+      for (const command of messengerSessionCommands(messenger)) session.addCommand(command)
       return session
     }
     const notes = annotate(new Command("notes"), { effects: NO_EFFECTS }).description("notes kept in the shared store")

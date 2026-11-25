@@ -1226,9 +1226,6 @@
     "account": {
       "in": "all"
     },
-    "account list": {
-      "in": "all"
-    },
     "account privacy": {
       "in": ["max"],
       "planned": {
@@ -4525,6 +4522,9 @@
     "session end": {
       "in": "all"
     },
+    "session list": {
+      "in": "all"
+    },
     "session start": {
       "in": "all",
       "options": {
@@ -4546,6 +4546,12 @@
           "in": ["tg"],
           "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice; WhatsApp links a device by QR or pairing code, never by an SMS code"
         }
+      }
+    },
+    "session status": {
+      "in": "all",
+      "options": {
+        "--check": "all"
       }
     },
     "setup": {
