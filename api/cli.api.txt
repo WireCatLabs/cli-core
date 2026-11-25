@@ -1423,6 +1423,10 @@ StoredMessages · interface · wroteTo(personId: Id): Promise<boolean>;
 StoredMessages · interface · pollVotes(chatId: Id, messageId: Id): Promise<PollVote[]>;
 StoredMessages · interface · reactors(chatId: Id, messageId: Id): Promise<Reactor[]>;
 StoredMessages · interface · }
+TimeLimit · interface · export interface TimeLimit {
+TimeLimit · interface · signal: AbortSignal;
+TimeLimit · interface · clear: () => void;
+TimeLimit · interface · }
 TokenSessionOptions · interface · export interface TokenSessionOptions {
 TokenSessionOptions · interface · app: AppIdentity;
 TokenSessionOptions · interface · service: string;
@@ -3153,6 +3157,7 @@ snakeKeys · const · export declare const snakeKeys: (value: unknown) => unknow
 startCli · const · export declare const startCli: (entry: CliEntry) => Promise<void>;
 startRun · const · export declare const startRun: (options: StartRunOptions) => Run;
 statsCommand · const · export declare const statsCommand: (messenger: import("./index.js").Messenger, loadRenderer?: typeof import("../charts/render.js").chartRenderer | undefined) => import("commander").Command;
+storageOf · const · export declare const storageOf: (raw: string) => TokenStorage;
 storeCommand · const · export declare const storeCommand: (messenger: import("./index.js").Messenger) => import("commander").Command;
 storeInfo · const · export declare const storeInfo: (env: NodeJS.ProcessEnv) => Promise<StoreInfo>;
 storeSummary · const · export declare const storeSummary: (env: NodeJS.ProcessEnv, { deep, command, version }?: {
@@ -3251,6 +3256,7 @@ tagsCommand · const · export declare const tagsCommand: (messenger: import("./
 tasksCommand · const · export declare const tasksCommand: (messenger: import("./index.js").Messenger) => import("commander").Command;
 termField · const · export declare const termField: (name: string, type: FieldType, example: string, more?: Pick<FieldSpec, "values" | "relation">) => FieldSpec;
 terminalAsker · const · export declare const terminalAsker: (command: Command) => Asker;
+timeLimit · const · export declare const timeLimit: (ms: number) => TimeLimit;
 tokenSessionCommand · const · export declare const tokenSessionCommand: (options: TokenSessionOptions) => Command;
 typedQuery · const · export declare const typedQuery: (words: QueryWords) => string;
 unfilteredQuery · const · export declare const unfilteredQuery: (entity: string, schema: Parameters<typeof queryFieldsOf>[0]) => QueryRegistry;
@@ -3266,6 +3272,7 @@ withSettingDefaults · const · config: unknown;
 withSettingDefaults · const · added: string[];
 withSettingDefaults · const · };
 withSqliteSidecars · const · export declare const withSqliteSidecars: (path: string) => string[];
+withTimeLimit · const · export declare const withTimeLimit: <T>(ms: number, run: (deadline: AbortSignal) => Promise<T>) => Promise<T>;
 writeNewFile · const · export declare const writeNewFile: (path: string, content: string) => Promise<void>;
 writesNewFileOnlyWith · const · export declare const writesNewFileOnlyWith: <T extends Command>(command: T, option: string) => T;
 writesOwnerFiles · const · export declare const writesOwnerFiles: <T extends Command>(command: T) => T;

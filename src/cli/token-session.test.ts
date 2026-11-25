@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough, Readable } from "node:stream"
-import { CliError, captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
@@ -19,7 +19,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-const setup = () => {
+const setup = (keyring: KeyringStore = memoryKeyring()) => {
   const root = mkdtempSync(join(tmpdir(), "token-session-"))
   roots.push(root)
   mkdirSync(join(root, "config"), { recursive: true })
@@ -30,7 +30,6 @@ const setup = () => {
     PAGES_CONFIG_DIR: join(root, "config"),
     PAGES_CACHE_DIR: join(root, "cache"),
   }
-  const keyring = memoryKeyring()
   const checked: string[] = []
   const cli = async (argv: string[], stdin?: string, claim?: TokenSessionOptions["claim"]) => {
     const streams = captureStreams()
@@ -64,6 +63,25 @@ const setup = () => {
   }
   return { env, cli, checked }
 }
+
+it("session list names every profile when the keyring cannot be reached", async () => {
+  const memory = memoryKeyring()
+  let reachable = true
+  const keyring: KeyringStore = {
+    get: (service, account) => {
+      if (!reachable) throw new Error("synthetic: no secret service")
+      return memory.get(service, account)
+    },
+    set: (service, account, secret) => memory.set(service, account, secret),
+    delete: (service, account) => memory.delete(service, account),
+  }
+  const { cli } = setup(keyring)
+  expect((await cli(["personal", "session", "start", "--json"], "good-token\n")).code).toBe(0)
+  reachable = false
+  const listed = await cli(["session", "list", "--json"])
+  expect(listed.code).toBe(0)
+  expect(listed.json.items).toEqual([{ profile: "personal", signed_in: null, state: "unknown", token_from: null }])
+})
 
 it("session start checks the token before keeping it; status, list and end", async () => {
   const { env, cli, checked } = setup()

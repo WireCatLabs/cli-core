@@ -57,6 +57,7 @@ export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { linkFetch } from "../http/link-fetch.js"
+export { type TimeLimit, timeLimit, withTimeLimit } from "../http/time-limit.js"
 export { mailFindingFieldsHelp } from "../mail/findings.js"
 export { botInstructions } from "../mcp/bot/instructions.js"
 export type { BotServerOptions, RunBotCommand } from "../mcp/bot/server.js"
@@ -611,6 +612,7 @@ export {
   type OAuthPreset,
   type OAuthPresetOptions,
   type OAuthSessionOptions,
+  type OAuthSignedIn,
   oauthFlowOf,
   oauthPreset,
   oauthSessionCommand,
@@ -825,6 +827,7 @@ export {
   type ManifestVerifyOptions,
   manifestVerify,
   signedInSite,
+  storageOf,
   type TokenSessionOptions,
   tokenSessionCommand,
 } from "./token-session.js"
