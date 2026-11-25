@@ -211,8 +211,11 @@ export const mapFields = (
   return out
 }
 
-/** Where a typed entry keeps its value, by its type, as Attio names them; a manifest's `typed.paths` adds or replaces. */
-export const TYPED_VALUE_PATHS: Readonly<Record<string, string>> = {
+/**
+ * Where a typed entry keeps its value, by its type, as Attio names them; a manifest's `typed.paths` adds or replaces.
+ * A list of paths is one text of the parts present: an address is kept in parts, and searched as one line.
+ */
+export const TYPED_VALUE_PATHS: Readonly<Record<string, string | readonly string[]>> = {
   text: "value",
   number: "value",
   checkbox: "value",
@@ -229,6 +232,15 @@ export const TYPED_VALUE_PATHS: Readonly<Record<string, string>> = {
   "phone-number": "phone_number",
   "personal-name": "full_name",
   interaction: "interacted_at",
+  location: ["line_1", "line_2", "line_3", "line_4", "locality", "region", "postcode", "country_code"],
+}
+
+const typedValue = (entry: CrmRaw, path: string | readonly string[] | undefined): unknown => {
+  if (typeof path === "string") return at(entry, path)
+  return path
+    ?.map((one) => text(at(entry, one)))
+    .filter((part) => part !== null)
+    .join(", ")
 }
 
 /** The current entries' values: one alone is the value, several a list, none no value. */
@@ -238,7 +250,7 @@ const typedOf = (entries: unknown, typed: CrmTypedValues): unknown => {
     if (typed.current !== undefined && at(entry, typed.current) != null) return []
     const type = text(at(entry, typed.by))
     const path = type === null ? undefined : (typed.paths?.[type] ?? TYPED_VALUE_PATHS[type])
-    const value = path === undefined ? null : at(entry, path)
+    const value = typedValue(entry, path)
     return value === null || value === undefined || value === "" ? [] : [value]
   })
   return values.length > 1 ? values : (values[0] ?? null)

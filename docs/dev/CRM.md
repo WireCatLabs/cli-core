@@ -281,7 +281,8 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   `.`: the stages group by `stages.pipeline`, or are one pipeline, and the pipeline's map reads its first stage.
 - `custom.typed` reads values kept as a list of typed entries with their history (Attio's `values.<slug>`): the
   entry's type (`by`) picks the path of its value from `TYPED_VALUE_PATHS` or `typed.paths`, an entry with a time at
-  `current` is history, and several current entries are a list. `fields.keep` takes `{ path, is }` as data.
+  `current` is history, and several current entries are a list. An address (`location`) is one line of its parts
+  present, street to country, so a search finds it by a city. `fields.keep` takes `{ path, is }` as data.
 - `entities.<person|organization>.search` names a call with `"{query}"`: the source then has a live `list` for
   `people list` and `organizations list`, words through `search` and none through `list`, paged by the operation's
   offset. A condition it cannot send is refused (`query.unsupported-field`), never dropped.

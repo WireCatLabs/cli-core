@@ -284,6 +284,7 @@ describe("Attio's shapes", () => {
   })
 
   it("keeps the current entries of each own attribute, a list for a multi-select or several, and skips built-in ones", async () => {
+    const site = { line_1: "Calle Colón 1", line_2: null, locality: "Valencia", region: "", country_code: "ES" }
     const deal = {
       id: { record_id: "d1" },
       values: {
@@ -301,6 +302,7 @@ describe("Attio's shapes", () => {
           { ...current, attribute_type: "select", option: { title: "US" } },
         ],
         budget: [{ ...current, attribute_type: "currency", currency_value: 900 }],
+        site: [{ ...current, attribute_type: "location", ...site, latitude: "39.47" }],
       },
     }
     const { source } = stubbed({
@@ -311,6 +313,7 @@ describe("Attio's shapes", () => {
           { api_slug: "tags", title: "Tags", type: "select", is_system_attribute: false, is_multiselect: true },
           { api_slug: "regions", title: "Regions", type: "select", is_system_attribute: false },
           { api_slug: "budget", title: "Budget", type: "currency", is_system_attribute: false },
+          { api_slug: "site", title: "Site", type: "location", is_system_attribute: false },
         ],
       }),
       query: () => ({ data: [deal] }),
@@ -322,6 +325,7 @@ describe("Attio's shapes", () => {
       tags: { label: "Tags", value: ["A"] },
       regions: { label: "Regions", value: ["EU", "US"] },
       budget: { label: "Budget", value: 900 },
+      site: { label: "Site", value: "Calle Colón 1, Valencia, ES" },
     })
   })
 
