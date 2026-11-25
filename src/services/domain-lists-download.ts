@@ -37,6 +37,11 @@ export interface DomainListsUpdate {
 const RELEASE_HOSTS = ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"]
 const DOWNLOAD_MS = 10 * 60_000
 
+/** The hosts a download may reach, each once: `hostFetch` refuses a list that names one twice. */
+export const packHosts = (urls: readonly string[]): string[] => [
+  ...new Set([...RELEASE_HOSTS, ...urls.map((url) => new URL(url).hostname)]),
+]
+
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/
 const SHA256 = /^[0-9a-f]{64}$/
 const DOMAIN = /^[a-z0-9_]([a-z0-9_.-]*[a-z0-9])?$/
@@ -131,12 +136,12 @@ export const updateDomainLists = async ({
 }: DomainListsUpdateOptions): Promise<DomainListsUpdate> => {
   const manifest = await fetchManifest(
     manifestUrl,
-    given ?? hostFetch({ hosts: [...RELEASE_HOSTS, new URL(manifestUrl).hostname], timeoutMs: 60_000 }),
+    given ?? hostFetch({ hosts: packHosts([manifestUrl]), timeoutMs: 60_000 }),
   )
   const get =
     given ??
     hostFetch({
-      hosts: [...RELEASE_HOSTS, ...manifest.sources.map((one) => new URL(one.url).hostname)],
+      hosts: packHosts(manifest.sources.map((one) => one.url)),
       timeoutMs: DOWNLOAD_MS,
     })
   const before = installedPack(env)

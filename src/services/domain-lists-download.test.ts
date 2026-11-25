@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "node:fs"
 import { gzipSync } from "node:zlib"
 import { afterEach, expect, it } from "vitest"
 import { domainListsDirectory, installedPack, listFile, lookupDomains } from "../domain/domain-lists.js"
-import { updateDomainLists } from "./domain-lists-download.js"
+import { packHosts, updateDomainLists } from "./domain-lists-download.js"
 
 const MANIFEST = "https://example.org/manifest.json"
 
@@ -112,4 +112,19 @@ it("refuses a manifest whose source id would write outside the pack", async () =
       }),
     )
   await expect(updateDomainLists({ env: process.env, fetch, manifestUrl: MANIFEST })).rejects.toThrow(/source id/)
+})
+
+it("names each host a download may reach once, the release's own included", () => {
+  expect(
+    packHosts([
+      "https://github.com/WireCatLabs/cli-core/releases/download/domain-lists/manifest.json",
+      "https://github.com/WireCatLabs/cli-core/releases/download/domain-lists-2026-11-25/ut1-sectors.txt.gz",
+      "https://www.stopforumspam.com/downloads/toxic_domains_whole.txt",
+    ]),
+  ).toEqual([
+    "github.com",
+    "release-assets.githubusercontent.com",
+    "objects.githubusercontent.com",
+    "www.stopforumspam.com",
+  ])
 })
