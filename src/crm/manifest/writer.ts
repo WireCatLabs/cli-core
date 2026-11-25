@@ -2,11 +2,19 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import { type ServiceApiPermissionsInput, serviceApiOwnKeys } from "../../cli/service-api.js"
 import { type ServiceApiCall, type ServiceApiCallOptions, serviceApiSend } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
-import type { CrmKind, CrmRecords } from "../../domain/crm.js"
+import type { CrmActivity, CrmKind, CrmRecords } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../../domain/deals.js"
 import type { PermissionKey } from "../../sends/permissions.js"
 import { fullName, id, isRaw, text } from "../values.js"
-import { CRM_VERBS, type CrmVerb, type CrmWriteCapabilities, type CrmWriteOptions, type CrmWriter } from "../writer.js"
+import {
+  CRM_VERBS,
+  type CrmActivityDraft,
+  type CrmActivityWrite,
+  type CrmVerb,
+  type CrmWriteCapabilities,
+  type CrmWriteOptions,
+  type CrmWriter,
+} from "../writer.js"
 import { type CrmWrites, foldFieldName } from "../writes.js"
 import {
   type CrmFixedValue,
@@ -19,6 +27,28 @@ import {
 import { at } from "./map.js"
 import { type CrmManifestSource, fill, inputOf, type Slots } from "./source.js"
 
+/**
+ * Activities the manifest does not describe, written by the CLI's own functions over `send`: a comment, a task and a
+ * task marked done. Each answers the activity as the source's `activities` maps it, with the same id, or the next full
+ * sync takes it for one the CRM deleted.
+ */
+export interface CrmManifestActivities {
+  /** The operation each sends, whose `api` keys the write checks too; a task needs `close` as well. */
+  operations: { readonly comment?: string; readonly task?: string; readonly close?: string }
+  create(draft: CrmActivityDraft, send: ServiceApiCall): Promise<CrmActivity>
+  complete?(externalId: string, send: ServiceApiCall): Promise<CrmActivity>
+}
+
+const activityWritesOf = (activities: CrmManifestActivities | undefined): CrmActivityWrite[] => {
+  if (!activities) return []
+  const { operations, complete } = activities
+  if (operations.task !== undefined && (operations.close === undefined || complete === undefined))
+    throw new CliError("configuration_error", "source manifest: activities: a task needs close and complete", {
+      reason: "manifest.invalid",
+    })
+  return (["comment", "task"] as const).filter((write) => operations[write] !== undefined)
+}
+
 export interface CrmManifestWriterOptions {
   api: ServiceApiManifest
   /** The service's name in messages: "Attio". */
@@ -27,6 +57,7 @@ export interface CrmManifestWriterOptions {
   send: ServiceApiCall
   /** The source over the same manifest: the read-back after each write, and the pipelines a close looks in. */
   source: () => CrmManifestSource
+  activities?: CrmManifestActivities
 }
 
 type Rule = CrmWriteRule | "implied" | CrmFixedValue
@@ -51,12 +82,16 @@ const takes = (kind: CrmKind, one: CrmManifestWrite, verb: CrmVerb) =>
     ? isDealKind(kind) && one.update !== undefined && typeof ruleOf(one, "stage") === "object"
     : one[CALL_OF[verb]] !== undefined
 
-const capabilitiesOf = (manifest: CrmManifest): CrmWriteCapabilities | undefined => {
+const capabilitiesOf = (
+  manifest: CrmManifest,
+  activities?: CrmManifestActivities,
+): CrmWriteCapabilities | undefined => {
   const written = manifest.kinds.flatMap((kind) => {
     const one = manifest.writes?.[kind] as CrmManifestWrite | undefined
     return one ? [{ kind, one }] : []
   })
-  if (written.length === 0) return undefined
+  const activityWrites = activityWritesOf(activities)
+  if (written.length === 0 && activityWrites.length === 0) return undefined
   return {
     kinds: written.map(({ kind }) => kind),
     verbs: CRM_VERBS.filter((verb) => written.some(({ kind, one }) => takes(kind, one, verb))),
@@ -65,12 +100,16 @@ const capabilitiesOf = (manifest: CrmManifest): CrmWriteCapabilities | undefined
     fields: Object.fromEntries(
       written.map(({ kind, one }) => [kind, [...Object.keys(one.fields), ...(one.custom ? ["custom"] : [])]]),
     ),
+    ...(activityWrites.length === 0 ? {} : { activities: activityWrites }),
   }
 }
 
-/** What the manifest's writes take, for `addCrmCommands({ writes })`; none when it describes no writes. */
-export const crmManifestWriteCapabilities = (input: unknown, api: ServiceApiManifest) =>
-  capabilitiesOf(parseCrmManifest(input, api))
+/** What the manifest's writes and the CLI's activities take, for `addCrmCommands({ writes })`; none when neither. */
+export const crmManifestWriteCapabilities = (
+  input: unknown,
+  api: ServiceApiManifest,
+  activities?: CrmManifestActivities,
+) => capabilitiesOf(parseCrmManifest(input, api), activities)
 
 /**
  * The `api` keys each CRM write also checks, those of the operation it sends, so `api.<operation>: deny` stops the
@@ -86,6 +125,24 @@ export const crmManifestWriteKeys = (
   return (kind, verb) => {
     const call = (manifest.writes?.[kind] as CrmManifestWrite | undefined)?.[CALL_OF[verb]]
     const operation = call && operations.get(call.operation)
+    return operation ? serviceApiOwnKeys(operation, bodyPermissions) : []
+  }
+}
+
+/** The `api` keys of the operation each activity write sends, for `CrmWrites.activityChecks` and `crmAlsoChecks`. */
+export const crmManifestActivityKeys = (
+  api: ServiceApiManifest,
+  activities: CrmManifestActivities | undefined,
+  bodyPermissions?: ServiceApiPermissionsInput["bodyPermissions"],
+): ((write: CrmActivityWrite | "close") => PermissionKey[]) => {
+  const operations = new Map(api.operations.map((one) => [one.id, one]))
+  return (write) => {
+    const id = activities?.operations[write]
+    const operation = id === undefined ? undefined : operations.get(id)
+    if (id !== undefined && !operation)
+      throw new CliError("configuration_error", `source manifest: activities: no operation ${id}`, {
+        reason: "manifest.invalid",
+      })
     return operation ? serviceApiOwnKeys(operation, bodyPermissions) : []
   }
 }
@@ -121,7 +178,7 @@ const merged = (entries: readonly { value: unknown; blank: unknown }[], list: bo
  */
 export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriterOptions): CrmWriter => {
   const manifest = parseCrmManifest(input, options.api)
-  const capabilities = capabilitiesOf(manifest)
+  const capabilities = capabilitiesOf(manifest, options.activities)
   if (!capabilities)
     throw new CliError("configuration_error", "source manifest: writes: it describes no writes", {
       reason: "manifest.invalid",
@@ -324,9 +381,15 @@ export const crmWriterFromManifest = (input: unknown, options: CrmManifestWriter
     return stage.externalId
   }
 
+  const { activities } = options
+  const complete = activities?.complete?.bind(activities)
   return {
     provider: manifest.provider,
     capabilities,
+    ...(activities ? { createActivity: (draft: CrmActivityDraft) => activities.create(draft, send) } : {}),
+    ...(complete && capabilities.activities?.includes("task")
+      ? { completeActivity: (externalId: string) => complete(externalId, send) }
+      : {}),
     async create(kind, draft, written) {
       const one = specOf(kind, "create")
       const answer = await sent(one.create as CrmOperationCall, { values: await valuesOf(kind, one, draft) })
@@ -360,6 +423,7 @@ export interface CrmManifestWritesOptions
     Omit<CrmWrites, "writer" | "alsoChecks"> {
   /** The CLI's source over the same manifest (`crmSourceFromManifest`). */
   source: () => CrmManifestSource
+  activities?: CrmManifestActivities
 }
 
 /**
@@ -367,10 +431,17 @@ export interface CrmManifestWritesOptions
  * `api` keys of each operation it sends as `alsoChecks`. The writes' guard asks before each one and journals it.
  */
 export const crmManifestWrites = (input: unknown, options: CrmManifestWritesOptions): CrmWrites => {
-  const { manifest: api, service, source, app, settings, self, ownedByDefault, env, warn } = options
+  const { manifest: api, service, source, app, settings, self, ownedByDefault, env, warn, activities } = options
   return {
-    writer: crmWriterFromManifest(input, { api, service, send: serviceApiSend(options), source }),
+    writer: crmWriterFromManifest(input, {
+      api,
+      service,
+      send: serviceApiSend(options),
+      source,
+      ...(activities ? { activities } : {}),
+    }),
     alsoChecks: crmManifestWriteKeys(input, api, options.bodyPermissions),
+    ...(activities ? { activityChecks: crmManifestActivityKeys(api, activities, options.bodyPermissions) } : {}),
     app,
     settings,
     ...(self === undefined ? {} : { self }),

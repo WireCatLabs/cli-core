@@ -331,6 +331,13 @@ the operation id, so a manifest's writes are never idempotent.
 - `crmManifestWriteContract(manifest, { api, definitions, hooks })` (`@wirecat/cli-core/crm/testing`) runs
   `crmWriteContract` against `crmManifestFake`, which answers the manifest's writes: it reads each rule backwards,
   keeps the record in our fields and answers as its schema says. `loseNextAnswer()` and `requests()` are on the fake.
+- **Activities are the CLI's own functions**, since a note's or task's body differs too much from one service to the
+  next for a rule. `activities` in `crmManifestWrites` and `crmManifestWriteCapabilities` takes `operations` (the id
+  `comment`, `task` and `close` each send), `create(draft, send)` and, with a task, `complete(externalId, send)`. They
+  mount `activities create` and `activities close` under the same guard and journal as a hand-written writer. Each
+  write also checks its operation's `api` keys (`CrmWrites.activityChecks`); `crmManifestActivityKeys` gives
+  `crmAlsoChecks` the same keys as its second argument, so `--dry-run` names them. Each answers the activity as the
+  source's `activities` maps it, with the same id, or a later full list (`listedAll`) takes it for one the CRM deleted.
 
 ### A test for a source from a manifest
 

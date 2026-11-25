@@ -20,9 +20,12 @@ import {
   crmManifestWriteFixture,
   FAKE_MANIFEST_TOKEN,
 } from "../testing/manifest-fake.js"
+import { crmAlsoChecks } from "../writer.js"
 import { type CrmManifest, type CrmManifestHooks, parseCrmManifest } from "./manifest.js"
 import { type CrmManifestSource, crmSourceFromManifest } from "./source.js"
 import {
+  type CrmManifestActivities,
+  crmManifestActivityKeys,
   crmManifestWriteCapabilities,
   crmManifestWriteKeys,
   crmManifestWrites,
@@ -84,7 +87,7 @@ const path = (name: string) => ({ name, in: "path", required: true, schema: str 
 
 const op = (
   id: string,
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,
   extra: Partial<ManifestOperation>,
 ): ManifestOperation => ({
@@ -136,6 +139,9 @@ const api: ServiceApiManifest = {
       parameters: [path("object"), path("attribute")],
       ...answered("Attribute"),
     }),
+    op("note", "POST", "/v2/notes", {}),
+    op("task", "POST", "/v2/tasks", {}),
+    op("done", "PATCH", "/v2/tasks/{task_id}", { parameters: [path("task_id")] }),
   ],
   servers: [{ url: "https://api.attio.test" }],
   securitySchemes: { token: { type: "http", scheme: "bearer" } },
@@ -568,6 +574,25 @@ describe("crmWriterFromManifest", () => {
     expect(keys("deal", "remove")).toEqual(["api.delete", "records.delete"])
     expect(keys("organization", "create")).toEqual([])
   })
+
+  it("takes the CLI's activity writes, each checking its operation's api keys", () => {
+    const activities: CrmManifestActivities = {
+      operations: { comment: "note", task: "task", close: "done" },
+      create: async () => ({}) as never,
+      complete: async () => ({}) as never,
+    }
+    expect(crmManifestWriteCapabilities(ATTIO, api, activities)?.activities).toEqual(["comment", "task"])
+    const { writes: _, ...reads } = ATTIO
+    expect(crmManifestWriteCapabilities(reads, api, { ...activities, operations: { comment: "note" } })).toMatchObject({
+      kinds: [],
+      activities: ["comment"],
+    })
+    const keys = crmManifestActivityKeys(api, activities)
+    expect([keys("comment"), keys("task"), keys("close")]).toEqual([["api.note"], ["api.task"], ["api.done"]])
+    expect(() => crmManifestWriteCapabilities(ATTIO, api, { ...activities, operations: { task: "task" } })).toThrow(
+      /a task needs close and complete/,
+    )
+  })
 })
 
 describe("parseCrmManifest of writes", () => {
@@ -625,10 +650,22 @@ afterEach(async () => {
 describe("CRM write commands over a manifest's writes", () => {
   const setup = async (
     permissions: Record<string, Level> = {},
-    { self, ownedByDefault }: { self?: string; ownedByDefault?: CrmKind[] } = {},
+    {
+      self,
+      ownedByDefault,
+      activities,
+    }: { self?: string; ownedByDefault?: CrmKind[]; activities?: CrmManifestActivities } = {},
   ) => {
     const fake = crmManifestFake(ATTIO, { api, definitions })
-    const sending = { manifest: api, service: "Attio", fetch: fake.fetch, token: () => FAKE_MANIFEST_TOKEN }
+    // The fake answers the manifest's routes; the activities' operations are the CLI's own, answered here.
+    const activityCalls: { path: string; body: unknown }[] = []
+    const fetch: typeof fake.fetch = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input)
+      if (!url.pathname.startsWith("/v2/notes") && !url.pathname.startsWith("/v2/tasks")) return fake.fetch(input, init)
+      activityCalls.push({ path: url.pathname, body: JSON.parse(String(init?.body ?? "null")) })
+      return Response.json({ data: { id: `n${activityCalls.length}` } })
+    }
+    const sending = { manifest: api, service: "Attio", fetch, token: () => FAKE_MANIFEST_TOKEN }
     const source = crmSourceFromManifest(ATTIO, { api, call: serviceApiCall(sending), hooks })
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-manifest-")), "store.db") })
     opened.push(store)
@@ -655,6 +692,7 @@ describe("CRM write commands over a manifest's writes", () => {
           env,
           ...(self ? { self: async () => self } : {}),
           ...(ownedByDefault ? { ownedByDefault } : {}),
+          ...(activities ? { activities } : {}),
           settings: () => ({ profile: "work", permissions, permissionSources: {} }),
         }),
     }
@@ -669,7 +707,7 @@ describe("CRM write commands over a manifest's writes", () => {
       addCrmCommands(root, {
         app: APP,
         open: async () => run,
-        writes: crmManifestWriteCapabilities(ATTIO, api),
+        writes: crmManifestWriteCapabilities(ATTIO, api, activities),
       })
       provide(root, { streams: { data: (text: string) => (data += text), diagnostic: () => undefined } } as never)
       data = ""
@@ -678,7 +716,35 @@ describe("CRM write commands over a manifest's writes", () => {
     }
     await cli("sync")
     const journal = () => new SendJournal(sendsPathFor(APP, "work", env)).entries()
-    return { fake, cli, journal }
+    return { fake, cli, journal, activityCalls }
+  }
+
+  const ACTIVITIES: CrmManifestActivities = {
+    operations: { comment: "note", task: "task", close: "done" },
+    async create(draft, send) {
+      const body = JSON.stringify({ on: draft.on, text: draft.body ?? draft.subject })
+      const answer = (await send(draft.kind === "comment" ? "note" : "task", {
+        path: {},
+        query: {},
+        headers: {},
+        fields: {},
+        body,
+      })) as { data: { id: string } }
+      return {
+        externalId: answer.data.id,
+        kind: draft.kind,
+        subject: draft.subject ?? "",
+        body: draft.body ?? null,
+        done: false,
+        createdAt: 1,
+        updatedAt: 1,
+        on: draft.on,
+      }
+    },
+    async complete(externalId, send) {
+      await send("done", { path: { task_id: externalId }, query: {}, headers: {}, fields: {}, body: "{}" })
+      return { externalId, kind: "task", subject: "Example", done: true, createdAt: 1, updatedAt: 2, on: [] }
+    },
   }
 
   it("deals create sends the manifest's create once, stores the answer and journals it", async () => {
@@ -709,6 +775,43 @@ describe("CRM write commands over a manifest's writes", () => {
       code: "validation_error",
     })
     expect(fake.requests()).toBe(0)
+  })
+
+  it("a comment and a task go through the CLI's own calls, each journaled, and a task is marked done", async () => {
+    const { cli, journal, activityCalls, fake } = await setup({}, { activities: ACTIVITIES })
+    const deal = (await cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1")).item.deal as {
+      ref: string
+    }
+    const comment = await cli("activities", "create", "comment", "--subject", deal.ref, "--text", "Example")
+    expect(comment.item).toMatchObject({ activity: { kind: "comment", on: [{ ref: deal.ref }] } })
+    const task = await cli("activities", "create", "task", "--subject", deal.ref, "--title", "Call back")
+    await cli("activities", "close", (task.item.activity as { external_id: string }).external_id)
+    expect(activityCalls.map(({ path }) => path)).toEqual(["/v2/notes", "/v2/tasks", "/v2/tasks/n2"])
+    expect(journal().map(({ key }) => key)).toEqual([
+      "deals.create",
+      "activities.create",
+      "activities.create",
+      "activities.close",
+    ])
+    expect(fake.refusals).toEqual([])
+  })
+
+  it("a deny on an activity's api key stops it before anything is sent, and --dry-run names the key", async () => {
+    const { cli, activityCalls } = await setup({ "api.note": "deny" }, { activities: ACTIVITIES })
+    const deal = (await cli("deals", "create", "--title", "Example kitchen", "--stage", "name 1")).item.deal as {
+      ref: string
+    }
+    await expect(
+      cli("activities", "create", "comment", "--subject", deal.ref, "--text", "Example"),
+    ).rejects.toMatchObject({ code: "permission_error" })
+    expect(activityCalls).toEqual([])
+    const keys = crmManifestActivityKeys(api, ACTIVITIES)
+    expect(crmAlsoChecks(undefined, keys)(["activities", "create"])).toEqual([
+      { key: "crm.assign-others", when: "--owner other than the sign-in's user" },
+      { key: "api.note", when: "a comment" },
+      { key: "api.task", when: "a task" },
+    ])
+    expect(crmAlsoChecks(undefined, keys)(["activities", "close"])).toEqual(["api.done"])
   })
 
   it("a deny on the operation's api key stops the write before anything is sent", async () => {
