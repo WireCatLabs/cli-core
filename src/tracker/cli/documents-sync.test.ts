@@ -379,9 +379,12 @@ describe("one sync for a tracker that holds documents too", () => {
       const synced = await answer(["sync", "--embed"])
       expect(synced.item.embeddings).toMatchObject({ left: true, remaining: 40 })
       expect(synced.next).toContainEqual(
-        expect.objectContaining({ step: "tracker.sync", args: expect.objectContaining({ embed: true }) }),
+        expect.objectContaining({
+          step: "tracker.sync",
+          args: expect.objectContaining({ embed: true }),
+          why: expect.stringContaining("40 chunks"),
+        }),
       )
-      expect(synced.next?.find(({ step }) => step === "tracker.sync")?.why).toContain("40 chunks")
     } finally {
       trackerLeft.on = false
     }
