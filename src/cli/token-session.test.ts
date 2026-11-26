@@ -60,6 +60,7 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
     return {
       code,
       json: out ? JSON.parse(out) : undefined,
+      err,
       error: err.startsWith("{") ? JSON.parse(err).error : undefined,
     }
   }
@@ -79,10 +80,15 @@ it("session list names every profile when the keyring cannot be reached", async 
   }
   const { cli } = setup(keyring)
   expect((await cli(["personal", "session", "start", "--json"], "good-token\n")).code).toBe(0)
+  expect((await cli(["work", "session", "start", "--json"], "good-token\n")).code).toBe(0)
   reachable = false
   const listed = await cli(["session", "list", "--json"])
   expect(listed.code).toBe(0)
-  expect(listed.json.items).toEqual([{ profile: "personal", signed_in: null, state: "unknown", token_from: null }])
+  expect(listed.json.items).toEqual([
+    { profile: "personal", signed_in: null, state: "unknown", token_from: null },
+    { profile: "work", signed_in: null, state: "unknown", token_from: null },
+  ])
+  expect(listed.err.match(/keyring did not answer/g)).toHaveLength(1)
 })
 
 it("session start checks the token before keeping it; status, list and end", async () => {

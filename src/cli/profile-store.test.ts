@@ -29,6 +29,7 @@ describe("the store a CRM command opens", () => {
     const { account, crmStore } = setup()
     const first = await crmStore(true)
     expect(first.account).toEqual(PORTAL)
+    expect((await first.store.accounts.storedAccount(PORTAL)).id).toBe(first.accountId)
     await first.store.close()
     expect(account).toHaveBeenCalledTimes(1)
     const again = await crmStore(true)
@@ -59,6 +60,80 @@ describe("the store a CRM command opens", () => {
     const { store } = await crmStore(false)
     await store.close()
     expect(existsSync(path)).toBe(true)
+  })
+})
+
+describe("the store a phone system's command opens, whose account is the profile", () => {
+  const phone = (extra: NodeJS.ProcessEnv = {}) => {
+    const path = join(mkdtempSync(join(tmpdir(), "pbx-store-")), "wirecat.db")
+    const env = { MESSAGING_STORE: path, ...extra }
+    const opened: string[] = []
+    const open = (at: NodeJS.ProcessEnv, options?: { readOnly?: boolean }) => {
+      opened.push(at.MESSAGING_STORE ?? "")
+      return openStore({ env: at, ...(options?.readOnly ? { readOnly: true } : {}) })
+    }
+    const pbxStore = (readOnly: boolean, saves?: boolean) =>
+      openProfileStore({
+        app: { ...app, command: "pbx", envPrefix: "PBX" },
+        env,
+        profile: "office",
+        readOnly,
+        provider: "asterisk",
+        open,
+        name: "office",
+        ...(saves === undefined ? {} : { saves }),
+      })
+    return { path, env, opened, pbxStore }
+  }
+  const OFFICE = { provider: "asterisk", account: "office" }
+
+  it("answers the account's id, and saves a new account with the profile's name", async () => {
+    const { pbxStore } = phone()
+    const { store, account, accountId } = await pbxStore(false)
+    try {
+      expect(account).toEqual(OFFICE)
+      expect(await store.accounts.storedAccount(OFFICE)).toMatchObject({ id: accountId, name: "office", scope: "work" })
+    } finally {
+      await store.close()
+    }
+  })
+
+  it("under the read-only lock, reads an account an older build saved with no profile", async () => {
+    const { env, path, opened, pbxStore } = phone({ PBX_READ_ONLY: "1" })
+    const older = await openStore({ env })
+    const id = await older.accounts.saveAccount(OFFICE, { name: "office" })
+    await older.close()
+    const { store, accountId } = await pbxStore(true)
+    try {
+      expect(accountId).toBe(id)
+      expect(opened).toEqual([path])
+    } finally {
+      await store.close()
+    }
+  })
+
+  it("with saves false, a read of a profile no run saved writes nothing, store file included", async () => {
+    const { path, pbxStore } = phone()
+    const { store, account } = await pbxStore(true, false)
+    expect(account).toEqual(OFFICE)
+    await store.close()
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it("with saves false, a writable open saves no account, and finds one a sync saved", async () => {
+    const { path, opened, pbxStore } = phone()
+    const first = await pbxStore(false, false)
+    await first.store.close()
+    expect(opened.at(-1)).not.toBe(path)
+    const synced = await pbxStore(false)
+    await synced.store.close()
+    const again = await pbxStore(false, false)
+    try {
+      expect(again.accountId).toBe(synced.accountId)
+      expect(opened.at(-1)).toBe(path)
+    } finally {
+      await again.store.close()
+    }
   })
 })
 
