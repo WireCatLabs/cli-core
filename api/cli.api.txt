@@ -80,16 +80,24 @@ ApiCommands · interface · }
 AppCompletionOptions · interface · export interface AppCompletionOptions {
 AppCompletionOptions · interface · sources?: (request: CompletionRequest) => CompletionSources | undefined | Promise<CompletionSources | undefined>;
 AppCompletionOptions · interface · }
+AppDoctorLocal · interface · export interface AppDoctorLocal {
+AppDoctorLocal · interface · fields: Record<string, unknown>;
+AppDoctorLocal · interface · notes?: string[];
+AppDoctorLocal · interface · failing?: boolean;
+AppDoctorLocal · interface · }
 AppDoctorOptions · interface · export interface AppDoctorOptions {
 AppDoctorOptions · interface · oauthClient?: (env: NodeJS.ProcessEnv) => OAuthClientReport;
 AppDoctorOptions · interface · packageName?: string;
 AppDoctorOptions · interface · online?: (env: NodeJS.ProcessEnv) => Promise<{
 AppDoctorOptions · interface · ok: boolean;
 AppDoctorOptions · interface · } & Record<string, unknown>>;
-AppDoctorOptions · interface · local?: (env: NodeJS.ProcessEnv) => {
-AppDoctorOptions · interface · fields: Record<string, unknown>;
-AppDoctorOptions · interface · notes?: string[];
+AppDoctorOptions · interface · local?: (env: NodeJS.ProcessEnv, command: Command) => AppDoctorLocal | Promise<AppDoctorLocal>;
+AppDoctorOptions · interface · config?: (env: NodeJS.ProcessEnv, command: Command) => {
+AppDoctorOptions · interface · path: string;
+AppDoctorOptions · interface · found: boolean;
+AppDoctorOptions · interface · issues: ConfigIssue[];
 AppDoctorOptions · interface · };
+AppDoctorOptions · interface · view?: (item: Record<string, unknown>) => string;
 AppDoctorOptions · interface · }
 AppErrors · interface · export interface AppErrors {
 AppErrors · interface · reasons?: readonly ErrorReason[];
@@ -2114,7 +2122,7 @@ appDoctorCommand · const · readonly profiles: import("valibot").OptionalSchema
 appDoctorCommand · const · }, (issue: import("valibot").StrictObjectIssue) => string>, undefined>;
 appDoctorCommand · const · }, (issue: import("valibot").StrictObjectIssue) => string>;
 appDoctorCommand · const · permissions?: import("./permission-keys.js").CommandPermissions | undefined;
-appDoctorCommand · const · }, options?: import("./app-doctor-command.js").AppDoctorOptions | undefined) => import("commander").Command;
+appDoctorCommand · const · } | null, options?: import("./app-doctor-command.js").AppDoctorOptions | undefined) => import("commander").Command;
 appMcpCommand · const · export declare const appMcpCommand: (app: import("./entry.js").AppIdentity, configuration: {
 appMcpCommand · const · resolveSettings: (flags?: import("./settings.js").GlobalFlags, options?: import("./settings.js").ResolveOptions) => import("./settings.js").Settings & object;
 appMcpCommand · const · configuredProfiles: (options?: import("./settings.js").ResolveOptions) => string[];
@@ -2983,6 +2991,7 @@ serviceApiPermissions · const · defaults: Readonly<Record<PermissionKey, Level
 serviceApiPermissions · const · extra: readonly PermissionKey[];
 serviceApiPermissions · const · };
 serviceApiWriter · const · export declare const serviceApiWriter: (options: ServiceApiOptions) => ServiceApiWrite;
+setExitCode · const · export declare const setExitCode: (command: Command, code: number) => void;
 settingRows · const · export declare const settingRows: (raw: unknown, declared: readonly DeclaredSetting[]) => SettingRow[];
 settingsFor · const · export declare const settingsFor: <T extends object = Record<never, never>>(app: AppIdentity, extension?: SettingsExtension<T>) => {
 settingsFor · const · resolveSettings: (flags?: GlobalFlags, options?: ResolveOptions) => Settings & T;

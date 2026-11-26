@@ -254,7 +254,7 @@ export {
   type Observation,
 } from "./agent-evaluation.js"
 export { answerEntity } from "./answer-entity.js"
-export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
+export { type AppDoctorLocal, type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
 export type { AppMcpOptions } from "./app-mcp-command.js"
 export { openAppStore } from "./app-store.js"
 export { askBeforeWrite } from "./ask-before-write.js"
@@ -375,6 +375,7 @@ export {
   provide,
   runBudgetOf,
   secretInputOf,
+  setExitCode,
   withAgentLevels,
   withoutOwnPaging,
 } from "./context.js"
