@@ -348,11 +348,11 @@ export interface MailStore extends PartialMailStore, MailActivityStore, MailType
   /**
    * Takes the senders of the live mail in `mailboxes` (the Sent folder, Gmail's `label:Sent`) as the owner's, beside
    * `addresses`, and marks the account's mail from any of them outgoing, so mail stored before it was known counts.
-   * Answers the addresses, lower case.
+   * Mail outside `mailboxes` from a `removed` address not among them is incoming again. Answers the addresses.
    */
   markOwnMail(
     accountId: number,
-    own: { addresses: readonly string[]; mailboxes: readonly string[] },
+    own: { addresses: readonly string[]; mailboxes: readonly string[]; removed?: readonly string[] },
     now: number,
   ): Promise<string[]>
   /** Gives up to `limit` emails stored without `sent_at` their internal date; answers how many. */

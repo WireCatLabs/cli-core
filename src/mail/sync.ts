@@ -957,9 +957,10 @@ const syncRound = async (
   if (bulk.size) await store.mail.setMailboxes(accountId, [bulkBox], bulk, startedAt)
   if (!snapshot) await store.sync.setSyncState(key, "mail_folder_scope", scope)
   if (!snapshot) await store.mail.backfillSentAt(accountId, SENT_AT_BACKFILL_PER_RUN)
-  await settleOwnMail(store, key, accountId, own, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], {
+  await settleOwnMail(store, key, accountId, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], {
     name: account.address,
     now: startedAt,
+    configured: account.addresses ?? [],
   })
   await stopIfAborted()
   const indexed = await index?.(store, key)

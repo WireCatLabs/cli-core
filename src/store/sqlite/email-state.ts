@@ -98,12 +98,17 @@ export const markEmailsRestored = (
 
 /**
  * Takes the senders of the live mail in `mailboxes` as the owner's, beside `addresses`, and marks every email of the
- * account from any of them outgoing. Answers the addresses, lower case.
+ * account from any of them outgoing. Mail outside `mailboxes` from a `removed` address that is not among them is
+ * incoming again. Answers the addresses, lower case.
  */
 export const markOwnMail = (
   database: CacheDatabase,
   accountId: number,
-  { addresses, mailboxes }: { addresses: readonly string[]; mailboxes: readonly string[] },
+  {
+    addresses,
+    mailboxes,
+    removed = [],
+  }: { addresses: readonly string[]; mailboxes: readonly string[]; removed?: readonly string[] },
   now: number,
 ): string[] => {
   const own = new Set(addresses.map((address) => address.trim().toLowerCase()))
@@ -125,5 +130,17 @@ export const markOwnMail = (
              AND external_id IN (SELECT value FROM json_each(?)))`,
       )
       .run(now, accountId, JSON.stringify([...own]))
+  const disowned = removed.map((address) => address.trim().toLowerCase()).filter((address) => !own.has(address))
+  if (disowned.length > 0)
+    database
+      .prepare(
+        `UPDATE emails SET outgoing = 0, updated_at = ? WHERE account_id = ? AND outgoing = 1
+           AND from_identity_id IN (SELECT id FROM identities WHERE provider = 'email'
+             AND external_id IN (SELECT value FROM json_each(?)))
+           AND NOT EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
+             WHERE m.email_id = emails.id AND b.account_id = emails.account_id
+               AND b.external_id IN (SELECT value FROM json_each(?)))`,
+      )
+      .run(now, accountId, JSON.stringify(disowned), JSON.stringify(mailboxes))
   return [...own].sort()
 }

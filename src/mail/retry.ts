@@ -9,7 +9,7 @@ import {
   type MailAttachmentPolicy,
   readAttachments,
 } from "./attachments.js"
-import { sentAtOf } from "./email-input.js"
+import { sentAtOf, storedHeaders } from "./email-input.js"
 import { mailFolders } from "./folders.js"
 import { mailHeadersOf } from "./headers.js"
 import { type ParsedMail, parseMail } from "./parse.js"
@@ -120,7 +120,7 @@ export const retryUnread = async ({
             receivedAt: Date.parse(item.receivedAt),
             bodyText: mail.text || null,
             size: item.size ?? stored.size,
-            ...(Object.keys(header).length ? { headers: header } : {}),
+            ...storedHeaders(header, mail),
             outgoing: mail.from === null ? null : mail.from.email === key.account,
             mailboxes: stored.mailboxes.map(({ externalId, name, kind }) => ({ externalId, name, kind })),
             ...(stored.read === null ? {} : { read: stored.read }),

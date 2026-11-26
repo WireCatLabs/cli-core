@@ -57,6 +57,28 @@ describe("mailHeadersOf", () => {
     )
   })
 
+  it("keeps a signed auto-reply apart from Auto-Submitted, so a person's out-of-office makes no program", () => {
+    const fields = [
+      "From: Pia <pia@shop.example>",
+      "Return-Path: <>",
+      "Auto-Submitted: auto-replied",
+      SIGNATURE,
+      "Authentication-Results: mx.google.com; dkim=pass header.i=@news.shop.example",
+    ]
+    expect(mailHeadersOf(raw(fields))).toEqual({ dkim: "pass", "auto-replied": true })
+  })
+
+  it("keeps a List-Post that names where to post, not one that says NO", () => {
+    const list = (post: string) => ["From: rin@lists.example", "List-Id: <dev.lists.example>", `List-Post: ${post}`]
+    expect(mailHeadersOf(raw(list("<mailto:dev@lists.example>")))).toEqual({
+      "list-id": "dev.lists.example",
+      "list-post": true,
+    })
+    expect(mailHeadersOf(raw(list("NO (posting not allowed on this list)")))).toEqual({
+      "list-id": "dev.lists.example",
+    })
+  })
+
   it("keeps the https and mailto unsubscribe targets only under the From domain's own signature", () => {
     const fields = (signed: string) => [
       "From: News <news@shop.example>",

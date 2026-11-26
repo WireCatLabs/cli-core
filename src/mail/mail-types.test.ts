@@ -50,6 +50,12 @@ describe("the type of one email", () => {
       "discussion_list discussion-list",
     ],
     [{ headers: { precedence: "list" } }, "discussion_list precedence-list"],
+    [{ headers: { "list-id": "dev.example.org", "list-post": true }, listSenders: 1 }, "discussion_list list-post"],
+    [
+      { headers: { "list-id": "news.example.org", "list-post": true, "feedback-id": true }, listSenders: 1 },
+      "newsletter list-id",
+    ],
+    [{ subject: "Away until Monday", headers: { "auto-replied": true }, ownerWrote: true }, "auto_reply auto-replied"],
     [{ headers: { precedence: "list", "list-id": "news.example.org" }, listSenders: 1 }, "newsletter list-id"],
     [{ from: "info@shop.example.com", headers: { "feedback-id": true } }, "promotion marketing-address"],
     [{ from: "x@esp.example.com", headers: { "feedback-id": true }, bot: true }, "promotion feedback-id"],

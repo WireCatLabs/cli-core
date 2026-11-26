@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import PostalMime, { type Address as PostalAddress } from "postal-mime"
 import { decodeEntities } from "../domain/html-entities.js"
+import { type BodySignals, bodySignalsOf } from "./body-signals.js"
 
 export interface Address {
   email: string
@@ -21,6 +22,8 @@ export interface ParsedMail {
   references: string[]
   attachments: { id: number; name: string; mime: string | null; bytes: Uint8Array | null }[]
   text: string
+  /** schema.org markup and a calendar method read from the body, which the store keeps beside the headers. */
+  signals?: BodySignals
 }
 
 // The store cuts a body into pieces itself; this only guards against a pathological one, like a pasted log.
@@ -123,5 +126,6 @@ export const parseMail = async (
       bytes: bytesOf(part.content),
     })),
     text: text.replace(/\r\n?/g, "\n").slice(0, maxBodyChars),
+    signals: bodySignalsOf(email.html, email.attachments),
   }
 }

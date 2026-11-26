@@ -79,7 +79,12 @@ export const typesOf = (
       headers: typeof row.list === "string" ? { ...headers, "list-id": row.list } : headers,
       recipients: row.recipients == null ? null : Number(row.recipients),
       parts: JSON.parse(String(row.parts ?? "[]")) as string[],
-      schemaTypes: schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
+      schemaTypes: [
+        ...new Set([
+          ...schemaTypesOf(typeof row.body_html === "string" ? row.body_html : null),
+          ...(Array.isArray(headers["schema-types"]) ? headers["schema-types"].map(String) : []),
+        ]),
+      ],
       listSenders: typeof row.list === "string" ? (senders.get(row.list) ?? 0) : 0,
       ownerWrote: Number(row.owner_wrote) === 1,
       bot: Number(row.bot) === 1,

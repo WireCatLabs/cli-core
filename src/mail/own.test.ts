@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { type MessageStore, openStore } from "../store/index.js"
 import { mailFolders } from "./folders.js"
 import { mailTurn } from "./owed.js"
+import { OWN_MAIL_CONFIGURED } from "./own.js"
 import type { MailAccount } from "./sync.js"
 import { syncMail } from "./sync.js"
 import { type FakeMail, type FakeMailbox, fakeMailSource } from "./testing/index.js"
@@ -157,6 +158,58 @@ describe("the owner's mail", () => {
     expect(await outgoing(store)).toEqual({ "9001": false, "9002": true })
     expect(await tiesOf(store, "pat@example.test")).toContain("mail")
     expect(await ownerHolds(store, ALIAS)).toBe(true)
+  })
+
+  it("stops counting an alias the owner no longer configures: its mail is incoming, its identity leaves the owner", async () => {
+    const store = await sandbox()
+    const box: FakeMailbox = {
+      messages: [mail(1), mail(2, { from: ["Owner Example", ALIAS], to: [["Pat Example", "pat@example.test"]] })],
+    }
+    await sync(store, box, { addresses: [ALIAS] })
+    expect(await outgoing(store)).toEqual({ "9001": false, "9002": true })
+    expect(await ownerHolds(store, ALIAS)).toBe(true)
+
+    await sync(store, box)
+
+    expect(await outgoing(store)).toEqual({ "9001": false, "9002": false })
+    expect(await tiesOf(store, "pat@example.test")).not.toContain("mail")
+    expect(await ownerHolds(store, ALIAS)).toBe(false)
+    expect(await ownerHolds(store, ME)).toBe(true)
+  })
+
+  it("keeps a removed alias the owner's while its mail is in Sent, and the owner's own link of it", async () => {
+    const store = await sandbox()
+    const other = "second@example.test"
+    const box: FakeMailbox = {
+      messages: [
+        mail(1, { from: ["Owner Example", ALIAS], to: [["Pat Example", "pat@example.test"]], labels: ["Sent"] }),
+        mail(2, { from: ["Owner Example", other], to: [["Pat Example", "pat@example.test"]] }),
+        mail(3),
+      ],
+    }
+    await sync(store, box, { addresses: [ALIAS, other] })
+    await store.people.unlinkIdentity({ provider: "email", id: other }, { method: "unlink", by: "owner" })
+    await store.people.linkToOwner({ provider: "email", id: other })
+
+    await sync(store, box)
+
+    expect(await outgoing(store)).toEqual({ "9001": true, "9002": false, "9003": false })
+    expect(await ownerHolds(store, ALIAS)).toBe(true)
+    expect(await ownerHolds(store, other)).toBe(true)
+  })
+
+  it("lets go of an alias stored before the configured list was kept", async () => {
+    const store = await sandbox()
+    const box: FakeMailbox = {
+      messages: [mail(1), mail(2, { from: ["Owner Example", ALIAS], to: [["Pat Example", "pat@example.test"]] })],
+    }
+    await sync(store, box, { addresses: [ALIAS] })
+    await store.sync.clearSyncState(KEY, OWN_MAIL_CONFIGURED)
+
+    await sync(store, box)
+
+    expect(await outgoing(store)).toEqual({ "9001": false, "9002": false })
+    expect(await ownerHolds(store, ALIAS)).toBe(false)
   })
 
   it("joins no alias to the owner while the account itself is not the owner's", async () => {

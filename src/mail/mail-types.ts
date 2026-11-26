@@ -141,9 +141,11 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   const precedence = typeof headers.precedence === "string" ? headers.precedence : ""
   const bulkPrecedence = precedence === "bulk" || precedence === "junk"
   const autoSubmitted = headers["auto-submitted"] !== undefined
-  // With a List-Id, its senders decide: one sender, even under `+tag` addresses, writes a newsletter.
+  // With a List-Id, its senders decide: one sender, even under `+tag` addresses, writes a newsletter. A List-Post
+  // with no campaign marker says members post there, before a third sender is stored.
+  const listPost = listId && headers["list-post"] === true && !feedbackId && !oneClick
   const discussion = listId
-    ? input.listSenders >= DISCUSSION_SENDERS
+    ? input.listSenders >= DISCUSSION_SENDERS || listPost
     : precedence === "list" && !feedbackId && !MARKETING_SENDER.test(from)
   const mass = listUnsubscribe || bulkPrecedence || listId || oneClick
   const transactional = !mass && !feedbackId
@@ -167,6 +169,7 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   const report = input.parts.find((part) => REPORT_PARTS.has(part))
   if (report !== undefined) return typed("auto_reply", report)
   if (MAILER_DAEMON.test(from)) return typed("auto_reply", "mailer-daemon")
+  if (headers["auto-replied"] === true) return typed("auto_reply", "auto-replied")
   if (!mass && AUTO_REPLY_SUBJECT.test(subject)) return typed("auto_reply", "auto-reply-subject")
   if (weak && trusted && SECURITY_SENDER.test(from)) return typed("security", "security-address")
   if (weak && trusted && SECURITY_SUBJECT.test(subject)) return typed("security", "security-subject")
@@ -192,7 +195,11 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   if (weak && BILL_SUBJECT.test(subject)) return typed("bill", "bill-subject")
 
   if (!person && input.sector === "social") return typed("social_notification", "sector:social")
-  if (discussion) return typed("discussion_list", listId ? "discussion-list" : "precedence-list")
+  if (discussion)
+    return typed(
+      "discussion_list",
+      !listId ? "precedence-list" : input.listSenders >= DISCUSSION_SENDERS ? "discussion-list" : "list-post",
+    )
   // Transactional mail sometimes carries List-Unsubscribe: an automated sender with no campaign marker sends notices.
   const automated = AUTOMATED_SENDER.test(from) && !MARKETING_SENDER.test(from)
   if (listUnsubscribe && !oneClick && !feedbackId && !bulkPrecedence && automated)
@@ -218,21 +225,29 @@ export const mailTypeOf = (input: MailTypeInput): MailTypeOf => {
   return typed("other", null)
 }
 
-const JSON_LD_OPEN = /<script[^>]*type\s*=\s*["']?application\/ld\+json[^>]*>/gi
+// `[^<>]` and not `[^>]`: a run of `<script` with no `>` would be read to the end from each of them.
+const JSON_LD_OPEN = /<script[^<>]*type\s*=\s*["']?application\/ld\+json[^<>]*>/gi
 const ITEM_TYPE = /\bitemtype\s*=\s*["']?https?:\/\/schema\.org\/([A-Za-z]+)/gi
 const LD_TYPE = /"@type"\s*:\s*"(?:https?:\/\/schema\.org\/)?([A-Za-z]+)"/g
 
-/** The schema.org types an email's HTML declares, in JSON-LD or microdata, as Gmail's markup reads them. @experimental */
-export const schemaTypesOf = (html: string | null): string[] => {
-  if (html === null || html === "") return []
-  const found = new Set<string>()
+/** The text of each JSON-LD block of an email's HTML. */
+export const jsonLdOf = (html: string): string[] => {
+  const blocks: string[] = []
   for (const open of html.matchAll(JSON_LD_OPEN)) {
     const start = open.index + open[0].length
     const end = html.indexOf("</script>", start)
     // An unclosed block ends the scan: every later opener would search to the end again.
     if (end === -1) break
-    for (const [, type] of html.slice(start, end).matchAll(LD_TYPE)) found.add(type as string)
+    blocks.push(html.slice(start, end))
   }
+  return blocks
+}
+
+/** The schema.org types an email's HTML declares, in JSON-LD or microdata, as Gmail's markup reads them. @experimental */
+export const schemaTypesOf = (html: string | null): string[] => {
+  if (html === null || html === "") return []
+  const found = new Set<string>()
+  for (const block of jsonLdOf(html)) for (const [, type] of block.matchAll(LD_TYPE)) found.add(type as string)
   for (const [, type] of html.matchAll(ITEM_TYPE)) found.add(type as string)
   return [...found]
 }
