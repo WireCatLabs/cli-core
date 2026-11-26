@@ -12,3 +12,8 @@
 ### Added
 
 - **`readWhole()` reads a file past 2 GiB into one buffer**, where `readFile` stops with `ERR_FS_FILE_TOO_LARGE`.
+
+### Fixed
+
+- **A documents sync reads a file an earlier version kept by name for its size** (`file is larger than …`) once the
+  budget allows it. Before, such a file stayed kept by name until it changed.

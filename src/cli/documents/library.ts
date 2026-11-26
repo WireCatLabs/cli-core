@@ -574,9 +574,12 @@ const libraryOf = <M extends SourceFile>(
                 isFolder: options.isFolder,
                 ...(options.isDocument ? { isDocument: options.isDocument } : {}),
                 skipReason: (file) => scanSkipReason(scans, file, skipReason(file)),
-                // A file an older version kept by name for its type is read once a newer one reads that type; the
+                // A file an older version kept by name for its type or size is read once a newer one reads it; the
                 // planner asks only when `skipReason` no longer gives a reason. The words are the CLIs' own.
-                retryable: (skip) => skip.reason.startsWith("unsupported type: ") || scanRetry(scans, skip.reason),
+                retryable: (skip) =>
+                  skip.reason.startsWith("unsupported type: ") ||
+                  skip.reason.startsWith("file is larger than ") ||
+                  scanRetry(scans, skip.reason),
                 ...(scans ? { scans } : {}),
                 errorOf,
                 assertHeld,

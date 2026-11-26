@@ -351,6 +351,27 @@ describe("documentLibraryCommands over a source without a change feed", () => {
     await cli(["sync"])
     expect(reads).toEqual([])
   })
+
+  it("reads a file an older version kept by name for its size once the budget allows it", async () => {
+    const source = fakeDocumentSource("alpha", { feed: false })
+    source.put({ ...fakeFile("big", ["root"]), name: "big.txt" })
+    const reads: string[] = []
+    const content = source.content
+    source.content = async (id, maxChars, file) => {
+      reads.push(id)
+      return content(id, maxChars, file)
+    }
+    let rule = (file: SourceFile): string | undefined => (file.id === "big" ? "file is larger than 50 MiB" : undefined)
+    const { cli } = setup(source, memoryKeyring(), WORDS, undefined, (file) => rule(file))
+    await cli(["folders", "add", "root"])
+    const skippedIds = (item: { skipped: { id: string }[] }) => item.skipped.map((one) => one.id)
+    expect(skippedIds(JSON.parse((await cli(["sync"])).stdout).item)).toContain("big")
+    expect(reads).not.toContain("big")
+    rule = () => undefined
+    reads.length = 0
+    expect(skippedIds(JSON.parse((await cli(["sync"])).stdout).item)).not.toContain("big")
+    expect(reads).toEqual(["big"])
+  })
 })
 
 describe("scans and pictures in a documents sync", () => {
