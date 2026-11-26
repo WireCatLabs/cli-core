@@ -32,9 +32,13 @@ nothing now.
 - **Merge freely, release in batches** (owner's rule, 2026-11-09, in
   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849); it reached GitHub's 2500-comment limit on 2026-11-19, and announcements continue in [issue #3157](https://github.com/WireCatLabs/cli-core/issues/3157)). Releasing one pull request at a time made every
   session wait hours.
-  - **Merging needs no lock.** Squash merge your pull request into `main` as soon as it is green and merges cleanly,
-    then comment one line on #3157: `merged #NNN`. `main` does not require a pull request to be up to date, so merge
-    `main` in only when GitHub reports a conflict.
+  - **Merging needs no lock.** Queue your pull request as soon as it is ready: `gh pr merge <number> --squash --auto`.
+    `main` takes changes only through GitHub's merge queue (since 2026-11-27). The queue checks the pull request
+    again on the `main` it lands on, then squash merges it. A pull request whose head already holds that `main`
+    reuses its own checks there, so keeping a branch current saves a full run but is not required. Once it has
+    merged (`gh pr view <number> --json state`), comment one line on #3157: `merged #NNN`. Merge `main` into your
+    branch only when GitHub reports a conflict. A failed queue run takes the pull request out of the queue: fix it
+    and queue it again.
   - **No release per pull request.** Never release only for your own work; the next release carries everything
     merged by then.
   - **The lock is for running a release.** Before `bin/release`, read the latest comments on #3157, `git fetch` and
