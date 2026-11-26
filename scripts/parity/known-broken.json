@@ -24,12 +24,6 @@
     "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
   },
   {
-    "repo": "ydisk-cli",
-    "pr": 3338,
-    "until": "2026-12-02",
-    "reason": "adopts cli-core 1.0 on its release/1.0 branch (a draft pull request); its main stays on 0.x until the 1.0.0 batch release"
-  },
-  {
     "repo": "bitrix24-cli",
     "pr": 3338,
     "until": "2026-12-02",
@@ -40,5 +34,35 @@
     "pr": 3365,
     "until": "2026-12-02",
     "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list as the template own commands until it adopts the next release"
+  },
+  {
+    "repo": "notion-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
+  },
+  {
+    "repo": "slack-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
+  },
+  {
+    "repo": "attio-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
+  },
+  {
+    "repo": "linear-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
+  },
+  {
+    "repo": "cli-memo",
+    "pr": 3372,
+    "until": "2026-12-03",
+    "reason": "#3372 shows each email type and reach in mail search; src/search/command.test.ts still pins the line without them"
   }
 ]
