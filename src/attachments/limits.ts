@@ -22,12 +22,15 @@ const positive = (env: NodeJS.ProcessEnv, name: string, fallback: number, factor
 export const attachmentMaxBytes = (env: NodeJS.ProcessEnv = process.env): number =>
   positive(env, "MESSAGING_ATTACHMENT_MAX_MIB", MAX_FILE_BYTES, 1024 * 1024)
 
-/** `readFile` stops at 2 GiB and the file budget goes past it, so the file is read in chunks into one buffer. */
+/**
+ * `readFile` stops at 2 GiB and the file budget goes past it, so the file is read in chunks into one buffer. The buffer
+ * is its own, never a slice of Node's pool, so a caller keeps it without a copy.
+ */
 export const readWhole = async (file: string | FileHandle, signal?: AbortSignal): Promise<Buffer> => {
   const handle = typeof file === "string" ? await open(file, "r") : file
   try {
     const { size } = await handle.stat()
-    const bytes = Buffer.allocUnsafe(size)
+    const bytes = Buffer.allocUnsafeSlow(size)
     let offset = 0
     while (offset < size) {
       signal?.throwIfAborted()
@@ -40,6 +43,10 @@ export const readWhole = async (file: string | FileHandle, signal?: AbortSignal)
     if (typeof file === "string") await handle.close()
   }
 }
+
+/** The same bytes as a plain `Uint8Array`, whose `slice` copies as callers expect, without copying them. */
+export const asBytes = (buffer: Buffer): Uint8Array =>
+  new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 
 /** A byte budget as people read it: `10 GiB`, `250 MiB`. */
 export const sizeText = (bytes: number): string =>
