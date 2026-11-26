@@ -379,7 +379,16 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
       const context = contextOf(this)
       if (!context.saved()) return answer(this, { profile: context.profile, ended: false })
       const { removed } = await (await context.keeperOf()).keeper.signOut()
-      if (!context.saved()) return answer(this, { profile: context.profile, ended: true, removed })
+      const left = () => {
+        try {
+          return context.saved()
+        } catch (error) {
+          // No keyring answers: the sign-in was in the file, which is now empty, and only the keyring read fails.
+          if (removed.includes("file")) return undefined
+          throw error
+        }
+      }
+      if (!left()) return answer(this, { profile: context.profile, ended: true, removed })
       answer(this, {
         profile: context.profile,
         ended: false,
