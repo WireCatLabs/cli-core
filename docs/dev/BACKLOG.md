@@ -84,8 +84,13 @@ None open.
   reached the owner, whether the owner knows them) instead of one kind, so service mail and newsletters leave
   Strangers and merge review (#3314). Draft plan
   waits for review: [plans/2026-11-24-contact-kinds.md](plans/2026-11-24-contact-kinds.md).
-- **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
-  owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
+- **CORE-3** · P2 · A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Plan approved 2026-11-26, with a
+  hard condition that a first-use install never breaks a command; Anthropic over `fetch` and readers on first use
+  are in; source maps first:
+  [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md#owners-decision-2026-11-26).
+- **CORE-73** · P2 · CLIs share no cli-core: `npm i -g` gives each its own tree, and each pins a different exact core
+  (16 installed on 2026-11-26: six versions, 1.0.0 to 1.3.0 and 0.691/0.750; 4.5 GB, ~300 MB each). Install a
+  release set (CLIs on one core version) into one prefix from Desktop, keeping exact pins (`ARCHITECTURE.md:1064`).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
   examples and list queries are merged. Canonical command paths and removal of compatibility spellings ship in
   #1837 (owner, 2026-10-24); every CLI adopts them in the same-day cli-core raise. New bot query/schema gaps are separate

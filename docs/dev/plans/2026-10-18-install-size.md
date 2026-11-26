@@ -1,6 +1,7 @@
 # Plan: a smaller install
 
-Status: draft for the owner's review. Nothing here is built.
+Status: approved by the owner on 2026-11-26 (see [owner's decision](#owners-decision-2026-11-26)). Nothing here is
+built.
 
 ## Goal
 
@@ -167,7 +168,7 @@ Cheap and safe first; the first-use installer last, because it is the only new m
    WireCat data folder, with `doctor` showing what is installed.
 7. **Voice on the installer**: remove `sherpa-onnx` and `ogg-opus-decoder` from cli-core and max-cli.
 8. **Meaning search on the installer**: remove `@wirecat/cli-core-onnx` and `@huggingface/tokenizers`.
-9. **Readers on the installer**, only if the owner says yes.
+9. **Readers on the installer** (owner's yes, 2026-11-26), after items 7 and 8 have run on it.
 
 Each item is its own pull request and its own release note. Items 7 and 8 change max-cli and tg-cli too.
 
@@ -184,6 +185,26 @@ Each item is its own pull request and its own release note. Items 7 and 8 change
   installs nothing; an interrupted install leaves nothing half-written; it never runs package scripts.
 - On Node and on Bun: voice and meaning search work after a first-use install from an empty data folder.
 - `npm audit` on a fresh install reports nothing.
+
+## Owner's decision (2026-11-26)
+
+- **Yes to the plan**, all three directions: no source maps in the package, heavy features installed on first use,
+  and one shared install for all CLIs ([CORE-73](../BACKLOG.md)).
+- **Open question 1: yes, on one condition: a first-use install must never break a command.** The installer cases
+  in the [test plan](#test-plan) are the floor. Before items 7 and 8 ship, these are added and pass in CI on Linux,
+  macOS and Windows:
+  - offline or a failed download: `engine-missing` with the exact command to retry, and the rest of the command
+    still runs;
+  - two CLIs (or two runs of one) installing the same engine at once: one installs, the other waits and uses it;
+  - no write access to the data folder: a clear error naming the folder, nothing half-written;
+  - an engine installed for an older cli-core: detected by version, reinstalled, never loaded mismatched;
+  - `npx`, a global npm install, pnpm, Bun and an install made by WireCat Desktop.
+- **Open question 2: yes.** The Anthropic adapter drops the SDK and calls the API over `fetch`, like
+  `src/models/openai.ts` (item 4).
+- **Open question 3: yes.** The web-page and HTML readers become first-use installs (item 9). This replaces the
+  2026-10-12 ruling that readers ship with the package; they move to the installer last, after voice and meaning
+  search have run on it, and under the same installer cases above.
+- Open question 4 (the size ceiling) is not answered yet.
 
 ## Open questions for the owner
 
