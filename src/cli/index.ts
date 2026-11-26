@@ -642,6 +642,7 @@ export {
   takesProfile,
   usableProfileName,
 } from "./profile.js"
+export { openProfileStore, type ProfileStore, type ProfileStoreOptions } from "./profile-store.js"
 export { ProfileTokenStore, type ProfileTokenStoreOptions, type TokenStorage } from "./profile-token.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
 export {

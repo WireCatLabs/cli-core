@@ -421,6 +421,7 @@ describe("oauthSessionCommand for a CLI that kept its own sign-ins", () => {
       { profile: "personal", signed_in: null, state: "unknown" },
       { profile: "work", signed_in: null, state: "unknown" },
     ])
+    expect(listed.err.match(/keyring did not answer/g)).toHaveLength(1)
   })
 })
 

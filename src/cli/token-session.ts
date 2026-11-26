@@ -121,14 +121,16 @@ const UNREADABLE = new Set(["keyring.unreachable", "oauth.not-saved", "oauth.inv
 
 /**
  * `session list`'s row for a profile whose sign-in cannot be read: a keyring this run cannot reach or a broken entry
- * must not hide the other profiles (WC-ACCT-12), and `session status` names the cause. Warns once per cause.
+ * must not hide the other profiles (WC-ACCT-12), and `session status` names the cause. Warns once per reason.
  */
 export const unknownSignIn = (warn: (message: string) => void) => {
   const warned = new Set<string>()
   return (profile: string, error: unknown) => {
     if (!(error instanceof CliError) || !UNREADABLE.has(String(error.details.reason))) throw error
-    if (!warned.has(error.message)) warn(error.message)
-    warned.add(error.message)
+    // By reason, not message: cli-base's keyring.unreachable names the profile, and the cause is the same for all.
+    const reason = String(error.details.reason)
+    if (!warned.has(reason)) warn(error.message)
+    warned.add(reason)
     return { profile, signed_in: null, state: "unknown" } as const
   }
 }
