@@ -14,6 +14,7 @@ export const STORE: Entry[] = [
     "conflict",
     "another program deleted or replaced the store's journal file while it was open; store recover says what to do",
   ],
+  ["store.busy", "conflict", "another process held the store for longer than this command waits; run it again"],
   validation("store.file-damaged", "the named store file is damaged or not a database"),
   ["store.unopenable", "configuration_error", "the store file cannot be opened at its path; details.path names it"],
   [

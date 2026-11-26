@@ -54,7 +54,7 @@ export {
   meetingEntryDetails,
 } from "../entities/listings.js"
 export { syncProgress } from "../entities/store-records.js"
-export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
+export { isCliFailure, isCommanderFailure, storeBusy, storeDamaged } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { linkFetch } from "../http/link-fetch.js"
 export { type TimeLimit, timeLimit, withTimeLimit } from "../http/time-limit.js"

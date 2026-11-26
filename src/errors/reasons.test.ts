@@ -11,7 +11,7 @@ import { storeRecoverCommand } from "../cli/store-recover.js"
 import { CORE_DETAILS, CORE_REASONS } from "../index.js"
 import { failed } from "../mcp/tool.js"
 import { framesOf } from "../runs/error-detail.js"
-import { damagedFile, storeDamaged } from "./failures.js"
+import { damagedFile, storeBusy, storeDamaged } from "./failures.js"
 import { DETAILS, failureContext, REASONS } from "./reasons.js"
 
 const sources = (dir: string): string[] =>
@@ -213,9 +213,9 @@ describe("a damaged store file", () => {
   })
 
   it("leaves another SQLite failure, or a filesystem errno that looks like one, a crash", () => {
-    const locked = Object.assign(new Error("database is locked"), { code: "ERR_SQLITE_ERROR", errcode: 5 })
+    const unique = Object.assign(new Error("UNIQUE constraint failed: t.x"), { code: "ERR_SQLITE_ERROR", errcode: 19 })
     const windowsEio = Object.assign(new Error("EIO: i/o error, read"), { code: "EIO", errno: -4070 })
-    for (const error of [locked, windowsEio])
+    for (const error of [unique, windowsEio])
       expect(failed(error).structuredContent).toMatchObject({ error: { reason: "command.crashed" } })
   })
 })
@@ -224,4 +224,43 @@ it("keeps the keys a task error names in the JSON a CLI prints", () => {
   const context = { reasons: CORE_REASONS, details: CORE_DETAILS }
   const subtask = new CliError("validation_error", "HRB-2 is a subtask", { reason: "task.is-subtask", parent: "HRB-1" })
   expect(errorObjectOf(subtask, context).error.details).toEqual({ parent: "HRB-1" })
+})
+
+describe("a store another process holds", () => {
+  const locked = (): unknown => {
+    const file = join(mkdtempSync(join(tmpdir(), "store-busy-")), "wirecat.db")
+    const holder = new DatabaseSync(file)
+    holder.exec("PRAGMA journal_mode = WAL; CREATE TABLE t (x); BEGIN IMMEDIATE")
+    const waiter = new DatabaseSync(file)
+    waiter.exec("PRAGMA busy_timeout = 0")
+    try {
+      waiter.exec("BEGIN IMMEDIATE")
+    } catch (error) {
+      return error
+    } finally {
+      holder.exec("ROLLBACK")
+    }
+    throw new Error("a second writer took a held write lock")
+  }
+
+  it("is store.busy, a conflict and not a crash, in the CLI and over MCP", async () => {
+    const error = locked()
+    const streams = captureStreams()
+    const code = await run(["item", "--json", "--no-record"], failing(error), {
+      streams,
+      tty: false,
+      env: process.env,
+    })
+    const { error: object } = JSON.parse(streams.stderr[0] ?? "")
+    expect(object).toMatchObject({ code: "conflict", reason: "store.busy", retry: { safe: false } })
+    expect(code).toBe(15)
+    expect(failed(error).structuredContent).toMatchObject({ error: { reason: "store.busy" } })
+  })
+
+  it("keeps SQLite's own error behind it and leaves other failures alone", () => {
+    const error = locked()
+    expect((storeBusy(new Error("sync failed", { cause: error })) as Error).cause).toBeInstanceOf(Error)
+    const other = new Error("no such table: t")
+    expect(storeBusy(other)).toBe(other)
+  })
 })

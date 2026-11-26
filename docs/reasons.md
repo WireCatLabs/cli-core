@@ -596,6 +596,7 @@ headings.
 | `stemmer.invalid` | `validation_error` | the stemmer is not valid for that script |  |
 | `stemmer.newer` | `validation_error` | the stems were built by a newer tool |  |
 | `stemmer.unknown` | `validation_error` | the store asks for stemmers this tool does not know |  |
+| `store.busy` | `conflict` | another process held the store for longer than this command waits; run it again |  |
 | `store.changed-during-recovery` | `validation_error` | the store was written to during the recovery, so it was left as it was |  |
 | `store.damaged` | `configuration_error` | the store file is damaged; store recover says what is lost and recovers it |  |
 | `store.dry-run` | `conflict` | a dry run of an import holds the store; the read or write waits for it to end |  |

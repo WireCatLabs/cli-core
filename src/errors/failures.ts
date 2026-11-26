@@ -33,6 +33,7 @@ export const usageReason = (code: string): string | undefined => USAGE_REASONS[c
 export const failureKey = (error: unknown): string =>
   isCliFailure(error) ? error.code : error instanceof Error ? error.name : "error"
 
+const SQLITE_BUSY = 5
 const SQLITE_CORRUPT = 11
 const SQLITE_NOTADB = 26
 const DAMAGED_TEXT = /database disk image is malformed|file is not a database|fts5: corruption/i
@@ -48,18 +49,22 @@ export const sqliteCode = (error: unknown): number | undefined => {
   return code === null ? undefined : code & 0xff
 }
 
-/** The SQLite failure that says the database file is damaged, on the error or up to five `cause`s behind it. */
-const damageIn = (error: unknown): Error | undefined => {
+/** The SQLite failure `matches` picks, on the error or up to five `cause`s behind it. */
+const sqliteFailureIn = (error: unknown, matches: (at: Error) => boolean): Error | undefined => {
   if (isCliFailure(error) || isCommanderFailure(error)) return undefined
   let at: unknown = error
   for (let depth = 0; depth < 5 && at instanceof Error; depth += 1) {
-    const code = sqliteCode(at)
-    if ((code !== undefined && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(code)) || DAMAGED_TEXT.test(at.message))
-      return at
+    if (matches(at)) return at
     at = at.cause
   }
   return undefined
 }
+
+const damageIn = (error: unknown): Error | undefined =>
+  sqliteFailureIn(error, (at) => {
+    const code = sqliteCode(at)
+    return (code !== undefined && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(code)) || DAMAGED_TEXT.test(at.message)
+  })
 
 // The record's frames are where SQLite failed, not where the failure was renamed.
 const wrapping = (error: CliError, original: unknown): CliError => {
@@ -83,6 +88,21 @@ export const storeDamaged = (error: unknown, next?: string): unknown =>
           `the store file is damaged${next ? `; \`${next}\` says what is damaged and what to do` : ""}`,
           { reason: "store.damaged" },
         ),
+        error,
+      )
+    : error
+
+/**
+ * Another process (a scheduled sync of another account, memo's import) held the store's write lock past the busy
+ * timeout: `store.busy`, not a crash. Not marked safe to retry, as the command may have written before it waited.
+ * @experimental
+ */
+export const storeBusy = (error: unknown): unknown =>
+  sqliteFailureIn(error, (at) => sqliteCode(at) === SQLITE_BUSY)
+    ? wrapping(
+        new CliError("conflict", "another process held the store for longer than this command waits; run it again", {
+          reason: "store.busy",
+        }),
         error,
       )
     : error
