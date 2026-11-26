@@ -30,7 +30,7 @@ export const taskCard = v.strictObject({
   project_key: text,
   project_name: text,
   created_by: v.nullable(
-    v.strictObject({ type: v.picklist(["person", "bot"]), id, name: v.nullable(text), owner: v.boolean() }),
+    v.strictObject({ type: v.picklist(["person", "agent"]), id, name: v.nullable(text), owner: v.boolean() }),
   ),
   title: text,
   description: v.nullable(text),

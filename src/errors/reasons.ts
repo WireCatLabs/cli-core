@@ -763,7 +763,7 @@ const OTHERS: Entry[] = [
     "mail-sort.confirm",
     "a free-mail domain rule needs the confirm of a dry run whose counts still hold; run the dry run again",
   ),
-  validation("mail-sort.sender-ref", "the sender is named by an address, a person: ref or a sender-bot: ref"),
+  validation("mail-sort.sender-ref", "the sender is named by an address, a person: ref or a bot: ref"),
   ["mail-sort.not-found", "not_found", "no mail sorting rule has that id; the rules list names them"],
   ["mail-sort.email", "not_found", "no incoming email has that id"],
   validation("identity.shared-email", "more than six people share the address, so it proposes no one"),

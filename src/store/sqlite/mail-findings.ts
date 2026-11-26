@@ -607,7 +607,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         // accepted findings' own mail unchanged.
         const chosen = pendingOf(batch.input, input.decided).findings.filter((finding) => accepted.includes(finding.id))
         if (chosen.length) cite(chosen, account, true)
-        if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
+        if (proposal.proposedBy.type !== "agent" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {
           bot: proposal.proposedBy.name,

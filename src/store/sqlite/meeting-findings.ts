@@ -240,7 +240,7 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
         // Rejecting creates nothing, so a batch whose evidence changed can still be closed.
         if (accepted.length && snapshot(account, pendingOf(batch.input, input.decided)) !== input.snapshotHash)
           return stale()
-        if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
+        if (proposal.proposedBy.type !== "agent" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {
           bot: proposal.proposedBy.name,

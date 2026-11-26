@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { displayName } from "../../domain/display-names.js"
-import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import { SENDER_BOT_PREFIX, senderBotRef } from "../../domain/person-kinds.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
@@ -25,7 +25,7 @@ export interface BotIdentity {
 
 /** A program that writes to the owner, apart from people: it has no ties, no tasks and no merge review. @experimental */
 export interface SenderBot {
-  /** `sender-bot:<id>`. */
+  /** `bot:<id>`. */
   bot: string
   /** The owner's name for it; `displayName` falls back to its identities'. */
   name: string | null
@@ -47,7 +47,7 @@ export interface SenderBot {
 /** One move of an identity between a person and a bot. @experimental */
 export interface BotMove {
   identity: IdentityRef
-  /** `person:<uid>` or `sender-bot:<id>`; `null` for none. */
+  /** `person:<uid>` or `bot:<id>`; `null` for none. */
   from: string | null
   to: string | null
   author: BotAuthor
@@ -370,7 +370,8 @@ export const settleLegacyBots = (database: CacheDatabase, at: number): void => {
   }
 }
 
-const botIdOf = (database: CacheDatabase, ref: string): number => {
+const botIdOf = (database: CacheDatabase, given: string): number => {
+  const ref = senderBotRef(given)
   const id = ref.startsWith(SENDER_BOT_PREFIX) ? ref.slice(SENDER_BOT_PREFIX.length) : ""
   const row = /^[1-9]\d*$/.test(id)
     ? database.prepare("SELECT id FROM sender_bots WHERE id = ?").get(Number(id))
@@ -396,7 +397,7 @@ const identityIdOf = (database: CacheDatabase, { provider, id }: IdentityRef): n
 /** What a move names: a person's identities, a bot's, or one identity. */
 const subjectOf = (database: CacheDatabase, subject: string | IdentityRef) => {
   if (typeof subject !== "string") return { identities: [identityIdOf(database, subject)] }
-  if (subject.startsWith(SENDER_BOT_PREFIX)) {
+  if (senderBotRef(subject).startsWith(SENDER_BOT_PREFIX)) {
     const bot = botIdOf(database, subject)
     return { bot, identities: botIdentitiesOf(database, bot) }
   }
@@ -673,7 +674,7 @@ export const holdingAuthorOf = (database: CacheDatabase, identity: number): BotA
 }
 
 /**
- * Puts an identity back where it was held, `person:<id>` or `sender-bot:<id>`, under the author that put it there: a
+ * Puts an identity back where it was held, `person:<id>` or `bot:<id>`, under the author that put it there: a
  * removed sorting rule leaves no owner's mark the owner never made, so the program may sort it again. A bot gone with
  * its last identity comes back as a new one. The caller holds the write lock.
  */

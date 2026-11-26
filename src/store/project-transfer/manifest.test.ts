@@ -27,7 +27,7 @@ it("hashes equivalent JSON property and record ordering equally, but includes li
   const fingerprint = projectAnnotationsFingerprint(JSON.stringify(first))
   expect(projectAnnotationsFingerprint(JSON.stringify(reversed))).toBe(fingerprint)
   at(second.facts, 0).status = "accepted"
-  at(second.facts, 0).confirmed_by = "bot:4"
+  at(second.facts, 0).confirmed_by = "agent:4"
   expect(projectAnnotationsFingerprint(JSON.stringify(second))).not.toBe(fingerprint)
 })
 
@@ -55,7 +55,7 @@ it.each([
   [
     "unrelated graph",
     (m: ProjectAnnotations) => {
-      at(m.links, 0).from = "bot:4"
+      at(m.links, 0).from = "agent:4"
     },
   ],
   [

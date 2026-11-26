@@ -21,7 +21,11 @@ const POINTER_LITERALS = [
 describe("the entity types a pointer may hold", () => {
   it("include every type the store's code and triggers write or compare", () => {
     const written = new Set<string>()
-    for (const text of [...sources("src/store"), ...sources("drizzle")])
+    const texts = [
+      ...sources("src/store").map((text) => ({ text, old: false })),
+      ...sources("drizzle").map((text) => ({ text, old: true })),
+    ]
+    for (const { text, old } of texts)
       for (const pattern of POINTER_LITERALS)
         for (const match of text.matchAll(pattern))
           for (const type of (match[1] ?? "").match(/\w+/g) ?? []) {
@@ -31,6 +35,8 @@ describe("the entity types a pointer may hold", () => {
             if (/^(event_type|eventType)\b/.test(match[0])) continue
             // A record relation's `target_type` of `ref` is the envelope's external id not matched yet, not a pointer.
             if (type === "ref" && /^target_type\b/.test(match[0])) continue
+            // The agents' type until store version 78, which rewrote it to `agent`; migrations keep their words.
+            if (type === "bot" && old) continue
             written.add(type)
           }
 

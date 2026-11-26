@@ -241,7 +241,7 @@ export const typeCondition = (
 
 /** One sender's mail, counted by type and reach: a shop's receipts and its sales side by side. @experimental */
 export interface SenderMailTypes {
-  /** `person:<id>`, `sender-bot:<id>`, or `null` when the store links the address to neither. */
+  /** `person:<id>`, `bot:<id>`, or `null` when the store links the address to neither. */
   ref: string | null
   /** The addresses it sent from, lower case. */
   addresses: string[]

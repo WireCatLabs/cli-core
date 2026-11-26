@@ -27,14 +27,14 @@ const target = (): ProjectAnnotationsTarget => ({
   revision_sha256: "b".repeat(64),
   annotation_count: 0,
   external: [
-    { ref: "bot:71", content_sha256: null },
+    { ref: "agent:71", content_sha256: null },
     { ref: "document:80", content_sha256: "a".repeat(64) },
     { ref: "person:72", content_sha256: null },
   ],
 })
 const bindings = () => ({
   "project:11": "project:91",
-  "bot:4": "bot:71",
+  "agent:4": "agent:71",
   "document:8": "document:80",
   "person:7": "person:72",
 })
@@ -112,7 +112,7 @@ it("preserves order independence and refuses mapping a project owner to a bot", 
   m.external.reverse()
   t.external.reverse()
   expect(planProjectAnnotationSnapshot(JSON.stringify(m), t, bindings()).fingerprint).toBe(initial.fingerprint)
-  expect(planProjectAnnotationSnapshot(JSON.stringify(m), t, { ...bindings(), "person:7": "bot:71" })).toMatchObject({
+  expect(planProjectAnnotationSnapshot(JSON.stringify(m), t, { ...bindings(), "person:7": "agent:71" })).toMatchObject({
     ready: false,
     conflicts: [{ reference: "person:7", reason: "wrong_kind" }],
   })

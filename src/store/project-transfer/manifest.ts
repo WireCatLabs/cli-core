@@ -33,8 +33,8 @@ export const validateProjectAnnotationsGraph = (manifest: ProjectAnnotations, ad
     kind(fact.ref, ["fact"])
     if (owned.has(fact.ref)) invalid("facts.duplicate")
     owned.add(fact.ref)
-    kind(fact.author, ["person", "bot"])
-    if (fact.confirmed_by !== null) kind(fact.confirmed_by, ["person", "bot"])
+    kind(fact.author, ["person", "agent"])
+    if (fact.confirmed_by !== null) kind(fact.confirmed_by, ["person", "agent"])
     if (fact.updated_at < fact.created_at) invalid("facts.updated_at")
     if (fact.type !== "decision" && (fact.supersedes !== null || ["superseded", "reversed"].includes(fact.status)))
       invalid("facts.lifecycle")
@@ -54,7 +54,7 @@ export const validateProjectAnnotationsGraph = (manifest: ProjectAnnotations, ad
   if (manifest.project.organization !== null) kind(manifest.project.organization, ["organization"])
   dependency(manifest.project.organization)
   for (const actor of additionalActors) {
-    kind(actor, ["person", "bot"])
+    kind(actor, ["person", "agent"])
     dependency(actor)
   }
   const aliases = new Set([manifest.project.name, manifest.project.key].map(normalizeVocabularyName))

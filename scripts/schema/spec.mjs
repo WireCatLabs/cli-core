@@ -125,7 +125,7 @@ const EDITS = {
         "text",
         {
           notnull: true,
-          note: "what the alias names: `identity`, `person`, `organization`, `chat`, `project`, `bot`, …",
+          note: "what the alias names: `identity`, `person`, `organization`, `chat`, `project`, `agent`, …",
         },
       ],
       ["aliasable_id", "integer", { notnull: true }],
@@ -601,7 +601,7 @@ const NEW = {
     },
     {
       name: "bots",
-      doc: "An AI agent or a script that works here: it registers itself, owns projects and tasks, is assigned work, writes notes. A bot of a messenger (a Telegram bot) is an identity, not this.",
+      doc: "An AI agent or a script that works here (`agent:<id>`, pointer type `agent`; `bot` before store version 78): it registers itself, owns projects and tasks, is assigned work, writes notes. A bot of a messenger (a Telegram bot) is an identity, and a program that writes to the owner is a sender bot (`bot:<id>`), not this.",
       cols: [
         id(),
         c("name", "text", { notnull: true, unique: true, note: "handle, e.g. `zm-puller`" }),

@@ -208,10 +208,10 @@ const isFinanceType = (type: string): type is FinanceType => (FINANCE_TYPES as r
 const PAID = netPaidSql("i.id")
 const INVOICES =
   `SELECT i.*, ${PAID} AS paid, b.name AS author_name, b.kind AS author_kind FROM invoices i ` +
-  "LEFT JOIN bots b ON i.author_type = 'bot' AND b.id = i.author_id"
+  "LEFT JOIN bots b ON i.author_type = 'agent' AND b.id = i.author_id"
 const PAYMENTS =
   "SELECT p.*, (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = p.id) AS allocated, " +
-  "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
+  "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'agent' AND b.id = p.author_id"
 
 type FinanceOperations = {
   [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never

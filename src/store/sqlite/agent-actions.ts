@@ -46,7 +46,7 @@ export interface AgentActionsStore {
 
 const CODE = /^[a-z][a-z0-9_]{0,63}$/
 const NAMED =
-  "SELECT a.*, b.name AS actor_name FROM agent_actions a LEFT JOIN bots b ON a.actor_type = 'bot' AND b.id = a.actor_id"
+  "SELECT a.*, b.name AS actor_name FROM agent_actions a LEFT JOIN bots b ON a.actor_type = 'agent' AND b.id = a.actor_id"
 
 export const agentActionsStoreOver = (context: StoreContext, afterRecord: () => void = () => {}): AgentActionsStore => {
   const { database, now } = context
@@ -94,7 +94,7 @@ export const agentActionsStoreOver = (context: StoreContext, afterRecord: () => 
           input.finishedAt,
           now(),
         )
-      database.prepare("UPDATE bots SET last_seen_at = ? WHERE ? = 'bot' AND id = ?").run(now(), actor.type, actor.id)
+      database.prepare("UPDATE bots SET last_seen_at = ? WHERE ? = 'agent' AND id = ?").run(now(), actor.type, actor.id)
       afterRecord()
       return actionOf(database.prepare(`${NAMED} WHERE a.id = ?`).get(Number(row?.id)) as Record<string, unknown>)
     },

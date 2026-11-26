@@ -270,6 +270,9 @@ it("finds bots by name and address and by the organization of their domain", asy
   expect(
     (await store.people.listBots({ limit: 10, organization: String(bank?.organization) })).items.map(({ bot }) => bot),
   ).toEqual([bank?.bot])
+  expect(bank?.bot).toMatch(/^bot:\d+$/)
+  // The ref a reader kept from before store version 78 still names it.
+  expect((await store.people.showBot(String(bank?.bot).replace("bot:", "sender-bot:"))).bot).toBe(bank?.bot)
   await expect(store.people.listBots({ limit: 10, query: "ba" })).rejects.toMatchObject({
     details: { reason: "query.short-text" },
   })

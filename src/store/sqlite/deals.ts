@@ -304,7 +304,7 @@ const itemsSql = (kind: DealKind) =>
   "b.kind AS author_kind, a.provider AS account_provider, a.external_id AS account_external_id, " +
   "bs.id AS base_stage_ref_id, bs.name AS base_stage_name " +
   `FROM ${TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id JOIN pipelines p ON p.id = s.pipeline_id ` +
-  "LEFT JOIN bots b ON d.author_type = 'bot' AND b.id = d.author_id LEFT JOIN accounts a ON a.id = d.account_id " +
+  "LEFT JOIN bots b ON d.author_type = 'agent' AND b.id = d.author_id LEFT JOIN accounts a ON a.id = d.account_id " +
   "LEFT JOIN pipeline_stages bs ON s.base_confirmed = 1 AND bs.id = s.base_stage_id"
 
 const MAX_STAGES = 30

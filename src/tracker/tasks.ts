@@ -110,13 +110,15 @@ const lastClose = async (store: MessageStore, id: string) => {
   const statuses = (await store.tasks.events(id)).filter((event) => event.kind === "status")
   const at = statuses.findLastIndex(
     (event) =>
-      event.actor?.type === "bot" && event.actor.name === SYNC.bot && isClosedState(String(event.changes?.status?.[1])),
+      event.actor?.type === "agent" &&
+      event.actor.name === SYNC.bot &&
+      isClosedState(String(event.changes?.status?.[1])),
   )
   if (at < 0) return undefined
   const from = statuses[at]?.changes?.status?.[0]
   return {
     from: typeof from === "string" && !isClosedState(from) ? (from as Task["state"]) : "open",
-    owner: statuses.slice(at + 1).find((event) => event.actor?.type !== "bot")?.at,
+    owner: statuses.slice(at + 1).find((event) => event.actor?.type !== "agent")?.at,
   }
 }
 

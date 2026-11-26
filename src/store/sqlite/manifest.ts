@@ -50,6 +50,51 @@ const V31_TABLES = [
 /** Version 56 rewrites CRM links and folds duplicates, which an older build would write again. */
 const V56_TABLES = ["links", "proposed_actions"]
 
+/**
+ * Version 78 renames the agents' `bot` to `agent` in every pointer pair and ref, so `bot:` can name sender bots: a build
+ * before it would read a sender bot's `bot:` as an agent and write agents as `bot` again. `persons` is here for the
+ * triggers that clear a person's kind when a record, an assignment or a deal link they hold changes type.
+ */
+const V78_TABLES = [
+  "agent_actions",
+  "aliases",
+  "attachments",
+  "catalog_items",
+  "contracts",
+  "deals",
+  "decisions",
+  "document_annotation_transfers",
+  "enrichments",
+  "entity_link_events",
+  "facts",
+  "financial_accounts",
+  "financial_transactions",
+  "invoices",
+  "leads",
+  "link_reviews",
+  "links",
+  "mail_sort_effects",
+  "memories",
+  "notes",
+  "orders",
+  "payment_allocations",
+  "payments",
+  "persons",
+  "pipeline_stage_changes",
+  "projects",
+  "proposed_actions",
+  "record_relations",
+  "records",
+  "subscription_prices",
+  "subscriptions",
+  "tag_consolidations",
+  "taggings",
+  "task_assignments",
+  "task_events",
+  "task_pairs",
+  "tasks",
+]
+
 /** Version 73 makes every base table with an integer `id` AUTOINCREMENT, by copying it: all of them change. */
 const V73_TABLES = [
   "accounts",
@@ -276,6 +321,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261125183555_version-76-mail-type-triggers", version: 76, minCompatible: 73 },
   { name: "20261125205013_version-77-mail-sort-rules", version: 77, minCompatible: 73 },
   { name: "20261125205014_version-77-mail-sort-triggers", version: 77, minCompatible: 73 },
+  { name: "20261125231505_version-78-agent-refs", version: 78, minCompatible: 78, tables: V78_TABLES },
 ]
 
 export const generatedMigrations = (

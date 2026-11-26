@@ -197,6 +197,7 @@ const WORDS: Record<RefSummaryKind, string> = {
   task: "Task",
   memory: "Memory",
   fact: "Fact",
+  agent: "Agent",
   bot: "Bot",
   invoice: "Invoice",
   payment: "Payment",

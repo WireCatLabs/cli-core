@@ -312,7 +312,7 @@ describe("what a locked run shows of proposals and evidence", () => {
       subject,
       object,
       summary: null,
-      proposedBy: { type: "bot", id: "1", name: "claude", kind: "agent" },
+      proposedBy: { type: "agent", id: "1", name: "claude", kind: "agent" },
       reason: null,
       evidence: ["msg:telegram/102/1/1", "msg:telegram/101/1/1"],
       score: null,

@@ -234,7 +234,7 @@ describe("a sender's mail by type", () => {
       types: { order: 2, promotion: 1 },
       reaches: { direct: 2, broadcast: 1 },
     })
-    expect(broadcast.items[0]?.ref).toMatch(/^(person|sender-bot):\d+$/)
+    expect(broadcast.items[0]?.ref).toMatch(/^(person|bot):\d+$/)
     const orders = await store.mail.mailSenders({ types: ["order"] })
     expect(orders.items.map(({ addresses }) => addresses)).toEqual([["shop@store.example.com"]])
     expect((await store.mail.mailSenders()).total).toBe(2)

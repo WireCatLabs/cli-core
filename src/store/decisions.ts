@@ -15,7 +15,7 @@ export const TASK_CLOSE_KIND = "task_close"
  */
 export type Proposer =
   | { type: "person"; id: string }
-  | { type: "bot"; id: string; name: string; kind: "agent" | "rule"; verified?: false }
+  | { type: "agent"; id: string; name: string; kind: "agent" | "rule"; verified?: false }
   | { type: "unknown" }
 
 /** Who decides: the owner, or an agent the host lets decide for the owner, with its reason. */
@@ -90,15 +90,15 @@ export const mayDecide = (
   const proposer = row.proposedBy
   if (proposer.type === "unknown")
     return refuse("permission_error", "proposal.owner-only", "this proposal names no author; only the owner decides it")
-  if (proposer.type === "bot" && proposer.verified === false)
+  if (proposer.type === "agent" && proposer.verified === false)
     return refuse(
       "permission_error",
       "proposal.owner-only",
       `${proposer.name} is named only by an old link's provenance; only the owner decides it`,
     )
-  if (proposer.type === "bot" && proposer.kind === "rule" && policy.ruleProposalsOwnerOnly)
+  if (proposer.type === "agent" && proposer.kind === "rule" && policy.ruleProposalsOwnerOnly)
     return refuse("permission_error", "proposal.owner-only", `proposed by ${proposer.name}: only the owner decides it`)
-  if (proposer.type === "bot" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
+  if (proposer.type === "agent" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
     return refuse("permission_error", "proposal.own", `${by.bot} proposed this; another decider must decide it`)
   return null
 }
@@ -122,7 +122,7 @@ export const assertMayWithdraw = (
   const proposer = row.proposedBy
   if (
     row.proposed &&
-    proposer.type === "bot" &&
+    proposer.type === "agent" &&
     proposer.kind === "agent" &&
     proposer.verified !== false &&
     botKey(proposer.name) === botKey(by.bot)

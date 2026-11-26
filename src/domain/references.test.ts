@@ -69,3 +69,21 @@ describe("references", () => {
       expect(looksLikeReference(text)).toBe(false)
   })
 })
+
+describe("agents and sender bots (store version 78)", () => {
+  it("reads agent:<number> as an agent, bot: and the old sender-bot: as a sender bot", () => {
+    expect(parseReference("agent:3")).toEqual({ type: "agent", id: "3" })
+    expect(parseReference("bot:3")).toEqual({ type: "bot", id: "3" })
+    expect(canonicalReference("sender-bot:3")).toBe("bot:3")
+    expect(looksLikeReference("sender-bot:3")).toBe(true)
+  })
+
+  it("keeps an author's name such as agent:claude a name", () => {
+    expect(looksLikeReference("agent:claude")).toBe(false)
+    expect(() => parseReference("agent:claude")).toThrow(/names no agent/)
+  })
+
+  it("never offers the old prefix", () => {
+    expect(() => parseReference("sendr-bot:3")).toThrow(/^(?!.*sender-bot:).*$/s)
+  })
+})

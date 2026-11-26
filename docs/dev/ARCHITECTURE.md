@@ -693,11 +693,11 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   or a small group does. `null` when nothing says. The page reads the List-Ids of its people's mail, and the senders of
   those lists through the index `emails_by_list_id` (version 74).
 - **Sender bots** (`sender-bots.ts`, versions 74 and 75): a program that writes to the owner is a sender bot
-  (`sender-bot:<id>`, a `sender_bots` row), an entity apart from people. Its identities are `sender_bot_identities` rows
+  (`bot:<id>`, a `sender_bots` row; `sender-bot:<id>` before version 78, still read), an entity apart from people. Its identities are `sender_bot_identities` rows
   and leave `identity_links`: an identity belongs to one person or one bot, never both, and its messages and mail keep
   pointing at the identity. A bot has a name, identities and an optional organization; it has no ties, no tasks, no
   merge review, and never appears in `people.list`, its counts, `people.similar` or `people.ties`. `people.listBots` and
-  `people.showBot` read them (`showBot` with every move). `bot:` stays the agents' ref (the `bots` table). Kept kinds
+  `people.showBot` read them (`showBot` with every move). The agents of the `bots` table are `agent:<id>`, pointer type `agent` (version 78; `bot` before). Kept kinds
   move a person's identities to a new bot by rule when their kind is `automated` by a program's signal
   (`PROGRAM_SIGNALS`: the platform's bot flag, a no-reply or notification address, a signed `Auto-Submitted`, an empty
   Return-Path, `bulk_never_replied`), the owner wrote them nothing (no mail tie, no private chat both wrote in; the

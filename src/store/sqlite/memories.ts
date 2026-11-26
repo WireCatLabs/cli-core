@@ -116,7 +116,7 @@ export interface MemoriesStore {
 
 type Row = Record<string, unknown>
 const NAMED =
-  "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memories m LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id"
+  "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memories m LEFT JOIN bots b ON m.author_type = 'agent' AND b.id = m.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
@@ -137,7 +137,8 @@ export const authorOf = (row: Row): Memory["author"] => ({
   type: row.author_type as Actor["type"],
   id: String(row.author_id),
   name: row.author_name == null ? null : String(row.author_name),
-  kind: row.author_type !== "bot" ? null : row.author_kind === "rule" || row.author_name === "rule" ? "rule" : "agent",
+  kind:
+    row.author_type !== "agent" ? null : row.author_kind === "rule" || row.author_name === "rule" ? "rule" : "agent",
 })
 
 /**
@@ -530,7 +531,7 @@ export const memoriesStoreOver = (
       const rows = database
         .prepare(
           "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memory_words w JOIN memories m ON m.id = w.rowid " +
-            "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
+            "LEFT JOIN bots b ON m.author_type = 'agent' AND b.id = m.author_id WHERE memory_words MATCH ? " +
             "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) " +
             "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ? OFFSET ?",
         )

@@ -31,7 +31,7 @@ describe("proposed actions", () => {
       status: "proposed",
       payload: { text: "Thanks, Friday works" },
       target: note.ref,
-      proposedBy: { type: "bot", name: "helper" },
+      proposedBy: { type: "agent", name: "helper" },
     })
     expect((await store.proposedActions.pending()).map(({ proposedBy }) => proposedBy.name)).toEqual(["helper"])
 
@@ -97,7 +97,7 @@ describe("listing proposals and the agent log", () => {
     const call = { tier: "read" as const, status: "ok" as const, startedAt: 1, finishedAt: 2 }
     expect(await store.agentActions.record({ ...call, actor: { bot: "tg-mcp" }, tool: "messages_list" })).toMatchObject(
       {
-        actor: { type: "bot", name: "tg-mcp" },
+        actor: { type: "agent", name: "tg-mcp" },
       },
     )
     await store.agentActions.record({ ...call, actor: { bot: "memo-mcp" }, tool: "memories_add" })

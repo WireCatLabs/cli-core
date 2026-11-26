@@ -450,7 +450,7 @@ Proposer · type · export type Proposer = {
 Proposer · type · type: "person";
 Proposer · type · id: string;
 Proposer · type · } | {
-Proposer · type · type: "bot";
+Proposer · type · type: "agent";
 Proposer · type · id: string;
 Proposer · type · name: string;
 Proposer · type · kind: "agent" | "rule";

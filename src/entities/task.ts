@@ -29,7 +29,9 @@ export const task = v.strictObject({
   project_name: v.optional(v.nullable(text)),
   /** Who added it: the owner, or an agent by its bot name. */
   created_by: v.optional(
-    v.nullable(v.strictObject({ type: v.picklist(["person", "bot"]), id, name: v.nullable(text), owner: v.boolean() })),
+    v.nullable(
+      v.strictObject({ type: v.picklist(["person", "agent"]), id, name: v.nullable(text), owner: v.boolean() }),
+    ),
   ),
   account: v.optional(text),
   /** The chat it came from, as a `chat:` reference. */

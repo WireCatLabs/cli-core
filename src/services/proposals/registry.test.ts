@@ -114,7 +114,7 @@ describe("the proposal registry", () => {
       subject: f.studio.ref,
       object: f.project.ref,
       project: f.project.ref,
-      proposedBy: { type: "bot", name: "claude-code", kind: "agent" },
+      proposedBy: { type: "agent", name: "claude-code", kind: "agent" },
       evidence: [f.note.ref],
     })
     const first = await f.registry.list({ limit: 2, offset: 0 })
@@ -204,7 +204,7 @@ describe("the proposal registry", () => {
       subject: "person:1",
       object: "person:2",
       summary: null,
-      proposedBy: { type: "bot", id: "9", name: "claude-code", kind: "agent" },
+      proposedBy: { type: "agent", id: "9", name: "claude-code", kind: "agent" },
       reason: null,
       evidence: [],
       score: null,
@@ -292,7 +292,7 @@ describe("the review fixes", () => {
       by: { bot: "claude-code", reason: "the note says ten" },
       reason: "checked twice",
     })
-    expect(await f.store.facts.get(other.ref)).toMatchObject({ status: "accepted", confirmedBy: { type: "bot" } })
+    expect(await f.store.facts.get(other.ref)).toMatchObject({ status: "accepted", confirmedBy: { type: "agent" } })
     const db = await openCache(f.path)
     handles.push(db)
     const metadata = db.prepare("SELECT metadata FROM facts WHERE id = ?").get(Number(other.id))?.metadata

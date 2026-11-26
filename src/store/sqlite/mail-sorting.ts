@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { isPackFreeMailDomain } from "../../domain/domain-lists.js"
 import { isFreeMailDomain } from "../../domain/organization-sectors.js"
-import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
+import { SENDER_BOT_PREFIX, senderBotRef } from "../../domain/person-kinds.js"
 import { listIdOf } from "../../mail/headers.js"
 import { MAIL_TYPES, type MailType } from "../../mail/mail-types.js"
 import { FREE_MAIL, isDisposableDomain } from "../../mail/score.js"
@@ -122,7 +122,7 @@ export interface MailSorting {
   /** Takes back the owner's newest add or removal not yet undone; `null` when there is none. */
   undo(by: Decider): Promise<SortUndo | null>
   /**
-   * The owner's manual sorting of one sender, an address or a `person:` or `sender-bot:` ref, removed: its address
+   * The owner's manual sorting of one sender, an address or a `person:` or `bot:` ref, removed: its address
    * rules and its one-mail rules. Domain and list rules stay. Answers the rules removed.
    */
   reset(sender: string, by: Decider): Promise<SortRule[]>
@@ -211,7 +211,7 @@ const inScope = (database: CacheDatabase, scope: SortScope, value: string): Mail
 
 const ADDRESS_ONLY = { subject: null, list: null, at: Number.MAX_SAFE_INTEGER }
 
-/** Where an identity sits now: `sender-bot:<id>`, `person:<id>` or `null`. */
+/** Where an identity sits now: `bot:<id>`, `person:<id>` or `null`. */
 const holderOf = (database: CacheDatabase, identity: number): string | null => {
   const bot = database.prepare("SELECT bot_id FROM sender_bot_identities WHERE identity_id = ?").get(identity)
   if (bot !== undefined) return `${SENDER_BOT_PREFIX}${bot.bot_id}`
@@ -219,7 +219,7 @@ const holderOf = (database: CacheDatabase, identity: number): string | null => {
   return person === undefined ? null : `person:${person.person_id}`
 }
 
-/** Where an identity sits now and who put it there, as an effect's `before` keeps it: `sender-bot:4 rules`. */
+/** Where an identity sits now and who put it there, as an effect's `before` keeps it: `bot:4 rules`. */
 const heldOf = (database: CacheDatabase, identity: number): string | null => {
   const holder = holderOf(database, identity)
   return holder === null ? null : `${holder} ${holdingAuthorOf(database, identity)}`
@@ -602,12 +602,13 @@ const ownerOnly = (by: Decider, what: string) => {
   if (by !== "owner") fail(`only the owner ${what}`, "mail-sort.owner-only")
 }
 
-const addressesOf = (database: CacheDatabase, sender: string): string[] => {
-  if (sender.includes("@") && !sender.includes(":")) return [sender.trim().toLowerCase()]
+const addressesOf = (database: CacheDatabase, given: string): string[] => {
+  if (given.includes("@") && !given.includes(":")) return [given.trim().toLowerCase()]
+  const sender = senderBotRef(given)
   const bot = sender.startsWith(SENDER_BOT_PREFIX) ? Number(sender.slice(SENDER_BOT_PREFIX.length)) : undefined
   const person = sender.startsWith("person:") ? Number(sender.slice("person:".length)) : undefined
   if (bot === undefined && person === undefined)
-    return fail(`${sender} names no sender: give an address, a person: or a sender-bot: ref`, "mail-sort.sender-ref")
+    return fail(`${sender} names no sender: give an address, a person: or a bot: ref`, "mail-sort.sender-ref")
   return database
     .prepare(
       "SELECT lower(i.external_id) AS address FROM identities i WHERE i.provider = 'email' AND i.id IN " +

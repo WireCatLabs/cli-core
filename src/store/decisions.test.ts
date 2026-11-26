@@ -20,7 +20,7 @@ afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.close()
 })
 
-const bot = (name: string, kind: "agent" | "rule" = "agent"): Proposer => ({ type: "bot", id: "1", name, kind })
+const bot = (name: string, kind: "agent" | "rule" = "agent"): Proposer => ({ type: "agent", id: "1", name, kind })
 const self: Decider = { bot: "claude-code", reason: "the chat names the project" }
 
 describe("mayDecide", () => {
@@ -87,7 +87,7 @@ describe("an agent cannot decide its own proposal", () => {
     expect((await store.facts.get(fact.ref)).status).toBe("proposed")
     expect(await store.facts.accept(fact.ref, { bot: "codex", reason: "the note says so" })).toMatchObject({
       status: "accepted",
-      confirmedBy: { type: "bot" },
+      confirmedBy: { type: "agent" },
     })
   })
 

@@ -9,7 +9,7 @@ export const ENTITY_TABLES = {
   ...RECORD_TABLES,
   account: "accounts",
   attachment: "attachments",
-  bot: "bots",
+  agent: "bots",
   calendar_entry: "calendar_entries",
   chat: "chats",
   conversation: "conversations",

@@ -104,7 +104,7 @@ type Row = Record<string, unknown>
 
 const WALLETS =
   "SELECT w.*, b.name AS author_name, b.kind AS author_kind FROM financial_accounts w " +
-  "LEFT JOIN bots b ON w.author_type = 'bot' AND b.id = w.author_id"
+  "LEFT JOIN bots b ON w.author_type = 'agent' AND b.id = w.author_id"
 
 const SIGNED = "CASE t.direction WHEN 'in' THEN t.amount ELSE -t.amount END"
 

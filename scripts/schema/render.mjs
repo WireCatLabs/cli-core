@@ -13,7 +13,7 @@ const CONVENTIONS = [
   "The source's own id is `external_id`; another thing's source id is `<thing>_external_id`.",
   "`created_at` and `updated_at` say when **our** row was saved and changed. Times of the world keep their names: `sent_at`, `joined_at`, `started_at`, `due_at`.",
   "`deleted_at` means gone at the source; sync never hard-deletes, only an owner command purges.",
-  "Polymorphic associations: `<name>_type` text (the singular table name: `person`, `bot`, `email`) + `<name>_id` integer. Actors (who made or owns something) are `person` or `bot`.",
+  "Polymorphic associations: `<name>_type` text (the singular table name: `person`, `agent`, `email`) + `<name>_id` integer. Actors (who made or owns something) are `person` or `agent` (an agent of the `bots` table; `bot` named it before store version 78).",
   "Searchable data gets its own column; `metadata` (JSON) holds only what is not searched.",
   "Booleans without `is_`. Times are epoch milliseconds, integers: they sort and range without a format to agree on.",
   "One search index per corpus: messages, emails, attachments, documents, notes, memories, meetings.",

@@ -69,7 +69,7 @@ export const IMPORTER = { bot: "import" } as const satisfies Author
 
 /** A proposal the import made that the owner has not decided yet: the import may still change it. */
 export const importersProposal = (entity: Pick<Reviewed, "review" | "author">) =>
-  entity.review === "proposed" && entity.author.type === "bot" && entity.author.name === IMPORTER.bot
+  entity.review === "proposed" && entity.author.type === "agent" && entity.author.name === IMPORTER.bot
 
 /** The stable word a store refusal carries, for the receipt. */
 export const codeOf = (error: CliError): string => {

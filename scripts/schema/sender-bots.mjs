@@ -2,7 +2,7 @@ import { c, id, ts } from "./columns.mjs"
 
 const senderBotsTable = {
   name: "sender_bots",
-  doc: "A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. An entity of its own beside `persons` (`sender-bot:<id>`): it holds its identities in `sender_bot_identities`, never in `identity_links`, so it is never listed or proposed as a person, has no ties and is no task's assignee. Not the `bots` table, which holds agents that work here.",
+  doc: "A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. An entity of its own beside `persons` (`bot:<id>`; `sender-bot:<id>` before store version 78): it holds its identities in `sender_bot_identities`, never in `identity_links`, so it is never listed or proposed as a person, has no ties and is no task's assignee. Not the `bots` table, which holds agents that work here (`agent:<id>`).",
   cols: [
     id(),
     c("person_id", "integer", {

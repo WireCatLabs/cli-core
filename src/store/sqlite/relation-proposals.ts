@@ -268,7 +268,7 @@ export const relationProposalsOver = (context: StoreContext) => {
     by: Exclude<Author, "owner">,
   ): ProposedAction => {
     const proposer = proposerOfAction(action)
-    const own = proposer.type === "bot" && proposer.kind === "rule" && botKey(proposer.name) === botKey(by.bot)
+    const own = proposer.type === "agent" && proposer.kind === "rule" && botKey(proposer.name) === botKey(by.bot)
     const before = action.payload as Record<string, unknown>
     const payload = own
       ? {

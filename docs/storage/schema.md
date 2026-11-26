@@ -13,7 +13,7 @@ checks every table and column of a new store against this page.
 - The source's own id is `external_id`; another thing's source id is `<thing>_external_id`.
 - `created_at` and `updated_at` say when **our** row was saved and changed. Times of the world keep their names: `sent_at`, `joined_at`, `started_at`, `due_at`.
 - `deleted_at` means gone at the source; sync never hard-deletes, only an owner command purges.
-- Polymorphic associations: `<name>_type` text (the singular table name: `person`, `bot`, `email`) + `<name>_id` integer. Actors (who made or owns something) are `person` or `bot`.
+- Polymorphic associations: `<name>_type` text (the singular table name: `person`, `agent`, `email`) + `<name>_id` integer. Actors (who made or owns something) are `person` or `agent` (an agent of the `bots` table; `bot` named it before store version 78).
 - Searchable data gets its own column; `metadata` (JSON) holds only what is not searched.
 - Booleans without `is_`. Times are epoch milliseconds, integers: they sort and range without a format to agree on.
 - One search index per corpus: messages, emails, attachments, documents, notes, memories, meetings.
@@ -244,7 +244,7 @@ Other names for anything: a person's nickname, a contact's name in one messenger
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `aliasable_type` | text | not null |  | what the alias names: `identity`, `person`, `organization`, `chat`, `project`, `bot`, … |
+| `aliasable_type` | text | not null |  | what the alias names: `identity`, `person`, `organization`, `chat`, `project`, `agent`, … |
 | `aliasable_id` | integer | not null |  | the row in the `aliasable_type` table |
 | `account_id` | integer |  | → `accounts.id` | set when the alias holds only as seen from one account, as a contact name in one messenger does; null when it holds everywhere |
 | `name` | text | not null |  | the alias as written: a nickname, a short name, a former name |
@@ -312,7 +312,7 @@ A phone, an address or an account an organization owns: a shop's number, `info@`
 
 ### `bots`
 
-An AI agent or a script that works here: it registers itself, owns projects and tasks, is assigned work, writes notes. A bot of a messenger (a Telegram bot) is an identity, not this.
+An AI agent or a script that works here (`agent:<id>`, pointer type `agent`; `bot` before store version 78): it registers itself, owns projects and tasks, is assigned work, writes notes. A bot of a messenger (a Telegram bot) is an identity, and a program that writes to the owner is a sender bot (`bot:<id>`), not this.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -335,7 +335,7 @@ An AI agent or a script that works here: it registers itself, owns projects and 
 
 ### `sender_bots`
 
-A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. An entity of its own beside `persons` (`sender-bot:<id>`): it holds its identities in `sender_bot_identities`, never in `identity_links`, so it is never listed or proposed as a person, has no ties and is no task's assignee. Not the `bots` table, which holds agents that work here.
+A program that writes to the owner: a no-reply or alert address, a messenger bot, a service's mail. An entity of its own beside `persons` (`bot:<id>`; `sender-bot:<id>` before store version 78): it holds its identities in `sender_bot_identities`, never in `identity_links`, so it is never listed or proposed as a person, has no ties and is no task's assignee. Not the `bots` table, which holds agents that work here (`agent:<id>`).
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -873,7 +873,7 @@ What a sorting rule did to one sender identity beyond its mail types: the sender
 | `rule_id` | integer | not null |  | the `mail_sort_rules` row |
 | `identity_id` | integer | not null |  | no foreign key, as the bot tables: an older build purging an account does not know this table |
 | `action` | text | not null |  | `sender` or `organization` |
-| `before` | text |  |  | `person:<id>` or `sender-bot:<id>` it was held by, then who put it there: `sender-bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was |
+| `before` | text |  |  | `person:<id>` or `bot:<id>` (`sender-bot:<id>` before store version 78) it was held by, then who put it there: `bot:4 rules`, `person:9 owner`; for `organization`, `held` when it already was |
 | `after` | text |  |  | where the rule put it; equal to `before` when the rule left it, as for past senders |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `undone_at` | integer |  |  | put back when the rule was removed |
@@ -1228,7 +1228,7 @@ Short text about something: a person, a chat, an event, a document, a task. Comm
 | `notable_id` | integer | not null |  | the row in the `notable_type` table |
 | `title` | text |  |  | optional heading |
 | `body` | text | not null |  | the note, in Markdown |
-| `author_type` | text |  |  | `person` or `bot` |
+| `author_type` | text |  |  | `person` or `agent` |
 | `author_id` | integer |  |  | the row in the `author_type` table |
 | `revision` | integer | not null |  | edit counter, raised on every change; an edit names the revision it read, so two writers cannot overwrite each other |
 | `created_at` | integer | not null |  | when this row was saved here |
@@ -1300,7 +1300,7 @@ What an agent concluded: a summary, a daily digest, a preference. Derived and fa
 | `body` | text | not null |  |  |
 | `subject_type` | text |  |  | what it is about: `person`, `chat`, `meeting`, `project`, …; null for a general fact |
 | `subject_id` | integer |  |  | the row in the `subject_type` table |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it |
 | `confidence` | real |  |  | 0–1, as the author rated it |
@@ -1796,7 +1796,7 @@ A place for tasks, with the short key their ids start with (`MEET-12`).
 | `organization_id` | integer |  | → `organizations.id` | the `organization` it belongs to |
 | `account_id` | integer |  | → `accounts.id` | the account an inbox project collects tasks for; null for a project of the owner's own |
 | `scope` | text | not null |  | `personal` or `work`; what a context query may read for a given purpose, so a work question never pulls private chats |
-| `owner_type` | text |  |  | `person` or `bot` |
+| `owner_type` | text |  |  | `person` or `agent` |
 | `owner_id` | integer |  |  | the row in the `owner_type` table |
 | `tasks_count` | integer | not null |  | the last number given out; the next task takes +1 in the same transaction |
 | `status` | text |  |  | active, archived |
@@ -1828,10 +1828,10 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `due_at` | integer |  |  | when it should be done |
 | `started_at` | integer |  |  | when someone started it (status in_progress) |
 | `closed_at` | integer |  |  | when it became done or dismissed |
-| `closed_by_type` | text |  |  | `person` or `bot` |
+| `closed_by_type` | text |  |  | `person` or `agent` |
 | `closed_by_id` | integer |  |  | the row in the `closed_by_type` table |
 | `close_reason` | text |  |  | why it was closed, in a few words, e.g. no-reply-needed |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `source` | text | not null |  | owner, agent, rule, or an import |
 | `package_id` | text | unique |  | the task package's own id for the task; null for a task made here |
@@ -1852,7 +1852,7 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `claimed_until` | integer |  |  | when the claim lapses; a lapsed claim holds nothing |
 | `close_certainty` | real |  |  | 0–1, how sure the agent that closed it said it was; null when the owner or a rule closed it |
 | `close_suggested_as` | text |  |  | done or dismissed: how an agent would close the open task, waiting on the owner because it was not sure enough or may not close; null when nothing waits |
-| `close_suggested_by_type` | text |  |  | `person` or `bot` |
+| `close_suggested_by_type` | text |  |  | `person` or `agent` |
 | `close_suggested_by_id` | integer |  |  | the row in the `close_suggested_by_type` table |
 | `close_suggested_certainty` | real |  |  | 0–1, as the suggesting agent rated it |
 | `close_suggested_reason` | text |  |  | why the agent would close it, in a few words |
@@ -1885,7 +1885,7 @@ Who works on a task: a person or a bot, in a role.
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `task_id` | integer | not null | → `tasks.id` | the `task` it belongs to |
-| `assignee_type` | text | not null |  | `person` or `bot` |
+| `assignee_type` | text | not null |  | `person` or `agent` |
 | `assignee_id` | integer | not null |  | the row in the `assignee_type` table |
 | `role` | text | not null |  | assignee, reviewer, watcher |
 | `created_at` | integer | not null |  | when this row was saved here |
@@ -1901,7 +1901,7 @@ The history of a task: created, status changed, assigned, due date moved.
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `task_id` | integer | not null | → `tasks.id` | the `task` it belongs to |
-| `actor_type` | text |  |  | `person` or `bot` |
+| `actor_type` | text |  |  | `person` or `agent` |
 | `actor_id` | integer |  |  | the row in the `actor_type` table |
 | `kind` | text | not null |  | what happened: created, status, assigned, unassigned, due, priority, moved |
 | `changes` | text |  |  | JSON: {field: [from, to]} |
@@ -1926,7 +1926,7 @@ Two tasks that may be one job, and what was decided about them: the review list 
 | `levels` | text | not null |  | JSON: the level of each field, which the weights are recounted from |
 | `reasons` | text | not null |  | JSON: the reasons shown with the score |
 | `decision` | text | not null |  | review, unsure, merged, rejected, unmerged, attached, new |
-| `decided_by_type` | text |  |  | `person` or `bot` |
+| `decided_by_type` | text |  |  | `person` or `agent` |
 | `decided_by_id` | integer |  |  | the row in the `decided_by_type` table |
 | `decided_at` | integer |  |  |  |
 | `created_at` | integer | not null |  | when this row was saved here |
@@ -2003,7 +2003,7 @@ What happened, as its evidence shows: a fact, a statement, a question, a decisio
 | `subject_id` | integer |  |  | the row in the `subject_type` table |
 | `occurred_at` | integer |  |  | when it happened, as the evidence shows |
 | `supersedes_id` | integer |  | → `facts.id` | the decision this decision replaces |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who accepted it; null while proposed |
@@ -2059,7 +2059,7 @@ An invoice the owner issued or received. Its lines are `invoice_lines` and its t
 | `due_date` | text |  |  | `YYYY-MM-DD` |
 | `status` | text | not null |  | draft, issued, partly_paid, paid, void: the store derives it from confirmed allocations; only void and draft → issued are set |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2115,7 +2115,7 @@ Money that moved to or from the owner. A refund is a payment the other way with 
 | `reference` | text |  |  | the payment's reference text, as the bank or the payer wrote it |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2142,7 +2142,7 @@ How much of a payment settles an invoice. A payment's allocations never exceed i
 | `payment_id` | integer | not null | → `payments.id` | the `payment` it belongs to |
 | `invoice_id` | integer | not null | → `invoices.id` | the `invoice` it belongs to |
 | `amount` | integer | not null |  | more than 0, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
@@ -2172,7 +2172,7 @@ An order the owner placed with a shop or a supplier, or took from a client: for 
 | `payment_id` | integer |  | → `payments.id` | the `payment` it belongs to |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2253,7 +2253,7 @@ A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in 
 | `rank` | real |  |  | its order in its stage's column on a board, lowest first; null sorts last |
 | `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's or an agent's own |
 | `external_id` | text |  |  | its id in that CRM |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `source` | text | not null |  | owner, agent, or a CRM sync |
@@ -2286,7 +2286,7 @@ A lead (`lead:<id>`): a first contact in a lead pipeline, before it is a deal. P
 | `deal_id` | integer |  | → `deals.id` | the deal it became |
 | `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's or an agent's own |
 | `external_id` | text |  |  | its id in that CRM |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `source` | text | not null |  | owner, agent, or a CRM sync |
@@ -2399,7 +2399,7 @@ What the owner or a supplier sells: a product or a service, with its price. Writ
 | `currency` | text |  |  | ISO 4217, upper case |
 | `description` | text |  |  |  |
 | `archived_date` | text |  |  | `YYYY-MM-DD`: no longer sold; lines and subscriptions keep pointing at it |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `source` | text | not null |  | owner, agent, an import |
@@ -2457,7 +2457,7 @@ A contract the owner works under. Its parties are relationships with a role and 
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
 | `deal_id` | integer |  | → `deals.id` | the deal it closed |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2497,7 +2497,7 @@ A subscription the owner bills (receivable) or pays (payable): one supplier, one
 | `cancelled_date` | text |  |  | `YYYY-MM-DD`; required once cancelled |
 | `end_date` | text |  |  | `YYYY-MM-DD`; never before the start |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2524,7 +2524,7 @@ A subscription's price from a day on, never overwritten: a correction is a rejec
 | `currency` | text | not null |  | ISO 4217, upper case |
 | `effective_from` | text | not null |  | `YYYY-MM-DD`: the first day it is billed |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2556,7 +2556,7 @@ A bank account, card, cash box or wallet (`wallet:<id>`), in one currency: a mul
 | `opening_balance` | integer |  |  | signed, in minor units of `currency` (kopecks, cents; yen for JPY): never a float, on `opening_date`; set with it or not at all, by the owner only |
 | `opening_date` | text |  |  | `YYYY-MM-DD` |
 | `closed_date` | text |  |  | `YYYY-MM-DD` |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `source` | text | not null |  | owner, agent, an import |
@@ -2591,7 +2591,7 @@ What a statement says moved on a financial account (`transaction:<id>`). A payme
 | `payment_id` | integer |  | → `payments.id` | the payment it settles; one transaction per payment |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
-| `author_type` | text | not null |  | `person` or `bot` |
+| `author_type` | text | not null |  | `person` or `agent` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
 | `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
@@ -2775,9 +2775,9 @@ Something an agent wants done outside the store — reply, send, delete, ban, mu
 | `payload` | text |  |  | JSON: what to do, e.g. the reply text |
 | `reason` | text |  |  | why the agent proposes it |
 | `status` | text | not null |  | proposed, approved, rejected, executed, failed |
-| `proposed_by_type` | text | not null |  | `person` or `bot` |
+| `proposed_by_type` | text | not null |  | `person` or `agent` |
 | `proposed_by_id` | integer | not null |  | the row in the `proposed_by_type` table |
-| `decided_by_type` | text |  |  | `person` or `bot` |
+| `decided_by_type` | text |  |  | `person` or `agent` |
 | `decided_by_id` | integer |  |  | the row in the `decided_by_type` table |
 | `decided_at` | integer |  |  |  |
 | `executed_at` | integer |  |  |  |
@@ -2798,7 +2798,7 @@ Every tool an agent called through the CLIs or MCP: who, which tool, at what acc
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `actor_type` | text | not null |  | `person` or `bot` |
+| `actor_type` | text | not null |  | `person` or `agent` |
 | `actor_id` | integer | not null |  | the row in the `actor_type` table |
 | `tool` | text | not null |  | the command or MCP tool |
 | `tier` | text | not null |  | read, draft, write-private, write-public, destructive, admin |
@@ -2911,7 +2911,7 @@ One tag on one thing.
 | `taggable_id` | integer | not null |  | the row in the `taggable_type` table |
 | `main` | integer | not null |  | 1 on the thing's main topic; at most one per thing |
 | `source` | text | not null |  | where it came from: owner, agent, auto, an import |
-| `author_type` | text |  |  | `person` or `bot` |
+| `author_type` | text |  |  | `person` or `agent` |
 | `author_id` | integer |  |  | the row in the `author_type` table |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
@@ -2943,7 +2943,7 @@ Immutable text-free receipts for owner-reviewed tag consolidation. IDs, hashes a
 | `survivor_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
 | `source_member_ids` | text | not null |  | JSON array of retained source IDs |
 | `survivor_member_ids` | text | not null |  | JSON array of retained survivor IDs |
-| `actor_type` | text | not null |  | `person` or `bot` |
+| `actor_type` | text | not null |  | `person` or `agent` |
 | `actor_id` | integer | not null |  | the row in the `actor_type` table |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `idempotency_key` | text | not null, unique |  |  |

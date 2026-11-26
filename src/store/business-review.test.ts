@@ -146,7 +146,7 @@ it("writes products directly for anyone and keeps a code once per supplier", asy
     unitPrice: "250.00",
     currency: "RUB",
   })
-  expect(made).toMatchObject({ kind: "product", supplier: null, author: { type: "bot", name: "claude-code" } })
+  expect(made).toMatchObject({ kind: "product", supplier: null, author: { type: "agent", name: "claude-code" } })
   expect(await reasonOf(f.store.products.add({ by: "owner", name: "Чай 2", sku: "TEA-1" }))).toBe("product.duplicate")
   expect(await reasonOf(f.store.products.add({ by: "owner", name: "Кофе", unitPrice: "1.00" }))).toBe("product.field")
   await f.store.products.update(made.ref, { by: "owner", archivedDate: "2026-11-07" })

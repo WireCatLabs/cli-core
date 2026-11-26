@@ -282,7 +282,7 @@ headings.
 | `mail-sort.scope` | `validation_error` | a sorting rule's scope is mail, list, subject, address or domain |  |
 | `mail-sort.sender` | `validation_error` | a sorting rule makes a sender a bot or a person |  |
 | `mail-sort.sender-new` | `validation_error` | a sender moves with its whole history, so an address rule that moves one applies to all |  |
-| `mail-sort.sender-ref` | `validation_error` | the sender is named by an address, a person: ref or a sender-bot: ref |  |
+| `mail-sort.sender-ref` | `validation_error` | the sender is named by an address, a person: ref or a bot: ref |  |
 | `mail-sort.sender-scope` | `validation_error` | a sorting rule moves or files a sender at address or domain scope only |  |
 | `mail-sort.value` | `validation_error` | the value names no mail, list, subject, address or domain of that scope |  |
 | `mail.attachments-unread` | `provider_unavailable` | the email could not be read again, so its skipped attachments have no text |  |

@@ -22,12 +22,12 @@ export interface UnsubscribeTarget {
 
 /** One list, or one sender of broadcast mail with no List-Id: a row of Subscriptions. @experimental */
 export interface MailSubscription {
-  /** `list:<List-Id>`, else the sender: `sender-bot:<id>`, `person:<id>` or `address:<address>`. */
+  /** `list:<List-Id>`, else the sender: `bot:<id>`, `person:<id>` or `address:<address>`. */
   key: string
   listId: string | null
   /** The display name on its newest email, else its address. */
   name: string | null
-  /** Who sent its newest email: `sender-bot:<id>`, `person:<id>`, or `null` when the address is linked to neither. */
+  /** Who sent its newest email: `bot:<id>`, `person:<id>`, or `null` when the address is linked to neither. */
   sender: string | null
   /** The From address of its newest email, lower case. */
   address: string | null

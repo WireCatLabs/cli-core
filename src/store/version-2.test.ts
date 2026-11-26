@@ -12,7 +12,7 @@ it("moves a memory of kind fact to facts with what points at it, keeps other mem
   migrate(old, { migrations: MIGRATIONS.filter((migration) => migration.version === 1) })
   old.exec(`INSERT INTO bots (name, kind, created_at, updated_at) VALUES ('digest-writer', 'agent', 1, 1);
     INSERT INTO memories (kind, body, author_type, author_id, model, status, scope, created_at, updated_at)
-      VALUES ('fact', 'The review is on Fridays', 'bot', (SELECT id FROM bots WHERE name = 'digest-writer'),
+      VALUES ('fact', 'The review is on Fridays', 'agent', (SELECT id FROM bots WHERE name = 'digest-writer'),
         'synthetic-model-1', 'confirmed', 'work', 10, 20),
       ('fact', 'The review was on Mondays', 'person', 1, NULL, 'superseded', 'work', 5, 15),
       ('summary', 'Reviews move often', 'person', 1, NULL, 'proposed', 'personal', 30, 30);
@@ -40,7 +40,7 @@ it("moves a memory of kind fact to facts with what points at it, keeps other mem
       type: "fact",
       statement: "The review is on Fridays",
       status: "accepted",
-      author: { type: "bot" },
+      author: { type: "agent" },
       model: "synthetic-model-1",
       confirmedBy: { type: "person" },
       scope: "work",

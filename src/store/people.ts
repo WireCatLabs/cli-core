@@ -248,15 +248,15 @@ export interface PeopleStore extends AccountPeople {
   /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
   ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>
   /**
-   * The sender bots: programs that write to the owner, apart from people (`sender-bot:<id>`), by name. `query` looks in
+   * The sender bots: programs that write to the owner, apart from people (`bot:<id>`), by name. `query` looks in
    * their names, addresses and usernames; `organization` (`organization:<id>`) keeps the ones that send for it.
    * @experimental
    */
   listBots(options: BotListOptions): Promise<BotList>
-  /** One sender bot (`sender-bot:<id>`), its identities and every move to or from it. @experimental */
+  /** One sender bot (`bot:<id>`), its identities and every move to or from it. @experimental */
   showBot(bot: string): Promise<SenderBotDetails>
   /**
-   * The owner says a sender is a program: a person (`person:<uid>`), a bot (`sender-bot:<id>`) or one identity moves
+   * The owner says a sender is a program: a person (`person:<uid>`), a bot (`bot:<id>`) or one identity moves
    * to a sender bot for its whole history, and no rule gives it back. Its messages keep pointing at the identity. `bot`
    * joins a stored bot; else a bot already holding it keeps it, or a new one takes it. A person every identity left is
    * hidden from lists, and a move back gives their uid back. The owner's alone; refused for the owner's own person.
@@ -268,7 +268,7 @@ export interface PeopleStore extends AccountPeople {
     options?: { bot?: string; name?: string; reason?: string },
   ): Promise<SenderBot>
   /**
-   * The owner says a sender is a person: a bot (`sender-bot:<id>`) or one identity of it moves to a person for its
+   * The owner says a sender is a person: a bot (`bot:<id>`) or one identity of it moves to a person for its
    * whole history, and no rule makes it a bot again. `person` takes it; else each identity goes back to the person it
    * came from, or a person of its own. Said of a person, it keeps them one. The owner's alone. @experimental
    */

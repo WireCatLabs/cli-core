@@ -9,7 +9,7 @@ const invalid = (): never => {
 }
 const scalar = new Set([
   "person",
-  "bot",
+  "agent",
   "organization",
   "project",
   "fact",
@@ -26,7 +26,7 @@ const scalar = new Set([
   "meeting_transcript",
   "meeting_transcript_row",
 ])
-const noText = new Set(["person", "bot", "organization", "project", "chat", "identity", "account"])
+const noText = new Set(["person", "agent", "organization", "project", "chat", "identity", "account"])
 
 const texts: Record<string, { table: string; fields: string[]; where: string; join?: string }> = {
   document: {
