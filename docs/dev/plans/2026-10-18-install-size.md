@@ -11,8 +11,8 @@ never use: charts, voice transcription, search by meaning, one model provider. T
 - **Under 100 MB** for a default install of max-cli (and so of tg-cli and the other CLIs on cli-core).
 - **About 75 MB** if the owner also agrees to make the web-page reader optional (open question 3).
 - **No `npm audit` alert** on a fresh install.
-- Every feature still works. A feature whose code is not installed says what to run, and installs it on first
-  use the way speech and meaning-search models already download.
+- Every feature still works. A feature whose code is not installed installs it on first use, by itself, the way
+  speech and meaning-search models already download (owner, 2026-11-26: see the next section).
 
 ## Current state
 
@@ -193,6 +193,12 @@ Each item is its own pull request and its own release note. Items 7 and 8 change
 - **Open question 1: yes, on one condition: a first-use install must never break a command.** The installer cases
   in the [test plan](#test-plan) are the floor. Before items 7 and 8 ship, these are added and pass in CI on Linux,
   macOS and Windows:
+  - **no command disappears**: every command and option stays in `--help`, `commands`, the generated docs and the
+    MCP tool list whether its engine is installed or not; a test compares them on an empty data folder and a full one;
+  - **the install is automatic and quiet**: the first command that needs an engine installs it with no question and
+    no extra step, then does its work. Progress goes to stderr only, so stdout stays one JSON value; `--json` runs
+    and MCP calls print nothing extra. Asking the user to run a command is only for the cases below where the
+    automatic install cannot succeed;
   - offline or a failed download: `engine-missing` with the exact command to retry, and the rest of the command
     still runs;
   - two CLIs (or two runs of one) installing the same engine at once: one installs, the other waits and uses it;
