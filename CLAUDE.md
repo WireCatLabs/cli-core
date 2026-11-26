@@ -75,10 +75,12 @@ manifests and wording of tg, max and wa on the same builds. The security checks 
 gitleaks and CodeQL of the workflows; CodeQL of the
 code (javascript-typescript, python, c-cpp, java-kotlin) runs only in the release's `checks` and the monthly run, and
 the pull request reports those checks as passed.
-A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and the version against a `main` already
-proven green (bin/release's fold and version pull requests) runs only `docs:check` and the changelog shape tests,
-and reports the other required checks as passed ([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml`
+A pull request that changes only `CHANGELOG.md`, the `changes/` fragments, the version and the Markdown docs against a
+`main` already proven green (bin/release's fold and version pull requests, docs-only pull requests) runs only the
+checks that read those files, and reports the other `validation / ` checks as passed
+([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml`
 runs again on a merge to `main` (no publishing), unless the squash commit has the tree of its pull request's head and
-that head passed every required check on the `main` it landed on (`main.yml`, `scripts/release-reuse.sh`).
+that head passed every required check on the `main` it landed on (`main.yml`, `scripts/release-reuse.sh`), or it
+changes only the changelog, the version and the Markdown docs against a parent proven green.
 Browser and platform suites run for releases, explicit manual validation, and monthly nonpublishing validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).
