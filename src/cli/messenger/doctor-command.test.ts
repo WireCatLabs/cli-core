@@ -50,7 +50,12 @@ const setup = () => {
   }
 }
 
-const call = async (argv: string[], env: NodeJS.ProcessEnv, connect: Messenger["connect"]) => {
+const call = async (
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  connect: Messenger["connect"],
+  own: Partial<Messenger> = {},
+) => {
   const messenger: Messenger = {
     app,
     provider: "chat",
@@ -58,6 +63,7 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, connect: Messenger["
     connect,
     chatArgument: "a chat",
     diagnose: async () => ({ session: { exists: true } }),
+    ...own,
   }
   const streams = captureStreams()
   const code = await run(
@@ -350,6 +356,44 @@ describe("doctor", () => {
     const failed = await call(["doctor", "--online", "--json"], env, refused)
     expect(failed.code).toBe(0)
     expect(failed.answer.online).toMatchObject({ ok: false, error_code: "authentication_error" })
+  })
+
+  it("**prints the messenger's notes about its own block** under the answer, and keeps them out of the JSON", async () => {
+    const { env } = setup()
+    const { stdout, stderr } = await call(["doctor", "--json"], env, refused, {
+      doctorNotes: (block) => ((block.session as { exists: boolean }).exists ? ["the session is kept here"] : []),
+    })
+
+    expect(stderr.join("")).toContain("the session is kept here")
+    expect(stdout.join("")).not.toContain("the session is kept here")
+  })
+
+  it("**answers the messenger's own --online checks** under online.checks, a failed or thrown one as a field", async () => {
+    const { env } = setup()
+    const checks = await call(["doctor", "--online", "--json"], env, async () => connection, {
+      doctorOnline: async () => [
+        { name: "bot", ok: true, detail: "@helper" },
+        { name: "mcp", ok: false, detail: "no answer" },
+      ],
+    })
+    expect(checks.code).toBe(0)
+    expect(checks.answer.online.checks).toEqual([
+      { name: "bot", ok: true, detail: "@helper" },
+      { name: "mcp", ok: false, detail: "no answer" },
+    ])
+
+    const thrown = await call(["doctor", "--online", "--json"], env, async () => connection, {
+      doctorOnline: async () => {
+        throw new Error("the bot API is down")
+      },
+    })
+    expect(thrown.code).toBe(0)
+    expect(thrown.answer.online.checks).toEqual([{ name: "chat", ok: false, detail: "the bot API is down" }])
+
+    const without = await call(["doctor", "--json"], env, async () => connection, {
+      doctorOnline: async () => [{ name: "bot", ok: true, detail: "never asked" }],
+    })
+    expect(without.answer.online).toBeUndefined()
   })
 })
 

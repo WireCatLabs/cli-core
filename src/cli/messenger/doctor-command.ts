@@ -20,7 +20,7 @@ import { unknownPermissionIssues } from "../permission-keys.js"
 import { NONE_NAMED } from "../settings.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
-import { type Messenger, messengerContext } from "./context.js"
+import { type DoctorCheck, type Messenger, messengerContext } from "./context.js"
 import { type PrivateFiles, privateFiles, withSqliteSidecars } from "./private-files.js"
 import { DAY_MS } from "./serve-members.js"
 import { storeSummary } from "./store-maintenance-command.js"
@@ -40,7 +40,8 @@ export const doctorCommand = (messenger: Messenger): Command => {
       const { report, renderer, fixes = [] } = await diagnose(this, messenger)
       if (online && renderer) {
         const checked = await onlineCheck(this, messenger, rememberedOf(report))
-        report.online = checked
+        const checks = await extraChecks(this, messenger)
+        report.online = checks.length > 0 ? { ...checked, checks } : checked
         report.login = { state: checked.ok ? "ok" : "failed" }
         const flood = report.flood as { path: string } | undefined
         if (flood) report.flood = floodState(followStanding(new FloodMemory(flood.path), checked.standing))
@@ -54,6 +55,10 @@ export const doctorCommand = (messenger: Messenger): Command => {
       )
       for (const fix of fixes) (renderer ?? output.renderer).note(`to make it private: ${fix}`)
       for (const line of damageNotes(report.store)) (renderer ?? output.renderer).note(line)
+      const block = report[messenger.provider]
+      if (messenger.doctorNotes && block && typeof block === "object" && !("error" in block))
+        for (const line of messenger.doctorNotes(block as Record<string, unknown>))
+          (renderer ?? output.renderer).note(line)
     })
   command.addCommand(reportCommand(messenger))
   return command
@@ -377,6 +382,15 @@ const onlineCheck = async (command: Command, messenger: Messenger, remembered: s
       clock: snakeKeys(health.clock),
       error: messageOf(error),
     }
+  }
+}
+
+const extraChecks = async (command: Command, messenger: Messenger): Promise<readonly DoctorCheck[]> => {
+  if (!messenger.doctorOnline) return []
+  try {
+    return await messenger.doctorOnline(command)
+  } catch (error) {
+    return [{ name: messenger.provider, ok: false, detail: messageOf(error) }]
   }
 }
 

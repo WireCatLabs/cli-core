@@ -569,6 +569,7 @@ export type { CompletionOptions } from "./messenger/complete-command.js"
 export {
   type ConnectOptions,
   connectFor,
+  type DoctorCheck,
   type Messenger,
   type MessengerContext,
   messengerContext,
