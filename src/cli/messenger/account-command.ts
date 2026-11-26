@@ -5,34 +5,17 @@ import { accountRemoveCommand } from "../account-remove.js"
 import { accountRenameCommand } from "../account-rename.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
-import { withQuery } from "../list-query.js"
-import { ACCOUNT_PROFILES_QUERY } from "./account-profile-query.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
 import { photoHelp, readProfilePhoto } from "./admin-commands.js"
 import { accountAnswer, renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { hideNever } from "./lacks.js"
 import { privacyCommand } from "./records-command.js"
-import { listProfiles } from "./session-commands.js"
 
 export const accountCommand = (messenger: Messenger): Command => {
   const tool = `${messenger.app.command} personal`
   const account = new Command("account")
     .description("the logged-in account")
-    .addCommand(
-      withQuery(
-        annotate(new Command("list"), { effects: REMOTE_READ, examples: [`${tool} account list`] }),
-        ACCOUNT_PROFILES_QUERY,
-      )
-        .summary("profiles on this computer and their signed-in accounts")
-        .description(
-          "every account profile on this computer, and the account each is logged in as; a name that is only a bot " +
-            "is left out (`bot list` has it), one that is a bot too says `bot: true`; asks the messenger nothing",
-        )
-        .action(async function (this: Command, words: string[]) {
-          await listProfiles(this, messenger, words, "account list")
-        }),
-    )
     .addCommand(
       annotate(new Command("show"), {
         effects: REMOTE_READ,

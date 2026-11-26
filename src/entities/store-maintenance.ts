@@ -48,7 +48,7 @@ const perAccount = { chats: count, messages: count, emails: count, documents: co
 const contents = {
   by_provider: v.optional(v.array(v.strictObject({ provider: text, accounts: count, ...perAccount }))),
   by_chat_kind: v.optional(v.array(v.strictObject({ provider: text, kind: text, chats: count, messages: count }))),
-  /** `name` is the one `account list` shows; the messenger's own id for the account is left out. */
+  /** `name` is the one `session list` shows; the messenger's own id for the account is left out. */
   by_account: v.optional(
     v.array(v.strictObject({ provider: text, account_id: count, name: v.nullable(text), ...perAccount })),
   ),

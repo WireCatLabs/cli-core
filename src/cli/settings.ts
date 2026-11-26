@@ -415,12 +415,12 @@ export interface Settings extends AISettings {
   /** Every profile on this computer, bots included — what a missing profile's error lists. */
   profilesHere: string[]
   /**
-   * The profiles here that are an account, not only a bot — what `account list` shows. A name only the file's bot
+   * The profiles here that are an account, not only a bot — what `session list` shows. A name only the file's bot
    * section names, with no personal section, recorded login or messenger profile of its own, is a bot. Absent for an
    * app that builds `Settings` itself; `profilesHere` stands in.
    */
   accountProfiles?: string[]
-  /** Every name with a bot: the file's bot section, or a bot's own files. `account list` marks these. */
+  /** Every name with a bot: the file's bot section, or a bot's own files. `session list` marks these. */
   botProfiles?: string[]
   /** Where each value came from — `config show` prints it. */
   sources: Record<string, Source>
@@ -445,7 +445,7 @@ export interface ResolveOptions {
   /** `personal` unless given. */
   kind?: ProfileKind
   /**
-   * `false` for a command that touches no account — `account list`, `config show` — so it still runs
+   * `false` for a command that touches no account — `session list`, `config show` — so it still runs
    * when no profile is named. Its `profile` is then `default`, from `none named`.
    */
   needsProfile?: boolean

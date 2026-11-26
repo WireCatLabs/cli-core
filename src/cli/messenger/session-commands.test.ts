@@ -56,7 +56,7 @@ const never = async (): Promise<typeof owner> => {
 }
 
 describe("messenger session status and list", () => {
-  it("**lists the profiles with no profile named**, as `account list` does, asking the messenger nothing", async () => {
+  it("**lists the profiles with no profile named**, asking the messenger nothing", async () => {
     const env = sandbox()
     await call(["work", "account", "show", "--json"], env, asked)
     rememberAccount(app, "work", "500", env)
@@ -65,16 +65,13 @@ describe("messenger session status and list", () => {
     const listed = await call(["session", "list", "--json"], env, never, {
       profileState: (profile: string) => (profile === "old" ? "signed-out" : "signed-in"),
     })
-    const account = await call(["account", "list", "--json"], env, never, {
-      profileState: (profile: string) => (profile === "old" ? "signed-out" : "signed-in"),
-    })
 
     expect(listed.code).toBe(0)
     expect(listed.body.items).toEqual([
       { profile: "old", current: false, account: "502", name: null, signed_in: false },
       { profile: "work", current: false, account: "500", name: "Owner", signed_in: true },
     ])
-    expect(account.body.items).toEqual(listed.body.items)
+    expect((await call(["account", "list", "--json"], env, never)).code).not.toBe(0)
     for (const item of listed.body.items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
   })
 

@@ -25,7 +25,7 @@ const fakeTool: ProgramDefinition = {
   },
   commands: () => [
     leaf("setup", "guided first run"),
-    new Command("account").description("the logged-in account").addCommand(leaf("list", "every profile")),
+    new Command("session").description("log in or out").addCommand(leaf("list", "every profile")),
     new Command("chats").description("the account's chats").addCommand(leaf("list", "chats, newest first")),
     new Command("skill").description("agent instructions").addCommand(leaf("show", "print the skill")),
     commandsCommand(app),
@@ -71,7 +71,7 @@ describe("the first screen", () => {
         linear                  Linear issues and projects, searchable with your other WireCat data
 
       Start here:   tg personal setup  (any profile name works)
-                    tg account list    your profiles and their logged-in accounts
+                    tg session list    your profiles and their logged-in accounts
       Next:         tg commands        every command, by section
                     tg help options    output, offline, timeouts, dry run
       For agents:   tg skill show      rules and the discovery loop"

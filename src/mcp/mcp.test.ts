@@ -757,7 +757,6 @@ describe("the MCP server", () => {
         .map((one) => one.command)
         .sort(),
     ).toEqual([
-      "account list",
       "account sessions list",
       "account show",
       "attachments check",
