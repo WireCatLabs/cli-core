@@ -4,9 +4,10 @@ import { CliError } from "@wirecat/cli-base"
 import { DOMParser, type Document, type Element, type Node } from "@xmldom/xmldom"
 import { Unzip, UnzipInflate } from "fflate"
 import { decodeXml } from "./encoding.js"
+import { attachmentMaxBytes } from "./limits.js"
 
-import { MAX_FILE_BYTES as MAX_EXPANDED } from "./limits.js"
-
+// The text parts are held in memory; pictures and media are only checksummed, so they count against the file budget.
+const MAX_KEPT = 50 * 1024 * 1024
 const MAX_PART = 10 * 1024 * 1024
 const MAX_ENTRIES = 1000
 const decoder = new TextDecoder("utf-8", { fatal: true })
@@ -22,7 +23,9 @@ const safeName = (name: string) =>
   ![...name].some((character) => character.charCodeAt(0) < 32) &&
   !name.split("/").includes("..")
 
-const directory = (bytes: Uint8Array) => {
+const KEPT = (name: string) => /\.(xml|rels|opf|xhtml|html)$/i.test(name) || name === "mimetype"
+
+const directory = (bytes: Uint8Array, maxExpanded: number) => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   let end = -1
   for (let index = bytes.length - 22; index >= Math.max(0, bytes.length - 65_557); index--) {
@@ -39,6 +42,7 @@ const directory = (bytes: Uint8Array) => {
   if (stop > end) throw new Error("invalid_zip")
   let offset = view.getUint32(end + 16, true)
   let expanded = 0
+  let kept = 0
   const entries = new Map<string, { size: number; crc: number }>()
   for (let index = 0; index < count; index++) {
     if (offset + 46 > stop || view.getUint32(offset, true) !== 0x02014b50) throw new Error("invalid_zip")
@@ -54,7 +58,8 @@ const directory = (bytes: Uint8Array) => {
       throw new Error("invalid_zip")
     if (((view.getUint32(offset + 38, true) >>> 16) & 0xf000) === 0xa000) throw new Error("invalid_zip")
     expanded += size
-    if (expanded > MAX_EXPANDED) throw new ReaderLimit()
+    if (KEPT(name)) kept += size
+    if (expanded > maxExpanded || kept > MAX_KEPT) throw new ReaderLimit()
     const local = view.getUint32(offset + 42, true)
     if (local + 30 > offset || view.getUint32(local, true) !== 0x04034b50) throw new Error("invalid_zip")
     const localLength = view.getUint16(local + 26, true)
@@ -80,18 +85,23 @@ const directory = (bytes: Uint8Array) => {
   return entries
 }
 
-export const readContainer = async (bytes: Uint8Array, signal?: AbortSignal): Promise<Map<string, Uint8Array>> => {
+export const readContainer = async (
+  bytes: Uint8Array,
+  signal?: AbortSignal,
+  maxExpanded = attachmentMaxBytes(),
+): Promise<Map<string, Uint8Array>> => {
   cancelled(signal)
-  const entries = directory(bytes)
+  const entries = directory(bytes, maxExpanded)
   const result = new Map<string, Uint8Array>()
   const seen = new Set<string>()
   const done = new Set<string>()
   let expanded = 0
+  let kept = 0
   const archive = new Unzip((file) => {
     const expected = entries.get(file.name)
     if (!expected || seen.has(file.name)) throw new Error("invalid_zip")
     seen.add(file.name)
-    const keep = /\.(xml|rels|opf|xhtml|html)$/i.test(file.name) || file.name === "mimetype"
+    const keep = KEPT(file.name)
     let size = 0
     let checksum = 0
     const parts: Uint8Array[] = []
@@ -99,7 +109,8 @@ export const readContainer = async (bytes: Uint8Array, signal?: AbortSignal): Pr
       if (error) throw error
       size += data.length
       expanded += data.length
-      if (expanded > MAX_EXPANDED || (keep && size > MAX_PART)) throw new ReaderLimit()
+      if (keep) kept += data.length
+      if (expanded > maxExpanded || kept > MAX_KEPT || (keep && size > MAX_PART)) throw new ReaderLimit()
       checksum = crc32(data, checksum)
       if (keep) parts.push(data.slice())
       if (final) {

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto"
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import * as v from "valibot"
+import { attachmentMaxBytes, readWhole, sizeText } from "../../attachments/limits.js"
 import {
   type CellValue,
   createDocx,
@@ -46,9 +47,6 @@ export interface FileEditCommands extends FileUpdateCommands {
   restoreFromTrash?(input: string, command: Command): Promise<object>
 }
 
-/** The whole file is held in memory to edit it. */
-const MAX_OFFICE_BYTES = 64 * 1024 * 1024
-
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 
 const inTemp = async <T>(act: (folder: string) => Promise<T>) => {
@@ -65,11 +63,16 @@ const downloaded = ({ target, signal }: FileUpdatePort, path: string) =>
     const into = join(folder, "file")
     await target.download(path, into, signal)
     const { size } = await stat(into)
-    if (size > MAX_OFFICE_BYTES)
-      throw new CliError("validation_error", `${path} is ${size} bytes; an Office file is read up to 64 MiB`, {
-        reason: "file.too-large",
-      })
-    const bytes = new Uint8Array(await readFile(into))
+    const max = attachmentMaxBytes()
+    if (size > max)
+      throw new CliError(
+        "validation_error",
+        `${path} is ${size} bytes; an Office file is read up to ${sizeText(max)}`,
+        {
+          reason: "file.too-large",
+        },
+      )
+    const bytes = new Uint8Array(await readWhole(into))
     return { bytes, sha256: sha256(bytes) }
   })
 

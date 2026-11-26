@@ -1,15 +1,5 @@
 import { createHash } from "node:crypto"
-import {
-  chmodSync,
-  constants,
-  copyFileSync,
-  existsSync,
-  linkSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-} from "node:fs"
+import { chmodSync, constants, copyFileSync, existsSync, linkSync, mkdirSync, renameSync, rmSync } from "node:fs"
 import { open } from "node:fs/promises"
 import { join, resolve, sep } from "node:path"
 import { CliError, isCliError, resolvePaths } from "@wirecat/cli-base"
@@ -18,7 +8,7 @@ import type { NextStep } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import * as v from "valibot"
 import { extractText, importEngine, MAX_TEXT_CHARS } from "../../attachments/extract.js"
-import { attachmentMaxBytes } from "../../attachments/limits.js"
+import { attachmentMaxBytes, readWhole } from "../../attachments/limits.js"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { FETCH, REMOTE_READ } from "../../cli/effects.js"
@@ -365,9 +355,10 @@ export const downloadCrmFile = async (
     await discard()
     throw diskFull(limits, top, setting)
   }
+  const overBudget = saved.bytes > attachmentMaxBytes(run.env ?? process.env)
   let bytes: Buffer
   try {
-    bytes = readFileSync(target)
+    bytes = overBudget ? Buffer.alloc(0) : await readWhole(target)
   } catch {
     await discard()
     // The error would name the local path; the file was removed under the download.
@@ -386,16 +377,15 @@ export const downloadCrmFile = async (
   }
   let extraction: Awaited<ReturnType<typeof extractText>> | { status: "too-large" }
   try {
-    extraction =
-      saved.bytes > attachmentMaxBytes(run.env ?? process.env)
-        ? { status: "too-large" }
-        : await extractText(
-            bytes,
-            { kind: "file", name: file.name, mime: file.mime, path: target },
-            importEngine,
-            signal,
-            run.env ?? process.env,
-          )
+    extraction = overBudget
+      ? { status: "too-large" }
+      : await extractText(
+          bytes,
+          { kind: "file", name: file.name, mime: file.mime, path: target },
+          importEngine,
+          signal,
+          run.env ?? process.env,
+        )
   } catch (error) {
     if (signal?.aborted) throw await cutOff()
     await discard()

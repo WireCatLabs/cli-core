@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { engineHint, extractText, importEngine, MAX_TEXT_CHARS } from "../../attachments/extract.js"
-import { attachmentMaxBytes } from "../../attachments/limits.js"
+import { attachmentMaxBytes, sizeText } from "../../attachments/limits.js"
 
 const READABLE = new Set([
   "application/pdf",
@@ -62,6 +62,6 @@ export const fileText = async (
         ? "file could not be read as text; it may be damaged or protected"
         : read.status === "unsupported"
           ? "file contents do not match its type"
-          : `file is too large for the document readers (over ${Math.round(attachmentMaxBytes(env) / 1024 / 1024)} MB, or over ${MAX_TEXT_CHARS} characters of text)`
+          : `file is too large for the document readers (over ${sizeText(attachmentMaxBytes(env))}, or over ${MAX_TEXT_CHARS} characters of text)`
   throw new CliError("validation_error", reason)
 }

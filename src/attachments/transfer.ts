@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import { lstat, open } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
-import { attachmentMaxBytes } from "./limits.js"
+import { attachmentMaxBytes, sizeText } from "./limits.js"
 
 export const MAX_CHUNK_BYTES = 1024 * 1024
 export interface ByteWindow {
@@ -47,7 +47,7 @@ export const retainedBytes = async (
     if (before.size > maxBytes)
       throw new CliError(
         "validation_error",
-        `the retained attachment exceeds ${maxBytes / 1024 / 1024} MiB; configure MESSAGING_ATTACHMENT_MAX_MIB`,
+        `the retained attachment exceeds ${sizeText(maxBytes)}; configure MESSAGING_ATTACHMENT_MAX_MIB`,
       )
     if (offsetBytes > before.size)
       throw new CliError("validation_error", "the byte offset is past the end of this attachment")

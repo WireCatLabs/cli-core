@@ -45,8 +45,10 @@ it("refuses a changed hash, invalid windows, symlinks, directories, missing and 
   await mkdir(join(root, "dir"))
   await expect(retainedBytes(join(root, "dir"), {})).rejects.toMatchObject({ code: "validation_error" })
   await expect(retainedBytes(join(root, "missing"), {})).rejects.toMatchObject({ code: "not_found" })
-  await truncate(path, 50 * 1024 * 1024 + 1)
-  await expect(retainedBytes(path, {})).rejects.toMatchObject({ code: "validation_error" })
+  await truncate(path, 10 * 1024 ** 3 + 1)
+  await expect(retainedBytes(path, {}, false, {})).rejects.toThrow(
+    "exceeds 10 GiB; configure MESSAGING_ATTACHMENT_MAX_MIB",
+  )
 })
 it("handles empty files and cancellation without emitting bytes", async () => {
   const { path } = await fixture()

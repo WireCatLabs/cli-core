@@ -6,7 +6,6 @@ import type { LookupFunction } from "node:net"
 import { isIP } from "node:net"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { importEngine } from "../attachments/extract.js"
-import { MAX_FILE_BYTES } from "../attachments/limits.js"
 import { isGoogleDocumentHost } from "../domain/google-documents.js"
 import { timeLimit } from "../http/time-limit.js"
 import { readWithRegistry } from "../readers/registry.js"
@@ -21,7 +20,7 @@ export interface PageLimits {
   redirects: number
 }
 
-export const PAGE_LIMITS: PageLimits = { maxBytes: MAX_FILE_BYTES, timeoutMs: 30_000, redirects: 5 }
+export const PAGE_LIMITS: PageLimits = { maxBytes: 50 * 1024 * 1024, timeoutMs: 30_000, redirects: 5 }
 
 export interface ResolvedAddress {
   address: string
