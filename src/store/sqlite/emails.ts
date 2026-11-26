@@ -45,6 +45,7 @@ import { ensurePerson } from "./identities.js"
 import { nearestMailPieces } from "./mail-nearest.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type MailSorting, mailSortingOver, settleThreads } from "./mail-sorting.js"
+import { type MailSubscriptionStore, mailSubscriptionStore } from "./mail-subscriptions.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
 import type { Reach } from "./sender-signals.js"
@@ -303,7 +304,7 @@ export interface SenderScore {
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
-export interface MailStore extends PartialMailStore, MailActivityStore, MailTypeStore {
+export interface MailStore extends PartialMailStore, MailActivityStore, MailTypeStore, MailSubscriptionStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
   /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
   saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
@@ -916,6 +917,7 @@ export const mailStoreOver = (
   ...partialMail(database),
   ...mailActivity(database),
   ...mailTypeStore(database),
+  ...mailSubscriptionStore(database),
   async emailFacts(filter = {}) {
     const [where, params] = emailWhere(database, filter)
     return database

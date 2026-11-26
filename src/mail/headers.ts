@@ -120,6 +120,22 @@ const programSignalsOf = (unfolded: string, from: string | undefined): Record<st
   }
 }
 
+/**
+ * The https and mailto targets of List-Unsubscribe (RFC 2369), each the first of its scheme, kept only when the From
+ * domain's DKIM signature covers the field: a target is where an unsubscribe goes, so a forged one must not be offered.
+ */
+const unsubscribeTargetsOf = (unfolded: string, from: string | undefined): Record<string, string> => {
+  const value = field(unfolded, "List-Unsubscribe")
+  if (value === undefined || !signedFieldsOf(unfolded, from).has("list-unsubscribe")) return {}
+  const targets = [...value.matchAll(/<\s*([^<>\s]+)\s*>/g)].map(([, target]) => target as string)
+  const https = targets.find((target) => /^https:\/\/[^/\s]/i.test(target))
+  const mailto = targets.find((target) => /^mailto:[^@\s]+@[^@\s]+/i.test(target))
+  return {
+    ...(https === undefined ? {} : { "list-unsubscribe-https": https }),
+    ...(mailto === undefined ? {} : { "list-unsubscribe-mailto": mailto }),
+  }
+}
+
 export const addressesOf = (value: string | undefined): string[] => {
   if (value === undefined) return []
   // A display name may itself look like an address ("bob@y.com" <real@z.com>), so quoted names and comments go first.
@@ -176,9 +192,10 @@ const headTextOf = (raw: Uint8Array): string => {
 export const headersOfRaw = (raw: Uint8Array): MailHeaders => headersOf(headTextOf(raw))
 
 /**
- * List-Id, the bulk-mail fields, Reply-To, Gmail's SPF, DKIM and DMARC verdicts and what marks a program or a list
- * (`programSignalsOf`) of a whole email, kept on mail stored in full so a rule, a sender score or a person's kind can
- * be worked out from the store later. Names are lower case.
+ * List-Id, the bulk-mail fields, Reply-To, Gmail's SPF, DKIM and DMARC verdicts, the unsubscribe targets
+ * (`unsubscribeTargetsOf`) and what marks a program or a list (`programSignalsOf`) of a whole email, kept on mail
+ * stored in full so a rule, a sender score or a person's kind can be worked out from the store later. Names are lower
+ * case.
  */
 export const mailHeadersOf = (raw: Uint8Array): Record<string, string | boolean> => {
   const unfolded = unfold(headTextOf(raw))
@@ -192,6 +209,7 @@ export const mailHeadersOf = (raw: Uint8Array): Record<string, string | boolean>
     ...authOf(unfolded),
     ...(field(unfolded, "List-Unsubscribe") === undefined ? {} : { "list-unsubscribe": true }),
     ...(precedence ? { precedence } : {}),
+    ...unsubscribeTargetsOf(unfolded, from),
     ...programSignalsOf(unfolded, from),
   }
 }

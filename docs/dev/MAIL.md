@@ -54,6 +54,13 @@ account `{ provider: "email", account: <address, lower case> }`.
   server never keeps these three; another server's Authentication-Results may be the sender's own. An empty
   Return-Path, which the receiving server writes, is kept as `null-return-path` unless the mail is an auto-reply: a
   person's out-of-office comes that way too. Mail stored before these keys keeps none of them until read again.
+- **Unsubscribe targets.** `list-unsubscribe` stays `true` whenever the field is present, signed or not: the mail types
+  and the bot rules read it as a mark of bulk mail. The targets themselves are kept apart, as
+  `list-unsubscribe-https` and `list-unsubscribe-mailto` (the first of each scheme in
+  [RFC 2369](https://www.rfc-editor.org/rfc/rfc2369)'s list), only when the same signature covers `List-Unsubscribe`:
+  a target is where an unsubscribe goes, so a forged one is never offered. `store.mail.subscriptions` reads them; with
+  `list-unsubscribe-post` and an https target the unsubscribe is one-click (RFC 8058, which requires both fields
+  signed). Nothing in cli-core unsubscribes. Mail stored before cli-core kept the targets has none until read again.
 - **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists the UID, flags,
   date and size of every message in the window, and reads the raw bytes of the newest `max` not done and not located
   (a budgeted run: `fetchBatch` a round). It takes the id from the Message-ID, so stored mail keeps its id and the same
