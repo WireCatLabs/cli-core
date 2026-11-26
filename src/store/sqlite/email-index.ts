@@ -1,9 +1,10 @@
 import { CHUNK_CHARS, type Chunk, type ChunkLine, chunkHash, cutChunks, splitText } from "../../conversations/chunks.js"
 import { mailCore } from "../../conversations/mail-text.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
-import type { CacheDatabase } from "../driver.js"
+import { type CacheDatabase, isQueryOnly } from "../driver.js"
+import { storeMailTypes, typeSavedMail } from "./email-types.js"
 import { int, str } from "./events.js"
-import { CORPORA, drainCorpus } from "./note-index.js"
+import { CORPORA, drainCorpus, indexQueued } from "./note-index.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
@@ -155,8 +156,8 @@ const MAIL_CUT = "mail_pieces_cut"
 // Each change to a piece's text bumps this, so every store cuts its mail again once and re-embeds it.
 const CUT = "email, sender at the end"
 
-export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
-  // Mail was once cut without cleaning, then across the emails of a thread, then with its sender before the subject; a store cut any of those ways is cut again.
+// Mail was once cut without cleaning, then across the emails of a thread, then with its sender before the subject; a store cut any of those ways is cut again.
+const cutCurrently = (database: CacheDatabase) => {
   if (database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CUT)?.value !== CUT)
     write(database, () => {
       const single = database
@@ -176,6 +177,18 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
         .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
         .run(MAIL_CUT, CUT, Date.now())
     })
+}
+
+/** How long one write of the word drain may go on taking batches: well inside another writer's 5 s wait. */
+const DRAIN_BUDGET_MS = 250
+
+export const drainEmailIndex = (
+  database: CacheDatabase,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+  until: () => boolean = () => false,
+): number => {
+  if (isQueryOnly(database)) return 0
+  cutCurrently(database)
   const unqueued = `FROM email_index_pending q JOIN emails e ON e.id = q.id
     WHERE q.indexable_type = 'email' AND e.email_thread_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM email_index_pending t
       WHERE t.indexable_type = 'email_thread' AND t.id = e.email_thread_id)`
@@ -203,13 +216,13 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
         dropUnusedVectors(database, before)
       }
     })
-  const emails = drainCorpus(database, CORPORA.email, stemmerFor)
+  const emails = drainCorpus(database, CORPORA.email, stemmerFor, { until, budgetMs: DRAIN_BUDGET_MS })
   const next = database.prepare(
     "SELECT id FROM email_index_pending WHERE indexable_type = 'email_thread' ORDER BY id LIMIT 50",
   )
   const done = database.prepare("DELETE FROM email_index_pending WHERE indexable_type = 'email_thread' AND id = ?")
   let threads = 0
-  while (next.all().length > 0)
+  while (!until() && next.all().length > 0)
     threads += write(database, () => {
       const ids = next.all().map(({ id }) => Number(id))
       for (const id of ids) {
@@ -219,4 +232,71 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
       return ids.length
     })
   return emails + threads
+}
+
+/** How many emails, and threads, queued before this save one save also indexes: the queue drains as mail syncs. */
+const EMAIL_BACKLOG_ON_SAVE = 500
+const THREAD_BACKLOG_ON_SAVE = 50
+
+/**
+ * Indexes and types the mail of these threads inside the save's own write, plus a little of what was queued before,
+ * so the first search finds it done. A drain of
+ * its own commits every 200 emails, and under a busy disk each commit's sync costs up to a second: 100,000 saved
+ * emails took the first search 564 s (cli-testing performance/mail/types).
+ */
+export const indexSavedMail = (
+  database: CacheDatabase,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+  threadIds: readonly number[],
+): void => {
+  cutCurrently(database)
+  const ids = (sql: string, ...params: (string | number)[]) =>
+    database
+      .prepare(sql)
+      .all(...params)
+      .map(({ id }) => Number(id))
+  const saved = ids(
+    `SELECT q.id FROM email_index_pending q JOIN emails e ON e.id = q.id
+      WHERE q.indexable_type = 'email' AND e.email_thread_id IN (SELECT value FROM json_each(?))`,
+    JSON.stringify(threadIds),
+  )
+  const backlog = ids(
+    "SELECT id FROM email_index_pending WHERE indexable_type = 'email' ORDER BY id LIMIT ?",
+    EMAIL_BACKLOG_ON_SAVE,
+  )
+  const emails = [...new Set([...saved, ...backlog])]
+  // An email's words leave the queue with it, so its thread is queued first, as the drain does.
+  database
+    .prepare(
+      `INSERT OR IGNORE INTO email_index_pending (indexable_type, id) SELECT DISTINCT 'email_thread', email_thread_id
+         FROM emails WHERE id IN (SELECT value FROM json_each(?)) AND email_thread_id IS NOT NULL`,
+    )
+    .run(JSON.stringify(emails))
+  indexQueued(database, CORPORA.email, stemmerFor, emails)
+  const threads = new Set([
+    ...ids(
+      "SELECT id FROM email_index_pending WHERE indexable_type = 'email_thread' AND id IN (SELECT value FROM json_each(?))",
+      JSON.stringify(threadIds),
+    ),
+    ...ids(
+      "SELECT id FROM email_index_pending WHERE indexable_type = 'email_thread' ORDER BY id LIMIT ?",
+      THREAD_BACKLOG_ON_SAVE,
+    ),
+  ])
+  const done = database.prepare("DELETE FROM email_index_pending WHERE indexable_type = 'email_thread' AND id = ?")
+  for (const id of threads) {
+    chunkThread(database, id, Date.now())
+    done.run(id)
+  }
+  typeSavedMail(database, threadIds)
+}
+
+/** Every email still waiting for its words, pieces or type, done a short write at a time until `until` answers true. */
+export const catchUpMail = (
+  database: CacheDatabase,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+  until: () => boolean = () => false,
+): void => {
+  drainEmailIndex(database, stemmerFor, until)
+  if (!until()) storeMailTypes(database, until)
 }

@@ -317,6 +317,8 @@ describe("search mail over the mail tables", () => {
     })
     const untyped = await openCache(path)
     live.push({ close: async () => untyped.close() } as MessageStore)
+    // A save types its mail; a store upgraded from before version 76 has none typed.
+    untyped.exec("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL")
     const left = () => Number(untyped.prepare("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL").get()?.n)
     const sorted = async (text: string, on = typed) =>
       (await searchStore(on, MAIL, { text, kind: "mail", limit: 10 })).items.map(({ id }) => id).sort()
@@ -343,6 +345,27 @@ describe("search mail over the mail tables", () => {
     await expect(
       searchStore(typed, { provider: "tg", account: "1" }, { text: "type:order", limit: 5 }),
     ).rejects.toThrow("type: is a mail field")
+  })
+
+  it("searches a read-only open whose mail still waits for its words", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "mail-read-only-")), "store.db")
+    const store = await openStore({ path })
+    live.push(store)
+    const owner = await store.accounts.saveAccount(MAIL, { name: null })
+    await store.mail.saveThread({
+      accountId: owner,
+      externalId: "thread-7",
+      now: at(10),
+      emails: [email("<plan@example.com>", { subject: "Roadmap for spring" })],
+    })
+    const raw = await openCache(path)
+    live.push({ close: async () => raw.close() } as MessageStore)
+    // As a writer that has not indexed its mail yet leaves it: the email queued, its thread not.
+    raw.exec("INSERT INTO email_index_pending (indexable_type, id) SELECT 'email', id FROM emails")
+    const readOnly = await openStore({ path, readOnly: true })
+    live.push(readOnly)
+
+    expect((await searchStore(readOnly, MAIL, { text: "roadmap", kind: "mail", limit: 5 })).items).toHaveLength(1)
   })
 
   it("refuses messenger-only fields", async () => {

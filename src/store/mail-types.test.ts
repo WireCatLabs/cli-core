@@ -240,7 +240,7 @@ describe("a sender's mail by type", () => {
     expect((await store.mail.mailSenders()).total).toBe(2)
   })
 
-  it("answers a type filter from a read-only open of a store whose types were never worked out", async () => {
+  it("answers a type filter from a read-only open of a store upgraded before its mail was typed", async () => {
     const path = storePath()
     const { store } = await synced(
       [
@@ -253,6 +253,8 @@ describe("a sender's mail by type", () => {
     handles.splice(handles.indexOf(store), 1)
     const raw = await openCache(path)
     handles.push(raw)
+    // Sync types its mail as it saves it; a store upgraded from before version 76 has none typed.
+    raw.exec("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL")
     expect(Number(raw.prepare("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL").get()?.n)).toBe(2)
     const readOnly = await openStore({ path, readOnly: true })
     handles.push(readOnly)
@@ -264,5 +266,25 @@ describe("a sender's mail by type", () => {
       "Pia Lund",
     ])
     expect(Number(raw.prepare("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL").get()?.n)).toBe(2)
+  })
+
+  it("indexes and types mail as it saves it, and a sync finishes what an upgrade left untyped", async () => {
+    const path = storePath()
+    const messages = [
+      mail(["Shop", "shop@store.example.com"], "Thank you for your order #12"),
+      mail(["Pia Lund", "pia@friends.example.com"], "Dinner on Friday?"),
+    ]
+    const { store } = await synced(messages, path)
+    const raw = await openCache(path)
+    handles.push(raw)
+    const count = (sql: string) => Number(raw.prepare(sql).get()?.n)
+    const untyped = () => count("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL")
+    expect(untyped()).toBe(0)
+    expect(count("SELECT count(*) AS n FROM email_index_pending")).toBe(0)
+    expect(count("SELECT count(*) AS n FROM email_words")).toBe(2)
+
+    raw.exec("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL")
+    await syncMail(fakeMailSource({ messages }), store, { account: { address: ME }, since: SINCE, now: () => NOW })
+    expect(untyped()).toBe(0)
   })
 })

@@ -341,17 +341,12 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
   }
 }
 
-/**
- * Indexes one corpus's rows written since the last drain, in short write transactions. These corpora are
- * small, so a change of stemmer choices simply queues every row again instead of waiting for `store rebuild`.
- */
-export const drainCorpus = (
+/** The corpus's writer once its index state is set up, or `undefined` when the store wants no index for it. */
+const readyWriter = (
   database: CacheDatabase,
   corpus: Corpus,
   stemmerFor: (stemmers: Stemmers) => Stemmer,
-  { batch = 200, until = () => false }: { batch?: number; until?: () => boolean } = {},
-): number => {
-  if (isQueryOnly(database)) return 0
+): ((id: number) => void) | undefined => {
   // Pieces written before they carried their account get it, once: purge and vector search filter by it.
   if (
     (corpus.type === "email" || corpus.type === "document") &&
@@ -375,33 +370,70 @@ export const drainCorpus = (
         .run(corpus.index),
     )
   const state = corpusIndexState(database, corpus)
-  if (state.wanted === null) return 0
+  if (state.wanted === null) return undefined
   const stemmer = stemmerFor(savedStemmers(database) ?? DEFAULT_STEMMERS)
-  const queue = `${corpus.type}_index_pending`
   if (state.built !== stemmer.identity) {
     write(database, () => {
       if (state.built !== null)
         database
-          .prepare(`INSERT OR IGNORE INTO ${queue} (indexable_type, id) SELECT ?, id FROM ${corpus.table}`)
+          .prepare(
+            `INSERT OR IGNORE INTO ${corpus.type}_index_pending (indexable_type, id) SELECT ?, id FROM ${corpus.table}`,
+          )
           .run(queuedAs(corpus))
       database.prepare("UPDATE search_index_state SET analyzer = ? WHERE name = ?").run(stemmer.identity, corpus.index)
     })
-  }
-  if (state.pending === 0 && state.built === stemmer.identity) return 0
-  const next = database.prepare(`SELECT id FROM ${queue} WHERE indexable_type = ? ORDER BY id LIMIT ?`)
-  const index = writer(database, corpus, stemmer)
+  } else if (state.pending === 0) return undefined
+  return writer(database, corpus, stemmer)
+}
+
+/**
+ * Indexes one corpus's rows written since the last drain, in short write transactions. These corpora are
+ * small, so a change of stemmer choices simply queues every row again instead of waiting for `store rebuild`.
+ */
+export const drainCorpus = (
+  database: CacheDatabase,
+  corpus: Corpus,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+  { batch = 200, until = () => false, budgetMs = 0 }: { batch?: number; until?: () => boolean; budgetMs?: number } = {},
+): number => {
+  if (isQueryOnly(database)) return 0
+  const index = readyWriter(database, corpus, stemmerFor)
+  if (index === undefined) return 0
+  const next = database.prepare(
+    `SELECT id FROM ${corpus.type}_index_pending WHERE indexable_type = ? ORDER BY id LIMIT ?`,
+  )
   let done = 0
   for (;;) {
     if (until()) break
+    // Batches go on in one write until the budget is spent: each commit syncs to disk, which under load costs more
+    // than indexing 200 short emails (cli-testing performance/mail/types).
     const count = write(database, () => {
-      const ids = next.all(queuedAs(corpus), batch).map((row) => Number(row.id))
-      for (const id of ids) index(id)
-      return ids.length
+      const started = performance.now()
+      for (let indexed = 0; ; ) {
+        const ids = next.all(queuedAs(corpus), batch).map((row) => Number(row.id))
+        for (const id of ids) index(id)
+        indexed += ids.length
+        if (ids.length < batch || performance.now() - started >= budgetMs) return indexed
+      }
     })
     if (count === 0) break
     done += count
   }
   return done
+}
+
+/** Indexes these queued rows now, inside the caller's write, so they share its commit. */
+export const indexQueued = (
+  database: CacheDatabase,
+  corpus: Corpus,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+  ids: readonly number[],
+): number => {
+  if (ids.length === 0) return 0
+  const index = readyWriter(database, corpus, stemmerFor)
+  if (index === undefined) return 0
+  for (const id of ids) index(id)
+  return ids.length
 }
 
 /** Documents, then notes: what a notes search reads; then the trigrams still to fill. */
