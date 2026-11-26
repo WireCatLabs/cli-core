@@ -80,6 +80,8 @@ fi
 printf -v list '%s, ' "${broken[@]}"
 list=${list%, }
 labelled=false
+# In the merge queue the pull request is named in the ref: refs/heads/gh-readonly-queue/main/pr-<n>-<sha>.
+[ -n "${PR:-}" ] || [[ ! ${QUEUE_REF:-} =~ /pr-([0-9]+)-[0-9a-f]+$ ]] || PR=${BASH_REMATCH[1]}
 if [ -n "${PR:-}" ]; then
   labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/labels" --jq '.[].name') ||
     echo "::error::could not read the labels of #$PR"

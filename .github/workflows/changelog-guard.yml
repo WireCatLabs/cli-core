@@ -3,10 +3,21 @@ name: Changelog guard
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+  merge_group:
 
 permissions:
   contents: read
 
 jobs:
   changelog:
+    if: github.event_name == 'pull_request'
     uses: WireCatLabs/cli-base/.github/workflows/changelog-guard.yml@29f6679fe6f90c335d0d1d080cbddeb1ba86fa7e # v1.0.0-rc.0: the API report and `major` label rules
+
+  # The guard reads the pull request's title and labels, which a merge group has not: the pull request passed it. The
+  # name is the one main's ruleset requires.
+  queued:
+    if: github.event_name == 'merge_group'
+    name: changelog / guard
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "The changelog guard passed on the pull request. The merge queue adds no title or changelog change."

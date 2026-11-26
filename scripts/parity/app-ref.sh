@@ -10,7 +10,15 @@ set -euo pipefail
 app=$1
 repo=${2:-$app-cli}
 explicit=${APP_REF:-}
-branch=${explicit:-${PR_BRANCH:-}}
+pr_branch=${PR_BRANCH:-}
+# In the merge queue (refs/heads/gh-readonly-queue/main/pr-<n>-<sha>) the branch is the queued pull request's.
+if [ -z "$pr_branch" ] && [[ ${QUEUE_REF:-} =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+  pr_branch=$(gh api "repos/$GITHUB_REPOSITORY/pulls/${BASH_REMATCH[1]}" --jq .head.ref) || {
+    echo "::error title=$repo::cannot read the branch of queued pull request #${BASH_REMATCH[1]}" >&2
+    exit 1
+  }
+fi
+branch=${explicit:-$pr_branch}
 ref=main
 
 if [ -n "$branch" ] && [ "$branch" != main ]; then

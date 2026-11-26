@@ -5,6 +5,8 @@
 #
 #   GH_TOKEN GITHUB_REPOSITORY COMMIT DRY_RUN APP_REF GITHUB_REF   set by the workflow
 #   EXTRA_CONTEXTS   check names required on top of the ruleset's, one per line
+#   PR_NUMBER        the pull request whose head to compare with, instead of the one GitHub lists for COMMIT: a merge
+#                    queue's commit is no pull request's merge commit yet
 #   PULL_REQUEST     true when scripts/ci-unchanged.sh asks whether a commit on main is proven green: the release-only
 #                    conditions (main, no dry run, Parity on main) do not apply, the summary says so
 set -uo pipefail
@@ -35,9 +37,13 @@ if [ "${PULL_REQUEST:-}" != true ]; then
   [ "${APP_REF:-main}" = "main" ] || full "Parity builds ${APP_REF}, not the main the pull request checked"
 fi
 
-prs=$(api "repos/$repo/commits/$COMMIT/pulls" \
-  --jq '[.[] | select(.merge_commit_sha == env.COMMIT and .base.ref == "main" and .merged_at != null)] | map(.number) | join(" ")') ||
-  full "could not list the pull requests of $COMMIT"
+if [ -n "${PR_NUMBER:-}" ]; then
+  prs=$PR_NUMBER
+else
+  prs=$(api "repos/$repo/commits/$COMMIT/pulls" \
+    --jq '[.[] | select(.merge_commit_sha == env.COMMIT and .base.ref == "main" and .merged_at != null)] | map(.number) | join(" ")') ||
+    full "could not list the pull requests of $COMMIT"
+fi
 case "$prs" in
   "") full "no merged pull request has $COMMIT as its merge commit" ;;
   *" "*) full "several pull requests claim $COMMIT: $prs" ;;
@@ -51,7 +57,9 @@ head=$(api "repos/$repo/pulls/$pr" --jq 'select(.head.repo.full_name == .base.re
 commit_info=$(api "repos/$repo/git/commits/$COMMIT" \
   --jq '[.tree.sha, (.parents | length), (.parents[0].sha // "none")] | join(" ")') || full "could not read commit $COMMIT"
 read -r tree parents parent <<<"$commit_info"
-[ "$parents" = 1 ] || full "$COMMIT has $parents parents, not a squash commit"
+# A merge queue may test a merge commit: its first parent is the main it lands on.
+[ "$parents" = 1 ] || { [ -n "${PR_NUMBER:-}" ] && [ "$parents" = 2 ]; } ||
+  full "$COMMIT has $parents parents, not a squash commit"
 head_tree=$(api "repos/$repo/git/commits/$head" --jq .tree.sha) || full "could not read commit $head"
 [ "$tree" = "$head_tree" ] || full "tree of $COMMIT ($tree) differs from the tree of #$pr's head ${head:0:10} ($head_tree)"
 
