@@ -33,7 +33,12 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
     PAGES_CACHE_DIR: join(root, "cache"),
   }
   const checked: string[] = []
-  const cli = async (argv: string[], stdin?: string, claim?: TokenSessionOptions["claim"]) => {
+  const cli = async (
+    argv: string[],
+    stdin?: string,
+    claim?: TokenSessionOptions["claim"],
+    entry?: TokenSessionOptions["entry"],
+  ) => {
     const streams = captureStreams()
     const code = await run(
       argv,
@@ -45,6 +50,7 @@ const setup = (keyring: KeyringStore = memoryKeyring()) => {
             service: "Pages",
             resolveSettings: settingsFor(app).resolveSettings,
             ...(claim ? { claim } : {}),
+            ...(entry ? { entry } : {}),
             verify: async (_command, token) => {
               checked.push(token)
               if (token !== "good-token") throw new CliError("authentication_error", "Pages refused the token")
@@ -89,6 +95,64 @@ it("session list names every profile when the keyring cannot be reached", async 
     { profile: "work", signed_in: null, state: "unknown", token_from: null },
   ])
   expect(listed.err.match(/keyring did not answer/g)).toHaveLength(1)
+})
+
+describe("entry", () => {
+  const entry: NonNullable<TokenSessionOptions["entry"]> = {
+    write: (token, { id }) => JSON.stringify({ token, workspace: id }),
+    read: (saved, env) => {
+      if (saved.source === "environment") return { token: saved.secret, account: env.PAGES_WORKSPACE }
+      const parsed = JSON.parse(saved.secret) as { token?: string; workspace?: string }
+      if (!parsed.token)
+        throw new CliError("configuration_error", "synthetic: unreadable entry", { reason: "session.unreadable" })
+      return { token: parsed.token, ...(parsed.workspace ? { account: parsed.workspace } : {}) }
+    },
+  }
+
+  it("keeps what write makes, gives verify the token back, and shows the account in status and list", async () => {
+    const keyring = memoryKeyring()
+    const { cli, checked } = setup(keyring)
+    expect((await cli(["personal", "session", "start", "--json"], "good-token\n", undefined, entry)).code).toBe(0)
+    expect(JSON.parse(keyring.get("pages-cli", "token:personal") ?? "")).toEqual({
+      token: "good-token",
+      workspace: "workspace-1",
+    })
+    const status = await cli(["personal", "session", "status", "--check", "--json"], undefined, undefined, entry)
+    expect(status.json.item).toMatchObject({ account: "workspace-1", verified: true })
+    expect(checked).toEqual(["good-token", "good-token"])
+    expect((await cli(["session", "list", "--json"], undefined, undefined, entry)).json.items).toEqual([
+      { profile: "personal", signed_in: true, state: "saved", token_from: "keyring", account: "workspace-1" },
+    ])
+  })
+
+  it("lists an entry read cannot make sense of as unknown, and the other profiles", async () => {
+    const keyring = memoryKeyring()
+    const { cli } = setup(keyring)
+    for (const profile of ["personal", "work"])
+      expect((await cli([profile, "session", "start", "--json"], "good-token\n", undefined, entry)).code).toBe(0)
+    keyring.set("pages-cli", "token:personal", "{}")
+    const listed = await cli(["session", "list", "--json"], undefined, undefined, entry)
+    expect(listed.code).toBe(0)
+    expect(listed.json.items).toEqual(
+      expect.arrayContaining([
+        { profile: "personal", signed_in: null, state: "unknown", token_from: null, account: null },
+        { profile: "work", signed_in: true, state: "saved", token_from: "keyring", account: "workspace-1" },
+      ]),
+    )
+  })
+
+  it("is refused beside site", () => {
+    expect(() =>
+      tokenSessionCommand({
+        app,
+        service: "Pages",
+        resolveSettings: settingsFor(app).resolveSettings,
+        verify: async () => ({ id: "1", account: {} }),
+        site: { example: "pages.example.com" },
+        entry,
+      }),
+    ).toThrow(/entry or site/)
+  })
 })
 
 it("session start checks the token before keeping it; status, list and end", async () => {
