@@ -358,7 +358,8 @@ export interface UnreadChats {
   unreadChats(): Promise<Page<Chat> & { left?: string[] }>
 }
 
-export interface ThreadReplies {
+/** Also the group of `ThreadRefresh`, which a messenger may implement instead of `threadReplies`. */
+export interface ThreadReplies extends Partial<ThreadRefresh> {
   /**
    * Replies `history` leaves out, such as Slack's thread replies: those sent after `since` (epoch milliseconds, left
    * out on the chat's first read) to the roots the adapter picks, oldest first. `messages sync` asks after the chat's
@@ -368,6 +369,39 @@ export interface ThreadReplies {
   threadReplies(
     chatId: Id,
     window: { since?: number },
+  ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
+}
+
+/**
+ * A message that has replies. `lastReplyAt`: when its newest reply was sent, by the messenger's clock (ISO 8601).
+ * Without it, a later sync reads the thread again only when it shows up on an older history page.
+ * @experimental
+ */
+export interface ThreadRoot {
+  id: Id
+  lastReplyAt?: string
+}
+
+/**
+ * Thread replies `history` leaves out, read one thread at a time, for a messenger that says which messages have them.
+ * `messages sync` picks the threads: on a chat's first read every root it saw, after that a root from an older history
+ * page whole, and any other root only when its newest reply came after the last read. An adapter has all three
+ * methods or none. A messenger with both this and `ThreadReplies` is read through this one.
+ * @experimental
+ */
+export interface ThreadRefresh {
+  /** The roots among one page `history` answered, from the page alone: it is not paced, so it asks nothing. */
+  threadRootsIn(chatId: Id, messages: readonly Message[]): Promise<ThreadRoot[]>
+  /**
+   * The roots a messenger lists cheaply that may have new replies, however old the root: Slack's are those sent in the
+   * last `thread_window_days`. The sync compares each `lastReplyAt` with the last read itself.
+   */
+  recentThreadRoots(chatId: Id): Promise<ThreadRoot[]>
+  /** One thread's replies sent after `after` (epoch milliseconds), or all of them, oldest first, without the root. */
+  rootReplies(
+    chatId: Id,
+    rootId: Id,
+    window: { after?: number },
   ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
 }
 
