@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs"
 import { zipSync } from "fflate"
 import { describe, expect, it, vi } from "vitest"
 import { docx, pdf, zip } from "../testing/files.js"
-import { type Engine, engineHint, engineStates, extractText, importEngine, type LoadEngine } from "./extract.js"
+import {
+  type Engine,
+  engineHint,
+  engineStates,
+  extractText,
+  importEngine,
+  type LoadEngine,
+  tooLarge,
+} from "./extract.js"
 
 const hint = (name: string, extra: { kind?: string; mime?: string } = {}) => ({
   kind: extra.kind ?? "file",
@@ -37,6 +45,19 @@ describe("reading the text layer of a file", () => {
     }
     expect(await extractText(forged, hint("forged.docx"), load)).toEqual({ status: "too-large" })
     expect(extractRawText).not.toHaveBeenCalled()
+  })
+  it("refuses a file over 10 GiB by default and follows the setting", () => {
+    expect(tooLarge(10 * 1024 ** 3, {})).toBe(false)
+    expect(tooLarge(10 * 1024 ** 3 + 1, {})).toBe(true)
+    expect(tooLarge(2 * 1024 ** 2, { MESSAGING_ATTACHMENT_MAX_MIB: "1" })).toBe(true)
+  })
+  it("reads a DOCX whose pictures unpack past the text budget", async () => {
+    const load: LoadEngine = async () => ({ extractRawText: async () => ({ value: "synthetic body" }) })
+    const big = zipSync({
+      "word/document.xml": text("<w:document/>"),
+      "word/media/image1.png": new Uint8Array(60 * 1024 * 1024),
+    })
+    expect(await extractText(big, hint("pictures.docx"), load)).toMatchObject({ status: "extracted" })
   })
 
   it("extracts a long PDF and closes its document without a fixed page/time cutoff", async () => {

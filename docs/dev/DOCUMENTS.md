@@ -849,7 +849,8 @@ checked again, the replaced content is kept, and the write asks `files.delete` (
 uploaded. The answer is the update's (`path`, `sha256`, `replaced`) plus `changed` and `calc_chain_dropped` for cells,
 or `paragraphs` (`replaced`, `inserted`, `deleted`) for a document, and `warnings`: a replaced paragraph whose mixed
 formatting became its first run's, or a replaced formula after which Excel rebuilds its calculation order. A file over
-64 MiB is refused (`file.too-large`): the editors hold it in memory.
+the file budget (`MESSAGING_ATTACHMENT_MAX_MIB`, 10 GiB by default) is refused (`file.too-large`). The editors hold
+the whole file in memory, so a large file needs about that much free memory.
 
 <a id="create-office-files"></a>
 

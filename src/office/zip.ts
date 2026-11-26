@@ -21,7 +21,7 @@ export const openPackage = async (bytes: Uint8Array) => {
     throw new CliError(
       "validation_error",
       error instanceof ReaderLimit
-        ? "the file is too large to edit (over 50 MB unpacked, 10 MB in one part or 1,000 entries)"
+        ? "the file is too large to edit (over 50 MB of unpacked text, 10 MB in one part or 1,000 entries)"
         : `the file is not a readable Office file (${error instanceof Error ? error.message : String(error)})`,
     )
   }

@@ -159,5 +159,5 @@ merged cells, images, headers and footers, numbered lists or links.
 ## Limits
 
 The file must be a plain `.xlsx` or `.docx` (not a macro-enabled or template file, not encrypted), at most 50 MB
-unpacked, 10 MB in one XML part and 1,000 zip entries — the limits of the shared document reader. Zip64 archives
+of unpacked XML, 10 MB in one XML part and 1,000 zip entries — the limits of the shared document reader. Zip64 archives
 are refused. Refusals are `validation_error` with a `reason` that starts with `office.`.

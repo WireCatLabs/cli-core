@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { constants, mkdirSync } from "node:fs"
-import { lstat, open, readFile, stat } from "node:fs/promises"
+import { lstat, open, stat } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryRegistry, queryFieldsOf, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
@@ -17,7 +17,7 @@ import {
   type LoadEngine,
   MAX_TEXT_CHARS,
 } from "../attachments/extract.js"
-import { attachmentMaxBytes } from "../attachments/limits.js"
+import { attachmentMaxBytes, readWhole, sizeText } from "../attachments/limits.js"
 import { type OcrPipeline, ocrImage, ocrPdf } from "../attachments/ocr.js"
 import { pdfPreview } from "../attachments/pdf-preview.js"
 import {
@@ -206,7 +206,7 @@ const outcome = async (
     status: "too-large" as const,
     issue: withRecovery({
       code: "validation_error",
-      message: `attachment exceeds ${maxBytes / 1024 / 1024} MiB; configure MESSAGING_ATTACHMENT_MAX_MIB`,
+      message: `attachment exceeds ${sizeText(maxBytes)}; configure MESSAGING_ATTACHMENT_MAX_MIB`,
       setting: "MESSAGING_ATTACHMENT_MAX_MIB",
     }),
   })
@@ -225,7 +225,7 @@ const outcome = async (
     const opened = await handle.stat()
     if (!opened.isFile()) return { status: "missing" }
     if (opened.size > maxBytes) return tooLarge()
-    bytes = new Uint8Array(await readFile(handle, { signal }))
+    bytes = new Uint8Array(await readWhole(handle, signal))
   } finally {
     await handle.close()
   }

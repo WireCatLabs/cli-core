@@ -19,7 +19,7 @@ again. Several files require their position from1.
 
 ## Transfer a larger file
 
-The default chunk is512KiB; `--chunk-bytes` allows up to1MiB. The file default is50MiB; set `MESSAGING_ATTACHMENT_MAX_MIB` to a positive whole number to change the extraction and retained-transfer file budget.
+The default chunk is512KiB; `--chunk-bytes` allows up to1MiB. The file default is10GiB; set `MESSAGING_ATTACHMENT_MAX_MIB` to a positive whole number to change the extraction and retained-transfer file budget.
 JSON includes base64, offsetBytes, readBytes, totalBytes, nextOffsetBytes and the SHA256
 of the whole file. `complete: true` means this answer contains the entire file, not that
 its text has been recognized.
@@ -83,12 +83,12 @@ Set these environment variables on the machine running the CLI or MCP server:
 
 | Setting | Default | Applies to |
 | --- | --- | --- |
-| `MESSAGING_ATTACHMENT_MAX_MIB` | `50` | File bytes for local extraction and retained transfer/PDF input |
+| `MESSAGING_ATTACHMENT_MAX_MIB` | `10240` (10 GiB) | File bytes for local extraction and retained transfer/PDF input |
 | `MESSAGING_PDF_PREVIEW_MAX_PIXELS` | `4000` | Maximum PNG width and height |
 | `MESSAGING_PDF_PREVIEW_MAX_MIB` | `8` | Encoded PNG size per preview page |
 
 Values must be positive whole numbers; invalid settings produce a validation error.
-For example, allow 250 MiB files and preview images up to 8,000 pixels per side/16 MiB:
+For example, allow files up to 250 MiB and preview images up to 8,000 pixels per side/16 MiB:
 
 ```sh
 export MESSAGING_ATTACHMENT_MAX_MIB=250
