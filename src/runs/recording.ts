@@ -1,5 +1,5 @@
 import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-base"
-import { isCliFailure, storeDamaged } from "../errors/failures.js"
+import { isCliFailure, storeBusy, storeDamaged } from "../errors/failures.js"
 import type { AppIdentity } from "../ports/app.js"
 import { markStoreDamaged } from "../store/marks.js"
 import { storePath } from "../store/path.js"
@@ -167,7 +167,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
       })
     },
     fail: async (thrown) => {
-      const error = storeDamaged(thrown)
+      const error = storeBusy(storeDamaged(thrown))
       markStoreDamaged(thrown, {
         store: storePath(options.env),
         command: `${options.app.command} ${options.command}`,
