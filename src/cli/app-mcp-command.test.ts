@@ -278,6 +278,36 @@ describe("appDoctorCommand", () => {
       expect(code).toBe(0)
       expect(item.local).toEqual({ error: "unreadable run file" })
     })
+
+    it("waits for an async check, and exits 1 when it is failing", async () => {
+      const { code, item } = await answer(async () => ({ fields: { problems: ["the timer is gone"] }, failing: true }))
+      expect(code).toBe(1)
+      expect(item.problems).toEqual(["the timer is gone"])
+    })
+  })
+
+  it("**without profiles** reads the CLI's own config, and prints the CLI's own view", async () => {
+    const env = home()
+    const streams = captureStreams()
+    const own = {
+      ...definition(),
+      commands: () => [
+        appDoctorCommand(app, null, {
+          config: () => ({ path: "/own/config.toml", found: false, issues: [] }),
+          local: () => ({ fields: { notes: 2 } }),
+          view: (item) => `config ${(item.config as { path: string }).path}, ${item.notes} notes`,
+        }),
+      ],
+    }
+    expect(await run(["doctor"], own, { streams, tty: true, env })).toBe(0)
+    expect(streams.stdout.join("")).toContain("config /own/config.toml, 2 notes")
+    const json = captureStreams()
+    await run(["doctor", "--json"], own, { streams: json, tty: false, env })
+    expect(JSON.parse(json.stdout[0] ?? "{}").item).toMatchObject({
+      config: { path: "/own/config.toml", found: false, issues: [] },
+      profiles: null,
+      notes: 2,
+    })
   })
 
   it("doctor reports create writes one private file about the newest failed run", async () => {

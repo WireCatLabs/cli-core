@@ -10,7 +10,8 @@ import { Command } from "commander"
 import type { OAuthClientReport } from "../constants/index.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath } from "../store/path.js"
-import { type BaseEnvironment, environmentOf, inCommandRun, outputFor } from "./context.js"
+import type { ConfigIssue } from "./config-issues.js"
+import { type BaseEnvironment, environmentOf, inCommandRun, outputFor, setExitCode } from "./context.js"
 import { doctorReportsCommand } from "./doctor-reports-command.js"
 import { DOCTOR_ONLINE_OPTION, DOCTOR_SUMMARY } from "./doctor-text.js"
 import { REMOTE_READ } from "./effects.js"
@@ -36,18 +37,36 @@ export interface AppDoctorOptions {
   online?: (env: NodeJS.ProcessEnv) => Promise<{ ok: boolean } & Record<string, unknown>>
   /**
    * What the CLI reads of its own state from disk, with no call out: a run left half done, a deadline near. `fields`
-   * join the answer; each of `notes` goes to stderr, as a fix does. A throw is reported as `local.error`.
+   * join the answer, and win over the shared ones of the same name; each of `notes` goes to stderr, as a fix does.
+   * `failing` makes doctor exit 1. A throw is reported as `local.error`.
    */
-  local?: (env: NodeJS.ProcessEnv) => { fields: Record<string, unknown>; notes?: string[] }
+  local?: (env: NodeJS.ProcessEnv, command: Command) => AppDoctorLocal | Promise<AppDoctorLocal>
+  /**
+   * A CLI with no profiles keeps its own config file: its path, whether it exists and its problems, read here in place
+   * of the `configuration`'s, which is then `null`. A `CliError` it throws is reported as `settings.error`.
+   */
+  config?: (env: NodeJS.ProcessEnv, command: Command) => { path: string; found: boolean; issues: ConfigIssue[] }
+  /** The answer as a person reads it; cli-core's item view without it. */
+  view?: (item: Record<string, unknown>) => string
 }
 
-const localCheck = (env: NodeJS.ProcessEnv, options: AppDoctorOptions) => {
-  if (!options.local) return { fields: {}, notes: [] }
+export interface AppDoctorLocal {
+  fields: Record<string, unknown>
+  notes?: string[]
+  failing?: boolean
+}
+
+const localCheck = async (env: NodeJS.ProcessEnv, command: Command, options: AppDoctorOptions) => {
+  if (!options.local) return { fields: {}, notes: [], failing: false }
   try {
-    const { fields, notes = [] } = options.local(env)
-    return { fields, notes }
+    const { fields, notes = [], failing = false } = await options.local(env, command)
+    return { fields, notes, failing }
   } catch (error) {
-    return { fields: { local: { error: error instanceof Error ? error.message : String(error) } }, notes: [] }
+    return {
+      fields: { local: { error: error instanceof Error ? error.message : String(error) } },
+      notes: [],
+      failing: false,
+    }
   }
 }
 
@@ -104,7 +123,7 @@ const configFiles = (path: string) => {
  */
 export const appDoctorReport = (
   app: AppIdentity,
-  configuration: Configuration,
+  configuration: Configuration | null,
   env: NodeJS.ProcessEnv,
   command: Command,
   options: AppDoctorOptions = {},
@@ -128,6 +147,15 @@ export const appDoctorReport = (
     profile_lock: env[envName(app, "PROFILE_LOCK")]?.trim() || null,
   }
   try {
+    if (configuration === null) {
+      const config = options.config?.(env, command) ?? {
+        path: configFilePath(paths.config),
+        found: existsSync(configFilePath(paths.config)),
+        issues: [],
+      }
+      const { files, fixes } = configFiles(config.path)
+      return { report: { ...common, config, profiles: null, files }, fixes }
+    }
     const settings = configuration.resolveSettings({}, { env, readOnly: true, needsProfile: false, withIssues: true })
     const { files, fixes } = configFiles(settings.configPath)
     return {
@@ -167,7 +195,11 @@ export const appDoctorReport = (
  * say the same thing: the state from disk, and only with `--online` a call out. Here that call is `options.online`
  * and, with `options.packageName`, whether npm has a newer version.
  */
-export const appDoctorCommand = (app: AppIdentity, configuration: Configuration, options: AppDoctorOptions = {}) =>
+export const appDoctorCommand = (
+  app: AppIdentity,
+  configuration: Configuration | null,
+  options: AppDoctorOptions = {},
+) =>
   profileFree(
     annotate(new Command("doctor"), {
       effects: REMOTE_READ,
@@ -180,7 +212,7 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
       const environment = environmentOf<BaseEnvironment & { fetch?: FetchLike }>(this)
       const env = environment.env ?? process.env
       const { report, fixes } = appDoctorReport(app, configuration, env, this, options)
-      const local = localCheck(env, options)
+      const local = await localCheck(env, this, options)
       const answer = async () => {
         const online = this.opts<{ online?: boolean }>().online
           ? await onlineCheck(app, env, environment.fetch ?? hostFetch({ hosts: ["registry.npmjs.org"] }), options)
@@ -193,9 +225,11 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
             { ...report, ...local.fields, ...(online ? { online } : {}) },
             { meta: clockMeta(Date.now(), timezoneOf()) },
           ),
+          options.view && ((body) => options.view?.((body as { item: Record<string, unknown> }).item) ?? ""),
         )
-        for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
-        for (const note of local.notes) output.renderer.note(note)
+        for (const note of new Set([...fixes.map((fix) => `to make it private: ${fix}`), ...local.notes]))
+          output.renderer.note(note)
+        if (local.failing) setExitCode(this, 1)
       }
       // A call out is recorded and ended by `--timeout` as any other command's; a config that will not load opens no
       // run, and doctor still answers.
@@ -213,7 +247,7 @@ const INCLUDES = [
 const EXCLUDES = ["what the tool reads or writes", "names", "e-mail addresses", "phone numbers", "the sign-in"]
 
 /** `doctor reports`: one file for the author, as a messenger's `doctor reports` writes it, without the send journal. */
-const reportsCommand = (app: AppIdentity, configuration: Configuration, options: AppDoctorOptions): Command =>
+const reportsCommand = (app: AppIdentity, configuration: Configuration | null, options: AppDoctorOptions): Command =>
   doctorReportsCommand({
     app,
     includes: INCLUDES,
