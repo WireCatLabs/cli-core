@@ -85,7 +85,8 @@ None open.
   Strangers and merge review (#3314). Draft plan
   waits for review: [plans/2026-11-24-contact-kinds.md](plans/2026-11-24-contact-kinds.md).
 - **CORE-3** · P2 · A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Plan approved 2026-11-26, with a
-  hard condition that a first-use install never breaks a command; source maps first:
+  hard condition that a first-use install never breaks a command; Anthropic over `fetch` and readers on first use
+  are in; source maps first:
   [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md#owners-decision-2026-11-26).
 - **CORE-73** · P2 · CLIs share no cli-core: `npm i -g` gives each its own tree, and each pins a different exact core
   (16 installed on 2026-11-26: six versions, 1.0.0 to 1.3.0 and 0.691/0.750; 4.5 GB, ~300 MB each). Install a

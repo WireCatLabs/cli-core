@@ -168,7 +168,7 @@ Cheap and safe first; the first-use installer last, because it is the only new m
    WireCat data folder, with `doctor` showing what is installed.
 7. **Voice on the installer**: remove `sherpa-onnx` and `ogg-opus-decoder` from cli-core and max-cli.
 8. **Meaning search on the installer**: remove `@wirecat/cli-core-onnx` and `@huggingface/tokenizers`.
-9. **Readers on the installer**, only if the owner says yes.
+9. **Readers on the installer** (owner's yes, 2026-11-26), after items 7 and 8 have run on it.
 
 Each item is its own pull request and its own release note. Items 7 and 8 change max-cli and tg-cli too.
 
@@ -199,7 +199,12 @@ Each item is its own pull request and its own release note. Items 7 and 8 change
   - no write access to the data folder: a clear error naming the folder, nothing half-written;
   - an engine installed for an older cli-core: detected by version, reinstalled, never loaded mismatched;
   - `npx`, a global npm install, pnpm, Bun and an install made by WireCat Desktop.
-- Open questions 2–4 are not answered yet.
+- **Open question 2: yes.** The Anthropic adapter drops the SDK and calls the API over `fetch`, like
+  `src/models/openai.ts` (item 4).
+- **Open question 3: yes.** The web-page and HTML readers become first-use installs (item 9). This replaces the
+  2026-10-12 ruling that readers ship with the package; they move to the installer last, after voice and meaning
+  search have run on it, and under the same installer cases above.
+- Open question 4 (the size ceiling) is not answered yet.
 
 ## Open questions for the owner
 
