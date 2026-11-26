@@ -869,6 +869,24 @@ ProfileChange · interface · photo?: Upload;
 ProfileChange · interface · }
 ProfileKind · type · export type ProfileKind = "personal" | "bot";
 ProfileState · type · export type ProfileState = "signed-in" | "signed-out" | "bot";
+ProfileStore · interface · export interface ProfileStore {
+ProfileStore · interface · store: MessageStore;
+ProfileStore · interface · account: AccountKey;
+ProfileStore · interface · accountId: number;
+ProfileStore · interface · }
+ProfileStoreOptions · interface · export interface ProfileStoreOptions {
+ProfileStoreOptions · interface · app: AppIdentity;
+ProfileStoreOptions · interface · env: NodeJS.ProcessEnv;
+ProfileStoreOptions · interface · profile: string;
+ProfileStoreOptions · interface · readOnly: boolean;
+ProfileStoreOptions · interface · provider: string;
+ProfileStoreOptions · interface · open: (env: NodeJS.ProcessEnv, options?: {
+ProfileStoreOptions · interface · readOnly?: boolean;
+ProfileStoreOptions · interface · }) => Promise<MessageStore>;
+ProfileStoreOptions · interface · account?: () => AccountKey;
+ProfileStoreOptions · interface · saves?: boolean;
+ProfileStoreOptions · interface · name?: string;
+ProfileStoreOptions · interface · }
 ProfileTokenStore · class · export declare class ProfileTokenStore {
 ProfileTokenStore · class · readonly variable: string;
 ProfileTokenStore · class · constructor({ app, env, keyring, warn }: ProfileTokenStoreOptions);
@@ -2823,6 +2841,7 @@ openAppStore · const · provider: ProviderEntry;
 openAppStore · const · readOnly?: boolean;
 openAppStore · const · }) => Promise<MessageStore>;
 openBrowser · const · export declare const openBrowser: (url: string, browser?: string, io?: Pick<EntryIo, "platform" | "spawn">) => Promise<void>;
+openProfileStore · const · export declare const openProfileStore: (options: ProfileStoreOptions) => Promise<ProfileStore>;
 outputFor · const · export declare const outputFor: (command: Command) => {
 outputFor · const · format: "json" | "jsonl" | "pretty";
 outputFor · const · color: boolean;
