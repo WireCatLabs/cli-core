@@ -740,6 +740,7 @@ const OTHERS: Entry[] = [
   validation("sender-bot.not-a-person", "the identity named is a sender bot's, not a person's; name a person"),
   validation("sender-bot.empty", "the person or bot named holds no identity to move"),
   validation("sender-bot.assignee", "a sender bot is no one's assignee; move it to a person first"),
+  validation("sender-bot.unknown-sends", "a bot list filters by alerts, receipts, newsletters, marketing or messenger"),
   validation("mail-sort.scope", "a sorting rule's scope is mail, list, subject, address or domain"),
   validation("mail-sort.apply-to", "a sorting rule says whether it sorts past mail too: applyTo all or new"),
   validation("mail-sort.value", "the value names no mail, list, subject, address or domain of that scope"),

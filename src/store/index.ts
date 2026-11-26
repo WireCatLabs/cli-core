@@ -228,6 +228,7 @@ export type {
   StageName,
 } from "./sqlite/base-stages.js"
 export { baseSettingKey } from "./sqlite/base-suggest.js"
+export { BOT_SENDS, type BotSends } from "./sqlite/bot-sends.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type {
   Contract,
@@ -372,6 +373,12 @@ export type {
 } from "./sqlite/knowledge.js"
 export { ORGANIZATION_KINDS, PROJECT_TYPES, SCOPES } from "./sqlite/knowledge.js"
 export type { MailRule, MailRuleCount, MailRuleInput, MailRulesStore } from "./sqlite/mail-rules.js"
+export type {
+  MailSubscription,
+  MailSubscriptionFilter,
+  MailSubscriptionList,
+  UnsubscribeTarget,
+} from "./sqlite/mail-subscriptions.js"
 export {
   type ListedAccount,
   MEETING_ROW_KINDS,

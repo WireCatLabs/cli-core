@@ -23,6 +23,7 @@ import type {
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
 import { agentLink, agentMergeOf, agentMerges, linkEvidenceOver } from "./sqlite/agent-links.js"
+import { sendsWhere } from "./sqlite/bot-sends.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as identityProposals from "./sqlite/identity-proposals.js"
@@ -439,7 +440,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     },
     listBots: async (options) => {
       storeKinds(database)
-      return listBots(database, options)
+      return listBots(database, options, options.sends === undefined ? undefined : sendsWhere(database, options.sends))
     },
     showBot: async (bot) => showBot(database, bot),
     moveToBot: async (subject, by, options) => {

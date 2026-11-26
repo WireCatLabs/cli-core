@@ -10,6 +10,7 @@ export {
   type AddedSourceInput,
   addedSourceKeyOf,
 } from "./sqlite/added-sources.js"
+export { BOT_SENDS, type BotSends } from "./sqlite/bot-sends.js"
 export type { ContractFilter } from "./sqlite/business-contracts.js"
 export type { CatalogEntry, CatalogInput, CatalogQuery } from "./sqlite/catalog.js"
 export type { CrmChange, CrmChangeKind } from "./sqlite/crm-changes.js"
@@ -31,6 +32,12 @@ export {
   type Project,
   SCOPES,
 } from "./sqlite/knowledge.js"
+export type {
+  MailSubscription,
+  MailSubscriptionFilter,
+  MailSubscriptionList,
+  UnsubscribeTarget,
+} from "./sqlite/mail-subscriptions.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
 export type { Author, Memory } from "./sqlite/memories.js"
 export type { TransactionFilter } from "./sqlite/money-transactions.js"

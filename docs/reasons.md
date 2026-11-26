@@ -537,6 +537,7 @@ headings.
 | `sender-bot.not-a-person` | `validation_error` | the identity named is a sender bot's, not a person's; name a person |  |
 | `sender-bot.not-found` | `not_found` | no sender bot has that id; the bots list names them |  |
 | `sender-bot.owner` | `validation_error` | the owner's own person is never a bot |  |
+| `sender-bot.unknown-sends` | `validation_error` | a bot list filters by alerts, receipts, newsletters, marketing or messenger |  |
 | `serve.outdated` | `configuration_error` | the store or the installed version is newer than this serve; it stopped so its unit starts the installed one |  |
 | `session.duplicate` | `conflict` | another profile here already signs in to this account as this user |  |
 | `session.missing` | `authentication_error` | this profile is not signed in: no saved sign-in or API token |  |

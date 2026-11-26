@@ -56,4 +56,23 @@ describe("mailHeadersOf", () => {
       {},
     )
   })
+
+  it("keeps the https and mailto unsubscribe targets only under the From domain's own signature", () => {
+    const fields = (signed: string) => [
+      "From: News <news@shop.example>",
+      "List-Unsubscribe: <ftp://shop.example/x>, <mailto:leave@shop.example?subject=leave>,",
+      " <https://shop.example/u/1>",
+      "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
+      `DKIM-Signature: v=1; d=shop.example; s=s1; h=From:${signed}; b=x`,
+      "Authentication-Results: mx.google.com; dkim=pass header.i=@shop.example",
+    ]
+    expect(mailHeadersOf(raw(fields("List-Unsubscribe:List-Unsubscribe-Post")))).toEqual({
+      dkim: "pass",
+      "list-unsubscribe": true,
+      "list-unsubscribe-https": "https://shop.example/u/1",
+      "list-unsubscribe-mailto": "mailto:leave@shop.example?subject=leave",
+      "list-unsubscribe-post": true,
+    })
+    expect(mailHeadersOf(raw(fields("Subject")))).toEqual({ dkim: "pass", "list-unsubscribe": true })
+  })
 })

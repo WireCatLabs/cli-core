@@ -4,6 +4,7 @@ import { SENDER_BOT_PREFIX } from "../../domain/person-kinds.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
+import type { BotSends } from "./bot-sends.js"
 import { groupByDomain, releaseDomainHolds } from "./domain-organizations.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -66,6 +67,8 @@ export interface BotListOptions {
   query?: string
   /** `organization:<id>`: the bots that send for it. */
   organization?: string
+  /** Only bots that send any of these (`BOT_SENDS`). */
+  sends?: readonly BotSends[]
   limit: number
   offset?: number
 }
@@ -518,7 +521,12 @@ const detailsOf = (database: CacheDatabase, bot: number): SenderBotDetails => {
 }
 
 /** The sender bots, by name; a bot a build before version 75 sorted shows once a list has settled it. */
-export const listBots = (database: CacheDatabase, options: BotListOptions): BotList => {
+/** `sent` is `sendsWhere` of `options.sends`, worked out before the read: it may keep mail types. */
+export const listBots = (
+  database: CacheDatabase,
+  options: BotListOptions,
+  sent?: { sql: string; params: SqlValue[] },
+): BotList => {
   const { limit, offset = 0 } = options
   const where = [HOLDS]
   const params: SqlValue[] = []
@@ -546,6 +554,10 @@ export const listBots = (database: CacheDatabase, options: BotListOptions): BotL
       throw new CliError("validation_error", `an organization is organization:<id>, got "${options.organization}"`)
     where.push("b.organization_id = ?")
     params.push(Number(id))
+  }
+  if (sent !== undefined) {
+    where.push(sent.sql)
+    for (const param of sent.params) params.push(param)
   }
   return read(database, () => {
     const filter = where.join(" AND ")
