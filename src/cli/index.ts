@@ -126,6 +126,8 @@ export type {
   ServerQuery,
   ServerReads,
   ThreadAddressing,
+  ThreadRefresh,
+  ThreadRoot,
   TopicEditing,
   TopicHistory,
   TopicReadState,

@@ -660,3 +660,127 @@ describe("the history limits on a fetch", () => {
     expect(all.items.find((one) => one.chat === "8")).toMatchObject({ limited: "group_too_large", complete: true })
   })
 })
+
+describe("refreshing threads one root at a time", () => {
+  const replyTo = (root: number, id: number, at = messageAt(id).timestamp): Message => ({
+    ...messageAt(id),
+    timestamp: at,
+    threadId: String(root),
+    threadRootId: String(root),
+  })
+
+  const threaded = (store: MessageStore, history: Message[], threads: Map<string, Message[]>, recent: string[]) => {
+    const asked: { root: string; after?: number }[] = []
+    const stop = { when: (_root: string) => false, controller: new AbortController() }
+    const rootOf = (id: string) => {
+      const replies = threads.get(id)
+      return replies?.length ? { id, lastReplyAt: replies.at(-1)?.timestamp } : undefined
+    }
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, lastMessageAt: history.at(-1)?.timestamp ?? null }], hasMore: false }),
+      history: async (reference: string, { limit, before }: { limit: number; before?: string }) => {
+        const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
+        const items = older.slice(-limit)
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
+        return { items, hasMore: older.length > items.length }
+      },
+      threadReplies: async () => {
+        throw new Error("read through rootReplies when the messenger has it")
+      },
+      threadRootsIn: async (chatId: string, messages: readonly Message[]) => {
+        expect(chatId).toBe("7")
+        return messages.flatMap((one) => rootOf(one.id) ?? [])
+      },
+      recentThreadRoots: async (chatId: string, window: { since?: number }) => {
+        expect(chatId).toBe("7")
+        expect(Object.keys(window).every((key) => key === "since")).toBe(true)
+        return recent.flatMap((id) => rootOf(id) ?? [])
+      },
+      rootReplies: async (chatId: string, root: string, window: { after?: number }) => {
+        expect(chatId).toBe("7")
+        const replies = threads.get(root)
+        if (!replies) throw new Error(`no thread ${root}`)
+        asked.push({ root, ...window })
+        if (stop.when(root)) stop.controller.abort()
+        const { after } = window
+        return replies.filter((one) => after === undefined || Date.parse(one.timestamp) > after)
+      },
+    } as unknown as MessengerAdapter
+    return { adapter, asked, stop }
+  }
+
+  const serviceOf = (store: MessageStore, adapter: MessengerAdapter) =>
+    archiveService({ ...storedDeps(messenger, store, account, guard), offline: false, connection: async () => adapter })
+  const options = (more: { limit?: number; pageSize?: number; stop?: AbortSignal } = {}) => ({
+    limit: more.limit ?? 100,
+    pageSize: more.pageSize ?? 100,
+    pauseMs: 0,
+    note: () => {},
+    stop: more.stop ?? new AbortController().signal,
+    onPage: () => {},
+  })
+  const held = async (store: MessageStore) =>
+    (await store.messages.messages(account, "7", { limit: 100 })).items.map((one) => one.id)
+
+  it("reads every root on the first sync, then only a root answered since, from the last sync on", async () => {
+    const store = await emptyStore()
+    const threads = new Map([
+      ["2", [replyTo(2, 50)]],
+      ["3", [replyTo(3, 51)]],
+    ])
+    const { adapter, asked } = threaded(store, [1, 2, 3].map(messageAt), threads, ["3"])
+    const service = serviceOf(store, adapter)
+
+    expect((await service.fetchAll(options())).items).toEqual([
+      { chat: "7", title: "Book club", fetched: 5, complete: true },
+    ])
+    expect(asked).toEqual([{ root: "2" }, { root: "3" }])
+    expect(await held(store)).toEqual(["1", "2", "3", "50", "51"])
+
+    asked.length = 0
+    await service.fetchAll(options())
+    expect(asked).toEqual([])
+
+    const point = Number((await store.sync.syncState(account, "threads:7"))?.value)
+    threads.get("3")?.push(replyTo(3, 52, new Date(point + 1000).toISOString()))
+    await service.fetchAll(options())
+    expect(asked).toEqual([{ root: "3", after: point - 60_000 }])
+    expect(await held(store)).toEqual(["1", "2", "3", "50", "51", "52"])
+    expect(await store.sync.ranges(account, "7")).toEqual([{ from: 1, to: 3 }])
+  })
+
+  it("reads a root whole when a later sync first reaches it on an older page", async () => {
+    const store = await emptyStore()
+    const threads = new Map([["2", [replyTo(2, 50)]]])
+    const { adapter, asked } = threaded(store, [1, 2, 3, 4, 5, 6].map(messageAt), threads, [])
+    const service = serviceOf(store, adapter)
+
+    await service.fetch("7", options({ limit: 2, pageSize: 2 }))
+    expect(asked).toEqual([])
+    await service.fetch("7", options({ pageSize: 2 }))
+    expect(asked).toEqual([{ root: "2" }])
+    expect(await held(store)).toContain("50")
+  })
+
+  it("keeps the threads it saved when stopped between them, and reads from the same point next time", async () => {
+    const store = await emptyStore()
+    const threads = new Map([
+      ["2", [replyTo(2, 50)]],
+      ["3", [replyTo(3, 51)]],
+    ])
+    const { adapter, asked, stop } = threaded(store, [1, 2, 3].map(messageAt), threads, [])
+    const service = serviceOf(store, adapter)
+
+    stop.when = (root) => root === "2"
+    await service.fetch("7", options({ stop: stop.controller.signal }))
+    expect(asked).toEqual([{ root: "2" }])
+    expect(await held(store)).toEqual(["1", "2", "3", "50"])
+    expect(await store.sync.syncState(account, "threads:7")).toBeUndefined()
+
+    stop.when = () => false
+    await service.fetch("7", options())
+    expect(asked).toEqual([{ root: "2" }, { root: "2" }, { root: "3" }])
+    expect(await held(store)).toEqual(["1", "2", "3", "50", "51"])
+  })
+})

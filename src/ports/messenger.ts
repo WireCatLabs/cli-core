@@ -371,6 +371,35 @@ export interface ThreadReplies {
   ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
 }
 
+/** A message that has replies, and when the newest came where the messenger says (ISO 8601). @experimental */
+export interface ThreadRoot {
+  id: Id
+  lastReplyAt?: string
+}
+
+/**
+ * Thread replies `history` leaves out, read one thread at a time, for a messenger that says which messages have them.
+ * `messages sync` picks the threads: on a chat's first read every root it saw, after that a root from an older history
+ * page whole, and any other root only when its newest reply came after the last read. A messenger with both this and
+ * `ThreadReplies` is read through this one.
+ * @experimental
+ */
+export interface ThreadRefresh {
+  /** The roots among one page `history` answered. */
+  threadRootsIn(chatId: Id, messages: readonly Message[]): Promise<ThreadRoot[]>
+  /**
+   * The roots a messenger lists cheaply that may have new replies, such as those sent in the last days. `since`
+   * (epoch milliseconds, absent on the chat's first read) lets it ask for fewer; the sync checks `lastReplyAt` itself.
+   */
+  recentThreadRoots(chatId: Id, window: { since?: number }): Promise<ThreadRoot[]>
+  /** One thread's replies sent after `after` (epoch milliseconds), or all of them, oldest first, without the root. */
+  rootReplies(
+    chatId: Id,
+    rootId: Id,
+    window: { after?: number },
+  ): Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>
+}
+
 /** @experimental */
 export interface MessageButtons {
   /** The keyboard one message carries, row by row; a message without one answers `[]`. */
@@ -808,6 +837,7 @@ export interface MessengerAdapter
     Partial<ThreadAddressing>,
     Partial<TopicHistory>,
     Partial<ThreadReplies>,
+    Partial<ThreadRefresh>,
     Partial<UnreadChats>,
     Partial<ForumControl>,
     Partial<TopicEditing>,

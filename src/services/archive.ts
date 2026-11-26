@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import type { Chat, ChatKind, Id, Message } from "../domain/models.js"
 import type { ActionableError } from "../domain/recovery.js"
-import { capability, type MessengerAdapter } from "../ports/messenger.js"
+import { capability, type MessengerAdapter, type ThreadRefresh, type ThreadRoot } from "../ports/messenger.js"
 import type { Fetching } from "../ports/traits.js"
 import { typedCommand } from "../runs/scope.js"
 import type { LeftChats } from "../store/chats.js"
@@ -272,8 +272,14 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       }
       const windowed =
         limit?.keepFrom !== undefined && !(limit.keepFrom <= (options.sinceMs ?? Number.NEGATIVE_INFINITY))
+      const roots: PagedRoots = new Map()
       const fetched = await fetchInto({
-        history: (window) => history(chat, { ...window, reactions: false }),
+        history: async (window) => {
+          const page = await history(chat, { ...window, reactions: false })
+          if (refreshes(connection) && !options.window && page.items[0])
+            pagedRoots(roots, await connection.threadRootsIn(page.items[0].chatId, page.items), window.before)
+          return page
+        },
         store,
         account,
         fetching: deps.messenger.fetching ?? FETCHING,
@@ -281,7 +287,9 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         ...(windowed ? { sinceMs: limit.keepFrom } : {}),
       })
       const replies =
-        fetched.chat && !options.window ? await savedReplies(connection, store, account, fetched.chat, options.stop) : 0
+        fetched.chat && !options.window
+          ? await savedReplies(connection, store, account, fetched.chat, roots, options.stop)
+          : 0
       const read = replies > 0 ? { ...fetched, fetched: fetched.fetched + replies } : fetched
       const result: Fetched = windowed && read.reachedSince ? { ...read, limited: "older_than_window" as const } : read
       if (result.limited && limit?.keepFrom !== undefined)
@@ -320,7 +328,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const upToDate = heldToNewest(await deps.store(), await deps.account(), deps.messenger.fetching ?? FETCHING, {
         ...options,
         catchUp: catchingUp ? (options.catchUp ?? {}) : false,
-        threads: connection.threadReplies !== undefined,
+        threads: connection.threadReplies !== undefined || refreshes(connection),
       })
       const finished = () =>
         options.onChat?.({ chats: chats.length, done: answer.items.length, fetched: answer.fetched })
@@ -627,6 +635,22 @@ const heldToNewest =
 
 const threadsKey = (chatId: Id): string => `threads:${chatId}`
 
+const refreshes = (connection: MessengerAdapter): connection is MessengerAdapter & ThreadRefresh =>
+  connection.threadRootsIn !== undefined &&
+  connection.recentThreadRoots !== undefined &&
+  connection.rootReplies !== undefined
+
+/** The roots this run's history pages showed; `whole` once one came from a page older than the chat's newest. */
+type PagedRoots = Map<Id, ThreadRoot & { whole: boolean }>
+
+const pagedRoots = (into: PagedRoots, roots: readonly ThreadRoot[], before: string | undefined) => {
+  for (const root of roots)
+    into.set(root.id, { ...root, whole: before !== undefined || into.get(root.id)?.whole === true })
+}
+
+/** `since` is this machine's clock and a reply's time the messenger's; the overlap keeps a reply sent while they differ. */
+const THREAD_CLOCK_SKEW_MS = 60_000
+
 /**
  * The replies a messenger's history pages leave out, saved without a held stretch: they say nothing of the history
  * around them. `since` is when the last read of them started.
@@ -636,14 +660,19 @@ const savedReplies = async (
   store: MessageStore,
   account: AccountKey,
   chatId: Id,
+  roots: PagedRoots,
   stop: AbortSignal,
 ): Promise<number> => {
-  if (!connection.threadReplies || stop.aborted) return 0
+  if (stop.aborted) return 0
   const startedAt = Date.now()
-  const point = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
-  // Awaited first: the flood wrapper turns every adapter method async, so batches arrive inside a promise.
-  const answer = await connection.threadReplies(chatId, Number.isFinite(point) ? { since: point } : {})
-  const batches = Symbol.asyncIterator in answer ? answer : [answer]
+  const stored = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
+  const point = Number.isFinite(stored) ? stored : undefined
+  const batches = refreshes(connection)
+    ? refreshedThreads(connection, chatId, roots, point)
+    : connection.threadReplies
+      ? await readyBatches(connection.threadReplies(chatId, point === undefined ? {} : { since: point }))
+      : undefined
+  if (!batches) return 0
   let saved = 0
   for await (const replies of batches) {
     if (replies.length > 0)
@@ -654,6 +683,34 @@ const savedReplies = async (
   }
   await store.sync.setSyncState(account, threadsKey(chatId), String(startedAt))
   return saved
+}
+
+// Awaited first: the flood wrapper turns every adapter method async, so batches arrive inside a promise.
+const readyBatches = async (
+  answer: Promise<Message[] | AsyncIterable<Message[]>> | AsyncIterable<Message[]>,
+): Promise<AsyncIterable<Message[]> | Message[][]> => {
+  const ready = await answer
+  return Symbol.asyncIterator in ready ? ready : [ready]
+}
+
+/** One thread at a time, so each is saved as it comes: the roots the pages showed, then the messenger's recent ones. */
+async function* refreshedThreads(
+  connection: ThreadRefresh,
+  chatId: Id,
+  roots: PagedRoots,
+  point: number | undefined,
+): AsyncGenerator<Message[]> {
+  const after = point === undefined ? undefined : point - THREAD_CLOCK_SKEW_MS
+  const all = new Map(roots)
+  for (const root of await connection.recentThreadRoots(chatId, after === undefined ? {} : { since: after }))
+    if (!all.has(root.id)) all.set(root.id, { ...root, whole: false })
+  for (const root of all.values()) {
+    const replied = Date.parse(root.lastReplyAt ?? "")
+    if (after !== undefined && !root.whole && !(replied > after)) continue
+    yield* await readyBatches(
+      connection.rootReplies(chatId, root.id, after === undefined || root.whole ? {} : { after }),
+    )
+  }
 }
 
 /** When the message a held stretch starts at was sent: by time the key is the time; by id, the stored message says. */
