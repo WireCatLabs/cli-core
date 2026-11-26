@@ -25,20 +25,32 @@ jobs:
       pull-requests: read
       checks: write
     outputs:
-      reuse: ${{ steps.decide.outputs.reuse == 'true' || steps.unchanged.outputs.reuse == 'true' }}
+      reuse: ${{ steps.queued.outputs.reuse == 'true' || steps.decide.outputs.reuse == 'true' || steps.unchanged.outputs.reuse == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
           persist-credentials: false
+      # The merge queue tested this very commit: its required checks are already on it.
+      - id: queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if why=$(bash scripts/ci-proven.sh "$GITHUB_SHA"); then
+            echo "reuse=true" >>"$GITHUB_OUTPUT"
+            echo "reusing the checks the merge queue ran on $GITHUB_SHA"
+          else
+            echo "full or another reuse: $why"
+          fi
       - id: decide
+        if: steps.queued.outputs.reuse != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT: ${{ github.sha }}
           PULL_REQUEST: "true"
         run: bash scripts/release-reuse.sh
       - id: unchanged
-        if: steps.decide.outputs.reuse != 'true'
+        if: steps.queued.outputs.reuse != 'true' && steps.decide.outputs.reuse != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           CAN_REPORT: "true"
@@ -50,10 +62,7 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           REQUIRED_PREFIX: "validation / "
           TITLE: "Not run: only the changelog, the version or the Markdown docs changed"
-          SUMMARY: >-
-            Apart from CHANGELOG.md, the changes/ fragments, package.json's version and the Markdown under docs/ and
-            at the top level, this commit's tree is ${{ steps.unchanged.outputs.fingerprint }}, the same as its parent
-            ${{ steps.unchanged.outputs.base }}, ${{ steps.unchanged.outputs.evidence }}.
+          SUMMARY: ${{ steps.unchanged.outputs.why }}
         run: bash scripts/ci-pass-checks.sh
 
   # Also when the decision itself failed: no answer means the full validation.

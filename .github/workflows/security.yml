@@ -5,9 +5,10 @@ name: Pull request security checks
 # runs only at release (PERF-105, NEED-2596): it was the slowest check of every pull request.
 on:
   pull_request:
+  merge_group:
 
 concurrency:
-  group: security-${{ github.event.pull_request.number }}
+  group: security-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
       reuse: ${{ steps.decide.outputs.reuse }}
       base: ${{ steps.decide.outputs.base }}
       fingerprint: ${{ steps.decide.outputs.fingerprint }}
-      evidence: ${{ steps.decide.outputs.evidence }}
+      why: ${{ steps.decide.outputs.why }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,12 +38,13 @@ jobs:
       - id: decide
         env:
           GH_TOKEN: ${{ github.token }}
-          CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+          CAN_REPORT: ${{ github.event_name == 'merge_group' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]') }}
+          QUEUE_REF: ${{ github.event_name == 'merge_group' && github.ref || '' }}
         run: bash scripts/ci-unchanged.sh
       - id: pick
         env:
           # Their token cannot write check runs, so they analyse everything.
-          CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+          CAN_REPORT: ${{ github.event_name == 'merge_group' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]') }}
         run: |
           analyze='"actions"' unchanged='"javascript-typescript","python","c-cpp","java-kotlin"'
           if [ "$CAN_REPORT" != true ]; then
@@ -77,7 +79,7 @@ jobs:
           persist-credentials: false
       - env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UNCHANGED: ${{ needs.languages.outputs.unchanged }}
           TITLE: Not analysed here — CodeQL analyses the code at release
           SUMMARY: >-
@@ -87,12 +89,9 @@ jobs:
         run: jq -r '.[] | "security / source (\(.))"' <<<"$UNCHANGED" | bash scripts/ci-pass-checks.sh
       - env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           REQUIRED_PREFIX: "security / "
-          TITLE: Not run — only the changelog and the version changed
-          SUMMARY: >-
-            Apart from CHANGELOG.md, the changes/ fragments and package.json's version, this pull request's tree is
-            ${{ needs.languages.outputs.fingerprint }}, the same as main at ${{ needs.languages.outputs.base }},
-            ${{ needs.languages.outputs.evidence }}.
+          TITLE: "Not run: this tree already passed"
+          SUMMARY: ${{ needs.languages.outputs.why }}
         if: needs.languages.outputs.reuse == 'true'
         run: bash scripts/ci-pass-checks.sh

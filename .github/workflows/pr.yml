@@ -7,9 +7,11 @@ name: Pull request validation
 # those files instead (scripts/ci-unchanged.sh).
 on:
   pull_request:
+  # The merge queue checks each pull request again on the main it will land on (gh-readonly-queue/main/pr-<n>-<sha>).
+  merge_group:
 
 concurrency:
-  group: pr-validation-${{ github.event.pull_request.number }}
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -26,7 +28,7 @@ jobs:
       reuse: ${{ steps.decide.outputs.reuse }}
       base: ${{ steps.decide.outputs.base }}
       fingerprint: ${{ steps.decide.outputs.fingerprint }}
-      evidence: ${{ steps.decide.outputs.evidence }}
+      why: ${{ steps.decide.outputs.why }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,8 +37,9 @@ jobs:
       - id: decide
         env:
           GH_TOKEN: ${{ github.token }}
-          CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+          CAN_REPORT: ${{ github.event_name == 'merge_group' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]') }}
           DOCS: "true"
+          QUEUE_REF: ${{ github.event_name == 'merge_group' && github.ref || '' }}
         run: bash scripts/ci-unchanged.sh
 
   # Also when the decision itself failed: no answer means the full validation.
@@ -71,12 +74,8 @@ jobs:
           src/store/sqlite/schema.test.ts src/parity/catalogue.test.ts
       - env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           REQUIRED_PREFIX: "validation / "
-          TITLE: "Not run: only the changelog, the version or the Markdown docs changed"
-          SUMMARY: >-
-            Apart from CHANGELOG.md, the changes/ fragments, package.json's version and the Markdown under docs/ and
-            at the top level, this pull request's tree is ${{ needs.version-only.outputs.fingerprint }}, the same as
-            main at ${{ needs.version-only.outputs.base }}, ${{ needs.version-only.outputs.evidence }}.
-            The checks that read those files ran here.
+          TITLE: "Not run: this tree already passed"
+          SUMMARY: ${{ needs.version-only.outputs.why }}
         run: bash scripts/ci-pass-checks.sh

@@ -98,7 +98,17 @@ land() {
     sleep 10
   done
   case "$state" in CLEAN|HAS_HOOKS|UNSTABLE) ;; *) echo "$pr is $state after 30 minutes" >&2; exit 1 ;; esac
-  gh pr merge "$pr" --squash --delete-branch --subject "$title (#${pr##*/})"
+  # main takes it through the merge queue, which checks it again on the main it lands on: wait until it lands.
+  gh pr merge "$pr" --squash --auto
+  for _ in $(seq 360); do
+    case "$(gh pr view "$pr" --json state -q .state)" in
+      MERGED) break ;;
+      CLOSED) echo "$pr was closed without merging" >&2; exit 1 ;;
+    esac
+    sleep 10
+  done
+  [ "$(gh pr view "$pr" --json state -q .state)" = MERGED ] ||
+    { echo "$pr did not leave the merge queue within an hour: gh pr view $pr" >&2; exit 1; }
   git fetch -q origin
   git merge -q --ff-only origin/main
   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
