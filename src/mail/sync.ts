@@ -76,6 +76,8 @@ export const syncMail = async (
   options: MailSyncOptions,
 ): Promise<MailSyncResult> => {
   const result = await syncAndComplete(source, store, options)
+  // What an upgrade or a cleared type left waiting is done here, in the background, not by the first search.
+  await store.mail.catchUp(() => options.signal?.aborted === true)
   const rules = options.account.rules ?? []
   if (!rules.some(({ meeting_notes }) => meeting_notes) || options.signal?.aborted) return result
   const now = (options.now ?? Date.now)()

@@ -116,13 +116,15 @@ describe("subscriptions", () => {
     expect((await store.mail.subscriptions({ accountIds: [] })).total).toBe(0)
   })
 
-  it("answers from a read-only open of a store whose types were never worked out, and writes nothing", async () => {
+  it("answers from a read-only open of a store upgraded before its mail was typed, and writes nothing", async () => {
     const path = storePath()
     const { store } = await synced(inbox(), path)
     await store.close()
     handles.splice(handles.indexOf(store), 1)
     const raw = await openCache(path)
     handles.push(raw)
+    // Sync types its mail as it saves it; a store upgraded from before version 76 has none typed.
+    raw.exec("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL")
     const untyped = () => Number(raw.prepare("SELECT count(*) AS n FROM emails WHERE mail_type IS NULL").get()?.n)
     expect(untyped()).toBe(6)
     const readOnly = await openStore({ path, readOnly: true })

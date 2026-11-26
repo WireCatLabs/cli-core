@@ -126,7 +126,7 @@ export const typesCurrent = (database: CacheDatabase): boolean =>
  * changed, a batch per write so another process never waits long for the lock. A query-only open keeps nothing.
  * Answers whether every stored type is current.
  */
-export const storeMailTypes = (database: CacheDatabase): boolean => {
+export const storeMailTypes = (database: CacheDatabase, until: () => boolean = () => false): boolean => {
   if (isQueryOnly(database)) return typesCurrent(database)
   if (rulesOf(database) !== TYPE_RULES)
     writeBatch(database, () => {
@@ -152,6 +152,7 @@ export const storeMailTypes = (database: CacheDatabase): boolean => {
   )
   const senders = new Map<string, number>()
   for (;;) {
+    if (until()) return false
     const more = writeBatch(database, () => {
       const ids = database
         .prepare("SELECT id FROM emails WHERE mail_type IS NULL LIMIT ?")
@@ -162,6 +163,43 @@ export const storeMailTypes = (database: CacheDatabase): boolean => {
     })
     if (!more) return true
   }
+}
+
+/** How many emails whose type was cleared before this save one save also types: the rest fill as mail syncs. */
+const BACKLOG_ON_SAVE = 500
+
+/**
+ * Types the mail of these threads inside the save's own write, plus a little of what is untyped from before: a
+ * read-only open cannot keep types, so a store typed only by its first search made that search work out every email
+ * (1.5–1.8 s of a 2 s limit on 100,000, cli-testing performance/mail/types). Skipped while a rules change waits to
+ * clear the stored types: those are typed again in batches by the next filtered read.
+ */
+export const typeSavedMail = (database: CacheDatabase, threadIds: readonly number[]): void => {
+  if (rulesOf(database) !== TYPE_RULES) {
+    if (database.prepare("SELECT 1 FROM emails WHERE mail_type IS NOT NULL LIMIT 1").get() !== undefined) return
+    database
+      .prepare(
+        "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) " +
+          "ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = excluded.at",
+      )
+      .run(RULES_KEY, TYPE_RULES, Date.now())
+  }
+  const ids = (sql: string, param: string | number) =>
+    database
+      .prepare(sql)
+      .all(param)
+      .map((row) => Number(row.id))
+  const untyped = new Set([
+    ...ids(
+      "SELECT id FROM emails WHERE email_thread_id IN (SELECT value FROM json_each(?)) AND mail_type IS NULL",
+      JSON.stringify(threadIds),
+    ),
+    ...ids("SELECT id FROM emails WHERE mail_type IS NULL LIMIT ?", BACKLOG_ON_SAVE),
+  ])
+  const keep = database.prepare(
+    "UPDATE emails SET mail_type = ?, reach = ?, type_signal = ?, sort_checked = 1 WHERE id = ?",
+  )
+  for (const [id, { type, reach, signal }] of typesOf(database, [...untyped])) keep.run(type, reach, signal, id)
 }
 
 /** Each email's stored type, or for one the store has not typed yet, the type worked out for this read. */
@@ -366,12 +404,17 @@ const ordered = <K extends string>(counts: Partial<Record<K, number>>, order: re
 /** @experimental */
 export interface MailTypeStore {
   /**
+   * Indexes and types every email still waiting for it, a short write at a time, until `until` answers true. Mail sync
+   * calls it once it has saved, so the first search, also on a read-only open, finds the work done.
+   */
+  catchUp(until?: () => boolean): Promise<void>
+  /**
    * Senders of incoming mail with their mail counted by type and reach, most mail first; a sender is listed when any of
    * its emails passes `types` and `reaches`.
    */
   mailSenders(filter?: SenderTypesFilter): Promise<{ items: SenderMailTypes[]; total: number }>
 }
 
-export const mailTypeStore = (database: CacheDatabase): MailTypeStore => ({
+export const mailTypeStore = (database: CacheDatabase): Omit<MailTypeStore, "catchUp"> => ({
   mailSenders: async (filter = {}) => mailSenders(database, filter),
 })

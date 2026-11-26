@@ -10,9 +10,11 @@ import { fold, normalize } from "../normalize.js"
 import type { ConversationSummary, StoredHit } from "../types.js"
 import { type MailActivityStore, mailActivity, threadEmailIds } from "./email-activity.js"
 import {
+  catchUpMail,
   chunkAttachments,
   drainEmailIndex,
   dropAttachmentChunks,
+  indexSavedMail,
   MAIL_PIECES,
   queueThreads,
   threadPieces,
@@ -861,6 +863,7 @@ export const mailStoreOver = (
     const id = write(database, () => {
       const saved = saveThread(database, orm, input)
       settleThreads({ database, orm, now }, [saved])
+      indexSavedMail(database, stemmerFor, [saved])
       return saved
     })
     return threadDetails(database, id) as ThreadDetails
@@ -869,6 +872,7 @@ export const mailStoreOver = (
     const ids = write(database, () => {
       const saved = inputs.map((input) => saveThread(database, orm, input))
       settleThreads({ database, orm, now }, saved)
+      indexSavedMail(database, stemmerFor, saved)
       for (const { accountId, name, value } of states) writeState({ orm, now }, accountId, name, value)
       return saved
     })
@@ -917,6 +921,7 @@ export const mailStoreOver = (
   ...partialMail(database),
   ...mailActivity(database),
   ...mailTypeStore(database),
+  catchUp: async (until) => catchUpMail(database, stemmerFor, until),
   ...mailSubscriptionStore(database),
   async emailFacts(filter = {}) {
     const [where, params] = emailWhere(database, filter)
