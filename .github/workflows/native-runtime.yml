@@ -2,12 +2,14 @@ name: Native runtime
 # Core's own path to native ONNX Runtime on each system it ships for: models download installs the library, the tiny
 # test models load and give the same numbers as through WebAssembly. Where Core offers no native library (musl), it
 # must offer none and stay on WebAssembly. It downloads the real library, so it runs when that path changes.
+# The lockfile, not package.json: a dependency bump changes both, and a release's version bump changes only package.json.
 on:
   pull_request:
     paths:
       - "src/embeddings/**"
       - "src/services/model-downloads.ts"
-      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/native-runtime.yml"
   schedule:
     - cron: "41 3 1 * *"

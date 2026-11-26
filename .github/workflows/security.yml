@@ -27,7 +27,7 @@ jobs:
       reuse: ${{ steps.decide.outputs.reuse }}
       base: ${{ steps.decide.outputs.base }}
       fingerprint: ${{ steps.decide.outputs.fingerprint }}
-      pr: ${{ steps.decide.outputs.pr }}
+      evidence: ${{ steps.decide.outputs.evidence }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,6 +93,6 @@ jobs:
           SUMMARY: >-
             Apart from CHANGELOG.md, the changes/ fragments and package.json's version, this pull request's tree is
             ${{ needs.languages.outputs.fingerprint }}, the same as main at ${{ needs.languages.outputs.base }},
-            whose pull request #${{ needs.languages.outputs.pr }} passed every required check on that tree.
+            ${{ needs.languages.outputs.evidence }}.
         if: needs.languages.outputs.reuse == 'true'
         run: bash scripts/ci-pass-checks.sh

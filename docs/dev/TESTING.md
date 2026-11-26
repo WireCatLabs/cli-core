@@ -54,11 +54,21 @@ What a CLI's failure does:
   A release whose CLIs still break on `main` builds their adoption branches instead (`bin/release --app-ref
   <branch>`), or waits until those CLIs have adopted.
 
-A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and `package.json`'s version against a `main` whose pull request
-passed every required check on the same tree (bin/release's fold and version pull requests) runs `pnpm docs:check`
-and the changelog shape test instead, and reports the other required checks as passed, saying why
+A pull request that changes only `CHANGELOG.md`, the `changes/` fragments, `package.json`'s version and the Markdown
+under `docs/` and at the top level, against a `main` proven green, runs only the checks that read those files:
+`pnpm docs:check`, `pnpm schema:check`, the changelog shape tests, `schema.test.ts` and `catalogue.test.ts`. It reports
+the other `validation / ` checks as passed, saying why
 ([`scripts/ci-unchanged.sh`](../../scripts/ci-unchanged.sh), [`scripts/ci-fingerprint.sh`](../../scripts/ci-fingerprint.sh)).
-The push to `main` that follows runs the full validation. The step
+bin/release's fold and version pull requests and docs-only pull requests are such. Proven green means that the
+commit's pull request passed every required check on the same tree, or that `main.yml` passed every required
+`validation / ` check on the commit itself. `skills/` and `docs/search/recipes.json` ship in the package, so a change
+to them runs the full validation. The security checks skip only for the changelog and the version, so a docs-only
+pull request still runs gitleaks. The push to `main` that follows skips its validation the same way.
+
+The two test shards split the files by how long each took, from
+[`test/shard-weights.json`](../../test/shard-weights.json) (`vitest.config.ts`); a file missing from it counts as the
+median. When the shards' `Duration` lines drift apart, refresh it: `pnpm test:slow && node scripts/shard-weights.ts
+coverage/tests.json`. The step
 `Build <cli>-cli <ref> against this cli-core` names the ref it built. A push to `main` and the monthly run build
 each CLI's `main`; a release builds `main` or the branch `bin/release --app-ref` names.
 The same full validation runs again on each push to `main`, in the release and in the monthly run.

@@ -28,11 +28,12 @@ jobs:
       # 588 test files took 250 s on one runner; `ci / coverage` merges the shards and holds the floor. Two, not four:
       # the Free plan runs 20 jobs at once across the account, and every extra shard makes other pull requests wait.
       test-shards: 2
+      # node-ci builds before these lines, so the `:built` scripts skip the second and third build (8 s each).
       checks: |
-        pnpm docs:check
+        pnpm docs:check:built
         pnpm schema:check
         pnpm check:dist
-        pnpm check:agent-process
+        pnpm check:agent-process:built
         pnpm help:examples
       # The smoke runs the sources; only the second line loads the Bun half of the Drizzle bundle in dist.
       bun-run: |
@@ -85,6 +86,8 @@ jobs:
       - run: pnpm build
       # A distribution's Node on a SQLite too old for the store (3.42, built with Node's features so
       # Node starts at all): the command must start again on ours, and a TERM to it must end both.
+      # -O0: the check opens a store and restarts a command, so speed does not matter, and it compiles in a third of
+      # the -O1 time (9.6 s against 29.4 s on a loaded workstation, 2026-11-26).
       - run: |
           # shellcheck disable=SC2046 # one flag per mirror, split on purpose
           docker run --rm $(bash .github/scripts/ubuntu-hosts.sh) -v "$PWD:/w" -w /w ubuntu:26.04 sh -ec '
@@ -93,7 +96,7 @@ jobs:
             curl -sSfL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 --max-time 60 --retry-max-time 120 \
               https://www.sqlite.org/2023/sqlite-amalgamation-3420000.zip -o /tmp/old.zip
             unzip -q /tmp/old.zip -d /tmp && mkdir /old
-            gcc -O1 -fPIC -shared -Wl,-soname,libsqlite3.so.0 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_FTS3 \
+            gcc -O0 -fPIC -shared -Wl,-soname,libsqlite3.so.0 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_FTS3 \
               -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_COLUMN_METADATA \
               -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_RBU -DSQLITE_ENABLE_DBSTAT_VTAB \
               -DSQLITE_ENABLE_MATH_FUNCTIONS /tmp/sqlite-amalgamation-3420000/sqlite3.c -o /old/libsqlite3.so.0 -lm

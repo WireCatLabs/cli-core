@@ -3,7 +3,9 @@ name: Main validation
 # The full tests on every commit that lands on main, so a merge that breaks them shows up now
 # and not at the next release. Nothing here publishes or tags: release.yml alone does that.
 # A squash commit whose tree equals its pull request's head, green on every required check and built on the main it
-# landed on, is not validated again (scripts/release-reuse.sh): the same tree already passed the same checks.
+# landed on, is not validated again (scripts/release-reuse.sh): the same tree already passed the same checks. Nor is a
+# commit that changes only the changelog, the version and the Markdown docs against a parent proven green
+# (scripts/ci-unchanged.sh); its `validation / ` checks are reported as passed, so the next commit can build on it.
 on:
   push:
     branches: [main]
@@ -21,12 +23,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      checks: read
+      checks: write
     outputs:
-      reuse: ${{ steps.decide.outputs.reuse }}
+      reuse: ${{ steps.decide.outputs.reuse == 'true' || steps.unchanged.outputs.reuse == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
       - id: decide
         env:
@@ -34,6 +37,24 @@ jobs:
           COMMIT: ${{ github.sha }}
           PULL_REQUEST: "true"
         run: bash scripts/release-reuse.sh
+      - id: unchanged
+        if: steps.decide.outputs.reuse != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CAN_REPORT: "true"
+          DOCS: "true"
+        run: bash scripts/ci-unchanged.sh
+      - if: steps.unchanged.outputs.reuse == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          REQUIRED_PREFIX: "validation / "
+          TITLE: "Not run: only the changelog, the version or the Markdown docs changed"
+          SUMMARY: >-
+            Apart from CHANGELOG.md, the changes/ fragments, package.json's version and the Markdown under docs/ and
+            at the top level, this commit's tree is ${{ steps.unchanged.outputs.fingerprint }}, the same as its parent
+            ${{ steps.unchanged.outputs.base }}, ${{ steps.unchanged.outputs.evidence }}.
+        run: bash scripts/ci-pass-checks.sh
 
   # Also when the decision itself failed: no answer means the full validation.
   validation:

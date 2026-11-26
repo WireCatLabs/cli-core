@@ -27,7 +27,8 @@ describe("ci-fingerprint.sh", () => {
     GIT_CONFIG_GLOBAL: "/dev/null",
   }
   const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, env, encoding: "utf8" }).trim()
-  const fingerprint = (rev = "HEAD") => execFileSync("bash", [script, rev], { cwd: repo, env, encoding: "utf8" }).trim()
+  const fingerprint = (rev = "HEAD", ...flags: string[]) =>
+    execFileSync("bash", [script, ...flags, rev], { cwd: repo, env, encoding: "utf8" }).trim()
   const edit = (file: string, change: (text: string) => string) => {
     const path = join(repo, file)
     writeFileSync(path, change(readFileSync(path, "utf8")))
@@ -73,6 +74,44 @@ describe("ci-fingerprint.sh", () => {
     const before = fingerprint()
     edit("package.json", (text) => text.replace('"left-pad": "1.3.0"', '"left-pad": "1.3.1"'))
     expect(fingerprint()).not.toBe(before)
+  })
+
+  describe("with --docs", () => {
+    const add = (file: string, text: string) => {
+      mkdirSync(join(repo, file, ".."), { recursive: true })
+      writeFileSync(join(repo, file), text)
+      git("add", ".")
+      git("commit", "-qm", `add ${file}`)
+    }
+    const docs = () => fingerprint("HEAD", "--docs")
+
+    beforeEach(() => {
+      add("README.md", "# Example\n")
+      add("docs/dev/plans/plan.md", "# Plan\n")
+      add("docs/search/recipes.json", "[]\n")
+      add("skills/example/SKILL.md", "# Skill\n")
+    })
+
+    it("stays the same when only Markdown under docs/ or at the top level changes", () => {
+      const [before, plain] = [docs(), fingerprint()]
+      edit("README.md", (text) => `${text}More.\n`)
+      edit("docs/dev/plans/plan.md", (text) => `${text}More.\n`)
+      add("docs/new.md", "# New\n")
+      expect(docs()).toBe(before)
+      expect(fingerprint()).not.toBe(plain)
+    })
+
+    it("changes with a file under docs/ that the package ships", () => {
+      const before = docs()
+      edit("docs/search/recipes.json", () => "[1]\n")
+      expect(docs()).not.toBe(before)
+    })
+
+    it("changes with a skill, which the package ships and the code reads", () => {
+      const before = docs()
+      edit("skills/example/SKILL.md", (text) => `${text}More.\n`)
+      expect(docs()).not.toBe(before)
+    })
   })
 
   it("refuses a package.json without exactly one top-level version", () => {
