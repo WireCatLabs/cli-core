@@ -1,11 +1,5 @@
 [
   {
-    "repo": "bitrix24-cli",
-    "pr": 3258,
-    "until": "2026-11-30",
-    "reason": "#3258 no longer offers schedule exec over MCP; src/mcp.test.ts still pins it among the offered schedule commands"
-  },
-  {
     "repo": "notion-cli",
     "pr": 3365,
     "until": "2026-12-03",
