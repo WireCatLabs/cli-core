@@ -169,7 +169,7 @@ describe("the owner's mail", () => {
     expect(await outgoing(store)).toEqual({ "9001": false, "9002": true })
     expect(await ownerHolds(store, ALIAS)).toBe(true)
 
-    await sync(store, box)
+    await sync(store, box, { addresses: [] })
 
     expect(await outgoing(store)).toEqual({ "9001": false, "9002": false })
     expect(await tiesOf(store, "pat@example.test")).not.toContain("mail")
@@ -191,11 +191,25 @@ describe("the owner's mail", () => {
     await store.people.unlinkIdentity({ provider: "email", id: other }, { method: "unlink", by: "owner" })
     await store.people.linkToOwner({ provider: "email", id: other })
 
-    await sync(store, box)
+    await sync(store, box, { addresses: [] })
 
     expect(await outgoing(store)).toEqual({ "9001": true, "9002": false, "9003": false })
     expect(await ownerHolds(store, ALIAS)).toBe(true)
     expect(await ownerHolds(store, other)).toBe(true)
+  })
+
+  it("drops no alias for a sync given no list, nor for an archive import", async () => {
+    const store = await sandbox()
+    const box: FakeMailbox = {
+      messages: [mail(1), mail(2, { from: ["Owner Example", ALIAS], to: [["Pat Example", "pat@example.test"]] })],
+    }
+    await sync(store, box, { addresses: [ALIAS] })
+
+    await sync(store, box)
+    await sync(store, box, { mode: "mbox", addresses: [] })
+
+    expect(await outgoing(store)).toEqual({ "9001": false, "9002": true })
+    expect(await ownerHolds(store, ALIAS)).toBe(true)
   })
 
   it("lets go of an alias stored before the configured list was kept", async () => {
@@ -206,7 +220,7 @@ describe("the owner's mail", () => {
     await sync(store, box, { addresses: [ALIAS] })
     await store.sync.clearSyncState(KEY, OWN_MAIL_CONFIGURED)
 
-    await sync(store, box)
+    await sync(store, box, { addresses: [] })
 
     expect(await outgoing(store)).toEqual({ "9001": false, "9002": false })
     expect(await ownerHolds(store, ALIAS)).toBe(false)

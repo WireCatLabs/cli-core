@@ -49,22 +49,23 @@ const disownIdentities = async (store: MessageStore, addresses: readonly string[
 
 /**
  * After a sync: the senders of the mail in Sent join the owner's addresses beside `configured`, the account's mail from
- * any of them becomes outgoing, and their identities join the owner as the account's own does. An address no longer
- * configured, with no mail in Sent, stops being the owner's: its mail outside Sent is incoming again and its identity
- * leaves the owner. Before the configured list was first kept, every stored address may have been configured.
+ * any of them becomes outgoing, and their identities join the owner as the account's own does. A `configured` list is
+ * the whole list: an address no longer in it, with no mail in Sent, stops being the owner's, its mail outside Sent is
+ * incoming again and its identity leaves the owner. Before the list was first kept, every stored address may have
+ * been configured. Without a list nothing stored is dropped: a caller that does not know the list removes nothing.
  */
 export const settleOwnMail = async (
   store: MessageStore,
   key: AccountKey,
   accountId: number,
   mailboxes: readonly string[],
-  { name, now, configured }: { name: string; now: number; configured: readonly string[] },
+  { name, now, configured }: { name: string; now: number; configured?: readonly string[] | undefined },
 ): Promise<void> => {
   const account = normal(key.account)
   const before = await storedOwn(store, key)
-  const wanted = [...new Set(configured.map(normal))].filter((address) => address !== account).sort()
-  const kept = await storedList(store, key, OWN_MAIL_CONFIGURED)
-  const removed = (kept ?? before).filter((address) => !wanted.includes(address))
+  const wanted = [...new Set((configured ?? []).map(normal))].filter((address) => address !== account).sort()
+  const kept = configured === undefined ? wanted : await storedList(store, key, OWN_MAIL_CONFIGURED)
+  const removed = configured === undefined ? [] : (kept ?? before).filter((address) => !wanted.includes(address))
   const found = await store.mail.markOwnMail(
     accountId,
     { addresses: [account, ...wanted, ...before.filter((address) => !removed.includes(address))], mailboxes, removed },
@@ -72,7 +73,7 @@ export const settleOwnMail = async (
   )
   const others = found.filter((address) => address !== account)
   const dropped = before.filter((address) => !others.includes(address))
-  if (JSON.stringify(wanted) !== JSON.stringify(kept ?? []) || (kept === undefined && before.length > 0))
+  if (configured !== undefined && (JSON.stringify(wanted) !== JSON.stringify(kept ?? []) || kept === undefined))
     await store.sync.setSyncState(key, OWN_MAIL_CONFIGURED, JSON.stringify(wanted))
   if (others.length === 0 && before.length === 0) return
   if (JSON.stringify(others) !== JSON.stringify([...before].sort()))

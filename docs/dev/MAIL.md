@@ -44,8 +44,9 @@ account `{ provider: "email", account: <address, lower case> }`.
   (`store.mail.markOwnMail`), and the account is saved again, so `linkOwnIdentities` joins their identities to the
   owner. Partial completion, `readEmailWhole` and a server search read the same list. A mail tie needs mail the owner
   wrote, so this is what gives the people an alias writes to their tie. Nothing is taken from a name.
-- **An alias the owner removes.** The list a sync is given is kept under `mail_own_configured`. An address that was in
-  it and is not now, and has no live mail in Sent, leaves `mail_own_addresses`: the account's mail from it outside
+- **An alias the owner removes.** A defined `addresses` is the whole list: a caller passes it only when it knows every
+  alias. The list is kept under `mail_own_configured`; a sync with no `addresses`, and an archive import, change
+  nothing stored. An address that was in it and is not now, and has no live mail in Sent, leaves `mail_own_addresses`: the account's mail from it outside
   Sent is incoming again, and its email identity leaves the owner when the rules joined it (`account`, by `rules`).
   A link the owner made stays. The join moved every identity of the alias's person, and only the email identity moves
   back. A store from before `mail_own_configured` takes every stored address as possibly configured once: an address

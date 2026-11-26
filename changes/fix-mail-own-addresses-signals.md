@@ -1,7 +1,8 @@
 ### Fixed
 
-- **An alias the owner removes stops being the owner's on the next mail sync.** The addresses a sync is given are kept
-  under `mail_own_configured`. One that is gone and has no mail in Sent leaves `mail_own_addresses`; the account's
+- **An alias the owner removes stops being the owner's on the next mail sync.** A defined `MailAccount.addresses` is
+  now the whole list; a sync without it, and an archive import, drop nothing. The list is kept under
+  `mail_own_configured`. One that is gone and has no mail in Sent leaves `mail_own_addresses`; the account's
   mail from it outside Sent is incoming again, and its email identity leaves the owner when the rules joined it. A link
   the owner made stays. `settleOwnMail` now takes the configured list as `configured` in its options, and
   `store.mail.markOwnMail` takes `removed`. No store version. Part of #3321.

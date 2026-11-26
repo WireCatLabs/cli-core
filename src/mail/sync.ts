@@ -960,7 +960,7 @@ const syncRound = async (
   await settleOwnMail(store, key, accountId, [...(sent ? [sent] : []), `label:${SENT_LABEL}`], {
     name: account.address,
     now: startedAt,
-    configured: account.addresses ?? [],
+    configured: snapshot ? undefined : account.addresses,
   })
   await stopIfAborted()
   const indexed = await index?.(store, key)
