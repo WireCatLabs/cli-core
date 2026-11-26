@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
-import { CliError, captureStreams, type KeyringStore } from "@wirecat/cli-base"
+import { brokenKeyring, CliError, captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { type Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -282,6 +282,19 @@ describe("oauthSessionCommand", () => {
     expect((await cli(["personal", "session", "start", "--credential-storage", "file", "--json"])).code).toBe(0)
     expect(keyring.get("crm-cli", "oauth:crm:personal")).toBeNull()
     expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "saved" })
+  })
+
+  it("ends a sign-in kept in the file where no keyring answers", async () => {
+    const { cli } = setup(brokenKeyring("Platform failure: DBus error: Failed to connect to socket"))
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      expect((await cli(["personal", "session", "start", "--json"])).code).toBe(0)
+      const ended = await cli(["personal", "session", "end", "--json"])
+      expect(ended.error).toBeUndefined()
+      expect(ended.json.item).toMatchObject({ ended: true, removed: ["file"] })
+    } finally {
+      stderr.mockRestore()
+    }
   })
 
   it("keeps nothing when the account is refused", async () => {
