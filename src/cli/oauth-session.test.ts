@@ -227,6 +227,22 @@ describe("oauthSessionCommand", () => {
     expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
   })
 
+  it("hands verify the granted scopes, so a CLI refuses a sign-in that lacks one before it is kept", async () => {
+    const seen: (readonly string[])[] = []
+    const { cli } = setup(memoryKeyring(), {
+      verify: async (_command, _accessToken, _events, scopes) => {
+        seen.push(scopes)
+        if (!scopes.includes("record_permission:write"))
+          throw new CliError("permission_error", "Crm did not grant write", { reason: "oauth.scope-missing" })
+        return { id: "workspace-1", account: {} }
+      },
+    })
+    const refused = await cli(["personal", "session", "start", "--json"])
+    expect(refused.error).toMatchObject({ code: "permission_error", reason: "oauth.scope-missing" })
+    expect(seen).toEqual([["record_permission:read"]])
+    expect((await cli(["personal", "session", "status", "--json"])).json.item).toMatchObject({ state: "missing" })
+  })
+
   it("signs in when the sign-in and the token share one host and no fetch is given", async () => {
     const loopback = globalThis.fetch
     const { cli, tokenCalls } = setup(memoryKeyring(), {}, (url) => loopback(callbackOf(url)), { fetch: false })

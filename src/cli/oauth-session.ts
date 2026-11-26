@@ -141,12 +141,14 @@ export interface OAuthSessionOptions {
   preset: (command: Command, steps?: SignInSteps) => OAuthPreset | Promise<OAuthPreset>
   /**
    * Asks the service whose the access token is; `id` names the account, `account` is what start and status show.
-   * `extra` is saved in the entry by the codec at sign-in, such as drive's `principal`.
+   * `extra` is saved in the entry by the codec at sign-in, such as drive's `principal`. `scopes` are the ones the
+   * service granted, so a CLI can refuse a sign-in that lacks one before it is kept (the account may untick a scope).
    */
   verify: (
     command: Command,
     accessToken: string,
     events: EventSink,
+    scopes: readonly string[],
   ) => Promise<{ id: string; account: Readonly<Record<string, unknown>>; extra?: Record<string, unknown> }>
   /** Runs before anything is saved; by default only remembers the account. A CLI that refuses a taken one throws. */
   claim?: (env: NodeJS.ProcessEnv, profile: string, id: string) => void
@@ -301,7 +303,7 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
         // Before anything is saved, so a refused account leaves the profile's sign-in as it was.
         accept: async (tokens) => {
           if (!tokens.accessToken) throw new CliError("authentication_error", `${service} returned no access token`)
-          const { id, account, extra } = await options.verify(this, tokens.accessToken, events)
+          const { id, account, extra } = await options.verify(this, tokens.accessToken, events, tokens.scopes)
           ;(options.claim ?? ((env, profile, key) => rememberAccount(app, profile, key, env)))(
             context.env,
             context.profile,
@@ -353,7 +355,11 @@ export const oauthSessionCommand = (options: OAuthSessionOptions): Command => {
       if (!args.check) return answer(this, { ...state, verified: false })
       refuseOffline(this, service)
       const { keeper } = await context.keeperOf()
-      const { account } = await context.run(async (events) => options.verify(this, await keeper.accessToken(), events))
+      const { account } = await context.run(async (events) => {
+        const tokens = await keeper.tokens()
+        if (!tokens.accessToken) throw new CliError("authentication_error", `${service} returned no access token`)
+        return options.verify(this, tokens.accessToken, events, tokens.scopes)
+      })
       answer(this, { ...account, ...state, verified: true })
     })
 
