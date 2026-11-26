@@ -692,9 +692,8 @@ describe("refreshing threads one root at a time", () => {
         expect(chatId).toBe("7")
         return messages.flatMap((one) => rootOf(one.id) ?? [])
       },
-      recentThreadRoots: async (chatId: string, window: { since?: number }) => {
-        expect(chatId).toBe("7")
-        expect(Object.keys(window).every((key) => key === "since")).toBe(true)
+      recentThreadRoots: async (...args: unknown[]) => {
+        expect(args).toEqual(["7"])
         return recent.flatMap((id) => rootOf(id) ?? [])
       },
       rootReplies: async (chatId: string, root: string, window: { after?: number }) => {
@@ -748,6 +747,22 @@ describe("refreshing threads one root at a time", () => {
     expect(asked).toEqual([{ root: "3", after: point - 60_000 }])
     expect(await held(store)).toEqual(["1", "2", "3", "50", "51", "52"])
     expect(await store.sync.ranges(account, "7")).toEqual([{ from: 1, to: 3 }])
+  })
+
+  it("reads a new reply to a root only the recent list names, on a page the store already holds", async () => {
+    const store = await emptyStore()
+    const threads = new Map([["1", [replyTo(1, 50)]]])
+    const { adapter, asked } = threaded(store, [1, 2, 3, 4].map(messageAt), threads, ["1"])
+    const service = serviceOf(store, adapter)
+
+    await service.fetchAll(options({ pageSize: 2 }))
+    expect(asked).toEqual([{ root: "1" }])
+    const point = Number((await store.sync.syncState(account, "threads:7"))?.value)
+    threads.get("1")?.push(replyTo(1, 51, new Date(point + 1000).toISOString()))
+    asked.length = 0
+    await service.fetchAll(options({ pageSize: 2 }))
+    expect(asked).toEqual([{ root: "1", after: point - 60_000 }])
+    expect(await held(store)).toEqual(["1", "2", "3", "4", "50", "51"])
   })
 
   it("reads a root whole when a later sync first reaches it on an older page", async () => {

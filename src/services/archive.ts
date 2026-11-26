@@ -273,6 +273,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const windowed =
         limit?.keepFrom !== undefined && !(limit.keepFrom <= (options.sinceMs ?? Number.NEGATIVE_INFINITY))
       const roots: PagedRoots = new Map()
+      const startedAt = Date.now()
       const fetched = await fetchInto({
         history: async (window) => {
           const page = await history(chat, { ...window, reactions: false })
@@ -288,7 +289,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       })
       const replies =
         fetched.chat && !options.window
-          ? await savedReplies(connection, store, account, fetched.chat, roots, options.stop)
+          ? await savedReplies(connection, store, account, fetched.chat, { roots, startedAt }, options.stop)
           : 0
       const read = replies > 0 ? { ...fetched, fetched: fetched.fetched + replies } : fetched
       const result: Fetched = windowed && read.reachedSince ? { ...read, limited: "older_than_window" as const } : read
@@ -648,27 +649,27 @@ const pagedRoots = (into: PagedRoots, roots: readonly ThreadRoot[], before: stri
     into.set(root.id, { ...root, whole: before !== undefined || into.get(root.id)?.whole === true })
 }
 
-/** `since` is this machine's clock and a reply's time the messenger's; the overlap keeps a reply sent while they differ. */
+/** `since` is this machine's clock, a reply's time the messenger's: the overlap keeps one sent while they differ. */
 const THREAD_CLOCK_SKEW_MS = 60_000
 
 /**
  * The replies a messenger's history pages leave out, saved without a held stretch: they say nothing of the history
- * around them. `since` is when the last read of them started.
+ * around them. `since` is when the last read of them started: before its history pages, so a reply sent while they
+ * were read is asked for again.
  */
 const savedReplies = async (
   connection: MessengerAdapter,
   store: MessageStore,
   account: AccountKey,
   chatId: Id,
-  roots: PagedRoots,
+  { roots, startedAt }: { roots: PagedRoots; startedAt: number },
   stop: AbortSignal,
 ): Promise<number> => {
   if (stop.aborted) return 0
-  const startedAt = Date.now()
   const stored = Number((await store.sync.syncState(account, threadsKey(chatId)))?.value)
   const point = Number.isFinite(stored) ? stored : undefined
   const batches = refreshes(connection)
-    ? refreshedThreads(connection, chatId, roots, point)
+    ? refreshedThreads(connection, chatId, roots, point, stop)
     : connection.threadReplies
       ? await readyBatches(connection.threadReplies(chatId, point === undefined ? {} : { since: point }))
       : undefined
@@ -699,12 +700,20 @@ async function* refreshedThreads(
   chatId: Id,
   roots: PagedRoots,
   point: number | undefined,
+  stop: AbortSignal,
 ): AsyncGenerator<Message[]> {
   const after = point === undefined ? undefined : point - THREAD_CLOCK_SKEW_MS
   const all = new Map(roots)
-  for (const root of await connection.recentThreadRoots(chatId, after === undefined ? {} : { since: after }))
-    if (!all.has(root.id)) all.set(root.id, { ...root, whole: false })
+  for (const root of await connection.recentThreadRoots(chatId)) {
+    const paged = all.get(root.id)
+    all.set(root.id, {
+      ...root,
+      lastReplyAt: newest(paged?.lastReplyAt, root.lastReplyAt),
+      whole: paged?.whole ?? false,
+    })
+  }
   for (const root of all.values()) {
+    if (stop.aborted) return
     const replied = Date.parse(root.lastReplyAt ?? "")
     if (after !== undefined && !root.whole && !(replied > after)) continue
     yield* await readyBatches(
@@ -712,6 +721,9 @@ async function* refreshedThreads(
     )
   }
 }
+
+const newest = (one: string | undefined, other: string | undefined): string | undefined =>
+  one === undefined || (other !== undefined && Date.parse(other) > Date.parse(one)) ? other : one
 
 /** When the message a held stretch starts at was sent: by time the key is the time; by id, the stored message says. */
 const timeOfKey = async (
