@@ -6,7 +6,7 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import * as v from "valibot"
-import { attachmentMaxBytes, readWhole, sizeText } from "../../attachments/limits.js"
+import { asBytes, attachmentMaxBytes, readWhole, sizeText } from "../../attachments/limits.js"
 import {
   type CellValue,
   createDocx,
@@ -72,7 +72,7 @@ const downloaded = ({ target, signal }: FileUpdatePort, path: string) =>
           reason: "file.too-large",
         },
       )
-    const bytes = new Uint8Array(await readWhole(into))
+    const bytes = asBytes(await readWhole(into))
     return { bytes, sha256: sha256(bytes) }
   })
 
