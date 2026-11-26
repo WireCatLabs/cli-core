@@ -1,11 +1,5 @@
 [
   {
-    "repo": "bitrix24-cli",
-    "pr": 3258,
-    "until": "2026-11-30",
-    "reason": "#3258 no longer offers schedule exec over MCP; src/mcp.test.ts still pins it among the offered schedule commands"
-  },
-  {
     "repo": "notion-cli",
     "pr": 3365,
     "until": "2026-12-03",
@@ -30,28 +24,16 @@
     "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
   },
   {
+    "repo": "wordpress-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list among this CLI own commands"
+  },
+  {
     "repo": "cli-memo",
     "pr": 3372,
     "until": "2026-12-03",
     "reason": "#3372 shows each email type and reach in mail search; src/search/command.test.ts still pins the line without them"
-  },
-  {
-    "repo": "tg-cli",
-    "pr": 3337,
-    "until": "2026-11-27",
-    "reason": "#3337 removed account list and the session contract requires session status and list; tg-cli main adopts both in tg-cli#923, which merges as soon as 1.3.0 is on npm"
-  },
-  {
-    "repo": "max-cli",
-    "pr": 3337,
-    "until": "2026-11-27",
-    "reason": "#3337 removed account list and the session contract requires session status and list; max-cli main adopts both in max-cli#992, which merges as soon as 1.3.0 is on npm"
-  },
-  {
-    "repo": "whatsapp-cli",
-    "pr": 3337,
-    "until": "2026-11-27",
-    "reason": "#3337 removed account list and the session contract requires session status and list; whatsapp-cli main adopts both in whatsapp-cli#423, which merges as soon as 1.3.0 is on npm"
   },
   {
     "repo": "cli-memo",
