@@ -219,7 +219,7 @@ const holderOf = (database: CacheDatabase, identity: number): string | null => {
   return person === undefined ? null : `person:${person.person_id}`
 }
 
-/** Where an identity sits now and who put it there, as an effect's `before` keeps it: `sender-bot:4 rules`. */
+/** Where an identity sits now and who put it there, as an effect's `before` keeps it: `bot:4 rules`. */
 const heldOf = (database: CacheDatabase, identity: number): string | null => {
   const holder = holderOf(database, identity)
   return holder === null ? null : `${holder} ${holdingAuthorOf(database, identity)}`

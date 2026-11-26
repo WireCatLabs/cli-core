@@ -52,9 +52,10 @@ it("moves the agents' `bot` to `agent` in pairs and refs, then a sender bot's `s
   old
     .prepare(
       'INSERT INTO mail_sort_effects (rule_id, identity_id, action, "before", "after", created_at) ' +
-        "VALUES (?, ?, 'bot', 'sender-bot:3', 'person:1', ?)",
+        "VALUES (?, ?, 'sender', 'sender-bot:3 rules', 'person:1', ?), " +
+        "(?, ?, 'sender', 'person:9 owner', 'sender-bot:3', ?)",
     )
-    .run(rule, identity, NOW)
+    .run(rule, identity, NOW, rule, identity, NOW)
   old.close()
 
   handles.push(await openStore({ path }))
@@ -73,9 +74,9 @@ it("moves the agents' `bot` to `agent` in pairs and refs, then a sender bot's `s
   const proposal = after.prepare("SELECT proposed_by_type, payload FROM proposed_actions").get()
   expect(proposal?.proposed_by_type).toBe("agent")
   expect(JSON.parse(String(proposal?.payload))).toEqual({ from: "agent:7", to: "person:1", ref: "sender-bot:3" })
-  expect(after.prepare('SELECT "before", "after" FROM mail_sort_effects').get()).toEqual({
-    before: "bot:3",
-    after: "person:1",
-  })
+  expect(after.prepare('SELECT "before", "after" FROM mail_sort_effects ORDER BY id').all()).toEqual([
+    { before: "bot:3 rules", after: "person:1" },
+    { before: "person:9 owner", after: "bot:3" },
+  ])
   expect(after.prepare("SELECT max(min_compatible) AS n FROM schema_migrations").get()?.n).toBe(78)
 })

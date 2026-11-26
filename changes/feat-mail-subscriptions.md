@@ -1,7 +1,7 @@
 ### Added
 
 - **Subscriptions: `store.mail.subscriptions`** (experimental). Broadcast mail grouped by `List-Id`, else by its
-  sender (`sender-bot:<id>`, `person:<id>` or `address:<address>`), newest group first, grouped, counted and paged in
+  sender (`bot:<id>`, `person:<id>` or `address:<address>`), newest group first, grouped, counted and paged in
   SQL (`limit`, default 100, and `offset`; `accountIds`, `since`, `until` and `types` narrow it). Each group gives its
   `key`, `listId`, `name`, the `sender` ref and `address` of its newest email, its mail count, that `newest` email and
   `unsubscribe`: the `https` and `mailto` targets and `oneClick` from its newest email that names one, or `null`.

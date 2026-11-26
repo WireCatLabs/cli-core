@@ -674,7 +674,7 @@ export const holdingAuthorOf = (database: CacheDatabase, identity: number): BotA
 }
 
 /**
- * Puts an identity back where it was held, `person:<id>` or `sender-bot:<id>`, under the author that put it there: a
+ * Puts an identity back where it was held, `person:<id>` or `bot:<id>`, under the author that put it there: a
  * removed sorting rule leaves no owner's mark the owner never made, so the program may sort it again. A bot gone with
  * its last identity comes back as a new one. The caller holds the write lock.
  */
