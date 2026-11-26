@@ -46,7 +46,7 @@ jobs:
           # Their token cannot write check runs, so they analyse everything.
           CAN_REPORT: ${{ github.event_name == 'merge_group' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]') }}
         run: |
-          analyze='"actions"' unchanged='"javascript-typescript","python","c-cpp","java-kotlin"'
+          analyze='"actions"' unchanged='"javascript-typescript","python","java-kotlin"'
           if [ "$CAN_REPORT" != true ]; then
             analyze="$analyze,$unchanged" unchanged=""
           fi
