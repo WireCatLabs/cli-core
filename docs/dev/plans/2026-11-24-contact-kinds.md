@@ -222,7 +222,11 @@ code says what the shop is, the bank's category says what the payment was. Resea
   a free-mail domain, owner only there), `rules`, `scopes`, `remove`, `undo` and `reset`; a rule sets a mail type,
   moves a sender to a bot or a person through `moveToBot`/`moveToPerson`, or files it under an organization; a typed
   mail says `typeSignal: "rule:<id>"`. Follow-up: the owner's rules win across levels, and a removed rule puts senders
-  back with their earlier author.
+  back with their earlier author (#3369).
+- **Built in #3372:** `type:` and `reach:` fields in mail search (`memo search mail 'type:order OR type:bill'`).
+- **Built in #3379:** `store.mail.subscriptions` groups mail by list (`List-Id`, else the sender) with its count, last
+  mail and unsubscribe targets, kept only under a passed DKIM signature of the `From` domain. No store version: the
+  targets live in the stored headers. `people.listBots({ sends })` filters bots by what they send (`BOT_SENDS`).
 - **Screening first-time senders**, as HEY does, only for people the owner has never written to. Later step.
 
 The domain lists above grow from the catalogue: UT1 (about 100 categories), the OpenStreetMap brand index, FDIC
@@ -259,11 +263,14 @@ software.
    grouping yet), then their sector from the domain lists (built in #3350 from Wikidata only, as `sector` in the
    organization's metadata: `category` already means client, supplier or partner; UT1 came later in the data pack of
    #3359; DKIM signing domain not matched yet). #3349 made the throwaway-domain check one prebuilt set.
-6. memo: `bots list`, and `people list` filters `reach:`, `tie:`.
+6. memo: `bots list`, and `people list` filters `reach:`, `tie:`. `bots list` and `bots show` built in memo#899
+   (memo 0.154.0). `memo mail subscriptions list` and `bots list type:<sends>` wait in memo#902 for a cli-core release.
+   #3370 made a newsletter-only sender a bot, a human author too.
 7. Desktop: three Contacts tabs and a Subscriptions view beside mail, with their filters; this closes
    [desktop#319](https://github.com/WireCatLabs/wirecat-desktop/issues/319) (bot filter) and touches
    [desktop#320](https://github.com/WireCatLabs/wirecat-desktop/issues/320) (filters). The public page
-   `content/docs/desktop/contacts.mdx` in cli-docs and its RU and ES copies change with it.
+   `content/docs/desktop/contacts.mdx` in cli-docs and its RU and ES copies change with it. The three tabs are built
+   in desktop#482, read through memo. The Subscriptions view waits for memo#902.
 
 ## Open questions
 
@@ -286,4 +293,6 @@ software.
    are built around it, so non-commercial lists may be used by WireCat but never by a paid service. Each such list is
    marked in the data pack, and its own terms are checked for how they define commercial use.
 7. ~~A bot's ref.~~ Decided (owner, 2026-11-25): `bot:<id>`. The AI agents' ref that holds `bot:` today is renamed
-   (to `agent:`), and `sender-bot:` stays readable as an alias.
+   (to `agent:`), and `sender-bot:` stays readable as an alias. Built in #3374, not merged: older builds read the
+   renamed agent rows wrongly, so it needs a store version every tool must reach first, and when it ships is the
+   owner's call.
