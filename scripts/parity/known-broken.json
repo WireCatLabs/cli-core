@@ -1,11 +1,5 @@
 [
   {
-    "repo": "notion-cli",
-    "pr": 3365,
-    "until": "2026-12-03",
-    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
-  },
-  {
     "repo": "slack-cli",
     "pr": 3365,
     "until": "2026-12-03",
