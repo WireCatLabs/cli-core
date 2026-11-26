@@ -358,7 +358,8 @@ export interface UnreadChats {
   unreadChats(): Promise<Page<Chat> & { left?: string[] }>
 }
 
-export interface ThreadReplies {
+/** Also the group of `ThreadRefresh`, which a messenger may implement instead of `threadReplies`. */
+export interface ThreadReplies extends Partial<ThreadRefresh> {
   /**
    * Replies `history` leaves out, such as Slack's thread replies: those sent after `since` (epoch milliseconds, left
    * out on the chat's first read) to the roots the adapter picks, oldest first. `messages sync` asks after the chat's
@@ -841,7 +842,6 @@ export interface MessengerAdapter
     Partial<ThreadAddressing>,
     Partial<TopicHistory>,
     Partial<ThreadReplies>,
-    Partial<ThreadRefresh>,
     Partial<UnreadChats>,
     Partial<ForumControl>,
     Partial<TopicEditing>,
