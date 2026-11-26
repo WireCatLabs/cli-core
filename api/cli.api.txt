@@ -1428,6 +1428,16 @@ TimeLimit · interface · export interface TimeLimit {
 TimeLimit · interface · signal: AbortSignal;
 TimeLimit · interface · clear: () => void;
 TimeLimit · interface · }
+TokenEntry · interface · export interface TokenEntry {
+TokenEntry · interface · write: (token: string, verified: {
+TokenEntry · interface · id: string;
+TokenEntry · interface · account: Readonly<Record<string, unknown>>;
+TokenEntry · interface · }) => string;
+TokenEntry · interface · read: (saved: StoredCredential, env: NodeJS.ProcessEnv) => {
+TokenEntry · interface · token: string;
+TokenEntry · interface · account?: string;
+TokenEntry · interface · };
+TokenEntry · interface · }
 TokenSessionOptions · interface · export interface TokenSessionOptions {
 TokenSessionOptions · interface · app: AppIdentity;
 TokenSessionOptions · interface · service: string;
@@ -1447,6 +1457,7 @@ TokenSessionOptions · interface · token?: string;
 TokenSessionOptions · interface · about?: string;
 TokenSessionOptions · interface · guide?: string;
 TokenSessionOptions · interface · endNote?: string;
+TokenSessionOptions · interface · entry?: TokenEntry;
 TokenSessionOptions · interface · }
 TokenStorage · type · export type TokenStorage = "keyring" | "file";
 Transcript · interface · export interface Transcript {

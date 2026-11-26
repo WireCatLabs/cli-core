@@ -1,4 +1,4 @@
-import { CliError, type KeyringStore } from "@wirecat/cli-base"
+import { CliError, type KeyringStore, type StoredCredential } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
 import { Command } from "commander"
@@ -75,6 +75,20 @@ export interface TokenSessionOptions {
   guide?: string
   /** One sentence more for `session end --help`, such as what of the service's own tools it leaves alone. */
   endNote?: string
+  /**
+   * The profile's entry keeps more than the token, as hubspot keeps the account id, its UI domain and time zone beside
+   * its key: `write` makes the stored value from the token and `verify`'s answer, and `read` gets the token back with
+   * the account `session status` and `session list` show. A token from `<PREFIX>_TOKEN` comes to `read` as it is.
+   * Unset, the entry is the token alone. Not with `site`.
+   */
+  entry?: TokenEntry
+}
+
+/** How a profile's entry holds the token and what is kept beside it (`TokenSessionOptions.entry`). */
+export interface TokenEntry {
+  write: (token: string, verified: { id: string; account: Readonly<Record<string, unknown>> }) => string
+  /** Throws a `CliError` with the reason `session.unreadable` for an entry it cannot read. */
+  read: (saved: StoredCredential, env: NodeJS.ProcessEnv) => { token: string; account?: string }
 }
 
 export interface ManifestVerifyOptions {
@@ -143,8 +157,13 @@ export const storageOf = (raw: string): TokenStorage => {
  * or read from stdin, checked with the service, and only then kept in the keyring or a private file.
  */
 const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command => {
-  const { app, service } = options
+  const { app, service, entry } = options
+  if (entry && options.site)
+    throw new CliError("configuration_error", "tokenSessionCommand takes entry or site, not both")
   const word = options.token ?? (options.login ? "password" : "API token")
+  const held = (saved: StoredCredential, env: NodeJS.ProcessEnv) =>
+    entry ? entry.read(saved, env) : { token: saved.secret }
+  const accountOf = (account: string | undefined) => (entry ? { account: account ?? null } : {})
   const contextOf = (command: Command) => {
     const base = baseContext(command, options.resolveSettings)
     const tokens = new ProfileTokenStore({
@@ -216,7 +235,8 @@ const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command =>
     const secret = (await readSecret(`${service} ${word}: `, secretInputOf(this))).trim()
     if (!secret) throw new CliError("validation_error", `no ${word} was given`)
     const token = login === undefined ? secret : `${login}:${secret}`
-    const { id, account } = await run((events) => options.verify(this, token, events, site))
+    const verified = await run((events) => options.verify(this, token, events, site))
+    const { id, account } = verified
     ;(options.claim ?? ((at, name, key) => rememberAccount(app, name, key, at)))(
       env,
       profile,
@@ -224,7 +244,8 @@ const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command =>
       tokens,
       keyring,
     )
-    const storedIn = tokens.write(profile, token, args.credentialStorage, site === undefined ? {} : { site })
+    const kept = entry ? entry.write(token, verified) : token
+    const storedIn = tokens.write(profile, kept, args.credentialStorage, site === undefined ? {} : { site })
     answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...siteOf(site), ...account })
   })
 
@@ -239,14 +260,21 @@ const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command =>
     )
     .option("--check", `ask ${service} whether the token still works, and whose it is`)
     .action(async function (this: Command, args: { check?: boolean }) {
-      const { profile, tokens, run } = contextOf(this)
+      const { env, profile, tokens, run } = contextOf(this)
       const saved = tokens.read(profile)
+      const found = saved ? held(saved, env) : undefined
       const site = options.site ? tokens.readWith(profile, SITE)?.secret : undefined
-      const state = { profile, state: saved ? "saved" : "missing", token_from: saved?.source ?? null, ...siteOf(site) }
-      if (!args.check || !saved) return answer(this, { ...state, verified: false })
+      const state = {
+        profile,
+        state: saved ? "saved" : "missing",
+        token_from: saved?.source ?? null,
+        ...siteOf(site),
+        ...accountOf(found?.account),
+      }
+      if (!args.check || !found) return answer(this, { ...state, verified: false })
       if (options.site && site === undefined) throw noSite(app, profile)
       refuseOffline(this, service)
-      const { account } = await run((events) => options.verify(this, saved.secret, events, site))
+      const { account } = await run((events) => options.verify(this, found.token, events, site))
       answer(this, { ...state, verified: true, ...account })
     })
 
@@ -295,9 +323,10 @@ const tokenSessionCommandDefinition = (options: TokenSessionOptions): Command =>
             signed_in: saved !== undefined,
             state: saved ? "saved" : "missing",
             token_from: saved?.source ?? null,
+            ...accountOf(saved ? held(saved, env).account : undefined),
           }
         } catch (error) {
-          return { ...unknown(profile, error), token_from: null }
+          return { ...unknown(profile, error), token_from: null, ...accountOf(undefined) }
         }
       })
       renderAnswer(

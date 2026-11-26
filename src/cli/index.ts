@@ -828,6 +828,7 @@ export {
   manifestVerify,
   signedInSite,
   storageOf,
+  type TokenEntry,
   type TokenSessionOptions,
   tokenSessionCommand,
 } from "./token-session.js"
