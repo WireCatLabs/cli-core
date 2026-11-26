@@ -326,6 +326,23 @@ export interface Messenger extends ServiceMessenger {
   skill?: URL
   /** What only this messenger can say about itself for `doctor`, read from disk — never a secret. */
   diagnose?: (command: Command, context: BaseContext) => Promise<Record<string, unknown>>
+  /**
+   * What a person should do about this messenger's `diagnose` block, printed under doctor's answer and never in the
+   * JSON: a script reads the block itself. @experimental
+   */
+  doctorNotes?: (block: Record<string, unknown>) => readonly string[]
+  /**
+   * Checks `doctor --online` runs after the login, answered under `online.checks`. They only read. A failed one is a
+   * field, as a failed login is, never an exit code. @experimental
+   */
+  doctorOnline?: (command: Command) => Promise<readonly DoctorCheck[]>
+}
+
+/** One check of `doctor --online` beyond the login. @experimental */
+export interface DoctorCheck {
+  name: string
+  ok: boolean
+  detail: string
 }
 
 /**
