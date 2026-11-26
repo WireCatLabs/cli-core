@@ -19,10 +19,11 @@ import {
 import type { Decider } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
 import { holdAddress } from "./address-organization.js"
+import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { moveToBot, moveToPerson } from "./sender-bots.js"
+import { holdingAuthorOf, moveToBot, moveToPerson, putBack } from "./sender-bots.js"
 import { LIST_ID } from "./sender-signals.js"
-import { read, write } from "./transaction.js"
+import { letWaitersIn, read, write } from "./transaction.js"
 
 /** One sorting rule. @experimental */
 export interface SortRule {
@@ -218,6 +219,14 @@ const holderOf = (database: CacheDatabase, identity: number): string | null => {
   return person === undefined ? null : `person:${person.person_id}`
 }
 
+/** Where an identity sits now and who put it there, as an effect's `before` keeps it: `sender-bot:4 rules`. */
+const heldOf = (database: CacheDatabase, identity: number): string | null => {
+  const holder = holderOf(database, identity)
+  return holder === null ? null : `${holder} ${holdingAuthorOf(database, identity)}`
+}
+
+const holderIn = (held: string | null): string | null => (held === null ? null : (held.split(" ")[0] ?? null))
+
 const isWhere = (holder: string | null, sender: "bot" | "person") =>
   holder?.startsWith(sender === "bot" ? SENDER_BOT_PREFIX : "person:") === true
 
@@ -287,7 +296,7 @@ export const settleSenders = (context: StoreContext, identities?: readonly numbe
     const at = context.now()
     const mover = sortRuleFor(rules.sender, mail)
     if (mover?.sender && !hasEffect(database, mover.id, identity, "sender")) {
-      const before = holderOf(database, identity)
+      const before = heldOf(database, identity)
       if (!isWhere(before, mover.sender)) moveSender(context, address, mover)
       recordEffect(database, {
         rule: mover.id,
@@ -332,41 +341,65 @@ const moveSender = (context: StoreContext, address: string, rule: SortRule) => {
   }
 }
 
-/** Puts back what a rule did to its senders, then lets the rules still live settle them. */
-const undoEffects = (context: StoreContext, rule: number): void => {
+/**
+ * Senders per write. A move to a bot takes about 10 ms, so 100 keep one write near 1 s, far from another writer's 5 s
+ * wait; putting one back is cheaper, but a write's commit costs the same.
+ */
+const SETTLE_CHUNK = 100
+
+/** Whether the sender is still where the rule put it: else the owner moved it since, and that stands. */
+const stillAfter = (database: CacheDatabase, identity: number, after: string | null): boolean => {
+  const now = holderOf(database, identity)
+  if (now === after) return true
+  return (
+    after?.startsWith("person:") === true &&
+    now === `person:${currentPerson(database, Number(after.slice("person:".length)))}`
+  )
+}
+
+/**
+ * Puts back what removed rules did to up to `SETTLE_CHUNK` senders, newest effect first, each to its holder and author
+ * before the rule, then lets the rules still live settle them. Answers whether more may be left. The caller holds
+ * the write lock.
+ */
+const putBackChunk = (context: StoreContext): boolean => {
   const { database } = context
+  const identities = database
+    .prepare(
+      "SELECT DISTINCT f.identity_id AS identity FROM mail_sort_effects f JOIN mail_sort_rules r ON r.id = f.rule_id " +
+        "WHERE r.removed_at IS NOT NULL AND f.undone_at IS NULL ORDER BY f.identity_id LIMIT ?",
+    )
+    .all(SETTLE_CHUNK)
+    .map((row) => Number(row.identity))
+  if (identities.length === 0) return false
   const effects = database
     .prepare(
-      "SELECT f.id, f.identity_id, f.action, f.before, f.after, i.external_id AS address FROM mail_sort_effects f " +
-        "JOIN identities i ON i.id = f.identity_id WHERE f.rule_id = ? AND f.undone_at IS NULL ORDER BY f.id DESC",
+      "SELECT f.id, f.identity_id, f.action, f.before, f.after FROM mail_sort_effects f " +
+        "JOIN mail_sort_rules r ON r.id = f.rule_id WHERE r.removed_at IS NOT NULL AND f.undone_at IS NULL " +
+        "AND f.identity_id IN (SELECT value FROM json_each(?)) ORDER BY f.id DESC",
     )
-    .all(rule)
+    .all(JSON.stringify(identities))
   const at = context.now()
   for (const effect of effects) {
     const identity = Number(effect.identity_id)
-    const subject = { provider: "email" as const, id: String(effect.address) }
     const before = effect.before == null ? null : String(effect.before)
-    if (effect.action === "sender" && before !== effect.after && before !== null) {
-      const now = holderOf(database, identity)
-      if (before.startsWith("person:") && !isWhere(now, "person")) moveToPerson(context, subject, { reason: "undo" })
-      if (before.startsWith(SENDER_BOT_PREFIX) && !isWhere(now, "bot"))
-        moveToBot(context, subject, {
-          reason: "undo",
-          ...(database
-            .prepare("SELECT 1 FROM sender_bots WHERE id = ?")
-            .get(Number(before.slice(SENDER_BOT_PREFIX.length)))
-            ? { bot: before }
-            : {}),
-        })
-    }
+    const after = effect.after == null ? null : String(effect.after)
+    const holder = holderIn(before)
+    if (effect.action === "sender" && holder !== null && holder !== after && stillAfter(database, identity, after))
+      putBack(context, identity, holder, before?.endsWith(" owner") ? "owner" : "rules")
     if (effect.action === "organization" && before === null)
       database
         .prepare("DELETE FROM organization_identities WHERE identity_id = ? AND organization_id = ? AND method = ?")
-        .run(identity, Number(String(effect.after).slice("organization:".length)), SORT_METHOD)
+        .run(identity, Number(String(after).slice("organization:".length)), SORT_METHOD)
     database.prepare("UPDATE mail_sort_effects SET undone_at = ? WHERE id = ?").run(at, Number(effect.id))
   }
-  const identities = [...new Set(effects.map((effect) => Number(effect.identity_id)))]
-  if (identities.length > 0) settleSenders(context, identities)
+  settleSenders(context, identities)
+  return identities.length === SETTLE_CHUNK
+}
+
+/** Each removed rule's senders put back a write at a time; a stopped run resumes on the next change of rules. */
+const putBackInChunks = (context: StoreContext) => {
+  while (write(context.database, () => putBackChunk(context))) letWaitersIn()
 }
 
 const clearTypes = (database: CacheDatabase, ids: readonly number[]) =>
@@ -526,12 +559,13 @@ const applyRule = (context: StoreContext, rule: SortRule): number[] => {
   if (!rule.past)
     for (const { identity } of sendersOf(database, identities)) {
       const holder = holderOf(database, identity)
+      const held = heldOf(database, identity)
       for (const action of [...(rule.sender ? ["sender"] : []), ...(rule.organization ? ["organization"] : [])])
         recordEffect(database, {
           rule: rule.id,
           identity,
           action,
-          before: action === "sender" ? holder : "held",
+          before: action === "sender" ? held : "held",
           after: action === "sender" ? holder : "held",
           at: context.now(),
         })
@@ -539,13 +573,12 @@ const applyRule = (context: StoreContext, rule: SortRule): number[] => {
   return identities
 }
 
-/** Each move takes about 10 ms: 100 per write keeps another writer's 5 s wait for the lock far away. */
-const SETTLE_CHUNK = 100
-
 /** Settles senders a write at a time; a sender already settled is skipped, so a stopped run resumes on the next. */
 const settleInChunks = (context: StoreContext, identities: readonly number[]) => {
-  for (let at = 0; at < identities.length; at += SETTLE_CHUNK)
+  for (let at = 0; at < identities.length; at += SETTLE_CHUNK) {
+    if (at > 0) letWaitersIn()
     write(context.database, () => settleSenders(context, identities.slice(at, at + SETTLE_CHUNK)))
+  }
 }
 
 /** A change's time, later than every change before it, so undo takes changes back in order within one millisecond. */
@@ -562,7 +595,6 @@ const takeOut = (context: StoreContext, rule: SortRule, undone: boolean) => {
     .run(at, at, undone ? at : null, rule.id)
   const removed = ruleById(context.database, rule.id)
   clearRuleTypes(context.database, removed)
-  undoEffects(context, rule.id)
   return removed
 }
 
@@ -657,14 +689,17 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
       settleInChunks(context, identities)
       return result
     },
-    remove: async (id, by) =>
-      write(database, () => {
+    remove: async (id, by) => {
+      const removed = write(database, () => {
         const rule = ruleById(database, id)
         if (by !== "owner" && (rule.author !== "program" || rule.decidedBy !== by.bot))
           fail("a program removes only the rules it made", "mail-sort.owner-only")
         if (rule.removedAt !== null) return rule
         return takeOut(context, rule, false)
-      }),
+      })
+      putBackInChunks(context)
+      return removed
+    },
     undo: async (by) => {
       const { identities, undone } = write(database, () => {
         ownerOnly(by, "undoes a sorting change")
@@ -685,11 +720,12 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
         const back = ruleById(database, rule.id)
         return { identities: applyRule(context, back), undone: { undid: "remove" as const, rule: back } }
       })
+      putBackInChunks(context)
       settleInChunks(context, identities)
       return undone
     },
-    reset: async (sender, by) =>
-      write(database, () => {
+    reset: async (sender, by) => {
+      const removed = write(database, () => {
         ownerOnly(by, "resets the manual sorting of a sender")
         const addresses = addressesOf(database, sender)
         const mails = database
@@ -706,7 +742,10 @@ export const mailSortingOver = (context: StoreContext): MailSorting => {
           )
           .all(JSON.stringify(addresses), JSON.stringify(mails))
           .map((row) => takeOut(context, ruleOf(row), false))
-      }),
+      })
+      putBackInChunks(context)
+      return removed
+    },
   }
 }
 

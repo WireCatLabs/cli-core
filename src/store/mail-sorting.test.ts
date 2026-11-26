@@ -100,7 +100,7 @@ describe("mail sorting rules", () => {
     })
   })
 
-  it("orders scopes and authors: mail over address over domain, the owner over the program", async () => {
+  it("orders scopes and authors: every owner's rule over every program's, then mail, address, domain", async () => {
     const { store } = await opened([
       email("orders@shop.example", "Receipt 1"),
       email("orders@shop.example", "Receipt 2"),
@@ -123,6 +123,11 @@ describe("mail sorting rules", () => {
       "owner",
     )
     expect(program.preview.retyped).toBe(0)
+    const programMail = await store.mail.sorting.add(
+      { scope: "mail", value: await idOf(store, "Weekly"), mailType: "bill", applyTo: "all" },
+      { bot: "sorter", reason: "learned" },
+    )
+    expect(programMail.preview.retyped).toBe(0)
     expect(await types(store)).toEqual({
       "Receipt 1": `order rule:${address.rule?.id}`,
       "Receipt 2": `shipping rule:${one.rule?.id}`,
@@ -216,6 +221,70 @@ describe("mail sorting rules", () => {
     await store.mail.sorting.remove(bots.rule?.id as number, "owner")
     expect(await listed()).toEqual([])
     expect(person.rule?.sender).toBe("person")
+  })
+
+  it("puts a removed rule's senders back with the author they had, so the program sorts them again", async () => {
+    const { store, db } = await opened([
+      email("noreply@shop.ru", "Receipt"),
+      email("ann@shop.ru", "Hi from Ann"),
+      email("bo@shop.ru", "Hi from Bo"),
+    ])
+    await store.people.list({ limit: 100, kind: "all" })
+    const bots = async () =>
+      Object.fromEntries(
+        (await store.people.listBots({ limit: 10 })).items.flatMap(({ identities, author }) =>
+          identities.map(({ id }) => [id, author]),
+        ),
+      )
+    expect(await bots()).toEqual({ "noreply@shop.ru": "rules" })
+    await store.people.moveToPerson({ provider: "email", id: "bo@shop.ru" }, "owner")
+    const lastMove = (address: string) =>
+      db
+        .prepare(
+          "SELECT m.author, m.to_bot_id IS NOT NULL AS bot FROM sender_bot_moves m JOIN identities i ON " +
+            "i.id = m.identity_id WHERE i.external_id = ? ORDER BY m.id DESC LIMIT 1",
+        )
+        .get(address)
+
+    const person = await store.mail.sorting.add(
+      { scope: "address", value: "noreply@shop.ru", sender: "person", applyTo: "all" },
+      "owner",
+    )
+    const bot = await store.mail.sorting.add(
+      { scope: "address", value: "ann@shop.ru", sender: "bot", applyTo: "all" },
+      "owner",
+    )
+    const bo = await store.mail.sorting.add(
+      { scope: "address", value: "bo@shop.ru", sender: "bot", applyTo: "all" },
+      "owner",
+    )
+    expect(await bots()).toEqual({ "ann@shop.ru": "owner", "bo@shop.ru": "owner" })
+
+    expect(await store.mail.sorting.undo("owner")).toMatchObject({ undid: "add", rule: { id: bo.rule?.id } })
+    await store.mail.sorting.remove(person.rule?.id as number, "owner")
+    await store.mail.sorting.remove(bot.rule?.id as number, "owner")
+    expect(await bots()).toEqual({ "noreply@shop.ru": "rules" })
+    expect(lastMove("noreply@shop.ru")).toEqual({ author: "rules", bot: 1 })
+    expect(lastMove("ann@shop.ru")).toEqual({ author: "rules", bot: 0 })
+    expect(lastMove("bo@shop.ru")).toEqual({ author: "owner", bot: 0 })
+
+    db.prepare("UPDATE persons SET kind = NULL").run()
+    await store.people.list({ limit: 100, kind: "all" })
+    expect(await bots()).toEqual({ "noreply@shop.ru": "rules" })
+  })
+
+  it("puts more senders back than one write takes, and finishes a stopped put-back on the next removal", async () => {
+    const { store, db } = await opened(Array.from({ length: 120 }, (_, i) => email(`desk${i}@bigshop.ru`, `Note ${i}`)))
+    const held = () => Number(db.prepare("SELECT count(*) AS n FROM sender_bot_identities").get()?.n)
+    const { rule } = await store.mail.sorting.add(
+      { scope: "domain", value: "bigshop.ru", sender: "bot", applyTo: "all" },
+      "owner",
+    )
+    expect(held()).toBe(120)
+    db.prepare("UPDATE mail_sort_rules SET removed_at = 1 WHERE id = ?").run(rule?.id as number)
+    expect(held()).toBe(120)
+    await store.mail.sorting.remove(rule?.id as number, "owner")
+    expect(held()).toBe(0)
   })
 
   it("files a sender under an organization and takes it out again", async () => {

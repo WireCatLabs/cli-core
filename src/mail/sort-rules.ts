@@ -50,44 +50,47 @@ const suffixesOf = (host: string): string[] => {
   return labels.slice(0, -1).map((_, at) => labels.slice(at).join("."))
 }
 
-/** The owner's rule first, then the newest. */
-const before = (a: SortRuleFacts, b: SortRuleFacts) =>
-  (a.author === "owner" ? 0 : 1) - (b.author === "owner" ? 0 : 1) || b.createdAt - a.createdAt || b.id - a.id
+const newestFirst = (a: SortRuleFacts, b: SortRuleFacts) => b.createdAt - a.createdAt || b.id - a.id
 
-/** Rules filed by what they name, each list in the order a match takes them. @experimental */
-export interface SortIndex<R extends SortRuleFacts> {
+/** One author's rules filed by what they name, each list newest first. */
+interface AuthorIndex<R extends SortRuleFacts> {
   byKey: Map<string, R[]>
   subjects: R[]
+}
+
+/** Rules filed by author, then by what they name. @experimental */
+export interface SortIndex<R extends SortRuleFacts> {
+  owner: AuthorIndex<R>
+  program: AuthorIndex<R>
   size: number
 }
 
 const keyOf = (scope: SortScope, value: string) => `${scope}\u0000${value}`
 
-/** @experimental */
-export const sortIndexOf = <R extends SortRuleFacts>(rules: readonly R[]): SortIndex<R> => {
+const authorIndexOf = <R extends SortRuleFacts>(rules: readonly R[]): AuthorIndex<R> => {
   const byKey = new Map<string, R[]>()
   const subjects: R[] = []
   for (const rule of rules) {
     if (rule.scope === "subject") subjects.push(rule)
     else byKey.set(keyOf(rule.scope, rule.value), [...(byKey.get(keyOf(rule.scope, rule.value)) ?? []), rule])
   }
-  for (const list of byKey.values()) list.sort(before)
-  return { byKey, subjects: subjects.sort(before), size: rules.length }
+  for (const list of byKey.values()) list.sort(newestFirst)
+  return { byKey, subjects: subjects.sort(newestFirst) }
 }
+
+/** @experimental */
+export const sortIndexOf = <R extends SortRuleFacts>(rules: readonly R[]): SortIndex<R> => ({
+  owner: authorIndexOf(rules.filter((rule) => rule.author === "owner")),
+  program: authorIndexOf(rules.filter((rule) => rule.author !== "owner")),
+  size: rules.length,
+})
 
 const applies = (rule: SortRuleFacts, mail: SortedMail) => rule.past || (mail.at !== null && mail.at >= rule.createdAt)
 
 const first = <R extends SortRuleFacts>(rules: readonly R[], mail: SortedMail): R | undefined =>
   rules.find((rule) => applies(rule, mail))
 
-/**
- * The rule that decides this email, the first scope that has one: the mail, its List-Id or a subject pattern, its
- * address, its domain. Within a scope the owner's rule beats the program's and the newest wins. A domain rule marked
- * `overAddresses` beats the address rules. Addresses match whole and domains on a label boundary, so `ann@` never
- * matches `joann@` and `shop.example` never matches `myshop.example`. @experimental
- */
-export const sortRuleFor = <R extends SortRuleFacts>(index: SortIndex<R>, mail: SortedMail): R | undefined => {
-  if (index.size === 0) return undefined
+const ruleOfAuthor = <R extends SortRuleFacts>(index: AuthorIndex<R>, mail: SortedMail): R | undefined => {
   const at = (scope: SortScope, value: string | null) =>
     value === null ? undefined : first(index.byKey.get(keyOf(scope, value)) ?? [], mail)
   const own = at("mail", String(mail.id))
@@ -102,7 +105,7 @@ export const sortRuleFor = <R extends SortRuleFacts>(index: SortIndex<R>, mail: 
           mail,
         ),
   ].filter((rule): rule is R => rule !== undefined)
-  if (second.length > 0) return second.sort(before)[0]
+  if (second.length > 0) return second.sort(newestFirst)[0]
   if (mail.from === null || !mail.from.includes("@")) return undefined
   const domain = suffixesOf(hostOf(mail.from))
     .map((host) => at("domain", host))
@@ -110,6 +113,16 @@ export const sortRuleFor = <R extends SortRuleFacts>(index: SortIndex<R>, mail: 
   if (domain?.overAddresses) return domain
   return at("address", mail.from) ?? domain
 }
+
+/**
+ * The rule that decides this email. Every owner's rule comes before every program's, whatever its scope: the owner's
+ * choice always wins. Within one author the first scope that has a rule wins: the mail, its List-Id or a subject
+ * pattern, its address, its domain; within a scope the newest wins. A domain rule marked `overAddresses` beats the
+ * same author's address rules. Addresses match whole and domains on a label boundary, so `ann@` never matches `joann@`
+ * and `shop.example` never matches `myshop.example`. @experimental
+ */
+export const sortRuleFor = <R extends SortRuleFacts>(index: SortIndex<R>, mail: SortedMail): R | undefined =>
+  index.size === 0 ? undefined : (ruleOfAuthor(index.owner, mail) ?? ruleOfAuthor(index.program, mail))
 
 /** Whether a scope is more specific than another. @experimental */
 export const narrower = (a: SortScope, b: SortScope): boolean => LEVEL[a] < LEVEL[b]

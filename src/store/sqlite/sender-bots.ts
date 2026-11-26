@@ -659,3 +659,44 @@ export const moveToPerson = (
     return recordOf(context, first ?? target ?? (chosen.person as number))
   })
 }
+
+/** Who put an identity where it is: its bot's author, else its last move's; `rules` when nothing moved it. */
+export const holdingAuthorOf = (database: CacheDatabase, identity: number): BotAuthor => {
+  const { bot } = holderOf(database, identity)
+  const row =
+    bot === undefined
+      ? database
+          .prepare("SELECT author FROM sender_bot_moves WHERE identity_id = ? ORDER BY id DESC LIMIT 1")
+          .get(identity)
+      : database.prepare("SELECT author FROM sender_bots WHERE id = ?").get(bot)
+  return row?.author === "owner" ? "owner" : "rules"
+}
+
+/**
+ * Puts an identity back where it was held, `person:<id>` or `sender-bot:<id>`, under the author that put it there: a
+ * removed sorting rule leaves no owner's mark the owner never made, so the program may sort it again. A bot gone with
+ * its last identity comes back as a new one. The caller holds the write lock.
+ */
+export const putBack = (context: StoreContext, identity: number, holder: string, author: BotAuthor): void => {
+  const { database } = context
+  const at = context.now()
+  const log = { author, reason: "a mail sorting rule was removed", at }
+  if (holder.startsWith(SENDER_BOT_PREFIX)) {
+    const kept = Number(holder.slice(SENDER_BOT_PREFIX.length))
+    const bot =
+      database.prepare("SELECT 1 FROM sender_bots WHERE id = ?").get(kept) === undefined
+        ? createBot(database, log)
+        : kept
+    for (const [person, gone] of intoBot(database, [identity], bot, log))
+      if (identitiesOf(database, person).length > 0) renameAfterLeaving(context, person, gone)
+    groupByDomain(database, [{ id: bot, displayName: null, holds: true, bot: true }], at)
+    return
+  }
+  const person = Number(holder.slice("person:".length))
+  const target =
+    database.prepare("SELECT 1 FROM persons WHERE id = ?").get(person) === undefined
+      ? undefined
+      : currentPerson(database, person)
+  outOfBot(database, [identity], target, log)
+  releaseDomainHolds(database, [identity])
+}

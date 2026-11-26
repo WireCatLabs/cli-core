@@ -87,6 +87,12 @@ export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => tran
 
 const BATCH_PAUSE_MS = 2
 
+/**
+ * A short pause between two writes of one loop: another process waiting for the lock tries every millisecond, and a
+ * loop that begins again at once leaves it a gap of microseconds, so it waits out its 5 s however short each write is.
+ */
+export const letWaitersIn = (): void => void Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
+
 const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, beforeCommit?: () => void): T => {
   const connection = connectionOf(database)
   if (connection.reading) throw new Error("a store write cannot run inside a read")
@@ -109,7 +115,7 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
     if (outer) committedWrites(database)
     // A write that had to wait has others waiting behind it, and its caller's next write would begin before they see
     // the lock free. Pausing only then costs an uncontended write nothing.
-    if (outer && (waited || !drain)) Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
+    if (outer && (waited || !drain)) letWaitersIn()
     return result
   } catch (error) {
     rollBack(database, outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)
