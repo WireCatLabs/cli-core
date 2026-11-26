@@ -24,6 +24,12 @@
     "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins them among this CLI own commands"
   },
   {
+    "repo": "wordpress-cli",
+    "pr": 3365,
+    "until": "2026-12-03",
+    "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list among this CLI own commands"
+  },
+  {
     "repo": "cli-memo",
     "pr": 3372,
     "until": "2026-12-03",
