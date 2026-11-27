@@ -95,9 +95,11 @@ pace, and the agent and model variables an agent's shell would leak in. A test t
 adds it there.
 
 `src/testing/fresh-store.ts` runs last: a store opened where no file is yet starts from a copy of one migrated
-once per test file, since migrating an empty store costs 40–55 ms and a run opens about 1,900 of them. Everything
-else in opening still runs on the copy. A test that needs the migrations themselves to run opens a file at an older
-version, or calls `migrate` itself.
+once per run, since migrating an empty store costs 40–55 ms and a run opens about 1,900 of them. vitest's
+`globalSetup` ([`src/testing/migrated-store.ts`](../../src/testing/migrated-store.ts)) migrates it from the
+checkout's migrations at the start of every run, so an edited migration reaches it. On a rerun in watch mode, where
+that setup does not run again, each test file migrates its own. Everything else in opening still runs on the copy.
+A test that needs the migrations themselves to run opens a file at an older version, or calls `migrate` itself.
 
 ## Coverage has a floor
 

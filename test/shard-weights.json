@@ -810,7 +810,7 @@
   "src/store/money-transactions.test.ts": 1060,
   "src/store/newsletter-bots.test.ts": 1476,
   "src/store/normalize.test.ts": 9,
-  "src/store/note-vectors.test.ts": 23201,
+  "src/store/note-vectors.test.ts": 11800,
   "src/store/notes.test.ts": 4710,
   "src/store/open-concurrency.test.ts": 150,
   "src/store/open.test.ts": 26,

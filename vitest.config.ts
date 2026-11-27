@@ -38,6 +38,7 @@ export default defineConfig({
   tsconfig: "./node_modules/@wirecat/cli-base/config/tsconfig.base.json",
   test: {
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+    globalSetup: ["src/testing/migrated-store.ts"],
     setupFiles: ["@wirecat/cli-base/testing/setup", "src/testing/sandbox.ts", "src/testing/fresh-store.ts"],
     globals: false,
     sequence: { sequencer: WeightedSequencer },

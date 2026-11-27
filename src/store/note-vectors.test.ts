@@ -21,6 +21,13 @@ vi.mock("./sqlite/vector-index.js", async (original) => {
   }
 })
 
+// Finding mentions in the large store's 5.4 million words took half of this file's time (2026-11-27); no test here
+// reads a mention.
+vi.mock("./sqlite/mention-drain.js", async (original) => ({
+  ...(await original<typeof import("./sqlite/mention-drain.js")>()),
+  drainMentions: () => 0,
+}))
+
 const MODEL = "local:invented:8"
 const DIMS = 8
 
