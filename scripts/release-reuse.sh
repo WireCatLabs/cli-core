@@ -87,8 +87,11 @@ api --paginate "repos/$repo/commits/$head/check-runs" \
 
 problems=$(jq -r -n --slurpfile required "$work/required.json" --slurpfile runs "$work/runs.ndjson" '
   $required[0][] as $r
-  | ($runs | map(select(.name == $r.context))) as $found
-  | if ($found | length) == 0 then "\($r.context): no such check run"
+  # changelog-guard.yml reports `changelog / guard` twice on a pull request: the guard, and its merge-queue job skipped.
+  | ($runs | map(select(.name == $r.context))) as $all
+  | ($all | map(select(.conclusion != "skipped"))) as $found
+  | if ($all | length) == 0 then "\($r.context): no such check run"
+    elif ($found | length) == 0 then "\($r.context): only skipped"
     elif ($found | any(.status != "completed" or .conclusion != "success"
                        or (($r.integration_id // .app) != .app)))
     then "\($r.context): " + ($found | map("\(.status)/\(.conclusion // "-")") | join(", "))
