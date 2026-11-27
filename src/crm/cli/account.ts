@@ -219,10 +219,8 @@ export const crmAccountCommand = (app: AppIdentity, options: CrmAccountOptions):
   annotate(new Command("account"), { effects: LOCAL_READ })
     .description("this profile on this computer")
     .addCommand(
-      annotate(
-        accountRemoveCommand(app, removalOf(app, options), {
-          ...(options.resolveSettings ? { resolveSettings: options.resolveSettings } : {}),
-        }),
-        { effects: LOCAL_WRITE },
-      ).hook("preAction", (_, action) => refuseSharedDelete(app, options, action)),
+      accountRemoveCommand(app, removalOf(app, options), {
+        ...(options.resolveSettings ? { resolveSettings: options.resolveSettings } : {}),
+        effects: LOCAL_WRITE,
+      }).hook("preAction", (_, action) => refuseSharedDelete(app, options, action)),
     )
