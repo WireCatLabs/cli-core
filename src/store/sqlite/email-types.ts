@@ -243,6 +243,35 @@ export const typeWhere = (database: CacheDatabase, filter: TypeFilter): { sql: s
     : typeCondition(database, filter, storeMailTypes(database))
 
 /**
+ * What one connection last worked out for the mail not typed yet, while nothing has changed the store: a search runs
+ * this filter for its page and again for its total, and an MCP server's read-only open searches many times.
+ */
+const worked = new WeakMap<CacheDatabase, { version: string; types: Map<number, MailTypeOf> }>()
+
+/** `data_version` moves when another connection commits, `total_changes()` when this one writes. */
+const versionOf = (database: CacheDatabase): string =>
+  `${Object.values(database.prepare("PRAGMA data_version").get() ?? {})[0]}:` +
+  `${Object.values(database.prepare("SELECT total_changes()").get() ?? {})[0]}`
+
+const untypedOf = (database: CacheDatabase, check: () => void): Map<number, MailTypeOf> => {
+  const version = versionOf(database)
+  const known = worked.get(database)
+  if (known?.version === version) return known.types
+  const ids = database
+    .prepare("SELECT id FROM emails WHERE mail_type IS NULL")
+    .all()
+    .map((row) => Number(row.id))
+  const types = new Map<number, MailTypeOf>()
+  const senders = new Map<string, number>()
+  for (let at = 0; at < ids.length; at += BATCH) {
+    check()
+    for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH), senders)) types.set(id, typed)
+  }
+  worked.set(database, { version, types })
+  return types
+}
+
+/**
  * The same filter, without writing: inside a read, the mail not typed yet is worked out in memory. `check` runs
  * between batches, so a search's time limit still stops it.
  */
@@ -263,17 +292,8 @@ export const typeCondition = (
   ]
   if (current) return { sql: [stored], params }
   const pending = read(database, () => {
-    const ids = database
-      .prepare("SELECT id FROM emails WHERE mail_type IS NULL")
-      .all()
-      .map((row) => Number(row.id))
     const kept: number[] = []
-    const senders = new Map<string, number>()
-    for (let at = 0; at < ids.length; at += BATCH) {
-      check()
-      for (const [id, typed] of typesOf(database, ids.slice(at, at + BATCH), senders))
-        if (passes(filter, typed.type, typed.reach)) kept.push(id)
-    }
+    for (const [id, typed] of untypedOf(database, check)) if (passes(filter, typed.type, typed.reach)) kept.push(id)
     return kept
   })
   return {

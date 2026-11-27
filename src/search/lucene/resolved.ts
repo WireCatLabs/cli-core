@@ -27,6 +27,8 @@ export interface QueryExecution {
   newest?: boolean
   signal?: AbortSignal
   timeLimitMs?: number
+  /** What the search already spent before this query, out of the same time limit. */
+  spentMs?: number
   /** Internal conversation eligibility, applied before lexical ranking. */
   conversationIds?: string[]
   conversationSince?: number

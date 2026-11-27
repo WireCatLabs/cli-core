@@ -82,6 +82,8 @@ export interface SearchQuery {
   signal?: AbortSignal
   /** Longer than the 2 s default when the caller set the run's time limit itself (`searchTimeLimit`). */
   timeLimitMs?: number
+  /** What the search already spent before this query, out of the same time limit: its total runs on what is left. */
+  spentMs?: number
   chat?: string
   /** A messenger the store holds, or `all` — the same as `in:` in the query. The account it runs as when unset. */
   source?: string
