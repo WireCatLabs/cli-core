@@ -12,10 +12,12 @@ import { credentialStorage, oauthAccount, standardCodec, tokenKeeper } from "../
 import { openStore } from "../store/store.js"
 import { messenger } from "../testing/shared-program.js"
 import { type AccountRemoval, type AccountRemovalContext, accountRemoveCommand, mayRevoke } from "./account-remove.js"
+import { LOCAL_WRITE } from "./effects.js"
 import { accountCommand } from "./messenger/account-command.js"
 import { accountFileFor, rememberAccount } from "./messenger/accounts.js"
 import { run } from "./program.js"
 import { settingsFor } from "./settings.js"
+import { assertSharedContracts, hasSharedContract } from "./shared-contracts.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "synthetic", version: "1.0.0" }
 const SERVICE = "chat-cli"
@@ -650,4 +652,13 @@ describe("mayRevoke", () => {
     expect(mayRevoke(app, { CHAT_CACHE_DIR: elsewhere })).toBe(false)
     expect(mayRevoke(app, { CHAT_CONFIG_DIR: elsewhere }, memoryKeyring())).toBe(true)
   })
+})
+
+it("is cli-core's own account remove, which a CLI changes only through its options", () => {
+  const removal: AccountRemoval = { signOut: async () => ({ revoked: null, removed: [] }) }
+  const remove = accountRemoveCommand(app, removal, { effects: LOCAL_WRITE })
+  expect(hasSharedContract(remove)).toBe(true)
+  expect(() => assertSharedContracts(remove)).not.toThrow()
+  remove.option("--later", "added after the factory")
+  expect(() => assertSharedContracts(remove)).toThrow("shared contract changed")
 })

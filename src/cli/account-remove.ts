@@ -10,7 +10,7 @@ import {
   resolvePaths,
   saveConfigFile,
 } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { lockPath, readLock, servingProfiles } from "../background/lock.js"
@@ -27,6 +27,7 @@ import { openStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { readConfigFile, withoutPath } from "./config-issues.js"
 import { type BaseEnvironment, baseContext, environmentOf } from "./context.js"
+import { honoursDryRun } from "./dry-run-guard.js"
 import { logsInOrOut, REMOTE_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { accountFileFor, recalledAccount } from "./messenger/accounts.js"
@@ -239,7 +240,7 @@ const removeSections = (path: string, sections: string[][]): void => {
  * this computer, and keeps or deletes what the store holds of its account. Asks first, or `--yes`; `--dry-run` lists
  * every entry, file and section it would remove.
  */
-export const accountRemoveCommand = (
+const accountRemoveCommandDefinition = (
   app: AppIdentity,
   removal: AccountRemoval,
   options: AccountRemoveOptions = {},
@@ -492,3 +493,10 @@ export const accountRemoveCommand = (
           )
       })
     })
+
+/** cli-core's own command (WC-CMD-34): a CLI changes it only through its options, `effects` among them. */
+export const accountRemoveCommand: (
+  app: AppIdentity,
+  removal: AccountRemoval,
+  options?: AccountRemoveOptions,
+) => Command = honoursDryRun(sharedCommand(accountRemoveCommandDefinition))
