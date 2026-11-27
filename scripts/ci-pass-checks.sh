@@ -7,6 +7,8 @@
 #   TITLE SUMMARY                         why the checks did not run, and the evidence
 #   stdin                                 the check names, one per line
 #   REQUIRED_PREFIX                       instead of stdin: every check main's ruleset requires that starts with it
+#   CONCLUSION                            failure to report them failed instead, so the merge queue drops the entry
+#                                         at once rather than waiting for checks that never come
 set -euo pipefail
 
 : "${GH_TOKEN:?}" "${GITHUB_REPOSITORY:?}" "${HEAD_SHA:?}" "${TITLE:?}" "${SUMMARY:?}"
@@ -29,11 +31,12 @@ posted=0
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   jq -n --arg name "$name" --arg sha "$HEAD_SHA" --arg title "$TITLE" --arg summary "$SUMMARY" \
-    '{name: $name, head_sha: $sha, status: "completed", conclusion: "success",
+    --arg conclusion "${CONCLUSION:-success}" \
+    '{name: $name, head_sha: $sha, status: "completed", conclusion: $conclusion,
       output: {title: $title, summary: $summary}}' |
-    gh api -X POST "repos/$GITHUB_REPOSITORY/check-runs" --input - --jq '"passed without running: \(.name)"'
+    gh api -X POST "repos/$GITHUB_REPOSITORY/check-runs" --input - --jq '"\(.conclusion) without running: \(.name)"'
   posted=$((posted + 1))
 done <<<"$list"
 [ "$posted" -gt 0 ] || { echo "::error::no check names to report"; exit 1; }
-printf '### %s\n\n%s\n\n%s checks reported as passed without running.\n' "$TITLE" "$SUMMARY" "$posted" \
-  >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+printf '### %s\n\n%s\n\n%s checks reported as %s without running.\n' \
+  "$TITLE" "$SUMMARY" "$posted" "${CONCLUSION:-success}" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
