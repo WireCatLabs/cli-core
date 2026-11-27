@@ -214,6 +214,54 @@ describe("the type of each email", () => {
   })
 })
 
+describe("what mail sync keeps for the type", () => {
+  it("keeps schema.org types and a few values, the calendar method, an auto-reply and List-Post, not the HTML", async () => {
+    const order =
+      '<html><script type="application/ld+json">{"@context":"http://schema.org","@type":"Order",' +
+      '"orderNumber":"A-1001","merchant":{"@type":"Organization","name":"Shop"}}</script><p>Thanks</p></html>'
+    const parcel =
+      '<div itemscope itemtype="http://schema.org/ParcelDelivery">' +
+      '<meta itemprop="trackingNumber" content="TRK-77"></div>'
+    const { store } = await synced([
+      mail(["Shop", "hello@shop.example.com"], "Thanks", { html: order }),
+      mail(["Post", "hello@post.example.com"], "Parcel", { html: parcel }),
+      mail(["Kai Example", "kai@corp.example.com"], "Planning", {
+        attachment: { name: "invite.ics", mime: "text/calendar", content: "BEGIN:VCALENDAR\r\nMETHOD:CANCEL\r\n" },
+      }),
+      mail(["Pia Example", "pia@corp.example.com"], "Away until Monday", {
+        extraHeaders: ["Auto-Submitted: auto-replied", ...signed("corp.example.com", ["auto-submitted"])],
+      }),
+      mail(["Rin Example", "rin@lists.example.com"], "Release notes", {
+        listId: "dev.lists.example.com",
+        extraHeaders: ["List-Post: <mailto:dev@lists.example.com>"],
+      }),
+    ])
+
+    const kept = Object.fromEntries(
+      (await store.mail.emails({ limit: 50 })).map((email) => [email.subject, email.headers]),
+    )
+    expect(kept.Thanks).toMatchObject({
+      "schema-types": ["Order", "Organization"],
+      "schema-fields": { orderNumber: "A-1001" },
+    })
+    expect(kept.Parcel).toMatchObject({
+      "schema-types": ["ParcelDelivery"],
+      "schema-fields": { trackingNumber: "TRK-77" },
+    })
+    expect(kept.Planning).toMatchObject({ "calendar-method": "cancel" })
+    expect(kept["Away until Monday"]).toMatchObject({ "auto-replied": true })
+    expect(kept["Release notes"]).toMatchObject({ "list-post": true })
+    expect(JSON.stringify(kept)).not.toContain("<script")
+    expect(await typed(store)).toMatchObject({
+      Thanks: { type: "order", signal: "schema:Order" },
+      Parcel: { type: "shipping", signal: "schema:ParcelDelivery" },
+      Planning: { type: "calendar" },
+      "Away until Monday": { type: "auto_reply", signal: "auto-replied" },
+      "Release notes": { type: "discussion_list", signal: "list-post" },
+    })
+  })
+})
+
 describe("a sender's mail by type", () => {
   it("lists a shop under its receipts and under its broadcasts, with all its mail counted", async () => {
     const { store } = await synced([

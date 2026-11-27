@@ -10,6 +10,15 @@ export const sentAtOf = (date: string | null, receivedAt: string): number => {
   return Number.isNaN(sent) ? Date.parse(receivedAt) : sent
 }
 
+/** The header fields `mailHeadersOf` kept, with what the body says beside them. */
+export const storedHeaders = (
+  header: Record<string, string | boolean>,
+  mail: Pick<ParsedMail, "signals">,
+): Pick<EmailInput, "headers"> => {
+  const headers = { ...header, ...mail.signals }
+  return Object.keys(headers).length ? { headers } : {}
+}
+
 /** What one read email stores of itself, whichever run read it; where it is filed is the caller's. */
 export const parsedEmail = (
   mail: ParsedMail,
@@ -28,6 +37,6 @@ export const parsedEmail = (
   receivedAt: Date.parse(item.receivedAt),
   bodyText: mail.text || null,
   size: item.size ?? null,
-  ...(Object.keys(header).length ? { headers: header } : {}),
+  ...storedHeaders(header, mail),
   outgoing: sentByOwner(mail.from?.email, own, inSent),
 })

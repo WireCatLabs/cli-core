@@ -98,7 +98,8 @@ export const signedFieldsOf = (unfolded: string, from: string | undefined): Set<
 
 /**
  * What says a program or a list sent the mail, each only when DKIM vouches for it (`signedFieldsOf`):
- * `Auto-Submitted` other than `no` (RFC 3834), the one-click unsubscribe of RFC 8058 and Google's `Feedback-ID`.
+ * `Auto-Submitted` other than `no` (RFC 3834), `auto-replied` apart, the one-click unsubscribe of RFC 8058 and Google's
+ * `Feedback-ID`.
  * An empty Return-Path is the receiving server's, not the sender's, and marks a program unless it is an auto-reply,
  * which RFC 3834 sends that way too: a person's out-of-office makes no bot.
  */
@@ -112,6 +113,8 @@ const programSignalsOf = (unfolded: string, from: string | undefined): Record<st
   const oneClick = /list-unsubscribe\s*=\s*one-click/i.test(field(unfolded, "List-Unsubscribe-Post") ?? "")
   return {
     ...(generated && signed.has("auto-submitted") ? { "auto-submitted": submitted } : {}),
+    // Its own key: `auto-submitted` marks a program, and a person's out-of-office makes no bot.
+    ...(submitted === "auto-replied" && signed.has("auto-submitted") ? { "auto-replied": true } : {}),
     ...(oneClick && signed.has("list-unsubscribe-post") ? { "list-unsubscribe-post": true } : {}),
     ...(field(unfolded, "Feedback-ID") !== undefined && signed.has("feedback-id") ? { "feedback-id": true } : {}),
     ...(/^\s*<\s*>/.test(field(unfolded, "Return-Path") ?? "") && submitted !== "auto-replied"
@@ -135,6 +138,9 @@ const unsubscribeTargetsOf = (unfolded: string, from: string | undefined): Recor
     ...(mailto === undefined ? {} : { "list-unsubscribe-mailto": mailto }),
   }
 }
+
+/** A List-Post that names where to post (RFC 2369): a discussion list's mark. `NO` says members cannot post. */
+const listPostOf = (value: string | undefined): boolean => value !== undefined && /<\s*[a-z][a-z+.-]*:/i.test(value)
 
 export const addressesOf = (value: string | undefined): string[] => {
   if (value === undefined) return []
@@ -192,7 +198,7 @@ const headTextOf = (raw: Uint8Array): string => {
 export const headersOfRaw = (raw: Uint8Array): MailHeaders => headersOf(headTextOf(raw))
 
 /**
- * List-Id, the bulk-mail fields, Reply-To, Gmail's SPF, DKIM and DMARC verdicts, the unsubscribe targets
+ * List-Id, List-Post, the bulk-mail fields, Reply-To, Gmail's SPF, DKIM and DMARC verdicts, the unsubscribe targets
  * (`unsubscribeTargetsOf`) and what marks a program or a list (`programSignalsOf`) of a whole email, kept on mail
  * stored in full so a rule, a sender score or a person's kind can be worked out from the store later. Names are lower
  * case.
@@ -208,6 +214,7 @@ export const mailHeadersOf = (raw: Uint8Array): Record<string, string | boolean>
     ...(replyTo === undefined ? {} : { "reply-to": replyTo }),
     ...authOf(unfolded),
     ...(field(unfolded, "List-Unsubscribe") === undefined ? {} : { "list-unsubscribe": true }),
+    ...(listPostOf(field(unfolded, "List-Post")) ? { "list-post": true } : {}),
     ...(precedence ? { precedence } : {}),
     ...unsubscribeTargetsOf(unfolded, from),
     ...programSignalsOf(unfolded, from),

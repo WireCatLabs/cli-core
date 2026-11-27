@@ -44,6 +44,13 @@ account `{ provider: "email", account: <address, lower case> }`.
   (`store.mail.markOwnMail`), and the account is saved again, so `linkOwnIdentities` joins their identities to the
   owner. Partial completion, `readEmailWhole` and a server search read the same list. A mail tie needs mail the owner
   wrote, so this is what gives the people an alias writes to their tie. Nothing is taken from a name.
+- **An alias the owner removes.** A defined `addresses` is the whole list: a caller passes it only when it knows every
+  alias. The list is kept under `mail_own_configured`; a sync with no `addresses`, and an archive import, change
+  nothing stored. An address that was in it and is not now, and has no live mail in Sent, leaves `mail_own_addresses`: the account's mail from it outside
+  Sent is incoming again, and its email identity leaves the owner when the rules joined it (`account`, by `rules`).
+  A link the owner made stays. The join moved every identity of the alias's person, and only the email identity moves
+  back. A store from before `mail_own_configured` takes every stored address as possibly configured once: an address
+  only a Sent folder this run does not read vouched for drops then.
 - **Stored headers.** An email stored in full keeps some header fields as JSON in `emails.headers`
   (`mailHeadersOf`, `src/mail/headers.ts`): `list-id`, `list-unsubscribe`, `precedence`, `reply-to`, Gmail's `spf`,
   `dkim` and `dmarc`, and what marks a program or a list. Those last are `auto-submitted` (its value, unless `no` or
@@ -53,7 +60,17 @@ account `{ provider: "email", account: <address, lower case> }`.
   registrable domain (`signedFieldsOf`). **Gap:** only Gmail's own `mx.google.com` stamp is read, so mail of an IMAP
   server never keeps these three; another server's Authentication-Results may be the sender's own. An empty
   Return-Path, which the receiving server writes, is kept as `null-return-path` unless the mail is an auto-reply: a
-  person's out-of-office comes that way too. Mail stored before these keys keeps none of them until read again.
+  person's out-of-office comes that way too. A signed `Auto-Submitted: auto-replied` is kept as `auto-replied`, apart
+  from `auto-submitted`, which marks a program: the mail is an `auto_reply`, and its sender stays a person.
+  `list-post` is `true` when List-Post names where to post, not when it says `NO` (RFC 2369), and is kept unsigned,
+  like List-Id: with no campaign marker it makes List-Id mail a `discussion_list` before three senders are stored.
+  Mail stored before these keys keeps none of them until read again.
+- **What the body says.** The store keeps no HTML of synced mail, so `parseMail` reads it once (`bodySignalsOf`,
+  `src/mail/body-signals.ts`) and the sync keeps beside the headers: `schema-types`, the schema.org types its JSON-LD
+  or microdata declares (at most 10), `schema-fields`, the first `orderNumber`, `orderStatus`, `trackingNumber`,
+  `reservationNumber` and `reservationStatus` (up to 100 characters each), and `calendar-method`, the method of its
+  `text/calendar` part (`request`, `cancel`, `reply`, from the Content-Type or the part's `METHOD`). The mail types
+  read `schema-types` as they read a kept `body_html`.
 - **Unsubscribe targets.** `list-unsubscribe` stays `true` whenever the field is present, signed or not: the mail types
   and the bot rules read it as a mark of bulk mail. The targets themselves are kept apart, as
   `list-unsubscribe-https` and `list-unsubscribe-mailto` (the first of each scheme in
@@ -221,6 +238,7 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 | `mail_resume:mbox` | a `MboxPoint`: the file's size and modification time, and whether every message was read |
 | `mail_folder_scope` | the mode and folders of the last run; a change skips deletions once |
 | `mail_own_addresses` | the owner's other addresses on the account, lower case: the configured ones and the senders of mail in Sent |
+| `mail_own_configured` | the addresses the last sync was given as the owner's, lower case, so a removed one stops counting |
 | `mail_coverage` | the folders, window and whether the last run was complete |
 | `mail_sender_scores` | when `scoreSenders` last ran, its version (`SCORE_VERSION`) and the senders it ranks lower |
 | `consumer:<holder>` | a holder's processing mark: `throughId`, `throughAt`, `held`, `read`, `skipped` by reason |
