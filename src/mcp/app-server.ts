@@ -14,6 +14,7 @@ import { rootOf } from "../cli/steps.js"
 import { mcpUrlOf } from "../http/public-url.js"
 import { type AppIdentity, readOnlyLockOf } from "../ports/app.js"
 import { type AgentProgram, type CommandAvailability, runCommandForAgent, toolsFromCommands } from "./agent.js"
+import { whileUnchanged } from "./current-settings.js"
 import type { HttpOptions } from "./http/serve.js"
 import { mcpHttpMarker } from "./http/state.js"
 import { appInstructions } from "./instructions.js"
@@ -70,7 +71,8 @@ export const createAppServer = (command: Command, context: BaseContext, options:
   const flags = command.optsWithGlobals<GlobalFlags & { permission?: string[] }>()
   const overrides = flags.permission ?? []
   const { settings } = context
-  const levels = () => options.resolveSettings(flags, { env: context.env }).permissions
+  const current = whileUnchanged(settings, context.env, () => options.resolveSettings(flags, { env: context.env }))
+  const levels = () => current().permissions
   const readOnly = () => readOnlyLockOf(app, context.env) !== undefined
   const authority = changesAuthorityAt(root)
   const fetches = fetchesOnlyAt(root)

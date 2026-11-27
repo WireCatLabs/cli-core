@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, truncateSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  truncateSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -2545,6 +2554,25 @@ describe("the MCP server", () => {
     expect((await call("tags add", { tag: ["synthetic"], chat: "7" })).body.error.code).toBe("permission_error")
     await expect(raw.readResource({ uri: "chat://chat/7" })).rejects.toThrow(/does not allow this resource/)
     writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify(levels({ chats: "deny" })))
+    await expect(raw.listResources()).rejects.toThrow(/does not allow this resource/)
+  })
+
+  it("applies a tightening on the next call even when the file keeps its size and modification time", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-permissions-same-size-"))
+    const { call, env, raw } = await connect(scripted(), { root })
+    const file = join(env.CHAT_CONFIG_DIR, "config.json")
+    const tick = new Date("2026-11-27T03:00:00Z")
+    writeFileSync(file, JSON.stringify(levels({ chats: "allow" })))
+    utimesSync(file, tick, tick)
+    expect((await call("messages list", { chat: "7" })).isError).toBe(false)
+    await raw.listResources()
+    const before = statSync(file)
+    const denied = `${JSON.stringify(levels({ chats: "deny" }))} `
+    expect(denied).toHaveLength(before.size)
+    writeFileSync(file, denied)
+    utimesSync(file, tick, tick)
+    expect(statSync(file).mtimeMs).toBe(before.mtimeMs)
+    // The resource list is checked by the server alone, not again by a command that resolves its own settings.
     await expect(raw.listResources()).rejects.toThrow(/does not allow this resource/)
   })
 
