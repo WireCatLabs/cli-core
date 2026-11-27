@@ -18,7 +18,7 @@ import { storedChatId } from "./message-resolution.js"
 import type { MessagesService } from "./messages.js"
 
 /** A bigger file is no photo a chat sends: skipping it costs a vector, reading it costs memory. */
-export const PICTURE_MAX_BYTES = 25 * 1024 * 1024
+export const PICTURE_MAX_BYTES = 250 * 1024 * 1024
 /** On 150 real photos (cli-testing performance/search/images) every match scored ≥ .25; strangers .19 median, .27 at p99. */
 export const PICTURE_FLOOR = 0.25
 const PAGE = 50

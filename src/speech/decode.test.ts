@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
@@ -173,6 +173,13 @@ describe("decoding a file on disk", () => {
 
     expect((await decodeChannelsFile(path, { maxBytes: 1, ffmpegFile })).channels).toHaveLength(2)
     expect(ffmpegFile).toHaveBeenCalledWith(path)
+  })
+
+  it("refuses a bundled format over 640 MB by default, before reading it", async () => {
+    const path = saved("long.flac", new Uint8Array(Buffer.from("fLaC")))
+    truncateSync(path, 640 * 1024 * 1024 + 1)
+
+    await expect(decodeChannelsFile(path, { ffmpegFile: refusing })).rejects.toThrow("larger than 640 MB")
   })
 
   it("reads a bundled format whole, and refuses one over maxBytes", async () => {

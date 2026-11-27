@@ -71,8 +71,8 @@ tg work search messages "a red bicycle leaning on a wall"
    more.
 4. **Search.** `search messages` now returns the picture lane beside the text hits.
 
-The bytes come from the saved copy of the attachment when there is one and it is not over 25 MB. Otherwise they
-come from the messenger's own download, held in memory, with the same 25 MB cap. A picture that is too large, or
+The bytes come from the saved copy of the attachment when there is one and it is not over 250 MB. Otherwise they
+come from the messenger's own download, held in memory, with the same 250 MB cap. A picture that is too large, or
 that the messenger no longer gives back, is counted as `skipped`.
 
 Level 1 needs no setup beyond the text model. Run `tg work conversations embed --chat <chat>` (or without
@@ -193,7 +193,7 @@ person's 150 photos, many of them screenshots. A gap of one or two queries is no
 - **The floor hides weak matches.** A picture needs a score of at least 0.25 (`PICTURE_FLOOR`). In the benchmark
   every right match scored 0.25 or more, and unrelated pictures had a median of 0.19 and 0.27 at the 99th
   percentile. A real but weak match can still be cut. Describe what is visible, in plain concrete words.
-- **Skipped pictures.** Over 25 MB, deleted on the server, or no file given back. They count as `skipped` and are
+- **Skipped pictures.** Over 250 MB, deleted on the server, or no file given back. They count as `skipped` and are
   tried again on the next run.
 - **Queries about context, not looks.** "The photo he sent about the contract" is a level 1 question. Use
   `search conversations`.

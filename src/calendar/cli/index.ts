@@ -119,7 +119,7 @@ export interface CalendarCommandOptions {
   feeds?: boolean
   /** The provider takes writes: mounts `events create|update|delete|respond|remind`, and what its writer adds. */
   writes?: { quickAdd?: boolean; move?: boolean; importEvent?: boolean; conferences?: readonly string[] }
-  /** Reads `events import`'s file; a file on disk, at most 10 MB, when absent. */
+  /** Reads `events import`'s file; a file on disk, at most 100 MB, when absent. */
   readFile?: (path: string) => Promise<string>
   /** Writes `events export --output`'s file; owner-only (0600), whole or not at all, when absent. */
   writeFile?: (path: string, content: string) => Promise<void>
