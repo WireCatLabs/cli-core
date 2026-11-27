@@ -189,7 +189,8 @@ Each item is its own pull request and its own release note. Items 7 and 8 change
 ## Owner's decision (2026-11-26)
 
 - **Yes to the plan**, all three directions: no source maps in the package, heavy features installed on first use,
-  and one shared install for all CLIs ([CORE-73](../BACKLOG.md)).
+  and one shared install for all CLIs (CORE-73, built in WireCat Desktop 0.9.0:
+  [wirecat-desktop#494](https://github.com/WireCatLabs/wirecat-desktop/pull/494)).
 - **Open question 1: yes, on one condition: a first-use install must never break a command.** The installer cases
   in the [test plan](#test-plan) are the floor. Before items 7 and 8 ship, these are added and pass in CI on Linux,
   macOS and Windows:
