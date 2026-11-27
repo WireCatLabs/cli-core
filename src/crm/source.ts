@@ -1,3 +1,4 @@
+import type { BudgetStop } from "../background/budget.js"
 import type {
   CrmActivity,
   CrmDepartment,
@@ -82,6 +83,16 @@ export interface CrmLiveQuery {
    * one that pages by number passes it on.
    */
   page?: number
+}
+
+/**
+ * Thrown by `CrmCallContext.spend` when the budget is spent; the engine turns it into a `partial` stop. A source that
+ * reads one record at a time may catch it to hand back what it read before the stop.
+ */
+export class CrmBudgetSpent extends Error {
+  constructor(readonly why: BudgetStop) {
+    super(`the run's budget is spent: ${why}`)
+  }
 }
 
 /** What the engine hands every source call; a source that ignores it works as before. */

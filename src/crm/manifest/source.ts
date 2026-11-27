@@ -5,7 +5,15 @@ import type { ServiceApiCall } from "../../cli/service-api-call.js"
 import { nextPage, parameterValue, type ServiceApiManifest, withValue } from "../../cli/service-api-manifest.js"
 import type { CrmField, CrmKind, CrmPipeline, CrmRecords, CrmUser } from "../../domain/crm.js"
 import type { StageOutcome } from "../../domain/deals.js"
-import type { CrmCallContext, CrmChanges, CrmIdPage, CrmLiveKind, CrmLiveQuery, CrmSource } from "../source.js"
+import {
+  CrmBudgetSpent,
+  type CrmCallContext,
+  type CrmChanges,
+  type CrmIdPage,
+  type CrmLiveKind,
+  type CrmLiveQuery,
+  type CrmSource,
+} from "../source.js"
 import { type CrmRaw, id, isRaw, number, rawsOf, text } from "../values.js"
 import { crmWindowOf, walk } from "../walk.js"
 import {
@@ -393,11 +401,21 @@ export const crmSourceFromManifest = (input: unknown, options: CrmManifestSource
     const send = metered(context)
     const ids = (await linkedRound(started, send, context))[kind]
     const items: CrmRecords[K][] = []
+    let next = from
     for (const externalId of ids.slice(from, from + LINKED_PAGE)) {
-      const one = await readOne(kind, externalId, send, context)
+      let one: CrmRecords[K] | null
+      try {
+        one = await readOne(kind, externalId, send, context)
+      } catch (error) {
+        // Each record costs its own requests, so a budget smaller than a page would stop every run before the page
+        // ends and save nothing: what was read is handed back, and the next run goes on from there.
+        if (error instanceof CrmBudgetSpent && next > from)
+          return { items, hasMore: true, nextCursor: `${next}@${started}` }
+        throw error
+      }
       if (one) items.push(one)
+      next++
     }
-    const next = from + LINKED_PAGE
     return next < ids.length
       ? { items, hasMore: true, nextCursor: `${next}@${started}` }
       : { items, hasMore: false, cursor: new Date(started).toISOString() }
