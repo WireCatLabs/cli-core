@@ -22,17 +22,5 @@
     "pr": 3365,
     "until": "2026-12-03",
     "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list among this CLI own commands"
-  },
-  {
-    "repo": "cli-memo",
-    "pr": 3372,
-    "until": "2026-12-03",
-    "reason": "#3372 shows each email type and reach in mail search; src/search/command.test.ts still pins the line without them"
-  },
-  {
-    "repo": "cli-memo",
-    "pr": 3374,
-    "until": "2026-11-30",
-    "reason": "#3374 (cli-core 2.0) names agents agent and sender bots bot:; cli-memo main still compares the agent type with bot, which no longer typechecks; cli-memo#901 adopts it and merges as soon as 2.0.0 is on npm"
   }
 ]
