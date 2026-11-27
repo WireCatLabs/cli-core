@@ -37,7 +37,7 @@ export interface FeedLimits {
   redirects: number
 }
 
-export const FEED_LIMITS: FeedLimits = { maxBytes: 10 * 1024 * 1024, timeoutMs: 30_000, redirects: 5 }
+export const FEED_LIMITS: FeedLimits = { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000, redirects: 5 }
 
 export interface FeedSyncStats {
   calendarId: number

@@ -183,7 +183,7 @@ returns the link on a create and on a change.
 times in the owner's zone, `DURATION`, RRULE, RDATE and EXDATE lines kept as written) and sends each to the provider
 under its UID (Google's [events.import](https://developers.google.com/workspace/calendar/api/v3/reference/events/import),
 which mails nobody). A changed occurrence (`RECURRENCE-ID`), an event with no UID, and a TZID that is no IANA zone
-are `skipped`, each with its reason. At most 500 events and 10 MB a file. The key is `events.import`, `ask` by
+are `skipped`, each with its reason. At most 500 events and 100 MB a file. The key is `events.import`, `ask` by
 default: one import writes a whole file, and may change events the calendar holds under the same UIDs; plus
 `extraKeys("import")`. The whole import is one guarded write, one question and one journal line. A failure part way
 names the UIDs imported before it (`imported`) and the one that failed.
@@ -283,7 +283,7 @@ takes only an existing calendar's `id`), so the CLI reads the feed itself.
   clock change): `FREQ` `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, with `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY` (with
   ordinals), `BYMONTHDAY`, `BYMONTH`, `BYSETPOS` and `WKST`, plus `RDATE`, and `EXDATE` slots come back `cancelled`.
   A series with any other part (`BYHOUR`, `FREQ=HOURLY`, `EXRULE`, two RRULEs) is skipped and counted, never guessed.
-- **Fetching:** `fetchFeed` follows each redirect by hand and only to `https:`, at most 5; reads at most 10 MB of
+- **Fetching:** `fetchFeed` follows each redirect by hand and only to `https:`, at most 5; reads at most 100 MB of
   decoded body and waits at most 30 s. Errors name the feed (`feed 7`) and the HTTP status, never the address.
 - **What the CLI keeps:** a `FeedRegistry` (`read`, `write`) of `{ id, url, title }`, in the keyring or a 0600 file
   as its other secrets.

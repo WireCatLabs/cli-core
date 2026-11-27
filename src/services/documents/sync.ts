@@ -15,7 +15,7 @@ import { changedSince, planDocuments, scopeHash, type WalkStop } from "./plan.js
 import type { SyncOptions } from "./ports.js"
 import { isPicture as readsAsPicture } from "./scans.js"
 
-const MAX_PICTURE_BYTES = 25 * 1024 * 1024
+const MAX_PICTURE_BYTES = 250 * 1024 * 1024
 const SAVE_EVERY_MS = 2000
 const SAVE_EVERY_ITEMS = 25
 const SETTLE_MS = 10_000

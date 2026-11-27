@@ -3,7 +3,7 @@ import { dirname } from "node:path"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
 
 /** The largest .ics file `events import` reads; checked before the file is read whole. */
-export const ICS_MAX_BYTES = 10 * 1024 * 1024
+export const ICS_MAX_BYTES = 100 * 1024 * 1024
 
 type FileError = [code: "not_found" | "permission_error" | "validation_error", reason: string, words: string]
 const FILE_ERRORS: Record<string, FileError> = {
@@ -31,7 +31,9 @@ export const readIcsFile = (path: string): Promise<string> =>
     const info = await stat(path)
     if (!info.isFile()) throw new CliError("validation_error", `${path} is not a file`, { reason: "file.not-a-file" })
     if (info.size > ICS_MAX_BYTES)
-      throw new CliError("validation_error", `${path} is larger than 10 MB`, { reason: "ics.too-large" })
+      throw new CliError("validation_error", `${path} is larger than ${ICS_MAX_BYTES / 1024 / 1024} MB`, {
+        reason: "ics.too-large",
+      })
     return readFile(path, "utf8")
   })
 

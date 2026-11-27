@@ -309,12 +309,12 @@ export const decodeChannels = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmp
 /**
  * The channels of a file on disk, for a recording too large to read into memory first: what ffmpeg reads (WAV, GSM,
  * AAC…) goes to it by path, and only the samples are held. A format a bundled decoder reads is read whole, at most
- * `maxBytes` (64 MB when not given): those decoders take bytes, and a compressed file decodes to many times its size.
+ * `maxBytes` (640 MB when not given): those decoders take bytes, and a compressed file decodes to many times its size.
  */
 export const decodeChannelsFile = async (
   path: string,
   {
-    maxBytes = 64 * 1024 * 1024,
+    maxBytes = 640 * 1024 * 1024,
     ffmpegFile = runFfmpegFile,
   }: { maxBytes?: number; ffmpegFile?: (path: string) => Promise<Pcm[]> } = {},
 ): Promise<DecodedChannels> => {
