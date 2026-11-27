@@ -112,6 +112,19 @@ describe("the first screen", () => {
     expect(stdout).toContain("Next:         tg help options")
   })
 
+  it("puts session list first under Next: when the tool has no setup to start with", async () => {
+    const noSetup: ProgramDefinition = {
+      app,
+      commands: () => [new Command("session").description("log in or out").addCommand(leaf("list", "every profile"))],
+    }
+    const { stdout } = await call(["--help"], noSetup)
+
+    expect(stdout).not.toContain("Start here")
+    expect(stdout).toMatch(
+      /\nNext: {9}tg session list {2}your profiles and their logged-in accounts\n {14}tg help options/,
+    )
+  })
+
   it("prints the options for every command on help options", async () => {
     const { code, stdout } = await call(["help", "options"])
 
