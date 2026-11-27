@@ -53,16 +53,19 @@ const optionTopics = (program: Command): string => {
 /** Only commands the tool has: `guide` and `setup` are not in every tool. */
 const pointers = (program: Command, cli: string, start: string | undefined, profile: boolean): string[] => {
   const has = (path: string) => commandAt(program, path) !== undefined
+  const sessions = has("session list")
+    ? ([`${cli} session list`, "your profiles and their logged-in accounts"] as const)
+    : undefined
+  // Without a "Start here:" row to follow, the line would hang unlabelled above "Next:".
   const next = [
+    start ? undefined : sessions,
     has("commands") ? [`${cli} commands`, "every command, by section"] : undefined,
     has("guide") ? [`${cli} guide`, "scenarios: command sequences for common tasks"] : undefined,
     [`${cli} help options`, optionTopics(program)],
   ].filter((row) => row !== undefined)
   const rows: Row[] = [
     ...(start ? [["Start here:", start, profile ? "(any profile name works)" : ""] as const] : []),
-    ...(has("session list")
-      ? [["", `${cli} session list`, "your profiles and their logged-in accounts"] as const]
-      : []),
+    ...(start && sessions ? [["", ...sessions] as const] : []),
     ...next.map(([command = "", does = ""], at) => [at === 0 ? "Next:" : "", command, does] as const),
     ...(has("skill show") ? [["For agents:", `${cli} skill show`, "rules and the discovery loop"] as const] : []),
   ]
