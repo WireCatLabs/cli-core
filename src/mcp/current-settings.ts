@@ -28,7 +28,12 @@ export const whileUnchanged = <S extends Pick<Settings, "configPath">>(
     const key = JSON.stringify(files.map(textOf))
     if (last?.key === key) return last.value
     const value = resolve()
-    last = { key, value }
+    // Keep it only when it read the file the key watched; otherwise watch that file from the next call on.
+    if (value.configPath === files[0]) last = { key, value }
+    else {
+      files[0] = value.configPath
+      last = undefined
+    }
     return value
   }
 }
