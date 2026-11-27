@@ -65,6 +65,20 @@ commit's pull request passed every required check on the same tree, or that `mai
 to them runs the full validation. The security checks skip only for the changelog and the version, so a docs-only
 pull request still runs gitleaks. The push to `main` that follows skips its validation the same way.
 
+In the merge queue, a pull request that is behind `main` has already passed the full validation on its own head. The
+queue then runs only what the merge can change ([`scripts/queue-scope.ts`](../../scripts/queue-scope.ts), the
+`queue-scope` job of `pr.yml`): lint, the typecheck, the build and the whole-tree checks, plus the test files whose
+imports reach both a file the pull request changed and a file `main` changed since the two parted. A test that reaches
+only one side has the inputs of a run that already passed, the pull request's own or `main`'s. Tests that start a
+process are added whenever both sides changed code, since no import shows what they run. The full validation runs
+instead when either side changed the lockfile, a tsconfig, `vitest.config.ts`, `test/`, `src/testing/`, a migration,
+the store schema or `package.json` beyond its version; when a line of the stable API in `api/` changed or went (the
+only case that needs the downstream CLIs built); when a changed file under `src/` is no code and no test names it; or
+when the tests weigh over 800 s in `test/shard-weights.json` (about a third of a full run). The repository variable
+`QUEUE_SCOPE_SIDES=union` widens the tests to those reaching either side. A test that reads a file or starts a
+command its imports do not show can be missed here, and is caught by the full validation of the next release or of
+the next pull request that touches it.
+
 The two test shards split the files by how long each took, from
 [`test/shard-weights.json`](../../test/shard-weights.json) (`vitest.config.ts`); a file missing from it counts as the
 median. When the shards' `Duration` lines drift apart, refresh it: `pnpm test:slow && node scripts/shard-weights.ts

@@ -42,10 +42,105 @@ jobs:
           QUEUE_REF: ${{ github.event_name == 'merge_group' && github.ref || '' }}
         run: bash scripts/ci-unchanged.sh
 
-  # Also when the decision itself failed: no answer means the full validation.
-  validation:
+  # In the merge queue the pull request has already passed the full validation on its head. Only tests whose imports
+  # reach a file the pull request changed and a file main changed since then can turn out differently, so this job
+  # runs those, with lint, the typecheck, the build and the cheap checks on the whole tree (scripts/queue-scope.ts).
+  # Whatever it cannot judge, it leaves to the full validation. It writes no cache: it runs on the queue's refs.
+  queue-scope:
     needs: version-only
-    if: ${{ !cancelled() && needs.version-only.outputs.reuse != 'true' }}
+    if: ${{ github.event_name == 'merge_group' && needs.version-only.outputs.reuse != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - id: store
+        run: echo "path=$(pnpm store path --silent)" >>"$GITHUB_OUTPUT"
+      # The key setup-node's pnpm cache uses, so the queue reads the store main's runs saved.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: node-cache-Linux-x64-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: node-cache-Linux-x64-pnpm-
+      - run: pnpm install --frozen-lockfile
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUEUE_REF: ${{ github.ref }}
+          QUEUE_SCOPE_SIDES: ${{ vars.QUEUE_SCOPE_SIDES || 'both' }}
+        run: |
+          [[ $QUEUE_REF =~ /pr-([0-9]+)-[0-9a-f]+$ ]] || { echo "scope=full" >>"$GITHUB_OUTPUT"; exit 0; }
+          pr=${BASH_REMATCH[1]}
+          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha)
+          git fetch -q --filter=blob:none origin "$head"
+          proof=$(mktemp)
+          COMMIT=$head PR_NUMBER=$pr PULL_REQUEST=true GITHUB_OUTPUT=$proof bash scripts/release-reuse.sh
+          if ! grep -qx "reuse=true" "$proof"; then
+            echo "scope=full" >>"$GITHUB_OUTPUT"
+            echo "full validation: #$pr's head ${head:0:10} is not green on every required check"
+            exit 0
+          fi
+          node scripts/queue-scope.ts "$(git merge-base "$head" HEAD^1)" "$head" HEAD^1 HEAD
+          grep -E '^(scope|why)=' "$GITHUB_OUTPUT"
+      - if: steps.scope.outputs.scope == 'related'
+        run: pnpm lint
+      - if: steps.scope.outputs.scope == 'related'
+        run: pnpm typecheck
+      - if: steps.scope.outputs.scope == 'related'
+        run: pnpm build
+      # node-ci's `checks` lines in ci.yml, and its API report step: they read the whole tree, in seconds.
+      - if: steps.scope.outputs.scope == 'related'
+        run: |
+          pnpm docs:check:built
+          pnpm schema:check
+          pnpm check:dist
+          pnpm check:agent-process:built
+          pnpm help:examples
+          pnpm exec cli-dev api-report --check --skip-build
+      - if: steps.scope.outputs.scope == 'related'
+        env:
+          FILES: ${{ steps.scope.outputs.files }}
+          TZ: Asia/Vladivostok
+        run: |
+          read -ra files <<<"$FILES"
+          pnpm vitest run "${files[@]}"
+      - if: steps.scope.outputs.scope == 'related'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          REQUIRED_PREFIX: "validation / "
+          TITLE: "Checked only what this merge can change"
+          SUMMARY: ${{ steps.scope.outputs.why }}
+        run: bash scripts/ci-pass-checks.sh
+      # Without this the queue would wait for the validation checks until its timeout.
+      - if: failure() && steps.scope.outputs.scope == 'related'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          REQUIRED_PREFIX: "validation / "
+          CONCLUSION: failure
+          TITLE: "Failed: a test or check this merge can change"
+          SUMMARY: "See the queue-scope job of this run."
+        run: bash scripts/ci-pass-checks.sh
+
+  # Also when a decision itself failed: no answer means the full validation.
+  validation:
+    needs: [version-only, queue-scope]
+    if: >-
+      ${{ !cancelled() && needs.version-only.outputs.reuse != 'true'
+      && needs.queue-scope.outputs.scope != 'related' }}
     uses: ./.github/workflows/ci.yml
 
   changelog-only:
@@ -63,7 +158,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: pnpm
+          # No cache saved from the merge queue's refs.
+          cache: ${{ github.event_name != 'merge_group' && 'pnpm' || '' }}
       - run: pnpm install --frozen-lockfile
       # What reads the changed files: the changelog's and the fragments' shape, the links and the generated pages
       # (docs:check), the schema page (schema:check, schema.test.ts) and the option catalogue in STANDARD.md.
