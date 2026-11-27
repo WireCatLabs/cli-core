@@ -5,6 +5,151 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 2.0.0 — 27.11.2026
+
+### Added
+
+- **Subscriptions: `store.mail.subscriptions`** (experimental). Broadcast mail grouped by `List-Id`, else by its
+  sender (`bot:<id>`, `person:<id>` or `address:<address>`), newest group first, grouped, counted and paged in
+  SQL (`limit`, default 100, and `offset`; `accountIds`, `since`, `until` and `types` narrow it). Each group gives its
+  `key`, `listId`, `name`, the `sender` ref and `address` of its newest email, its mail count, that `newest` email and
+  `unsubscribe`: the `https` and `mailto` targets and `oneClick` from its newest email that names one, or `null`.
+  Nothing is unsubscribed. A store opened read-only works types out in memory, as the type filters do.
+- **List-Unsubscribe targets are kept.** Mail stored in full keeps `list-unsubscribe-https` and
+  `list-unsubscribe-mailto` in `emails.headers`, only when the From domain's DKIM signature that Gmail passed covers
+  `List-Unsubscribe`. `list-unsubscribe` stays `true` whenever the field is present, and `list-unsubscribe-post` is
+  kept as before. Mail stored earlier has no target until it is read again. No store version.
+- **`people.listBots` filters by what a bot sends:** `sends` takes `alerts` (`security`, `system_alert`,
+  `account_notice`), `receipts` (`order`, `bill`, `shipping`), `newsletters`, `marketing` (`promotion`) and
+  `messenger` (a bot with an account in a messenger), any of them, in SQL. `BOT_SENDS` and `BotSends` are exported
+  from `@wirecat/cli-core/store` and `@wirecat/cli-core/store/areas` (experimental), so memo and Desktop read one map.
+  An unknown name is refused with `sender-bot.unknown-sends`.
+- **A messenger CLI can add its own notes and `--online` checks to the shared `doctor`** (experimental). `doctorNotes`
+  turns the CLI's `diagnose` block into notes printed under the answer, never in the JSON. `doctorOnline` runs checks
+  after the login and answers them under `online.checks` as `{ name, ok, detail }`. A failed or thrown check is a
+  field, as a failed login is, and the exit code stays 0. max-cli needs both to drop its own `doctor` (stale web
+  client, moved keyring, paused login, bot and PATH hints; the bot's `getMyInfo` and the MCP handshake).
+- **`readWhole()` reads a file past 2 GiB into one buffer**, where `readFile` stops with `ERR_FS_FILE_TOO_LARGE`.
+- **`asBytes()` gives `readWhole`'s buffer as a plain `Uint8Array` without a copy.**
+- **`sizeText()` says a byte budget as people read it**: `10 GiB`, `250 MiB`.
+- **`oauthSessionCommand` hands `verify` the scopes the service granted**, as a fourth argument, in `session start`
+  and in `session status --check`. An account may untick a scope on the consent screen and still sign in, so a CLI
+  can now refuse such a sign-in before it is kept (gcal refuses one without read access to Calendar, or without a
+  grant it asked for). A `verify` that takes three arguments works as before.
+- **`openProfileStore` for a phone system's calls**, exported from `@wirecat/cli-core/cli` with `ProfileStore` and
+  `ProfileStoreOptions`, so asterisk-cli and beeline-cli drop their own copies.
+  - It also answers `accountId`, the store's id for the account, which `store.meetings({ accountId })` takes.
+  - `account` is optional. Without it the account is the profile itself (`{ provider, account: profile }`), and a
+    read finds an account an older build saved with no profile row, under `<PREFIX>_READ_ONLY` too.
+  - `saves: false` never saves the account. A profile no run saved, or no store at all, reads an empty store in a
+    temporary folder, so a mistyped profile saves nothing. A store that needs a migration is still migrated.
+  - `name` is the name a new account is saved with. It was always `null`.
+  - A CRM's and a content CLI's calls (`openCrmStore`, `openContentStore`) work as before.
+- **`messages sync` picks the threads to read again, for a messenger with `ThreadRefresh`** (experimental). A
+  messenger whose history leaves thread replies out, as Slack's does, no longer decides itself which threads to read.
+  It answers three questions, with all three methods or none: which messages on a history page are roots
+  (`threadRootsIn`, from the page alone and not paced), which roots it lists cheaply that may have new replies however
+  old the root, such as those sent in the last days (`recentThreadRoots`), and one root's replies after a time
+  (`rootReplies`). The sync reads every root it saw on the chat's first read. After that it reads a root from an older
+  history page whole, and any other root only from the last read on, when the root's `lastReplyAt` is later. The last
+  read's time is taken before the history pages and a minute early, so a reply sent while they are read, or while the
+  two clocks differ, is not lost. Each thread is saved as it comes, and a stopped sync reads from the same point
+  again. A messenger with `ThreadReplies` alone works as before.
+- **`tokenSessionCommand` takes `entry`, for a profile that keeps more than its token.** `entry.write` makes the
+  stored value from the token and `verify`'s answer, and `entry.read` gets the token back with the account. `session
+  status --check` hands `verify` the token alone, and `session status` and `session list` show the account as
+  `account`. An entry `read` cannot make sense of (reason `session.unreadable`) is listed as `state: "unknown"` and
+  hides no other profile. Unset, the entry is the token alone, as before. hubspot moves to the shared command with it
+  and keeps its sign-ins as they are, so nobody signs in again. Not with `site`. `TokenEntry` is exported from
+  `@wirecat/cli-core/cli`.
+- **`store.mail.catchUp(until?)`** (experimental). Indexes and types every email still waiting for its words, pieces
+  or type, a short write at a time, until `until` answers true. `syncMail` calls it once it has saved, so a store
+  upgraded to version 76 has its mail typed by its next sync, not by its first search.
+- **`appDoctorCommand` for a CLI with no profiles.** memo has its own config file and no accounts, so it kept a copy of
+  the shared doctor. `configuration` may now be `null`, with `config(env, command)` giving the config's `path`, `found`
+  and `issues`, and `profiles` is then `null`. `local` receives the command, may be async, and returns `failing: true`
+  to make doctor exit 1. `view(item)` gives the text a person reads. The CLI's `local` fields win over the shared ones
+  of the same name, and a note the shared check and the CLI both print is printed once.
+- **`setExitCode` is exported from `@wirecat/cli-core/cli`.** A command that answers and still fails (a sync with
+  failed sources) sets this run's exit code, also under `commands --serve`, where several requests share one process.
+
+### Changed — may break callers
+
+- **cli-core 2.0: agents are `agent`, sender bots are `bot:` (store version 78, `minCompatible` 78).** The owner's
+  rulings of 25.11.2026 and 26.11.2026 (contact-kinds plan, open question 7). Until now `bot:<id>` and the pointer
+  type `bot` named an agent of the `bots` table, and a sender bot was `sender-bot:<id>`. Now an agent is `agent:<id>`
+  and `agent`, and a sender bot is `bot:<id>`.
+- **What breaks for callers:**
+  - The JSON output: the `type` of `author`, `created_by`, `confirmed_by` and `decided_by` (tasks, deals, facts, mail
+    and meeting findings) and of every actor pair says `"agent"` where it said `"bot"`.
+  - `Proposer` (stable): `{ type: "agent", id, name, kind, verified? }` replaces `{ type: "bot", … }`.
+  - `parseReference`: `agent:<number>` gives `{ type: "agent" }`; `bot:<id>` gives `{ type: "bot" }`, a sender bot.
+    `agent:` takes a number only, so an author's name such as `agent:claude` stays a name and `looksLikeReference`
+    says no.
+  - `SENDER_BOT_PREFIX` is `"bot:"`. Sender bot refs in output (`moveToBot`, `showBot`, `store.mail.subscriptions`
+    `sender`, sorting rule effects) say `bot:<id>`.
+  - Still read, never written: `sender-bot:<id>` parses as `bot:<id>`, and `moveToBot`, `moveToPerson`, `showBot`
+    and the sorting rules take it. The `sender-bot.*` error reasons keep their names.
+- **Every WireCat CLI must move to cli-core 2.0 together.** All of them pin an exact cli-core version and share one
+  store file. The first 2.0 build that opens the store runs version 78, which rewrites the stored values: every
+  `*_type` pair in the 36 tables that have one, `links.target_text` and `links.metadata.gone`, `record_relations`
+  refs, `proposed_actions.payload` (`from`, `to`, `ref`), `document_annotation_transfers.reference_map`, and
+  `mail_sort_effects` (`sender-bot:` to `bot:`). After that, a 1.x build refuses the store with "the message store
+  was written by a newer version (schema 78, needs at least 78 …)" (`configuration_error`), because it would read a
+  sender bot's `bot:` as an agent and would keep writing agents as `bot`. So upgrade every installed CLI and WireCat
+  Desktop the same day, and migrate with `serve`, `mcp` and syncs stopped. The migration writes a rollback copy
+  first; without one it refuses, as since version 73.
+- **Migration for API users:**
+  - Match `type === "agent"` where you matched `type === "bot"` for an agent (actors, `Proposer`, output schemas).
+  - Build a sender bot ref from `SENDER_BOT_PREFIX` (`bot:`) instead of the literal `sender-bot:`.
+  - Pass a ref you read from older files or user input through `senderBotRef` (from `@wirecat/cli-core/store`): it
+    turns `sender-bot:<id>` into `bot:<id>` and leaves any other text as it is. `OLD_SENDER_BOT_PREFIX` names the old
+    form.
+  - Unchanged: an author or decider `{ bot: name }` still holds an agent's name; `identity_links.method = 'bot'`,
+    `identities.bot` and keyring `bot:<profile>` entries of a messenger's bot account are not agent refs.
+- **A file is read for its text up to 10 GiB by default, not 50 MiB.** The 50 MiB default refused large PDFs and
+  documents from Drive, Yandex Disk, CRM files and attachments. `MAX_FILE_BYTES` and `attachmentMaxBytes()` are now
+  10 GiB, and `MESSAGING_ATTACHMENT_MAX_MIB` still sets another budget
+  ([attachments](docs/attachments.md#configure-pdf-previews-and-larger-files)). The same budget now covers editing
+  an Office file in place (it was 64 MiB) and what a DOCX, XLSX or EPUB unpacks to, so pictures inside one no longer
+  make it unreadable. The text parts are still read up to 50 MiB unpacked, the guard against a zip bomb. A file
+  within the budget is held whole in memory, once, so a caller that used `MAX_FILE_BYTES` as a memory bound now
+  allows 200 times more. A caller that reads the constant gets 10 GiB, not the setting: read the budget with
+  `attachmentMaxBytes()`.
+- **`AppDoctorOptions.local` has a wider type:** `(env, command) => AppDoctorLocal | Promise<AppDoctorLocal>`. A
+  `local` written for the old type still compiles and runs as before. Code that calls `options.local` itself must now
+  pass the command and await the answer.
+
+### Fixed
+
+- **A release makes its GitHub release again.** The release workflow pushed only the tag, so GitHub's releases page
+  stopped at the last release made by hand. The `tag` job now creates the release from the version's changelog
+  section, as the CLIs' release workflows do. 1.x was backfilled by hand.
+- **Parity checks drive, gcal, bitrix24, wordpress and cli-template again.** The first four released on cli-core 1.0
+  on 26.11.2026 (drive 0.78.0, gcal 0.36.0, bitrix24 0.28.0, wordpress 0.4.0), and cli-template adopted 1.3.0, so
+  their entries for #3338 and #3365 are off the known-broken list. bitrix24 keeps its entry for #3258.
+- **Parity checks bitrix24 again.** Its entry for #3258 is off the known-broken list: bitrix24 main no longer pins
+  `schedule exec` among the MCP schedule commands (bitrix24-cli #162, released in 0.28.0).
+- **A documents sync reads a file an earlier version kept by name for its size** (`file is larger than …`) once the
+  budget allows it. Before, such a file stayed kept by name until it changed.
+- **`session list` warns once when the keyring cannot be reached**, not once per profile, as 1.1.0 described. The
+  warning was counted by its text, and cli-base's text names the profile.
+- **Parity checks bitrix24, tg, max and whatsapp again.** The 1.3.0 release run passed their tests. tg, max and
+  whatsapp adopted `session list` and `session status` (tg-cli#923, max-cli#992, whatsapp-cli#423), and bitrix24's
+  `src/mcp.test.ts` no longer pins `schedule exec`.
+- **`session end` ends a sign-in kept in the file where no keyring answers**, in every CLI built on
+  `oauthSessionCommand`. It removed the sign-in, then failed with `keyring.unreachable` when it read again to check
+  that nothing was left. On a server without a desktop, where the sign-in falls back to the file, it now answers
+  `ended: true` and `removed: ["file"]`.
+- **The first mail search after a large save is fast.** `saveThreads` and `saveThread` now index the words and
+  pieces of the mail they save and work out its type and reach inside the same write, plus up to 500 emails and 50
+  threads left from before. On 100,000 synthetic emails the first plain search took 87 ms instead of 12.1 s, and the
+  first `type:` search on a read-only open 74 ms instead of 2.8 s. A sync slice of 50 threads spends about 14 ms
+  more CPU. The word drain that a search or `catchUp` still runs keeps taking batches of 200 in one write for up to
+  250 ms, instead of committing every 200 emails. No store version.
+- **A mail search on a read-only open no longer fails with "attempt to write a readonly database"** when saved mail
+  is still waiting for its words: the drain tried to queue the threads of that mail first.
+
 ## 1.3.0 — 26.11.2026
 
 ### Changed — experimental
