@@ -67,14 +67,15 @@ heading with it.
 
 Local commits check only staged lint and secrets. There is no pre-push check.
 Every pull request runs three checks. The fast standards job (`standards.yml`) checks that only a `release/*` branch edits
-`CHANGELOG.md`, config integrity, lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
+`CHANGELOG.md`, config integrity and Markdown. Lint and types run once, in `ci / check`, and the secret scan once, in
+`security / secrets` (WC-CI-3).
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
 on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
-dist checks, Bun, old Node, the SQLite restart and parity, which builds cli-template and the CLIs marked `pr` in
+dist checks, Bun, the old runtimes (old Node and the SQLite restart, one job) and parity, which builds cli-template and the CLIs marked `pr` in
 `scripts/parity/downstream.json` against the branch (a release builds and tests all of them), checking the
 manifests and wording of tg, max and wa on the same builds. The security checks (`security.yml`) run zizmor,
 gitleaks and CodeQL of the workflows; CodeQL of the
-code (javascript-typescript, python, c-cpp, java-kotlin) runs only in the release's `checks` and the monthly run, and
+code (javascript-typescript, python, java-kotlin) runs only in the release's `checks` and the monthly run, and
 the pull request reports those checks as passed.
 A pull request that changes only `CHANGELOG.md`, the `changes/` fragments, the version and the Markdown docs against a
 `main` already proven green (bin/release's fold and version pull requests, docs-only pull requests) runs only the

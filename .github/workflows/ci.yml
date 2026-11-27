@@ -22,8 +22,11 @@ permissions:
 
 jobs:
   ci:
-    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@29f6679fe6f90c335d0d1d080cbddeb1ba86fa7e # v1.0.0-rc.0
+    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@518799b41976fc305320258a5b81ea225b862d10 # main after cli-base#729: the secrets input
     with:
+      # security.yml's `security / secrets` scans the whole history on every pull request and in the merge queue, and
+      # the release's checks do too (WC-CI-3, NEED-2 on #3386).
+      secrets: false
       pack: ${{ inputs.pack || false }}
       # 588 test files took 250 s on one runner; `ci / coverage` merges the shards and holds the floor. Two, not four:
       # the Free plan runs 20 jobs at once across the account, and every extra shard makes other pull requests wait.
@@ -40,38 +43,8 @@ jobs:
         pnpm smoke:bun
         pnpm build && bun scripts/check-dist.ts
 
-  old-node:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      # The last official Node whose SQLite has no FTS5 (measured 2026-10-01).
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22.15.0
-      - run: node scripts/check-old-node.mjs
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22.16.0
-      - name: Check mail and store bindings on the minimum supported Node
-        run: |
-          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-mail.mjs "$T/mail.db"
-      - name: Check reviewed tags on the minimum supported Node
-        run: |
-          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-tags.mjs "$T/tags.db"
-      - name: Check CRM changes and the digest's reads on the minimum supported Node
-        run: |
-          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-crm-changes.mjs "$T/crm.db"
-
-  sqlite-restart:
+  # The runtimes older than ours, in one job: they share the checkout, install and build.
+  old-runtimes:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,6 +82,23 @@ jobs:
             kill -TERM $parent; sleep 2
             if pgrep -x node; then echo "TERM to the parent left a process"; exit 1; fi
             echo "TERM ended the parent and the restarted command"'
+      # The last official Node whose SQLite has no FTS5 (measured 2026-10-01).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.15.0
+      - run: node scripts/check-old-node.mjs
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.16.0
+      - name: Check mail and store bindings on the minimum supported Node
+        run: |
+          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-mail.mjs "$T/mail.db"
+      - name: Check reviewed tags on the minimum supported Node
+        run: |
+          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-tags.mjs "$T/tags.db"
+      - name: Check CRM changes and the digest's reads on the minimum supported Node
+        run: |
+          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-crm-changes.mjs "$T/crm.db"
 
   version:
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
