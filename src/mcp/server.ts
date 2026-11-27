@@ -31,6 +31,7 @@ import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
 import { type CallerSource, callerOf, callingAgent, withCaller } from "./caller.js"
+import { whileUnchanged } from "./current-settings.js"
 import type { HttpOptions } from "./http/serve.js"
 import { mcpHttpMarker } from "./http/state.js"
 import { instructions } from "./instructions.js"
@@ -118,8 +119,11 @@ export const createServer = (
   if (!environment.runCommand) throw new Error("the MCP server runs inside run(), which hands it the program")
   const program: AgentProgram = { run: environment.runCommand, commands: describeProgram(root) }
   const overrides = command.optsWithGlobals<{ permission?: string[] }>().permission ?? []
+  const resolved = whileUnchanged(settings, context.env, () =>
+    messenger.resolveSettings(command.optsWithGlobals(), { env: context.env }),
+  )
   const refreshPermissions = () => {
-    const current = messenger.resolveSettings(command.optsWithGlobals(), { env: context.env })
+    const current = resolved()
     settings.permissions = current.permissions
     settings.permissionSources = current.permissionSources
   }
