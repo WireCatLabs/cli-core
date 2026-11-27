@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { serviceApiCall } from "../../cli/service-api-call.js"
 import type { ServiceApiManifest } from "../../cli/service-api-manifest.js"
 import type { CrmItem, CrmOrganization, CrmPerson } from "../../domain/crm.js"
-import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "../source.js"
+import { CrmBudgetSpent, type CrmCallContext, type CrmGap, type CrmPage, type CrmSource } from "../source.js"
 import { crmManifestContract } from "../testing/manifest-fake.js"
 import { crmSourceContract } from "../testing/source-contract.js"
 import { amountOf, type CrmRaw } from "../values.js"
@@ -898,6 +898,36 @@ describe("path checks, enrich, optional kinds and select.max", () => {
     hub.rows["0-3"] = (hub.rows["0-3"] ?? []).filter(({ id }) => id !== "301")
     expect(await source.ids?.("person", undefined)).toEqual({ items: [], hasMore: false })
     expect(await all(source, "person")).toEqual([])
+  })
+
+  it("hands back the linked contacts read before the budget ran out, and goes on from there", async () => {
+    const hub = fakeHubspot()
+    const office = (hub.rows["0-3"] ?? []).find(({ id }) => id === "302")
+    if (office) office.associations = { contacts: ["202", "203"] }
+    const linked = {
+      ...MANIFEST,
+      entities: { ...MANIFEST.entities, person: { ...MANIFEST.entities.person, linked: true } },
+    }
+    const source = over(linked, hub)
+    const budget = (extra: number): CrmCallContext => ({
+      spend: () => {
+        if (extra-- <= 0) throw new CrmBudgetSpent("requests")
+      },
+      gap: () => {},
+    })
+    // A stop before the first contact of a page is read is the run's stop, with nothing to hand back.
+    await expect(source.changes("person", null, undefined, budget(0))).rejects.toBeInstanceOf(CrmBudgetSpent)
+    const read: string[] = []
+    let page: string | undefined
+    let calls = 0
+    do {
+      const answer = (await source.changes("person", null, page, budget(3))) as CrmPage<CrmPerson>
+      read.push(...answer.items.map(({ externalId }) => externalId))
+      page = answer.nextCursor
+      calls++
+    } while (page)
+    expect(read).toEqual(["201", "202", "203"])
+    expect(calls).toBeGreaterThan(1)
   })
 
   it("reads no linked contact when the deals are an optional kind the service says is not there", async () => {

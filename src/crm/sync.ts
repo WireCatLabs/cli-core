@@ -18,7 +18,13 @@ import { crmSettingKey } from "../store/sqlite/crm-settings.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { ungroupedHint } from "./group-hint.js"
-import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "./source.js"
+import {
+  CrmBudgetSpent as BudgetSpent,
+  type CrmCallContext,
+  type CrmGap,
+  type CrmPage,
+  type CrmSource,
+} from "./source.js"
 import { recordCrmViewer } from "./viewer.js"
 
 const DAY = 86_400_000
@@ -212,13 +218,6 @@ export const crmGapsOf = async (store: MessageStore, account: AccountKey): Promi
     return Array.isArray(value) ? (value as CrmGap[]) : []
   } catch {
     return []
-  }
-}
-
-/** Thrown by `CrmCallContext.spend` when the budget is spent; the engine turns it into a `partial` stop. */
-class BudgetSpent extends Error {
-  constructor(readonly why: BudgetStop) {
-    super(`the run's budget is spent: ${why}`)
   }
 }
 

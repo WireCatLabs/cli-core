@@ -46,6 +46,7 @@ export {
 } from "./query.js"
 export {
   CRM_FILE_SOURCES,
+  CrmBudgetSpent,
   type CrmCallContext,
   type CrmChanges,
   type CrmCondition,
