@@ -69,6 +69,7 @@ export const searchStore = async (
   meaning?: MeaningLane,
   rerank?: RerankLane,
 ): Promise<SearchFound> => {
+  const started = performance.now()
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
@@ -104,7 +105,11 @@ export const searchStore = async (
         await countLucene(
           store,
           account,
-          { ...(request.discover ? discoveryRequest(request) : request), limit: request.limit + offset },
+          {
+            ...(request.discover ? discoveryRequest(request) : request),
+            limit: request.limit + offset,
+            spentMs: performance.now() - started,
+          },
           messenger,
           TOTAL_CAP,
         ).catch((error: unknown) => {

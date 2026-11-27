@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import type { AttachmentInput, EmailInput } from "../store/index.js"
 import { openCache } from "../store/open.js"
@@ -345,6 +345,47 @@ describe("search mail over the mail tables", () => {
     await expect(
       searchStore(typed, { provider: "tg", account: "1" }, { text: "type:order", limit: 5 }),
     ).rejects.toThrow("type: is a mail field")
+  })
+
+  it("keeps a read-only type search to one time limit, and works the untyped mail out again after a change", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "mail-types-budget-")), "store.db")
+    const writer = await openStore({ path })
+    live.push(writer)
+    const owner = await writer.accounts.saveAccount(MAIL, { name: null })
+    await writer.mail.saveThread({
+      accountId: owner,
+      externalId: "thread-9",
+      now: at(10),
+      emails: [
+        email("<order@example.com>", {
+          subject: "Thank you for your order #4411",
+          from: { address: "orders@shop.example.com", name: "Shop" },
+        }),
+        email("<bill@example.com>", {
+          subject: "Your bill is ready",
+          from: { address: "billing@phone.example.com", name: "Phone Co" },
+        }),
+      ],
+    })
+    const raw = await openCache(path)
+    live.push({ close: async () => raw.close() } as MessageStore)
+    raw.exec("UPDATE emails SET mail_type = NULL, reach = NULL, type_signal = NULL")
+    const readOnly = await openStore({ path, readOnly: true })
+    live.push(readOnly)
+    const search = () => searchStore(readOnly, MAIL, { text: "type:order", kind: "mail", limit: 10 })
+
+    const real = performance.now.bind(performance)
+    let calls = 0
+    // Time leaps past the limit once the search has started: the page took it all, so its total gets none.
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => real() + (calls++ === 0 ? 0 : 2_500))
+    const late = await search()
+    clock.mockRestore()
+    expect(late.items.map(({ id }) => id)).toEqual(["<order@example.com>"])
+    expect(late.total).toEqual({ value: 1, relation: "gte" })
+    expect((await search()).total).toEqual({ value: 1, relation: "eq" })
+
+    raw.exec("UPDATE emails SET subject = 'Thank you for your order #4412' WHERE external_id = '<bill@example.com>'")
+    expect((await search()).items.map(({ id }) => id).sort()).toEqual(["<bill@example.com>", "<order@example.com>"])
   })
 
   it("searches a read-only open whose mail still waits for its words", async () => {

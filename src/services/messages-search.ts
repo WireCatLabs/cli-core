@@ -275,6 +275,7 @@ export const prepareLucene = async (
     ...(selectedChat ? { chat: selectedChat } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
     ...(request.timeLimitMs === undefined ? {} : { timeLimitMs: request.timeLimitMs }),
+    ...(request.spentMs === undefined ? {} : { spentMs: request.spentMs }),
     newest: request.newest,
     ...(stemmer ? { stemmer } : {}),
     ...(unstemmed ? { unstemmed: true } : {}),

@@ -84,9 +84,9 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const mail = corpus === MAIL
   if (mail && (execution.conversationIds || execution.conversationSince !== undefined))
     throw new CliError("validation_error", "mail has no conversations to search within")
-  const started = context.now()
   const limitMs = execution.timeLimitMs ?? QUERY_LIMITS.milliseconds
-  const until = Date.now() + limitMs
+  const started = context.now() - (execution.spentMs ?? 0)
+  const until = Date.now() + limitMs - (execution.spentMs ?? 0)
   const budget: MatchBudget = { work: 0 }
   let states = 0,
     expansions = 0
