@@ -1,4 +1,4 @@
-### Changed — may break callers
+### Fixed
 
 - **Pictures, calendar files and audio are read about ten times larger.** The owner's ruling of 27.11.2026: raise
   each cap by about ten times, not to the 10 GiB file budget. A picture for picture search or a documents sync is
