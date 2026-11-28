@@ -988,7 +988,7 @@ export const searchNotesOf = async (
     throw new CliError(
       "validation_error",
       source === "internal"
-        ? "the query's source:internal keeps the notes written in memo, and the --source list names none of them: " +
+        ? "the query's source:internal keeps the notes written in wcat, and the --source list names none of them: " +
             "add notes:internal to --source, or drop source:internal from the query"
         : "the query's source:file keeps the files from notes folders, and the --source list names none of them: " +
             "add notes:<folder id> to --source, or drop source:file from the query",

@@ -223,7 +223,7 @@ export const harderAccess = ({ env, command, ...options }: Asking): HarderAccess
     const unreadable = error instanceof CliError ? error.message : REASON_TEXT["harder.bad-setting"]
     return { ready: false, ...UNSET, reason_id: "harder.bad-setting", reason: `${unreadable}; nothing was sent` }
   }
-  const tool = command ?? "memo"
+  const tool = command ?? "wcat"
   if (!setting)
     return {
       ready: false,

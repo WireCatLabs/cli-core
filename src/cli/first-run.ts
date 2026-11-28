@@ -188,7 +188,7 @@ const askTools = async (run: FirstRun) => {
   const installed = run.installed ?? ((name: string) => onPath(name, env))
   const { WIRECAT_TOOLS } = await import("./help/first-screen.js")
   const others = WIRECAT_TOOLS.filter((tool) => tool.command !== command)
-  const missing = others.filter((tool) => !installed(tool.command))
+  const missing = others.filter((tool) => !installed(tool.program ?? tool.command))
   io.say("Other WireCat tools — they share this store, so one search finds everything:")
   for (const tool of others) {
     const at = missing.indexOf(tool)

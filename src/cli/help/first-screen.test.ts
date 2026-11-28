@@ -59,7 +59,8 @@ describe("the first screen", () => {
         zm                      Zoom meetings: transcripts and summaries, searchable with your other WireCat data
         drive                   Google Drive and Docs as local text, searchable with your other WireCat data
         gcal                    Google Calendar events, searchable with your other WireCat data
-        memo context <person>   one person across messengers, mail, notes and meetings
+        wcat context <person>   one person across messengers, mail, notes and meetings
+        files                   notes folders, Obsidian vaults, PDF and Word files, searchable with your other WireCat data
         mail                    IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data
         b24                     Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data
         amo                     amoCRM and Kommo: deals, contacts and companies, searchable with your other WireCat data
@@ -171,7 +172,7 @@ describe("the first screen", () => {
 
   it("installs on a program a tool builds itself, without the profile when it has none", async () => {
     const out: string[] = []
-    const program = new Command("memo")
+    const program = new Command("wcat")
       .description("context about people")
       .exitOverride()
       .configureOutput({ writeOut: (text) => out.push(text) })
@@ -179,10 +180,10 @@ describe("the first screen", () => {
     installHelp(program, { profile: false, can: [{ command: "context Anna", does: "one person, everywhere" }] })
 
     await expect(program.parseAsync(["--help"], { from: "user" })).rejects.toMatchObject({ exitCode: 0 })
-    expect(out.join("")).toContain("Usage: memo <command> [options]")
+    expect(out.join("")).toContain("Usage: wcat <command> [options]")
     expect(out.join("")).not.toContain("profile")
-    expect(out.join("")).not.toContain("  memo context <person>")
-    expect(out.join("")).toMatch(/memo help options\s+the options every command takes/)
+    expect(out.join("")).not.toContain("  wcat context <person>")
+    expect(out.join("")).toMatch(/wcat help options\s+the options every command takes/)
   })
 
   it("names only the option topics the program has", () => {

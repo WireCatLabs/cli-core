@@ -127,11 +127,11 @@ export const accountsOfKind = (
   listed = false,
 ): AccountKey[] => {
   if (mailAccount !== undefined && kind !== "mail")
-    throw new CliError("validation_error", "--account names a mail account — memo search mail reads it")
+    throw new CliError("validation_error", "--account names a mail account — wcat search mail reads it")
   if (kind === undefined) return chosen
   if (kind === "messages") {
     if (explicit === MAIL)
-      throw new CliError("validation_error", "mail is searched with `memo search mail`, not search messages")
+      throw new CliError("validation_error", "mail is searched with `wcat search mail`, not search messages")
     return chosen.filter(({ provider }) => holdsKindOf(provider, "messages"))
   }
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")
@@ -143,7 +143,7 @@ export const accountsOfKind = (
   if (mail.length === 0)
     throw new CliError(
       "not_found",
-      "no mail in the store yet — `memo sync --only mail --since-time <time>` imports it",
+      "no mail in the store yet — `wcat sync --only mail --since-time <time>` imports it",
       {
         reason: NO_MAIL,
       },

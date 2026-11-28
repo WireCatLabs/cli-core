@@ -239,7 +239,7 @@ const statusCommand = (messenger: Messenger): Command =>
           "directions and promises found by words are marked pattern: read the cited message before trusting one. " +
           "Others' questions in a group with no role, and others' word-found promises in a group, are counted on " +
           "the chat's row as unlisted, not listed. " +
-          "Only this profile's account is read; the other linked chats are named, and memo projects status reads them",
+          "Only this profile's account is read; the other linked chats are named, and wcat projects status reads them",
       )
       .argument("<project>", "an existing project's id, key, exact name or alias")
       .option("--since-time <time>", "how far back: days (60d, at most 730d) or a start date (2026-09-01)", "60d")

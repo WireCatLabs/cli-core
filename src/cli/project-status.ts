@@ -203,7 +203,7 @@ const missingOf = (found: ProjectStatus, hints: ProjectStatusHints): Missing[] =
             field: "chats",
             why: `${others.length} linked chats were not read here (${[
               ...new Set(others.map((one) => one.reason)),
-            ].join(", ")}); memo projects status reads every account`,
+            ].join(", ")}); wcat projects status reads every account`,
           },
         ]
       : []),

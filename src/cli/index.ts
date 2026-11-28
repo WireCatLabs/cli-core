@@ -471,6 +471,7 @@ export {
   MEMO_SCENARIOS,
   type Scenario,
   shellProblems,
+  WCAT_SCENARIOS,
 } from "./guide.js"
 export {
   type CommandHelp,

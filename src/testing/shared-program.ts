@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url"
 import { CliError } from "@wirecat/cli-base"
-import { MEMO_SCENARIOS } from "../cli/guide.js"
+import { WCAT_SCENARIOS } from "../cli/guide.js"
 import { addMeetingProjectCandidatesCommand } from "../cli/meeting-project-candidates-command.js"
 import { addMeetingSeriesInventoryCommand } from "../cli/meeting-series-inventory-command.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -108,7 +108,7 @@ export const sharedCommands = (over: Messenger = messenger) => {
     floodCommand(messenger),
     guideCommand(app, {
       directory: fileURLToPath(new URL("../cli/fixtures/scenarios", import.meta.url)),
-      worksWith: [MEMO_SCENARIOS.personBrief],
+      worksWith: [WCAT_SCENARIOS.personBrief],
     }),
     imagesCommand(messenger),
     inboxCommand(messenger),

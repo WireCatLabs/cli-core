@@ -33,7 +33,7 @@ export const searchAllOnlyOf = (value: string, allowed: readonly string[] = SOUR
   if (chosen.includes("mail"))
     throw new CliError(
       "validation_error",
-      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
+      "mail is searched by wcat: install @wirecat/wirecat, then `wcat search mail …`",
     )
   const unknown = chosen.find((one) => !allowed.includes(one))
   if (unknown !== undefined || chosen.length === 0)
@@ -76,7 +76,7 @@ const allCommand = (messenger: Messenger): Command => {
           "messages too (notes and events are local only; --backend archive or --offline keeps it to the local store)"
         : "search messenger messages and notes in the local store") +
         ", calendar events when the store holds a calendar" +
-        ", and meeting transcripts, chat and summaries when it holds a meeting account — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
+        ", and meeting transcripts, chat and summaries when it holds a meeting account — best match first; not mail (wcat searches it: wcat search mail), " +
         "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +
         "or notes reads one kind with all its fields",
     )
@@ -163,12 +163,12 @@ const notesCommand = (messenger: Messenger): Command =>
   annotate(new Command("notes"), { effects: LOCAL_READ, partial: true, output: { entity: "note", view: "hit" } })
     .summary("find stored notes by words and filters")
     .description(
-      "search the notes — written in memo, or imported from a notes folder — by words and, with the local " +
+      "search the notes — written in wcat, or imported from a notes folder — by words and, with the local " +
         "text model, by meaning; each hit says which found it and what it links to",
     )
     .argument(
       "<query...>",
-      'strict Lucene query: words, "phrases", AND/OR/NOT, tag:, source:internal (written in memo) or source:file ' +
+      'strict Lucene query: words, "phrases", AND/OR/NOT, tag:, source:internal (written in wcat) or source:file ' +
         "(from a notes folder) and date ranges",
     )
     .addHelpText(
@@ -180,7 +180,7 @@ const notesCommand = (messenger: Messenger): Command =>
     )
     .option(
       "--source <accounts>",
-      "only these notes accounts, separated by commas: notes:internal for notes written in memo, notes:<folder id> " +
+      "only these notes accounts, separated by commas: notes:internal for notes written in wcat, notes:<folder id> " +
         "as a hit shows it, notes, documents or group:<name>",
     )
     .option("--filter <query>", "a query every hit must also match, found by words or by meaning")
@@ -245,7 +245,7 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
   const search = new Command("search")
     .summary("search the local archive")
     .description(
-      "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, the separate memo CLI: memo search mail",
+      "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, wcat: wcat search mail",
     )
   search
     .addCommand(allCommand(messenger))

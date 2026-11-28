@@ -70,7 +70,7 @@ max config set models.analysis.model '<your installed Ollama model>'
 max models keys set '<endpoint host[:port]>'
 ```
 
-Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTPS without embedded credentials, query or fragment; plain HTTP only on this computer (`localhost`, `127.x.x.x`, `[::1]`), so neither the text nor the key crosses a network unencrypted. With `models.analysis`, `models.replies` and `models.ocr` not set (and not `off`), linking, reply drafts and attachment OCR use the AI model chosen with `memo models ai set`, with the key kept for its address; OCR through it to another computer needs that model's yes to pictures (`--allow-remote`). Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
+Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTPS without embedded credentials, query or fragment; plain HTTP only on this computer (`localhost`, `127.x.x.x`, `[::1]`), so neither the text nor the key crosses a network unencrypted. With `models.analysis`, `models.replies` and `models.ocr` not set (and not `off`), linking, reply drafts and attachment OCR use the AI model chosen with `wcat models ai set`, with the key kept for its address; OCR through it to another computer needs that model's yes to pictures (`--allow-remote`). Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
 
 **Chat text to a model outside this computer** follows one setting for every WireCat tool, `models chats`. A model on this computer (`localhost`, `127.x.x.x`, `[::1]`) is not outside: it needs no yes and no setting, for `conversations embed` and for `--analyze` alike.
 
@@ -144,9 +144,9 @@ hash and embeds a word to check the vector length. A custom model's vector key c
 redefined as another model never reads the old vectors.
 
 ```sh
-memo models download e5-large
-memo models set e5-large
-memo models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base","onnx":"onnx/model_quantized.onnx","dims":768,"pooling":"mean","prefix":{"query":"query: ","passage":"passage: "}}'
+wcat models download e5-large
+wcat models set e5-large
+wcat models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base","onnx":"onnx/model_quantized.onnx","dims":768,"pooling":"mean","prefix":{"query":"query: ","passage":"passage: "}}'
 ```
 
 ## Enrichment: rewriting records for search (off by default)
@@ -162,12 +162,12 @@ It is off until the owner says yes. One setting serves every WireCat CLI: the `e
 settings file (`provider`, `model`, optional `base_url`, `consented_at`).
 
 ```sh
-memo models consents show --json                          # on or off, records, enriched, pending, cost estimate
-memo models consents set openai --model gpt-4o-mini       # what would be sent and what it costs; changes nothing
-memo models consents set openai --model gpt-4o-mini --yes # on
-memo models consents revoke                               # off, and deletes what the model wrote
-memo models keys set openai < key.txt                     # the key, from stdin or a hidden prompt
-memo models keys remove openai
+wcat models consents show --json                          # on or off, records, enriched, pending, cost estimate
+wcat models consents set openai --model gpt-4o-mini       # what would be sent and what it costs; changes nothing
+wcat models consents set openai --model gpt-4o-mini --yes # on
+wcat models consents revoke                               # off, and deletes what the model wrote
+wcat models keys set openai < key.txt                     # the key, from stdin or a hidden prompt
+wcat models keys remove openai
 ```
 
 With it on, `embedNotes` and `embedMail` (every `sync` that embeds) first enrich up to 600 records that have no
@@ -186,16 +186,16 @@ MCP a sync has 45 s, so enrichment can start only in its first 7.75 s or so. A r
 time does not answer `left`, since the same run would not move either. The shared documents `sync` then adds a
 `sync.longer` step (`sync --embed --timeout 15m`, not safe to run unasked) for a run in a terminal.
 
-When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
+When the tool passes its identity (wcat does), the key is read from its keyring entry `embeddings:<provider>`
 (`models keys set openai`), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),
-then an entry of the tool's service named after the provider alone (`cli-memo` / `anthropic`). The consent text also
+then an entry of the tool's service named after the provider alone (`wcat` / `anthropic`). The consent text also
 says that a question in the record's own words finds that record first a little less often.
 An agent's shell cannot turn it on, and over MCP `models consents set` needs `mcp.authority`. Prices for the
 estimate are known for `openai/gpt-4o-mini` and `anthropic/claude-haiku-5-5`; another model gets `usd: null`.
 
 ## Search harder: a hosted model reorders `search all` (off by default)
 
-`searchAll` with `harder` (memo's `search all --harder`) sends the question and the first 30 merged hits to the
+`searchAll` with `harder` (wcat's `search all --harder`) sends the question and the first 30 merged hits to the
 provider and model the owner chose: Anthropic (`api.anthropic.com`, `claude-haiku-5-5` unless he names another),
 OpenAI (`api.openai.com`, `gpt-4o-mini`) or an OpenAI-compatible API at a base URL he gives (OpenRouter and the like),
 where he must name the model. Each hit goes as its number, date, title and at most 400 characters of the excerpt
@@ -215,13 +215,13 @@ What gets sent, and when:
   provider). An API at a base URL may need none.
 
 ```sh
-memo models search-consents show --json            # allowed or not, provider, model, endpoint, whether the key is found
-memo models search-consents set anthropic          # what a --harder search sends; changes nothing
-memo models search-consents set anthropic --yes    # allowed; each search still has to ask with --harder
-memo models search-consents set openai --yes       # gpt-4o-mini
-memo models search-consents set openai --base-url https://openrouter.ai/api/v1 --model deepseek/deepseek-chat --yes
-memo models search-consents revoke
-memo models keys set anthropic < key.txt
+wcat models search-consents show --json            # allowed or not, provider, model, endpoint, whether the key is found
+wcat models search-consents set anthropic          # what a --harder search sends; changes nothing
+wcat models search-consents set anthropic --yes    # allowed; each search still has to ask with --harder
+wcat models search-consents set openai --yes       # gpt-4o-mini
+wcat models search-consents set openai --base-url https://openrouter.ai/api/v1 --model deepseek/deepseek-chat --yes
+wcat models search-consents revoke
+wcat models keys set anthropic < key.txt
 ```
 
 The search waits 5 s for a hosted model and 60 s for one on this computer; `set … --timeout <duration>` (1s to 10m)
@@ -253,13 +253,13 @@ An agent's shell cannot give the consent, and over MCP `models search-consents s
 
 ## Local only
 
-`memo models local-only set on` keeps every model call on this computer, in every WireCat tool: an address that is not
+`wcat models local-only set on` keeps every model call on this computer, in every WireCat tool: an address that is not
 `localhost`, `127.x.x.x` or `[::1]` is refused before anything is sent (`permission_error`, reason
 `local-only.refused`). It covers the AI model (`models ai`), enrichment, search harder, linking, reply drafts,
 attachment OCR, remote embeddings and OpenAI transcription; voice messages then use only the downloaded speech model,
 never the messenger's service. It is off until the owner turns it on, kept as `local_only` in the shared settings
 file; a section that cannot be read counts as on. An agent may turn it on, only the owner turns it off.
-`memo models local-only show --json` lists each feature with `where` (`this-computer`, `elsewhere`, `agent`, `off`)
+`wcat models local-only show --json` lists each feature with `where` (`this-computer`, `elsewhere`, `agent`, `off`)
 and whether local only refuses it. The digest and MCP agents run outside WireCat: they are local only when the agent
 runs a local model.
 

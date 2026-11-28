@@ -5,6 +5,8 @@ export interface WireCatTool {
   envPrefix: string
   /** The npm package `setup` installs it from. */
   package: string
+  /** The program on PATH, when it is not `command`: every WireCat tool writes a `wcat` launcher. */
+  program?: string
   shown?: string
   does: string
 }
@@ -54,12 +56,20 @@ export const WIRECAT_TOOLS: readonly WireCatTool[] = [
     does: "Google Calendar events, searchable with your other WireCat data",
   },
   {
-    command: "memo",
-    appName: "cli-memo",
-    envPrefix: "MEMO",
-    package: "@wirecat/cli-memo",
-    shown: "memo context <person>",
+    command: "wcat",
+    appName: "wcat",
+    envPrefix: "WCAT",
+    package: "@wirecat/wirecat",
+    program: "wcat-wirecat",
+    shown: "wcat context <person>",
     does: "one person across messengers, mail, notes and meetings",
+  },
+  {
+    command: "files",
+    appName: "files-cli",
+    envPrefix: "FILES",
+    package: "@wirecat/files-cli",
+    does: "notes folders, Obsidian vaults, PDF and Word files, searchable with your other WireCat data",
   },
   {
     command: "mail",

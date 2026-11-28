@@ -24,18 +24,21 @@ export interface Scenario {
   look: string[]
 }
 
-/** A scenario another tool holds — memo's cross-tool ones — listed by reference under "Works with". */
+/** A scenario another tool holds — wcat's cross-tool ones — listed by reference under "Works with". */
 export interface GuideReference {
   tool: string
   name: string
   title: string
 }
 
-/** memo's cross-tool scenarios: the one source of the titles every tool lists, and memo's files must carry. */
-export const MEMO_SCENARIOS = {
-  personBrief: { tool: "memo", name: "person-brief", title: "One person across every tool" },
-  decisionTrail: { tool: "memo", name: "decision-trail", title: "What did we decide about X, across every source" },
+/** wcat's cross-tool scenarios: the one source of the titles every tool lists, and wcat's files must carry. */
+export const WCAT_SCENARIOS = {
+  personBrief: { tool: "wcat", name: "person-brief", title: "One person across every tool" },
+  decisionTrail: { tool: "wcat", name: "decision-trail", title: "What did we decide about X, across every source" },
 } as const satisfies Record<string, GuideReference>
+
+/** @deprecated `WCAT_SCENARIOS`: memo is now wcat. Kept so the rename needs no major release of cli-core. */
+export const MEMO_SCENARIOS = WCAT_SCENARIOS
 
 export interface GuideOptions {
   /** Absolute path of the tool's scenario files: `fileURLToPath(new URL("../scenarios", import.meta.url))`. */

@@ -80,7 +80,7 @@ export const activeTimers = (): string[] | undefined => {
     })
       .split("\n")
       .map((line) => line.trim().split(/\s+/).at(-2) ?? "")
-      .filter((unit) => /^(memo|mail|tg|max|whatsapp|zoom|drive|gcal|wirecat)-.*\.timer$/.test(unit))
+      .filter((unit) => /^(wcat|memo|mail|tg|max|whatsapp|zoom|drive|gcal|wirecat)-.*\.timer$/.test(unit))
   } catch {
     return undefined
   }

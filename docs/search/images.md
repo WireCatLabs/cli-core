@@ -1,7 +1,7 @@
 # Image search
 
 Find a picture by what is around it and by what it shows. This guide is for people who use a tool built on
-cli-core (`tg`, `max`, `memo`) and for developers who build on cli-core. Commands are written as `tg`; the other
+cli-core (`tg`, `max`, `wcat`) and for developers who build on cli-core. Commands are written as `tg`; the other
 tools take the same words.
 
 The search runs on your machine. No picture, message or vector leaves it (see [Privacy](#privacy)).

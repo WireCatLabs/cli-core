@@ -41,7 +41,7 @@ Acme. The search found "are you coming?" from the word "come", with no network.
 
 **Built on it:** [tg-cli](https://github.com/WireCatLabs/tg-cli), [max-cli](https://github.com/WireCatLabs/max-cli),
 [gcal-cli](https://github.com/WireCatLabs/gcal-cli) and 12 more WireCat CLIs, such as the mail and notes tool
-[cli-memo](https://github.com/WireCatLabs/cli-memo), the [WhatsApp tool](https://github.com/WireCatLabs/whatsapp-cli),
+[wcat](https://github.com/WireCatLabs/cli-memo), the [WhatsApp tool](https://github.com/WireCatLabs/whatsapp-cli),
 [zoom-cli](https://github.com/WireCatLabs/zoom-cli) and [drive-cli](https://github.com/WireCatLabs/drive-cli).
 
 ## Install
@@ -111,7 +111,7 @@ one copy. A CLI with nothing to store needs only cli-base.
 
 ```mermaid
 flowchart TB
-  tools["tg · max · wa · memo · zm · drive"] --> interface
+  tools["tg · max · wa · wcat · zm · drive"] --> interface
   subgraph core ["@wirecat/cli-core"]
     interface["Interface: CLI commands and MCP tools"] --> services["Services: one use case each"]
     services --> ports["Ports: MessengerAdapter · MeetingSource · TaskStore"]

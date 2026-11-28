@@ -31,7 +31,7 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
     .summary("search stored messages, notes, calendar events and meetings")
     .description(
       "search calendar events, messages from the other WireCat tools, notes and meeting transcripts, chat and " +
-        "summaries in the local store — best match first; not mail (the separate memo CLI searches it: memo search " +
+        "summaries in the local store — best match first; not mail (wcat searches it: wcat search " +
         "mail). Use it when you do not know where something was written; search events reads the calendar with all " +
         "its fields",
     )

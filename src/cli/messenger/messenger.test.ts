@@ -2899,7 +2899,7 @@ describe("the shared read commands", () => {
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
     expect(mail.code).toBe(2)
     expect(mail.stderr.join("\n")).toContain("unknown command")
-    expect(mail.stderr.join("\n")).not.toContain("memo")
+    expect(mail.stderr.join("\n")).not.toContain("wcat")
 
     const args = ["search", "messages", "chapter", "--json"]
     const all = await call([...args, "--source", "all"], never, env)
@@ -2910,7 +2910,7 @@ describe("the shared read commands", () => {
     expect(all.stderr.join("\n")).not.toContain("mail search")
     const asked = await call([...args, "--source", "email"], never, env)
     expect(asked.code).toBe(2)
-    expect(asked.stderr.join("\n")).toContain("memo search mail")
+    expect(asked.stderr.join("\n")).toContain("wcat search mail")
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2942,7 +2942,7 @@ describe("the shared read commands", () => {
     expect(answer.items.filter(({ kind }: { kind: string }) => kind === "message")).toHaveLength(messages.items.length)
   })
 
-  it("**search all** leaves the mail in the store out: mail is memo's", async () => {
+  it("**search all** leaves the mail in the store out: mail is wcat's", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-mail-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2975,7 +2975,7 @@ describe("the shared read commands", () => {
     expect(all.meta.accounts).not.toContain("email:owner@example.test")
     const only = await call(["search", "all", "chapter", "--only", "mail", "--json"], never, env)
     expect(only.code).toBe(2)
-    expect(only.stderr.join("\n")).toContain("memo search mail")
+    expect(only.stderr.join("\n")).toContain("wcat search mail")
   })
 
   it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {

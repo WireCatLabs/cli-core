@@ -124,7 +124,7 @@ const leftOutLine = (one: LeftOutChat, read: string | null) =>
 
 const purposeHintLine = (hint: NonNullable<StoredProjectGathering["purposeHint"]>) =>
   `${hint.chat} gave ${hint.items} of ${hint.of} items by membership alone; if it is not a work chat, ask the owner ` +
-  `to set its purpose: memo relationships update ${hint.relationship} --purpose <purpose>`
+  `to set its purpose: wcat relationships update ${hint.relationship} --purpose <purpose>`
 
 const LABELS: Record<string, string> = {
   "person-only": "  [person only]",
