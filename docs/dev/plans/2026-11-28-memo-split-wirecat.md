@@ -140,7 +140,7 @@ sources, or that no source brought in, belongs to the knowledge tool.
 | `jobs` | `wcat` | `jobs start` runs the whole sync ("sync notes and embed new mail every 5 minutes"), so it stays with `wcat sync` |
 | `search notes` | both | cli-core's `searchNotes`. `files search notes` searches its own notes |
 | `tags`, `tasks` | `wcat` | memo's own code, not cli-core's shared builders (those take a messenger). They span sources. Checked in phase 3, 2026-11-28 |
-| `mail findings`, `mail review` | `wcat review findings`, `wcat review mail` | The `mail` word belongs to the mail CLI in `wcat` |
+| `mail findings`, `mail review`, `mail subscriptions list` | `wcat review findings`, `wcat review mail`, `wcat review subscriptions list` | The `mail` word belongs to the mail CLI in `wcat`. `subscriptions list` came in cli-memo#902 |
 | `documents` | `wcat` | It lists documents of every account: Drive, folders, imports |
 | `people`, `bots`, `organizations`, `relationships` | `wcat` | People and bots span every source |
 | `memories`, `facts`, `mentions`, `vocabulary`, `reminders` | `wcat` | Written by agents and the owner, or found across sources |
