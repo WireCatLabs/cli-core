@@ -7,6 +7,7 @@ import { readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../ports/messenger.js"
 import { typedCommand } from "../runs/scope.js"
 import type { Ffmpeg } from "./decode.js"
+import type { VoiceEngines } from "./engines.js"
 import { installedBytes, isInstalled, megabytes, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { OPENAI_TRANSCRIBE_MODEL, orderedModels, type SpeechModel, speechModel } from "./models.js"
 import type { Recognizer } from "./recognize.js"
@@ -30,7 +31,12 @@ export interface Heard extends Transcript {
 /** A recording is read into memory whole; minutes of Opus are a few megabytes. */
 const LARGEST_VOICE = 32 * 1024 * 1024
 
-export type OpenRecognizer = (model: SpeechModel, path: (name: string) => string, vadModel: string) => Recognizer
+export type OpenRecognizer = (
+  model: SpeechModel,
+  path: (name: string) => string,
+  vadModel: string,
+  engines?: VoiceEngines,
+) => Recognizer | Promise<Recognizer>
 
 export interface Choice {
   with: TranscribeWith
@@ -50,6 +56,8 @@ export interface Choice {
   signal?: AbortSignal
   /** Local only is on: `auto` never asks the messenger. */
   localOnly?: boolean
+  /** Where the voice engines install on first use, and the command that installs them when that fails. */
+  engines?: VoiceEngines
 }
 
 /** A voice note, or an audio file someone sent — an iPhone recording reaches WhatsApp as `audio/mp4`. */
@@ -59,7 +67,7 @@ export const isAudioFile = ({ kind, mime }: { kind: string; mime?: string | unde
 /** The flag, then the profile's `transcribeWith`, `speechModel` and `transcribeModel`, then `auto` and the CLI's first model. */
 export const choose = (
   messenger: Messenger,
-  settings: Pick<Settings, "configured" | "shared">,
+  settings: Pick<Settings, "configured" | "shared"> & { profile?: string },
   flags: { local?: boolean; model?: string; with?: TranscribeWith },
   env: NodeJS.ProcessEnv = process.env,
   keyring?: KeyringStore,
@@ -73,9 +81,12 @@ export const choose = (
   const known = TRANSCRIBE_WITH.includes(chosen)
   const onlyHere = localOnly(env)
   const offComputer = known && onlyHere && (chosen === "messenger" || chosen === "openai")
+  const picked = model === undefined ? (orderedModels(messenger.speechModels)[0] as SpeechModel) : speechModel(model)
   return {
     ...(onlyHere ? { localOnly: true } : {}),
     directory: modelsDirectory(env),
+    // Named with the profile even when chosen before the run starts: a hint without it fails when copied.
+    engines: { env, retry: typedCommand(messenger.app.command, `models download ${picked.id}`, settings.profile) },
     with: known ? chosen : "auto",
     ...(known
       ? {}
@@ -85,7 +96,7 @@ export const choose = (
             `the profile's transcribeWith is one of ${TRANSCRIBE_WITH.join(", ")}`,
           ),
         }),
-    model: model === undefined ? (orderedModels(messenger.speechModels)[0] as SpeechModel) : speechModel(model),
+    model: picked,
     transcribeModel: fromFile<string>(settings, "transcribeModel", OPENAI_TRANSCRIBE_MODEL).value,
     ...(known && chosen === "openai" && !offComputer ? openaiAccess(messenger, env, keyring) : {}),
     ...(offComputer
@@ -160,9 +171,9 @@ export const hearOnline = async (
 
 /** The local model, or OpenAI when chosen, on the bytes `hearOnline` fetched. */
 export const hearLocally = async (bytes: Uint8Array, messageId: string, choice: Choice): Promise<Heard> => {
-  const { model, directory, open, ffmpeg } = choice
+  const { model, directory, open, ffmpeg, engines = {} } = choice
   const { decodeAudio } = await import("./decode.js")
-  const { samples, rate } = await decodeAudio(bytes, ffmpeg)
+  const { samples, rate } = await decodeAudio(bytes, ffmpeg, engines)
   if (choice.with === "openai") {
     if (choice.refusal) throw choice.refusal
     const { transcribeOpenAI } = await import("./openai.js")
@@ -175,6 +186,7 @@ export const hearLocally = async (bytes: Uint8Array, messageId: string, choice: 
         vadModel: vadPath(directory),
         // A voice message wants its text, not its turns: one request, and no voice detector needed.
         bundle: true,
+        engines,
         ...(choice.fetch ? { fetch: choice.fetch } : {}),
         ...(choice.signal ? { signal: choice.signal } : {}),
       },
@@ -188,7 +200,7 @@ export const hearLocally = async (bytes: Uint8Array, messageId: string, choice: 
     }
   }
   const { openRecognizer, toModelRate } = await import("./recognize.js")
-  const recognizer = (open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
+  const recognizer = await (open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory), engines)
   try {
     return {
       messageId,

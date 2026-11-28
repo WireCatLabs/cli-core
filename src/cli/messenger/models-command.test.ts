@@ -12,6 +12,7 @@ import { embeddingKeys } from "../../embeddings/keys.js"
 import { textModel } from "../../embeddings/models.js"
 import { ENTITIES } from "../../entities/index.js"
 import { model as modelEntity } from "../../entities/model.js"
+import { placeEngines } from "../../kit/engines.js"
 import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
 import { speechModel, VAD } from "../../speech/models.js"
 import { run } from "../program.js"
@@ -71,6 +72,7 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
     mkdirSync(join(directory, model.id), { recursive: true })
     sized(vadPath(directory), VAD.bytes)
     for (const file of model.files) sized(modelPath(directory, model)(file.name), file.bytes)
+    placeEngines(env)
   }
   const go = async (args = argv) => {
     const streams = captureStreams()

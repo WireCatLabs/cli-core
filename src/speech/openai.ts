@@ -5,6 +5,7 @@ import { type Fetch, OPENAI_URL } from "../embeddings/remote.js"
 import { endpointFetch, onThisComputer } from "../models/endpoint.js"
 import { refuseModelAddress } from "../models/local-only.js"
 import type { Pcm } from "./decode.js"
+import type { VoiceEngines } from "./engines.js"
 import { filesPresent, modelsDirectory, vadPath } from "./install.js"
 import { OPENAI_TRANSCRIBE_MODEL, VAD } from "./models.js"
 import { SAMPLE_RATE, type SpeechCutter, type TimedText, toModelRate } from "./recognize.js"
@@ -61,6 +62,8 @@ export interface OpenAITranscription {
   /** The voice detector model; the shared models directory's when not given. */
   vadModel?: string
   env?: NodeJS.ProcessEnv
+  /** How the voice detector's engine installs on first use; `env` is its data folder when this leaves it out. */
+  engines?: VoiceEngines
   /** Seams for tests: the detector, the retry policy and the clock. */
   cutter?: (vadModel: string) => SpeechCutter
   retry?: RetryConfig
@@ -211,9 +214,9 @@ export const piecesOf = (spans: readonly { start: number; end: number }[], limit
   return pieces
 }
 
-const openCutter = async (vadModel: string): Promise<SpeechCutter> => {
+const openCutter = async (vadModel: string, engines: VoiceEngines): Promise<SpeechCutter> => {
   const { openSpeechCutter } = await import("./recognize.js")
-  return openSpeechCutter(vadModel)
+  return openSpeechCutter(vadModel, engines)
 }
 
 const checkKeywords = (keywords: readonly string[] = []): void => {
@@ -251,7 +254,9 @@ export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription)
       "the voice detector that finds the speech is not on this machine — it comes with any speech model: `models download`",
       { reason: "model.not-downloaded", model: "silero_vad" },
     )
-  const cutter = await (options.cutter ?? openCutter)(vadModel)
+  const cutter = options.cutter
+    ? options.cutter(vadModel)
+    : await openCutter(vadModel, { ...(options.env ? { env: options.env } : {}), ...options.engines })
   let spans: { start: number; end: number }[]
   try {
     spans = cutter.cut(pcm)

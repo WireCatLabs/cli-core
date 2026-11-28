@@ -1,11 +1,14 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { transcribeMeeting } from "../meetings/index.js"
 import { memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
 import { decodeChannels, type Pcm } from "./decode.js"
 import { piecesOf, transcribeOpenAI } from "./openai.js"
 import { openSpeechCutter, SAMPLE_RATE, type SpeechCutter, toModelRate } from "./recognize.js"
+
+placeEngines()
 
 const fixture = (name: string) => new URL(`../testing/fixtures/${name}`, import.meta.url)
 const vadModel = fileURLToPath(fixture("silero_vad.onnx"))
@@ -85,7 +88,7 @@ describe("transcribing with OpenAI", () => {
 
   it("**keeps continuous speech whole where the detector cut it at 20 seconds**, never mid-word", async () => {
     const [channel] = await channelsOf("quiet-middle.ogg")
-    const cutter = openSpeechCutter(vadModel)
+    const cutter = await openSpeechCutter(vadModel)
     try {
       const pcm = toModelRate(channel.samples, channel.rate)
       const speech = pcm.subarray(SAMPLE_RATE / 2)

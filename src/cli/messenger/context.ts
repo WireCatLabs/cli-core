@@ -25,6 +25,7 @@ import type { PurposeConfig } from "../../services/project-purposes.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { type BaseContext, type BaseEnvironment, baseContext, environmentOf } from "../context.js"
+import { engineInstall } from "../engines.js"
 import { type PermissionKeyOf, refuseUnknownPermissionKeys } from "../permission-keys.js"
 import { asFirstWord } from "../profile.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
@@ -379,6 +380,8 @@ export interface MessengerContext extends BaseContext {
   stdin: NodeJS.ReadableStream & { isTTY?: boolean }
   /** The local speech recognizer, where a test hands one in. */
   recognizer?: OpenRecognizer
+  /** What this command adds to an engine's install on first use (`engineInstall`). */
+  engineInstall?: ReturnType<typeof engineInstall>
   /** Read-only, the allow-list, the recipient list and the hourly limit — asked before every write, told after. */
   guard: SendGuard
   /**
@@ -786,6 +789,7 @@ export const messengerContext = (
     profile,
     stdin: environmentOf(command).stdin ?? process.stdin,
     ...(environmentOf(command).recognizer ? { recognizer: environmentOf(command).recognizer } : {}),
+    engineInstall: engineInstall(command),
     guard,
     withMessenger: (work, options = {}) =>
       base.run(

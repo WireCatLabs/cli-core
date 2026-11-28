@@ -395,6 +395,11 @@ const OTHERS: Entry[] = [
   validation("source.no-text", "the source holds no text to keep"),
   validation("source.unreadable", "the reader could not read the source"),
   ["source.engine-missing", "configuration_error", "reading this source needs a reader package that is not installed"],
+  [
+    "engine.missing",
+    "configuration_error",
+    "a feature's engine is not installed and could not be installed now; details.retry is the command that installs it",
+  ],
   validation("busy.feed", "a feed calendar has no busy times to ask; read its events with events list"),
   ["calendar.unsynced", "not_found", "the calendar account has no synced calendar in the store"],
   ["calendar.sync-incomplete", "not_found", "a synced calendar's sync never finished or is mid-round"],
@@ -892,6 +897,7 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
 const DETAILED: Record<string, readonly string[]> = {
   "vocabulary.consolidation-over-budget": ["table"],
   "chat-sending.ask": CHAT_SENDING_ASK_DETAILS,
+  "engine.missing": ["engine", "version", "retry"],
 }
 
 /** Every reason this package raises; cli-base's own are known to the handler already. */

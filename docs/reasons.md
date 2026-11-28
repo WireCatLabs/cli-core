@@ -153,6 +153,7 @@ headings.
 | `documents.other-account` | `configuration_error` | the documents are signed in as another account than the tracker copy of the same provider |  |
 | `domain-lists.offline` | `permission_error` | updating the domain lists needs the network; --offline was requested |  |
 | `download.mismatch` | `invalid_response` | the downloaded file has other content than the listing said |  |
+| `engine.missing` | `configuration_error` | a feature's engine is not installed and could not be installed now; details.retry is the command that installs it | `engine`, `version`, `retry` |
 | `enrichment.owner-only` | `permission_error` | only the owner turns enrichment on, not an agent |  |
 | `event.conference-exists` | `validation_error` | the event has a meeting link already, which its attendees use |  |
 | `event.conflict` | `validation_error` | the event changed at the provider since the last sync; sync and try again |  |

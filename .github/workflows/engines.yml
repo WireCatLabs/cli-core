@@ -1,16 +1,22 @@
 name: Engines
-# The first-use installer on each system an engine ships for: its tests under Node, then the built installer from an
-# empty data folder under Node and Bun, with the engines cli-core pins downloaded from npm. Only when the installer or
-# its pins change, since every WireCat repository shares the Actions minutes.
+# The first-use installer on each system an engine ships for: its tests and voice's under Node, then the built installer
+# and voice from an empty data folder under Node and Bun, with the engines cli-core pins downloaded from npm. Only when
+# the installer, its pins or voice change, since every WireCat repository shares the Actions minutes.
 on:
   pull_request:
     paths:
       - "src/engines/**"
-      - "src/speech/install.ts"
+      - "src/speech/**"
+      - "src/cli/messenger/models-command.ts"
+      - "src/cli/messenger/transcribe-command.ts"
+      - "src/cli/messenger/hearing-command.ts"
+      - "src/cli/engine-surface.test.ts"
       - "src/files/tar.ts"
       - "src/files/lock.ts"
       - "src/cli/engines.ts"
       - "src/testing/engine-fixtures.ts"
+      - "src/testing/placed-engines.ts"
+      - "src/testing/voice-engine-fixtures.ts"
       - "scripts/engine-*.ts"
       - "scripts/check-engines.ts"
       - ".github/workflows/engines.yml"
@@ -42,12 +48,65 @@ jobs:
           cache: pnpm
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
+      - run: >-
+          pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
+          src/speech/voice-install.test.ts src/cli/engine-surface.test.ts
       - run: pnpm build
       # The line is checked, not only the exit code: a script that never reached its check also exits 0.
-      - run: node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "pinned engines install" "$RUNNER_TEMP/node.log"
+      - run: node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "voice works" "$RUNNER_TEMP/node.log"
         env:
           ENGINE_CHECK_REAL: "1"
-      - run: bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "pinned engines install" "$RUNNER_TEMP/bun.log"
+      - run: bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "voice works" "$RUNNER_TEMP/bun.log"
         env:
           ENGINE_CHECK_REAL: "1"
+
+  # The packed package as people install it, none of which has the engines beside cli-core: npm into a folder (the
+  # layout npx uses), a global npm install, pnpm (WireCat Desktop's) and Bun. Each runs voice from an empty data folder.
+  installs:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Install the package four ways
+        run: |
+          set -euo pipefail
+          tgz=$(ls "$RUNNER_TEMP"/wirecat-cli-core-*.tgz)
+          for way in npm global pnpm bun; do mkdir -p "$RUNNER_TEMP/$way" && echo '{}' > "$RUNNER_TEMP/$way/package.json"; done
+          npm install --prefix "$RUNNER_TEMP/npm" --no-audit --no-fund "$tgz"
+          npm install --global --prefix "$RUNNER_TEMP/global" --no-audit --no-fund "$tgz"
+          pnpm --dir "$RUNNER_TEMP/pnpm" add "$tgz"
+          bun add --cwd "$RUNNER_TEMP/bun" "$tgz"
+      - name: Voice from each install, from an empty data folder
+        env:
+          ENGINE_CHECK_REAL: "1"
+        run: |
+          set -euo pipefail
+          global=$(npm root --global --prefix "$RUNNER_TEMP/global")
+          check() {
+            for engine in sherpa-onnx ogg-opus-decoder; do
+              if [ -e "$2/../../$engine" ]; then echo "$engine is installed beside cli-core in $2" && exit 1; fi
+            done
+            "$1" scripts/check-engines.ts "$2/dist" | tee "$RUNNER_TEMP/check.log"
+            grep -q "voice works" "$RUNNER_TEMP/check.log"
+          }
+          check node "$RUNNER_TEMP/npm/node_modules/@wirecat/cli-core"
+          check node "$global/@wirecat/cli-core"
+          check node "$RUNNER_TEMP/pnpm/node_modules/@wirecat/cli-core"
+          check bun "$RUNNER_TEMP/bun/node_modules/@wirecat/cli-core"

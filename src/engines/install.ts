@@ -52,6 +52,14 @@ export class EngineUnavailable extends Error {
   }
 }
 
+/** A missing engine as the error of a command whose whole work needs it, with the command that installs it. */
+export const engineMissingError = (state: EngineMissing): CliError =>
+  new CliError(
+    "configuration_error",
+    `${state.engine} ${state.version} is not installed and could not be installed now: ${state.reason}. Retry with: ${state.retry}`,
+    { reason: "engine.missing", engine: state.engine, version: state.version, retry: state.retry },
+  )
+
 export interface EnsureOptions {
   /** The command a person runs to try again, such as `max speech install`. */
   retry: string

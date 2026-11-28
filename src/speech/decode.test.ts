@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import {
   decodeAudio,
   decodeChannels,
@@ -13,6 +14,8 @@ import {
   wavStream,
 } from "./decode.js"
 import { SAMPLE_RATE } from "./recognize.js"
+
+placeEngines()
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`../testing/fixtures/${name}`, import.meta.url)))
 const refusing = async () => {

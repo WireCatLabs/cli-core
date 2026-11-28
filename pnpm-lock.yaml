@@ -100,18 +100,12 @@ importers:
       mpg123-decoder:
         specifier: 1.0.3
         version: 1.0.3
-      ogg-opus-decoder:
-        specifier: 1.7.5
-        version: 1.7.5
       postal-mime:
         specifier: 4.1.4
         version: 4.1.4
       qrcode-generator:
         specifier: 2.0.4
         version: 2.0.4
-      sherpa-onnx:
-        specifier: 2.0.0
-        version: 2.0.0
       string-width:
         specifier: 8.3.0
         version: 8.3.0
@@ -221,6 +215,9 @@ importers:
       mysql2:
         specifier: 3.24.6
         version: 3.24.6(@types/node@22.20.5)
+      ogg-opus-decoder:
+        specifier: 1.7.5
+        version: 1.7.5
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -230,6 +227,9 @@ importers:
       psl:
         specifier: 1.15.0
         version: 1.15.0
+      sherpa-onnx:
+        specifier: 2.0.0
+        version: 2.0.0
       ssh2:
         specifier: 1.17.0
         version: 1.17.0

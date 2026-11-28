@@ -98,6 +98,7 @@ it("reuses the existing recognizer with bounded, copied PCM and the existing lea
     expect.objectContaining({ id: "tiny-example" }),
     expect.any(Function),
     join(directory, "silero_vad.onnx"),
+    {},
   )
   await Promise.all([recognizer.close(), recognizer.close()])
   expect(native.free).toHaveBeenCalledTimes(1)

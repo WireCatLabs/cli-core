@@ -14,6 +14,7 @@ import {
 } from "../../speech/transcribe.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
+import { engineInstall } from "../engines.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardAnswer } from "./message-answers.js"
@@ -36,14 +37,16 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
     .option("--model <model>", "which downloaded model; implies --local (`models list`)")
     .action(async function (this: Command, chat: string, messageId: string) {
       const context = messengerContext(this, messenger)
+      const chosen = choose(
+        messenger,
+        context.settings,
+        this.opts<{ local?: boolean; model?: string }>(),
+        context.env,
+        context.keyring,
+      )
       const choice = {
-        ...choose(
-          messenger,
-          context.settings,
-          this.opts<{ local?: boolean; model?: string }>(),
-          context.env,
-          context.keyring,
-        ),
+        ...chosen,
+        engines: { ...chosen.engines, ...engineInstall(this) },
         ...(context.recognizer ? { open: context.recognizer } : {}),
         ...signalOf(this),
       }

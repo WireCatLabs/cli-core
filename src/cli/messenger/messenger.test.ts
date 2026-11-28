@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
 import type { AddressBookEntry, Chat, Message, WindowedMessage } from "../../domain/models.js"
 import { conversation, ENTITIES } from "../../entities/index.js"
+import { placeEngines } from "../../kit/engines.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -5540,6 +5541,7 @@ describe("messages transcribe", () => {
       truncateSync(path, bytes)
     }
     rememberAccount(app, "default", "500", root)
+    placeEngines(root, ["ogg-opus-decoder"])
     const seeded = await openStore({ env: root })
     await seeded.messages.saveMessages(
       { provider: "chat", account: "500" },

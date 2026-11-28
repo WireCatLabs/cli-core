@@ -69,7 +69,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./documents` | `src/documents/`, `src/services/documents/`, `src/fetch/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction, and the one-page fetch for a link the owner adds; existing readers remain available — see [Document workflows](DOCUMENTS.md) and [Reading one page](#reading-one-page) |
 | `./store` | `src/store/` | the SQLite seam and the shared message store |
 | `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
-| `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding (ffmpeg included), timed local pieces, OpenAI transcription and `cloudSpeech` for a host that opts a profile in; import alone loads no engine |
+| `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding (ffmpeg included), timed local pieces, OpenAI transcription and `cloudSpeech` for a host that opts a profile in; import alone loads no engine, and the voice engines install on first use ([Engines](#engines-installed-on-first-use)) |
 | `./charts` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads the bundled ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
 | `./models` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
 | `./services` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
@@ -1095,7 +1095,7 @@ An engine is an npm package and everything it needs, which cli-core installs int
 time a command needs it, instead of shipping it in every install (`src/engines/install.ts`). It lives in
 `<WireCat data>/engines/<name>/<version>/<key>/node_modules/`, one flat folder, and is loaded only from there
 (`engineRequire`, `importFromEngine`), never from the packages beside cli-core. So npx, a global npm install, pnpm and
-WireCat Desktop should all load the same files; only Node and Bun are tested.
+WireCat Desktop all load the same files, under Node and under Bun.
 
 - **The pins** are `src/engines/pins.ts`: each package's exact version, the registry's `dist.integrity` (sha512) and
   the tarball's size, plus npm's `os`, `cpu` and `libc` for a package built for some systems only, so each system
@@ -1117,8 +1117,19 @@ WireCat Desktop should all load the same files; only Node and Bun are tested.
   the rest of its work. `engineFor` (`src/cli/engines.ts`) prints progress to stderr for a person at a terminal only,
   and nothing under `--json` or for an MCP call. `doctor` lists the folders under `engines`.
 
-The [Engines workflow](../../.github/workflows/engines.yml) runs these tests on Linux, macOS and Windows, and the built
-installer from an empty data folder under Node and Bun, downloading the pinned engines from npm.
+**Voice** is the first user. `sherpa-onnx` (recognition and the voice detector) and `ogg-opus-decoder` (Opus) are
+development dependencies only; `src/speech/engines.ts` installs each the first time `loadSherpa` or `decodeOgg` needs
+it. `choose` names the retry command, `<cli> <profile> models download <model>`, and `models download` installs both
+engines beside the model it checks. A failure is the error `engine.missing` with that command in `details.retry`: a
+command whose whole work is voice (`messages transcribe`) fails with it, a read that hears voice on the side
+(`messages list --transcribe`) puts it under `missing` and answers the rest, and Opus falls back to ffmpeg when the
+machine has it. Tests that are about voice rather than its install link the copies in the repository's node_modules into the data
+folder (`placeEngines`, in `@wirecat/cli-core/testing`, for the CLIs' tests too).
+
+The [Engines workflow](../../.github/workflows/engines.yml) runs these tests and voice's on Linux, macOS and Windows,
+then the built installer and voice (a recording decoded and cut at its pauses) from an empty data folder under Node and
+Bun, downloading the pinned engines from npm. Its `installs` job does the same from the packed package installed by
+npm into a folder (npx's layout), by a global npm install, by pnpm (WireCat Desktop's) and by Bun.
 
 ## Package upgrades
 

@@ -804,6 +804,7 @@ MessengerContext · interface · stdin: NodeJS.ReadableStream & {
 MessengerContext · interface · isTTY?: boolean;
 MessengerContext · interface · };
 MessengerContext · interface · recognizer?: OpenRecognizer;
+MessengerContext · interface · engineInstall?: ReturnType<typeof engineInstall>;
 MessengerContext · interface · guard: SendGuard;
 MessengerContext · interface · withMessenger: <T>(work: (messenger: MessengerAdapter) => Promise<T>, options?: ConnectOptions) => Promise<T>;
 MessengerContext · interface · withStore: <T>(work: (store: MessageStore, account: AccountKey) => Promise<T>, options?: {
