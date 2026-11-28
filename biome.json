@@ -29,7 +29,13 @@
   },
   "overrides": [
     {
-      "includes": ["packages/sqlite/probe.mjs", "packages/onnx/probe.mjs", "packages/onnx/probe-native.mjs"],
+      "includes": [
+        "packages/sqlite/probe.mjs",
+        "packages/sqlite/platforms.mjs",
+        "packages/sqlite/where.mjs",
+        "packages/onnx/probe.mjs",
+        "packages/onnx/probe-native.mjs"
+      ],
       "linter": {
         "rules": {
           "suspicious": {

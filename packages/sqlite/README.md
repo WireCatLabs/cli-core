@@ -9,7 +9,15 @@ Next to each library sits [sqlite-vec](https://github.com/asg017/sqlite-vec) 0.1
 the same targets, plus Windows x64 (`vec0.dll` only, since Node there has SQLite built in). sqlite-vec is by
 Alex Garcia, dual-licensed MIT or Apache-2.0; it is shipped here under Apache-2.0.
 
+The libraries come in one package per platform, which this package names as optional dependencies, so an
+install downloads only its own (about 1.8 MB on Linux, 3.7 MB on macOS, 0.2 MB on Windows):
+`@wirecat/cli-core-sqlite-darwin` (arm64 and x64 in one universal build), `-linux-x64-gnu`, `-linux-arm64-gnu`,
+`-linux-x64-musl`, `-linux-arm64-musl` and `-win32-x64`. An install with `--omit=optional`, or a `node_modules`
+copied to another platform, has none.
+
 `libraryFor()` returns the library for the running platform, or nothing; `extensionFor()` the extension.
 
-Built and published by `.github/workflows/sqlite.yml`; `build.sh` builds one target, `check.sh`
-checks a library exports what Node imports, `probe.mjs` that a runtime holds the store on it and loads `vec0`.
+Built and published by `.github/workflows/sqlite.yml`; `build.sh` builds one target into `lib/<target>/`,
+`check.sh` checks a library exports what Node imports, `platforms.mjs` lays out the platform packages in
+`npm/<target>/`, `where.mjs` prints what an install finds, and `probe.mjs` checks that a runtime holds the store
+on it and loads `vec0`.

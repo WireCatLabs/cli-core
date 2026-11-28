@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core-sqlite",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "SQLite 3.53.4 builds and the sqlite-vec 0.1.9 extension for @wirecat/cli-core",
   "license": "Apache-2.0",
   "type": "module",
@@ -19,7 +19,14 @@
     "LICENSE",
     "index.js",
     "index.d.ts",
-    "lib/",
     "README.md"
-  ]
+  ],
+  "optionalDependencies": {
+    "@wirecat/cli-core-sqlite-darwin": "1.2.0",
+    "@wirecat/cli-core-sqlite-linux-x64-gnu": "1.2.0",
+    "@wirecat/cli-core-sqlite-linux-arm64-gnu": "1.2.0",
+    "@wirecat/cli-core-sqlite-linux-x64-musl": "1.2.0",
+    "@wirecat/cli-core-sqlite-linux-arm64-musl": "1.2.0",
+    "@wirecat/cli-core-sqlite-win32-x64": "1.2.0"
+  }
 }

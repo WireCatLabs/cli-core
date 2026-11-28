@@ -1,6 +1,8 @@
 name: SQLite
 # Builds @wirecat/cli-core-sqlite (packages/sqlite) — SQLite and the sqlite-vec extension — checks every
 # library on the systems it is for, and publishes it when started by hand with `publish` — npm trusts this file by name.
+# The libraries go out as one package per platform (@wirecat/cli-core-sqlite-<target>), which the main package
+# names as optional dependencies, so an install downloads only its own.
 on:
   schedule:
     - cron: "37 3 1 * *"
@@ -123,14 +125,20 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/sqlite/lib
-      - run: cd packages/sqlite && npm pack
+      - run: node packages/sqlite/platforms.mjs
+      - name: pack the main package and one per platform
+        run: |
+          mkdir out
+          npm pack ./packages/sqlite --pack-destination out
+          for dir in packages/sqlite/npm/*/; do npm pack "./$dir" --pack-destination out; done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package
-          path: packages/sqlite/wirecat-cli-core-sqlite-*.tgz
+          path: out/*.tgz
           if-no-files-found: error
 
-  # The library as installed — unpacked from the tarball — under Bun, which loads it itself.
+  # The library as installed — the main package and the darwin one, found by libraryFor() — under Bun, which
+  # loads it itself.
   macos:
     needs: pack
     strategy:
@@ -148,9 +156,13 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
-      - run: tar -xzf wirecat-cli-core-sqlite-*.tgz
+      - run: |
+          mkdir probe && echo '{}' > probe/package.json
+          npm install --prefix probe --no-audit --no-fund ./wirecat-cli-core-sqlite-[0-9]*.tgz ./wirecat-cli-core-sqlite-darwin-*.tgz
       - run: sw_vers -productVersion && uname -m
-      - run: bun packages/sqlite/probe.mjs "$PWD/package/lib/darwin/libsqlite3.dylib" "$SQLITE_VERSION" "$PWD/package/lib/darwin/vec0.dylib"
+      - run: |
+          bun packages/sqlite/probe.mjs "$(bun packages/sqlite/where.mjs probe library)" "$SQLITE_VERSION" \
+            "$(bun packages/sqlite/where.mjs probe extension)"
 
   # A distribution's Node, which takes the system library, started on ours instead.
   distributions:
@@ -174,13 +186,21 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
-      - run: tar -xzf wirecat-cli-core-sqlite-*.tgz
+      # Laid out as npm hoists it, by hand: the image's Node may come without npm.
+      - run: |
+          main=probe/node_modules/@wirecat/cli-core-sqlite
+          mkdir -p "$main" "$main-${{ matrix.target }}"
+          tar -xzf wirecat-cli-core-sqlite-[0-9]*.tgz -C "$main" --strip-components=1
+          tar -xzf wirecat-cli-core-sqlite-${{ matrix.target }}-[0-9]*.tgz -C "$main-${{ matrix.target }}" --strip-components=1
       - run: |
           docker run --rm -v "$PWD:/w" -w /w ${{ matrix.image }} sh -c '
             if command -v apk >/dev/null; then apk add --no-cache nodejs >/dev/null
             elif command -v dnf >/dev/null; then dnf install -y nodejs >/dev/null
             else apt-get update >/dev/null && apt-get install -y nodejs >/dev/null; fi
-            LD_LIBRARY_PATH=/w/package/lib/${{ matrix.target }} node packages/sqlite/probe.mjs - ${{ env.SQLITE_VERSION }} /w/package/lib/${{ matrix.target }}/vec0.so'
+            library=$(node packages/sqlite/where.mjs probe library)
+            extension=$(node packages/sqlite/where.mjs probe extension)
+            case $library in */cli-core-sqlite-${{ matrix.target }}/*) ;; *) echo "found $library" >&2; exit 1 ;; esac
+            LD_LIBRARY_PATH=$(dirname "$library") node packages/sqlite/probe.mjs - ${{ env.SQLITE_VERSION }} "$extension"'
 
   publish:
     needs: [macos, distributions, security]
@@ -198,4 +218,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
-      - run: npm publish wirecat-cli-core-sqlite-*.tgz --access public --provenance
+      # The platform packages before the main one that names them; a version already on npm is skipped, so a
+      # publish that stopped halfway can run again.
+      - run: |
+          for tarball in wirecat-cli-core-sqlite-*-[0-9]*.tgz wirecat-cli-core-sqlite-[0-9]*.tgz; do
+            package=$(tar -xzOf "$tarball" package/package.json | jq -r '.name + "@" + .version')
+            if npm view "$package" version >/dev/null 2>&1; then echo "$package is already on npm"; continue; fi
+            npm publish "$tarball" --access public --provenance
+          done

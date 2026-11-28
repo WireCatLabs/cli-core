@@ -9,6 +9,7 @@ coverage/
 /docs_ai/
 .claude/settings.local.json
 packages/sqlite/lib/
+packages/sqlite/npm/
 packages/sqlite/*.tgz
 packages/onnx/native/
 /.live/
