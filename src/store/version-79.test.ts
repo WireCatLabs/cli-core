@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { rollBackTo } from "../testing/older-store.js"
 import type { CacheDatabase } from "./driver.js"
-import { migrate } from "./migrations.js"
+import { MIGRATIONS, migrate } from "./migrations.js"
 import { openCache } from "./open.js"
 import { proposerOf } from "./sqlite/actors.js"
 import { MANIFEST } from "./sqlite/manifest.js"
@@ -143,6 +143,20 @@ it("names no `memo upgrade` in the notice wcat prints when it moves the store", 
 
   expect(notice).toContain("`mail upgrade`")
   expect(notice).not.toContain("memo")
+})
+
+it("is refused by a build that speaks 78, so no older build writes a second memo:bulk box", async () => {
+  const { path, old } = await storeAt78()
+  old.close()
+  handles.push(await openStore({ path }))
+  await handles.pop()?.close()
+
+  const before = await openCache(path)
+  handles.push(before)
+  const upTo78 = MIGRATIONS.filter(({ version }) => version <= 78)
+  expect(() => migrate(before, { migrations: upTo78 })).toThrow(
+    /written by a newer version \(schema 79, needs at least 79; this one speaks 78\)/,
+  )
 })
 
 it("drops memo's client row when wcat already has one", async () => {

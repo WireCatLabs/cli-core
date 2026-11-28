@@ -154,5 +154,11 @@
     "pr": 3437,
     "until": "2026-12-12",
     "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "cli-memo",
+    "pr": 3447,
+    "until": "2026-12-05",
+    "reason": "#3447 (store version 79) renames memo:bulk, memo:envelope:… and the memo-* bots to the wcat names: src/mail/pipeline.test.ts writes memo:bulk, and src/mcp/server.ts AGENT, src/sources/suggest.ts READER_BOT and the findings bots still write memo-* until the CLI becomes wcat"
   }
 ]

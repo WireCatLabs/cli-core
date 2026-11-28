@@ -12,7 +12,11 @@
   client list becomes `wcat`. Every reference to a bot is by its id, so authors, proposers and deciders follow. A new
   name already taken keeps both rows, and the store still opens. Labels written as history (provenance, reasons,
   decision notes in `metadata`, import batch ids) keep the name they were written with.
-- **Every WireCat CLI moves to this cli-core together.** A build before version 79 refuses the store, so it can never
-  write a second `memo:bulk` box beside `wcat:bulk`. Before the migration the store copies `bots`, `mail_sort_rules`,
+- **What breaks: every WireCat CLI must move to cli-core 3.0 on the same day.** Once one CLI on this cli-core opens
+  the store, every build before version 79 refuses it ("written by a newer version (schema 79, needs at least 79; this
+  one speaks 78)"), so it can never write a second `memo:bulk` box beside `wcat:bulk`. Release each CLI on cli-core
+  3.0 in the same run, or its users are locked out until they run `<cli> upgrade`. Code that names `memo:bulk`,
+  `memo:envelope:…` or a `memo-*` bot (cli-memo's `AGENT`, `READER_BOT`, its findings bots and its tests) moves to
+  the new names: the old ones no longer match a row. Before the migration the store copies `bots`, `mail_sort_rules`,
   `mailboxes`, `store_settings`, `templates` and `templates_history` into `backups/` beside it, and
   `store restore <copy>` takes it back to version 78.
