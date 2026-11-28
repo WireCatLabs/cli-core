@@ -5,6 +5,265 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 3.0.0 — 28.11.2026
+
+### Added
+
+- **Users no longer get cli-core's type files; developers get them from `X.Y.Z-dev`.** Every release now publishes
+  two versions from one build: `X.Y.Z` (tag `latest`) without `.d.ts`, `.d.ts.map`, `.js.map` or `src/`, and
+  `X.Y.Z-dev` (tag `dev`) with them, the same JavaScript byte for byte. The install of a CLI is about 12 MB and
+  1,676 files smaller. A CLI repository keeps `"@wirecat/cli-core": "X.Y.Z"` in `package.json` and adds
+  `"@wirecat/cli-core": X.Y.Z-dev` under `overrides:` in `pnpm-workspace.yaml`; without it `tsc` fails with TS7016,
+  "Could not find a declaration file for module '@wirecat/cli-core'". `cli-dev adopt` from cli-base writes the line
+  ([Architecture](docs/dev/ARCHITECTURE.md#the-two-packages-of-a-release)).
+- **`doctor` lists the engines installed in the shared data folder.** A new `engines` field gives the folder
+  (`<WireCat data>/engines`) and each engine in it: its name, version, path and whether this version of cli-core
+  loads it (`current`). Nothing installs an engine yet; voice, search by meaning and the document readers move onto
+  the installer in later releases, and then install on first use instead of shipping in every install
+  ([how engines install](docs/dev/ARCHITECTURE.md#engines-installed-on-first-use)).
+- **Hints, help and errors name `wcat` and `files`, not `memo`.** memo became `wcat` (`@wirecat/wirecat`), and its
+  local files commands moved to the files CLI (`@wirecat/files-cli`). Every CLI's "Works with" screen lists `wcat
+  context <person>` and `files`, and a hint such as "mail is searched by wcat: install @wirecat/wirecat, then `wcat
+  search mail …`" replaces the `memo` one. `WIRECAT_TOOLS` has the entries `wcat` and `files` in place of `memo`, and a
+  new `program` field (`wcat-wirecat`): the first-run tool list checks that program, since every WireCat tool installs
+  a `wcat` launcher. `WCAT_SCENARIOS` replaces `MEMO_SCENARIOS`, which stays as a deprecated alias. A CLI's
+  `contracts/help.snap` and `docs/commands.md` change at its next bump. Watch for: the shared `search` description
+  changed, and `customizeSharedCommand` refuses an override whose "before" text no longer matches, so zoom-cli fails
+  at start on this cli-core until its `src/contract-overrides.ts` says the new text (memo's override goes with phase 4
+  of the split).
+- **A send never takes a file from memo's old `cli-memo` folders**, as it already refuses every other WireCat tool's
+  folders, and store recovery counts `wcat-*` timers as WireCat's.
+- **`accountRemoveCommand` is marked as cli-core's own command**, as the session and mirrors commands are since 1.2.0.
+  `commands --json` gives it `origin: "cli-core"`, so the `reserved-shared-command` lint rule (WC-CMD-34) stops
+  warning on the CLIs that mount it. A CLI changes it only through its options, `effects` among them: an option, a
+  description or an annotation added to the returned command afterwards stops the run with
+  `contract.unacknowledged-override`. Pass `{ effects }` instead of wrapping it in `annotate(...)`. The CRM's
+  `account remove` does so too. No CLI on main wraps it today.
+- **`@wirecat/cli-core/preload`** loads every file of the bundle and resolves the bundle's own chunks without looking
+  on disk, so a server keeps answering after an upgrade replaces the package under it. The CLI's loader calls it 2 s
+  after a server starts and before `upgrade`.
+- **`@wirecat/cli-core-sqlite` 1.2.0 is built as one package per platform.** Its SQLite and sqlite-vec libraries
+  move into six optional packages (`@wirecat/cli-core-sqlite-darwin`, `-linux-x64-gnu`, `-linux-arm64-gnu`,
+  `-linux-x64-musl`, `-linux-arm64-musl`, `-win32-x64`), and npm, pnpm and Bun install only the one for the
+  machine, by `os`, `cpu` and `libc`. Once cli-core depends on 1.2.0, an install is about 9 MB smaller on Linux,
+  7.5 MB on macOS and 11 MB on Windows; until then nothing changes for a cli-core install. `libraryFor()` and
+  `extensionFor()` answer as before, and a missing library gives the same error. An install with `--omit=optional`
+  now has no library ([the package](packages/sqlite/README.md)).
+- **`decodeChannels`, `decodeChannelsFile`, `decodeAudio`, `recognizeLocalPieces`, `openLocalSpeechRecognizer` and
+  `transcribeOpenAI` take how the voice engines install** (`engines`: the data folder's `env`, a `fetch`, `progress`
+  for stderr and the `retry` command named when they cannot be installed). Left out, they install into this
+  process's data folder, silently.
+- **`placeEngines` in `@wirecat/cli-core/testing`** puts the pinned engines in a test's data folder, linked to the
+  copies in the repository's `node_modules`. A CLI whose tests decode Opus or run the voice detector through cli-core
+  (max-cli's `src/hearing.test.ts`, whatsapp-cli's `src/media.test.ts`) adds `sherpa-onnx` and `ogg-opus-decoder` as
+  dev dependencies at the pinned versions and calls `placeEngines(env, ["sherpa-onnx", "ogg-opus-decoder"])`.
+- **`CrmBudgetSpent`**, what `CrmCallContext.spend` throws once the budget is spent. A source that reads one record at
+  a time may catch it and hand back what it read before the stop.
+- **Mail sync keeps more of what decides a mail's type** in `emails.headers`, no store version: `auto-replied` (a
+  signed `Auto-Submitted: auto-replied`, apart from `auto-submitted`), `list-post` (List-Post naming where to post),
+  `schema-types` and `schema-fields` (the schema.org type names and a few values of the HTML, never the HTML), and
+  `calendar-method` (`request`, `cancel`, `reply`). The mail types read them: an auto-reply is `auto_reply`, List-Id
+  mail with List-Post and no campaign marker is a `discussion_list`, and stored schema types count as `body_html`'s
+  do. Mail stored earlier has none of them until mail sync reads it again. From the gaps #3358 listed.
+- **`Message.senderIsBot`: a messenger can say the sender is a bot account.** The store saves it as the sender
+  identity's `bot` flag, so the sender goes to Bots, not People. Set it only when true. A sender the owner moved to
+  People stays there.
+
+### Changed — may break callers
+
+- **`WIRECAT_TOOLS` and the scenarios name `wcat`, not `memo`.** The `memo` entry of `WIRECAT_TOOLS` is gone: read
+  `wcat` (and the new `files`) instead. Each scenario's `tool` is now `"wcat"`, in `WCAT_SCENARIOS` and in the
+  deprecated alias `MEMO_SCENARIOS` alike, so a caller that compares `tool` with `"memo"` no longer matches. memo is
+  renamed with no alias for its commands (owner's ruling, 2026-11-28).
+- **Search by meaning installs its engines on first use instead of shipping them.** `@wirecat/cli-core-onnx` (with
+  `onnxruntime-common`) and `@huggingface/tokenizers` are no longer dependencies of the package: about 17 MB less in
+  every install. The first command that loads a local model (a search, `sync --embed`, `models download`) installs
+  them into `<WireCat data>/engines/` with no question, quietly under `--json` and over MCP, and goes on. When the
+  install cannot run (offline, a data folder it cannot write), the search answers by words alone and names
+  `<cli> models download <model>`, which installs them again, with voice's error `engine.missing`
+  ([how engines install](docs/dev/ARCHITECTURE.md#engines-installed-on-first-use)). A program that imported either
+  package through cli-core's install must now depend on it itself.
+- **Word files are read by cli-core's own reader, and `mammoth` is no longer a dependency.** The install is 8 MB and
+  24 packages smaller. The text is the one mammoth gave:
+  paragraphs, headings, list items and table cells, each followed by a blank line, no footnotes. Two things differ: a
+  line break inside a paragraph is now a new line (mammoth joined the words on either side), and a simple field's
+  shown value, a page number for one, is kept. The extractor is `docx:v1`; text read earlier keeps
+  `docx:mammoth@1.13.0` and is not read again. `Engine` no longer has `"mammoth"`, and `doctor` no longer lists it, so a
+  `Record<Engine, …>` with a `mammoth` key fails to typecheck: drop the key. A `.docx` never gives `engine-missing`
+  now; a damaged one gives `unreadable`, as before. A CLI that depended on `mammoth` only for cli-core's reader can
+  remove it.
+- **The PDF, web-page and HTML readers and the PNG charts install on first use.** `unpdf`, `defuddle`, `linkedom` and
+  `@resvg/resvg-js` left `dependencies`: the first PDF or HTML read, or the first PNG chart, installs them into the
+  WireCat data folder (about 3 MB for the readers), quietly, and every later run loads them from there. An install of
+  cli-core takes 30 MB less disk (178 MB to 149 MB, Linux x64). Offline, before the first install, such a file is
+  `engine-missing` with a `reason` and a `retry`, and is read on a later run; `chartPng` answers the `engine-missing`
+  state instead of a PNG, and `stats charts --output x.png` still prints the chart, marked incomplete
+  (`engine.missing`). A caller that imported one of these packages itself now installs it itself. `doctor`'s
+  `readers` says `on first use` for them until they are installed
+  ([how engines install](docs/dev/ARCHITECTURE.md#engines-installed-on-first-use)).
+- **cli-core ships pre-bundled, and its 51 entry points are now 7.** `exports` points at `dist/bundle/`, one esbuild
+  build split into chunks and merged by rolldown, so a CLI loads cli-core from this package instead of carrying its own
+  copy: tg's `dist/bundle` goes from 14.7 MB to 1.7 MB, the template's from 13.0 MB to 0.03 MB. Warm `--help` of tg
+  measured +28 ms against the private copy, the template's +19 ms (Node 24, median of 30 and 10 runs). A CLI must take
+  this release together with cli-base 2.0.0, the peer range now: an older `cli-dev bundle` copies cli-core privately
+  again. The unbundled `dist/**/*.js` stay only in `X.Y.Z-dev`; users get the 12 files that a process starts by
+  path (the embedding process `dist/embeddings/child.js`, the `cli-core-parity` bin) and what they import.
+
+  | Before | Now |
+  |---|---|
+  | `.`, `./cli`, `./store`, `./store/areas`, `./sends`, `./update`, `./services`, `./background`, `./manifest`, `./oauth`, `./constants`, `./models`, `./files`, `./crm`, `./crm/cli`, `./meetings`, `./meetings/cli`, `./meetings/mcp`, `./calendar`, `./calendar/cli`, `./calendar/mcp`, `./tracker`, `./content`, `./tasks`, `./google`, `./speech`, `./speech/wav`, `./persistence/native`, `./parity`, `./charts`, `./sql`, `./sftp`, `./mount`, `./office` | `.` |
+  | `./cli/start`, `./sqlite-runtime` | `./start` |
+  | `./mcp` | `./mcp` |
+  | `./documents`, `./documents/cli` | `./documents` |
+  | `./mail`, `./mail/cli` | `./mail` |
+  | `./testing`, `./crm/testing`, `./meetings/testing`, `./calendar/testing`, `./tracker/testing`, `./content/testing`, `./mail/testing`, `./documents/testing`, `./tasks/testing`, `./skill-validation` | `./testing` |
+  | — | `./preload` (new), `./package.json` (new) |
+  | `./internal/*` (types only) | removed: no CLI used it |
+  | `./parity.json`, `./schemas/records-envelope.v1.schema.json`, `./schemas/examples/records-business.jsonl` | unchanged |
+
+  Five types that two areas named alike are renamed in `.`; the old name keeps the other area's type:
+  `Attachment` from `./meetings` → `MeetingAttachment`, `Finding` from `./meetings` → `MeetingFinding`, `Transcript`
+  from `./meetings` → `MeetingTranscript`, `TokenStorage` from `./oauth` → `OAuthTokenStorage`, `GroupMember` from
+  `./services` → `GroupContextMember`. `SCOPES` from `./services` and from `./store/areas` are now one array.
+  `matches` (tasks and mail) and `within` (documents and mail) keep their meaning per entry point: they stay apart.
+
+  What a CLI changes, mechanically:
+  - Rewrite each import specifier by the table above, then merge the imports that now share one specifier.
+  - Import `startCli` and `ensureSqlite` from `@wirecat/cli-core/start` in the bin; `.` loads the whole program.
+  - `vi.mock("@wirecat/cli-core/<old path>")` becomes `vi.mock("@wirecat/cli-core")` or the new entry: gcal-cli and
+    max-cli mock `./cli`, zoom-cli `./services` and `./store`, cli-memo `./store`. The mock only reaches the CLI's
+    own calls, as before.
+  - Deep `dist/` imports read unbundled files the bundle does not use, so a mock of them no longer reaches cli-core:
+    cli-memo mocks `node_modules/@wirecat/cli-core/dist/embeddings/models.js` (`src/search/search-meaning.test.ts`),
+    cli-testing imports `dist`, `dist/cli/index.js` and `dist/store/index.js`, cli-base `dist/index.js`. Move them to
+    an entry point: those files are only in `X.Y.Z-dev`, so such an import passes in a CLI's own checkout and fails
+    where users install it.
+  - biome rules naming `@wirecat/cli-core/store/*` (slack-cli, whatsapp-cli) and `@wirecat/cli-core/*`
+    (whatsapp-cli) match nothing now.
+  - The stable API is `.`, `./mcp`, `./start` and `./testing`; names from the areas that were experimental entry
+    points stay experimental inside `.` ([what may break](docs/REFERENCE.md#how-often-and-what-may-break)).
+- **memo's ids in the store take the name `wcat` (store version 79, `minCompatible` 79).** memo becomes `wcat`
+  ([plan](https://github.com/WireCatLabs/cli-core/pull/3443), owner's rulings of 28.11.2026). The mailbox of mail
+  sent to many is `wcat:bulk` (`bulkBox`, was `memo:bulk`), an envelope rule's mailbox is `wcat:envelope:<kind>:<value>`
+  (`envelopeBox`, was `memo:envelope:…`), and the scan's rule bot is `wcat-scan` (`SCAN_BOT`, was `memo-scan`).
+- **The first build that opens the store runs version 79.** It rewrites, in one transaction, whole values only:
+  `mailboxes.external_id` (`memo:bulk`, `memo:envelope:…`), `bots.name` (`memo-scan`, `memo-mcp`, `memo-findings`,
+  `memo-mail-findings` become `wcat-scan`, `wcat-mcp`, `wcat-findings`, `wcat-mail-findings`, and `memo-reader`
+  becomes `files-reader`), the same handles in `mail_sort_rules.decided_by`, `memo` as the tool that saved a template
+  (`templates.updated_by`, `templates_history.saved_by`) becomes `wcat`, and the `memo` client in the store's
+  client list becomes `wcat`. Every reference to a bot is by its id, so authors, proposers and deciders follow. A new
+  name already taken keeps both rows, and the store still opens. Labels written as history (provenance, reasons,
+  decision notes in `metadata`, import batch ids) keep the name they were written with.
+- **What breaks: every WireCat CLI must move to cli-core 3.0 on the same day.** Once one CLI on this cli-core opens
+  the store, every build before version 79 refuses it ("written by a newer version (schema 79, needs at least 79; this
+  one speaks 78)"), so it can never write a second `memo:bulk` box beside `wcat:bulk`. Release each CLI on cli-core
+  3.0 in the same run, or its users are locked out until they run `<cli> upgrade`. Code that names `memo:bulk`,
+  `memo:envelope:…` or a `memo-*` bot (cli-memo's `AGENT`, `READER_BOT`, its findings bots and its tests) moves to
+  the new names: the old ones no longer match a row. Before the migration the store copies `bots`, `mail_sort_rules`,
+  `mailboxes`, `store_settings`, `templates` and `templates_history` into `backups/` beside it, and
+  `store restore <copy>` takes it back to version 78.
+- **Voice installs its engines on first use instead of shipping them.** `sherpa-onnx` and `ogg-opus-decoder` are no
+  longer dependencies of cli-core: a default install of cli-core alone takes 120 MB instead of 153 MB. The first
+  transcription, Opus decoding or `models download` of a speech model installs them into the shared data folder
+  (`<WireCat data>/engines`) with no question, then does its work; progress goes to stderr for a person at a terminal
+  only, never under `--json` or over MCP. Offline, or when the folder cannot be written, the command fails with the
+  new reason `engine.missing`, whose `details.retry` is the command that installs them
+  (`<cli> <profile> models download <model>`); `messages list --transcribe` and the other reads still answer, with the
+  reason under `missing`. A CLI that imported either package itself (max-cli's `src/transcribe/speech.ts` and
+  `src/voice.ts`) keeps it in its own dependencies, or moves to cli-core's `decodeAudio` and `recognizeLocalPieces`
+  ([how engines install](docs/dev/ARCHITECTURE.md#engines-installed-on-first-use)).
+- **The local recognizer opener may be async.** `LocalSpeechRecognizerOptions.open` may return a promise, and is
+  given the engines' install options as a fourth argument; a synchronous opener, as before, still works.
+- **`bot watch --public-url` listens on port 9466 by default, not 8766.** WireCat Desktop gives the tools' MCP
+  servers the ports 8700 to 8999, and max's MCP server has 8766, so a bot and max's server could not run at once.
+  A tunnel that forwards to `127.0.0.1:8766` must now forward to `9466`, or the bot runs with `--port 8766`. A CLI
+  whose own docs name 8766 as the bot's port changes them when it bumps cli-core.
+- **Users no longer get cli-core's unbundled `.js`: the installed package is 17.1 MB instead of 34.5 MB.** Since
+  3.0 everything `exports` names loads from `dist/bundle/`, so the 1,678 tsc files beside it were never run. `X.Y.Z`
+  keeps only the 12 that a process starts by path, listed in `dist/by-path.json`: the embedding process
+  `dist/embeddings/child.js`, the `cli-core-parity` bin, and what the two import. `X.Y.Z-dev` keeps all of them. A
+  CLI that imports or mocks a file under `node_modules/@wirecat/cli-core/dist/` outside `dist/bundle/` passes in its
+  own checkout and fails where users install it: use an entry point. The release fails when the user package ships
+  another unbundled `.js` or lacks a listed one, and `scripts/install-size.ts` fails when a listed file cannot load
+  what it imports ([Architecture](docs/dev/ARCHITECTURE.md#the-two-packages-of-a-release)).
+
+### Changed — experimental
+
+- **A messenger's `account sessions` is now `account devices`, with no alias.** The group lists the
+  devices and apps where the messenger account is signed in. Its old name read like `session`, the profiles on this
+  computer. Telegram, WhatsApp and MAX call these "devices" in their apps too. `account sessions list` is now
+  `account devices list`, and `account sessions end --others` is now `account devices end --others`. The old words
+  are not a command any more, so a script that types them stops with a usage error. The MCP tools follow the new
+  paths.
+- **What breaks for callers:**
+  - The permission keys are `account.devices`, `account.devices.list` and `account.devices.end`.
+    `account.devices.end` asks by default, as `account.sessions.end` did.
+  - A profile that saved an `account.sessions…` key no longer runs: like any key no command checks, it is refused,
+    and the message names the new key to rename it to. `<tool> config unset permissions.account.sessions.end`
+    removes it, or move its level to `permissions.account.devices.end`.
+  - A pinned MCP catalogue, a help snapshot or a parity row that lists `account sessions` changes on the next
+    cli-core bump.
+  - Unchanged: the answers keep their entities, `account_session` and `ended_account_sessions`, with the `sessions`
+    field. The adapter methods `sessions()` and `endOtherSessions()` keep their names, so no messenger adapter
+    changes. Nothing in the store changes. The commands a CLI mounts are not part of the stable API, and
+    `accountCommand` keeps its signature, so this ships in a minor, as the removal of `account list` did.
+
+### Fixed
+
+- **The install is 28 MB smaller: the Anthropic adapter calls the API over plain `fetch`, without
+  `@anthropic-ai/sdk`.** The packed cli-core installs in 253 MB on disk instead of 281 MB, with 8 packages fewer. The
+  adapter sends the same streamed `POST /v1/messages` as before, with the same key header, API version 2026-10-21,
+  no retries and the same answers, errors and token counts.
+- **A fresh install is about 65 MB smaller: charts ship the parts of ECharts they use, bundled.** `echarts`, `zrender`
+  and `tslib` are no longer dependencies; `dist/charts/echarts.js` (570 KB) holds what the bar and line charts and
+  the SVG renderer need. Charts render the same SVG and PNG as before, offline. An app that imported `echarts`
+  itself, counting on cli-core to install it, now lists it in its own dependencies; no WireCat CLI does. The licence
+  notices of the bundled code are in `THIRD_PARTY_NOTICES` ([architecture](docs/dev/ARCHITECTURE.md)).
+- **The install is about 26 MB smaller: the MCP SDK with zod, LiquidJS, tldts and psl are bundled, and the Russian
+  dictionary ships gzipped.** The packed cli-core installs in 153 MB on disk instead of 178 MB, with 9 packages fewer.
+  `dist/bundled/` (under 1 MB) holds the libraries; MCP servers, templates, mail scoring and mention parsing answer as
+  before. `@modelcontextprotocol/server` and `liquidjs` stay as optional peer dependencies, because cli-core's
+  declarations name their types (`McpServer`, `CallToolResult`): an app that has the SDK, as cli-memo does, gets
+  them, and an app without it sees `any` there under `skipLibCheck`. An app that builds its own `McpServer` and serves
+  it with `serveOverHttp` keeps working. An app that imported one of these libraries itself, counting on cli-core to
+  install it, now lists it in its own dependencies. The licence notices are in `THIRD_PARTY_NOTICES`
+  ([architecture](docs/dev/ARCHITECTURE.md)).
+- **Pictures, calendar files and audio are read about ten times larger.** The owner's ruling of 27.11.2026: raise
+  each cap by about ten times, not to the 10 GiB file budget. A picture for picture search or a documents sync is
+  read up to 250 MB (was 25 MB, `PICTURE_MAX_BYTES`). An `.ics` file for `events import` and a calendar feed are read
+  up to 100 MB (was 10 MB, `ICS_MAX_BYTES`, `FEED_LIMITS`). `decodeChannelsFile` reads an MP3, Ogg or FLAC file whole
+  up to 640 MB when no `maxBytes` is given (was 64 MB). Each is held whole in memory
+  ([picture search](docs/search/images.md)).
+- **`session list` is the first line under `Next:` on a tool with no `setup`.** The first help screen put it below
+  `Start here:`, and a tool without that line, such as cli-template's `clidev`, showed it with no label above `Next:`.
+  A tool with `setup` keeps it below `Start here:`.
+- **A CRM sync whose contacts and companies come from its deals now goes on under a small request budget.** Such a
+  source (`linked: true`, as attio) reads each contact and company a deal names on its own, about two requests each,
+  50 to a page. A run given fewer requests than a page needs, such as `sync --max-pages 20`, stopped before the page
+  ended and saved nothing, so every later run started the same page again. It now saves what it read and the next run
+  goes on from there.
+- **An alias the owner removes stops being the owner's on the next mail sync.** A defined `MailAccount.addresses` is
+  now the whole list; a sync without it, and an archive import, drop nothing. The list is kept under
+  `mail_own_configured`. One that is gone and has no mail in Sent leaves `mail_own_addresses`; the account's
+  mail from it outside Sent is incoming again, and its email identity leaves the owner when the rules joined it. A link
+  the owner made stays. `settleOwnMail` now takes the configured list as `configured` in its options, and
+  `store.mail.markOwnMail` takes `removed`. No store version. Part of #3321.
+- **A bot's private chat marks the bot.** When a dialog is saved with `providerMetadata.isBot = true`, the identity
+  with the dialog's id that wrote in it gets `bot = 1`, so senders saved before `senderIsBot` move to Bots on the next
+  chat sync. No store version ([tg-cli #932](https://github.com/WireCatLabs/tg-cli/issues/932)).
+- **A mail search by `type:` or `reach:` now keeps to its 2 s time limit on a store whose mail is not typed yet.** On
+  a store upgraded to version 76 and not synced since, a read-only search worked out the type of every email twice,
+  once for its page and once for its total, and each pass started its own 2 s clock: 2.3–2.8 s on 100,000 emails, with
+  no "out of time". The total now runs on the time the page left, and is left out when none is left. The types worked
+  out in memory are kept while the store is unchanged, so the total and later searches on the same open reuse them:
+  about 1.2 s for the first such search on 100,000 emails, under 0.2 s for the next ones.
+- **An open MCP server no longer works out all its settings again on every tool call.** It checks each call against
+  the permissions in the config file, so a permission tightened there applies on the very next call. Working out all
+  the settings each time read every profile's folders and the parent processes' environments: about a third of the
+  CPU of the MCP tests. The server now works them out again only when the text of the config file or of the
+  machine's shared config changes; it compares the text, not the file's time, so an edit in the same clock tick
+  still applies at once.
+
 ## 2.0.0 — 27.11.2026
 
 ### Added
