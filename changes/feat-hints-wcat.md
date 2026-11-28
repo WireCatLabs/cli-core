@@ -1,3 +1,10 @@
+### Changed — may break callers
+
+- **`WIRECAT_TOOLS` and the scenarios name `wcat`, not `memo`.** The `memo` entry of `WIRECAT_TOOLS` is gone: read
+  `wcat` (and the new `files`) instead. Each scenario's `tool` is now `"wcat"`, in `WCAT_SCENARIOS` and in the
+  deprecated alias `MEMO_SCENARIOS` alike, so a caller that compares `tool` with `"memo"` no longer matches. memo is
+  renamed with no alias for its commands (owner's ruling, 2026-11-28).
+
 ### Added
 
 - **Hints, help and errors name `wcat` and `files`, not `memo`.** memo became `wcat` (`@wirecat/wirecat`), and its
