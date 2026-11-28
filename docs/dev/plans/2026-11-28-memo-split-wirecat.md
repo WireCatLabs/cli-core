@@ -183,9 +183,9 @@ Owner's ruling (section 0). The new internal name is `wcat`, not `wirecat`:
 | Keyring service | `cli-memo` | `wcat` | wcat, first start |
 | Agent skill folder (cli-base requires it to equal `appName`) | `skills/cli-memo` | `skills/wcat` | `wcat skill install` writes the new one and removes the `cli-memo` skill folder it wrote |
 | Timers and units of `memo jobs` and `memo schedule` | `memo-*`, running `memo …` | `wcat-*`, running `wcat-wirecat …` | wcat, first start |
-| Ids in the store | `memo:bulk`, `memo:envelope:…`, the bot `memo-scan` | `wcat:bulk`, `wcat:envelope:…`, `wcat-scan` | cli-core store migration, version 79 |
+| Ids in the store | `memo:bulk`, `memo:envelope:…`, bots `memo-scan`, `memo-mcp`, `memo-findings`, `memo-mail-findings`, `memo-reader`, the client `memo` in `store_settings`, the tool name `memo` on saved templates | `wcat:bulk`, `wcat:envelope:…`, `wcat-scan`, `wcat-mcp`, `wcat-findings`, `wcat-mail-findings`, `files-reader`, `wcat`, `wcat` | cli-core store migration, version 79. Import batch ids (`memo-import-…`) are history labels and stay |
 | `mail-trash` in memo's state folder | `cli-memo/mail-trash` | `wcat/mail-trash` | mail-cli reads the new path. It reads the old one only to move it |
-| Notes state of files | memo's state folder, `memo:` mark on exported files | files-cli's state folder, `files:` mark | files-cli, first start. Only its state file is rewritten, never the owner's notes |
+| Notes state of files | memo's state folder, `memo:` mark on exported files | files-cli's state folder, `files:` mark | files-cli, first start. Only its state file is rewritten, never the owner's notes. The `memo-id` and `memo-hash` front matter keys in exported notes stay |
 | Desktop's catalog id `memo` | `memo` | the Desktop pull request decides, and moves its saved state if it renames | Desktop |
 | n8n internal name `wireCatMemo` and its credential type | stay | stay | renaming them breaks saved workflows. Display names change |
 
