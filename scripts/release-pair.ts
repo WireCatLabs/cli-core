@@ -1,8 +1,9 @@
 /**
  * Turns the one validated tarball into the two packages a release publishes: X.Y.Z, which users install, without
- * type files, maps or src/, and X.Y.Z-dev, the same files under the -dev version, which CLI repositories install
- * through their root override to get the types (docs/dev/RELEASING.md). Fails unless every runtime file is
- * byte-identical in the two, so a CLI tested against -dev runs the code its users get.
+ * type files, maps, src/ or the unbundled `.js` that nothing runs, and X.Y.Z-dev, the same files under the -dev
+ * version, which CLI repositories install through their root override to get the types (docs/dev/RELEASING.md).
+ * Fails unless every runtime file is byte-identical in the two, so a CLI tested against -dev runs the code its users
+ * get: what `exports` names is `dist/bundle/`, in both.
  *
  *   node scripts/release-pair.ts wirecat-cli-core-<version>.tgz <out-dir>
  */
@@ -13,9 +14,22 @@ import { scratch } from "./scratch.ts"
 
 export const DEV_SUFFIX = "-dev"
 
-/** What users do not get: the type files, every map, and the sources the maps point at. */
-export const developerOnly = (path: string): boolean =>
-  path.startsWith("src/") || /\.d\.ts$|\.d\.ts\.map$|\.js\.map$/.test(path)
+export const BY_PATH = "dist/by-path.json"
+
+/** The unbundled files a process starts by path, with what they import, as `scripts/bundle-dist.ts` listed them. */
+export const keptOf = (dir: string): Set<string> =>
+  new Set((JSON.parse(readFileSync(join(dir, BY_PATH), "utf8")) as { keep: string[] }).keep)
+
+/**
+ * What users do not get: the type files, every map, the sources the maps point at, and the tsc output outside
+ * `dist/bundle/` except what `kept` names.
+ */
+export const developerOnly =
+  (kept: ReadonlySet<string>) =>
+  (path: string): boolean =>
+    path.startsWith("src/") ||
+    /\.d\.ts$|\.d\.ts\.map$|\.js\.map$/.test(path) ||
+    (/^dist\/.*\.js$/.test(path) && !path.startsWith("dist/bundle/") && !kept.has(path))
 
 const filesUnder = (root: string): string[] =>
   readdirSync(root, { recursive: true, withFileTypes: true })
@@ -37,13 +51,15 @@ export const pairProblems = (lean: string, dev: string, version: string): string
   const problems: string[] = []
   const leanFiles = filesUnder(lean)
   const devFiles = filesUnder(dev)
-  for (const path of leanFiles.filter(developerOnly)) problems.push(`${version} ships ${path}`)
+  if (!devFiles.includes(BY_PATH)) return [`${version}${DEV_SUFFIX} has no ${BY_PATH}`]
+  const devOnly = developerOnly(keptOf(dev))
+  for (const path of leanFiles.filter(devOnly)) problems.push(`${version} ships ${path}`)
   if (!devFiles.includes("dist/index.d.ts")) problems.push(`${version}${DEV_SUFFIX} has no dist/index.d.ts`)
-  const runtime = devFiles.filter((path) => !developerOnly(path))
+  const runtime = devFiles.filter((path) => !devOnly(path))
   const leanSet = new Set(leanFiles)
   for (const path of runtime.filter((path) => !leanSet.has(path))) problems.push(`only ${version}-dev ships ${path}`)
   const devSet = new Set(runtime)
-  for (const path of leanFiles.filter((path) => !devSet.has(path) && !developerOnly(path)))
+  for (const path of leanFiles.filter((path) => !devSet.has(path) && !devOnly(path)))
     problems.push(`only ${version} ships ${path}`)
   for (const path of runtime.filter((path) => leanSet.has(path))) {
     const a = readFileSync(join(lean, path))
@@ -84,7 +100,7 @@ const main = (tarball: string, outDir: string) => {
 
   const leanDir = join(work, "lean")
   cpSync(full, leanDir, { recursive: true })
-  for (const path of filesUnder(leanDir).filter(developerOnly)) rmSync(join(leanDir, path))
+  for (const path of filesUnder(leanDir).filter(developerOnly(keptOf(full)))) rmSync(join(leanDir, path))
   rmSync(join(leanDir, "src"), { recursive: true, force: true })
 
   const devDir = join(work, "dev")
@@ -109,7 +125,9 @@ const main = (tarball: string, outDir: string) => {
   }
   const files = (dir: string) => filesUnder(dir).length
   console.log(`${leanTarball}: ${files(join(work, "check-lean"))} files, for users`)
-  console.log(`${devTarball}: ${files(join(work, "check-dev"))} files, the same runtime files plus types and src/`)
+  console.log(
+    `${devTarball}: ${files(join(work, "check-dev"))} files, the same runtime files plus types, src/ and the unbundled .js`,
+  )
 }
 
 if (import.meta.main) {

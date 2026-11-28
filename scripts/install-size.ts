@@ -1,11 +1,12 @@
 /**
  * Installs a packed tarball of this package into an empty folder, as a user's `npm i` would, and fails when its
  * node_modules takes more disk than the ceiling in install-size.json. Disk use, not bytes in files: that is what a
- * person sees, and what docs/dev/plans/2026-10-18-install-size.md measures.
+ * person sees, and what docs/dev/plans/2026-10-18-install-size.md measures. Also fails when a file started by path
+ * (`dist/by-path.json`) cannot load what it imports, since the user package leaves the other unbundled `.js` out.
  *
  *   node scripts/install-size.ts wirecat-cli-core-<version>.tgz
  */
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawnSync } from "node:child_process"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { scratch } from "./scratch.ts"
@@ -44,3 +45,15 @@ if (total > ceilingMB * 1024) {
   console.error(`install size ${mb(total)} MB is above the ceiling of ${ceilingMB} MB in scripts/install-size.json`)
   process.exit(1)
 }
+
+const installed = join(modules, "@wirecat/cli-core")
+const { started } = JSON.parse(readFileSync(join(installed, "dist/by-path.json"), "utf8")) as { started: string[] }
+// Started with no arguments, each fails in its own code; a missing module fails before any of it runs.
+for (const file of started) {
+  const { stderr } = spawnSync(process.execPath, [join(installed, file)], { encoding: "utf8", timeout: 60_000 })
+  if (/ERR_MODULE_NOT_FOUND|Cannot find module/.test(stderr)) {
+    console.error(`${file} does not load in the installed package:\n${stderr}`)
+    process.exit(1)
+  }
+}
+console.log(`started by path: ${started.join(", ")} load`)
