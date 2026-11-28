@@ -4,6 +4,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { checkBundledLibraries } from "./check-bundled-libraries.ts"
 import { checkCliEntry, checkStartEntry } from "./check-cli-entry.ts"
 import { checkEngines } from "./check-engines.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
@@ -18,18 +19,42 @@ await checkFileLeases(root)
 await checkRecordingPartials(root)
 await checkRecordingPublication(root)
 await checkEngines(root)
+await checkBundledLibraries(root)
 const dist = join(root, "store/sqlite")
 const leaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js"))
   .filter((name) => /\b(from|import)\s*\(?\s*"drizzle-orm/.test(readFileSync(join(root, name), "utf8")))
 if (leaks.length > 0) throw new Error(`dist still imports drizzle-orm: ${leaks.join(", ")}`)
-// ECharts' own error messages quote `import … from "echarts/…"`, so only a statement counts, not a string.
-const echartsImport =
-  /(^|[;{}\s])(import|export)\b[^"'`;]*?\bfrom\s*["'](echarts|zrender|tslib)\b|\b(import|require)\(\s*["'](echarts|zrender|tslib)\b/m
-const echartsLeaks = readdirSync(root, { recursive: true, encoding: "utf8" })
+// Bundled, so a published file that imports one fails where it is installed. The optional peers are named by
+// declarations for their types, never by code. ECharts' own error messages quote `import … from "echarts/…"`, so
+// only a statement counts, not a string.
+const BUNDLED = [
+  "echarts",
+  "zrender",
+  "tslib",
+  "@modelcontextprotocol/core",
+  "zod",
+  "tldts",
+  "tldts-core",
+  "psl",
+  "punycode",
+]
+const TYPES_ONLY = ["@modelcontextprotocol/server", "liquidjs"]
+const importOf = (packages: string[]) => {
+  const names = packages.map((name) => name.replace(/[/.]/g, "\\$&")).join("|")
+  return new RegExp(
+    `(^|[;{}\\s])(import|export)\\b[^"'\`;]*?\\bfrom\\s*["'](${names})["'/]|\\b(import|require|resolve)\\(\\s*["'](${names}|dictionary-ru)["'/]`,
+    "m",
+  )
+}
+const codeImport = importOf([...BUNDLED, ...TYPES_ONLY])
+const declarationImport = importOf(BUNDLED)
+const bundledLeaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js") || name.endsWith(".d.ts"))
-  .filter((name) => echartsImport.test(readFileSync(join(root, name), "utf8")))
-if (echartsLeaks.length > 0) throw new Error(`dist still imports echarts: ${echartsLeaks.join(", ")}`)
+  .filter((name) =>
+    (name.endsWith(".d.ts") ? declarationImport : codeImport).test(readFileSync(join(root, name), "utf8")),
+  )
+if (bundledLeaks.length > 0) throw new Error(`dist still imports a bundled library: ${bundledLeaks.join(", ")}`)
 
 const { openSqlite } = await import(join(dist, "open.js"))
 const { migrate } = await import(join(dist, "../migrations.js"))

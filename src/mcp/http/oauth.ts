@@ -1,13 +1,8 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto"
 import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
-import {
-  type AuthInfo,
-  OAuthError,
-  OAuthErrorCode,
-  type OAuthMetadata,
-  type OAuthTokenVerifier,
-} from "@modelcontextprotocol/server"
+import type { AuthInfo, OAuthMetadata, OAuthTokenVerifier } from "@modelcontextprotocol/server"
+import { OAuthError, OAuthErrorCode } from "../../bundled/mcp-server.js"
 import { ACCESS_SECONDS, type StoredClient as Client, REFRESH_SECONDS, readStored, type Stored } from "./state.js"
 
 const AUTH_CODE_MS = 60 * 1000

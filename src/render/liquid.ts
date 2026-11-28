@@ -1,4 +1,5 @@
-import { Liquid, Tag, type TagToken, type TopLevelToken } from "liquidjs"
+import type { TagToken, TopLevelToken } from "liquidjs"
+import { Liquid, Tag } from "../bundled/liquidjs.js"
 
 export interface LiquidLimits {
   /** Characters of template source. */

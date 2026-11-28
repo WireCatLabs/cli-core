@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { fold } from "../store/normalize.js"
-import { dictionaryLanguages, knownWord } from "./dictionary.js"
+import { dictionaryFile, dictionaryLanguages, knownWord } from "./dictionary.js"
 
 const { known, covers } = knownWord(["russian", "english", "spanish"])
 const real = (word: string) => known(fold(word))
@@ -32,5 +33,13 @@ describe("knownWord", () => {
       "spanish",
     ])
     expect(dictionaryLanguages({ cyrillic: "none", latin: "english" })).toEqual(["english"])
+  })
+})
+
+describe("the vendored Russian dictionary", () => {
+  it("is dictionary-ru's, gzip-compressed and otherwise unchanged", () => {
+    const original = (name: string) => readFileSync(new URL(name, import.meta.resolve("dictionary-ru")), "utf8")
+    expect(dictionaryFile("russian", "index.dic")).toBe(original("index.dic"))
+    expect(dictionaryFile("russian", "index.aff")).toBe(original("index.aff"))
   })
 })

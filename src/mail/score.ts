@@ -1,5 +1,5 @@
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js"
-import { getDomain } from "tldts"
+import { getDomain } from "../bundled/tldts.js"
 import type { Listed } from "./source.js"
 
 /**

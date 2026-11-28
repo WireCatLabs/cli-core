@@ -1,5 +1,6 @@
-import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server"
+import type { McpServer } from "@modelcontextprotocol/server"
 import { visibleControls } from "@wirecat/cli-base"
+import { ResourceTemplate } from "../bundled/mcp-server.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import { capability } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { dictionaryFile } from "./dictionary.js"
 
 interface Suffix {
   flag: string
@@ -19,9 +19,8 @@ let loaded: Dictionary | undefined
  */
 const dictionary = (): Dictionary => {
   if (loaded) return loaded
-  const file = (name: string) => readFileSync(new URL(name, import.meta.resolve("dictionary-ru")), "utf8")
   const stems = new Map<string, string>()
-  for (const line of file("index.dic").split("\n").slice(1)) {
+  for (const line of dictionaryFile("russian", "index.dic").split("\n").slice(1)) {
     const [entry, flags = ""] = line.trim().split("/")
     if (!entry) continue
     // Names and abbreviations are capitalised in the dictionary; a transcript's word index is lower case.
@@ -30,7 +29,7 @@ const dictionary = (): Dictionary => {
   }
   const suffixes = new Map<string, Suffix[]>()
   let longest = 0
-  for (const line of file("index.aff").split("\n")) {
+  for (const line of dictionaryFile("russian", "index.aff").split("\n")) {
     const [kind, flag, strip, append, condition] = line.trim().split(/\s+/)
     if (kind !== "SFX" || flag === undefined || strip === undefined || append === undefined || !condition) continue
     const ending = append === "0" ? "" : append

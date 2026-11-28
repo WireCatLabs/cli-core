@@ -1,4 +1,4 @@
-import { getDomainWithoutSuffix } from "tldts"
+import { getDomainWithoutSuffix } from "../../bundled/tldts.js"
 import { isReadable } from "../../domain/display-names.js"
 import { installedPack, isPackFreeMailDomain, lookupDomains } from "../../domain/domain-lists.js"
 import { SECTORS_BUILT } from "../../domain/organization-sectors.generated.js"
