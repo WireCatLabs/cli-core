@@ -138,7 +138,8 @@ sources, or that no source brought in, belongs to the knowledge tool.
 | `notes`, `folders`, `sources`, `import` | `files` | Files on this computer, and the readers for PDF, Word and transcripts |
 | `sync` | `files sync` syncs notes. `wcat sync` embeds stored mail, runs `people scan`, and runs `files sync` when files is installed | Each tool syncs what it brings in, and `wcat sync` still does all that `memo sync` did |
 | `jobs` | `wcat` | `jobs start` runs the whole sync ("sync notes and embed new mail every 5 minutes"), so it stays with `wcat sync` |
-| `search notes`, `tags`, `tasks` | both | Shared builders. TOOL-BOUNDARIES keeps them in every source tool |
+| `search notes` | both | cli-core's `searchNotes`. `files search notes` searches its own notes |
+| `tags`, `tasks` | `wcat` | memo's own code, not cli-core's shared builders (those take a messenger). They span sources. Checked in phase 3, 2026-11-28 |
 | `mail findings`, `mail review` | `wcat review findings`, `wcat review mail` | The `mail` word belongs to the mail CLI in `wcat` |
 | `documents` | `wcat` | It lists documents of every account: Drive, folders, imports |
 | `people`, `bots`, `organizations`, `relationships` | `wcat` | People and bots span every source |
@@ -147,8 +148,8 @@ sources, or that no source brought in, belongs to the knowledge tool.
 | everything else in the first row of section 1 | `wcat` | Across sources |
 | plumbing | both | Every CLI has it |
 
-In phase 3, check whether memo's `notes` group is cli-core's shared notes builder (the one tg mounts) or memo's own.
-If it is shared, `wcat` keeps the shared part (a note on a person) and `files` gets the folder part.
+Checked in phase 3: memo's `notes` group is memo's own code. It only takes its shape from cli-core's contract
+template, and tg has no `notes` group. So `files` takes the whole `notes` group.
 
 ### 3.5 Old names stop on the release day
 
