@@ -128,13 +128,17 @@ jobs:
         with:
           name: parity-cli-core
       - run: mkdir core && tar -xzf cli-core.tgz -C core
+      # A template in known-broken.json may also fail to build: a break made on purpose, as #3437's entry points.
+      - id: known
+        run: shared/scripts/parity/known-broken.sh cli-template >> "$GITHUB_OUTPUT"
       - name: Build cli-template ${{ steps.app.outputs.ref }} against this cli-core
+        id: build
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         run: shared/scripts/parity/build-app.sh template cli cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.app.outputs.ref }}
-      - id: known
-        run: shared/scripts/parity/known-broken.sh cli-template >> "$GITHUB_OUTPUT"
       - name: Check and test cli-template against this cli-core
+        if: steps.build.outcome == 'success'
         continue-on-error: ${{ steps.known.outputs.until != '' }}
         run: pnpm ci:quick && pnpm test
         working-directory: cli
