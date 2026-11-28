@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 
 export const SQLITE_VERSION = "3.53.4"
 export const SQLITE_VEC_VERSION = "0.1.9"
 
-const here = dirname(fileURLToPath(import.meta.url))
+// From this file, not the caller: pnpm links the platform package only beside this package.
+const require = createRequire(import.meta.url)
 
 const folderFor = ({ platform, arch, musl }) =>
   platform === "darwin"
@@ -18,7 +19,13 @@ const folderFor = ({ platform, arch, musl }) =>
 
 const existing = (folder, file) => {
   if (folder === undefined) return undefined
-  const path = join(here, "lib", folder, file)
+  let root
+  try {
+    root = dirname(require.resolve(`@wirecat/cli-core-sqlite-${folder}/package.json`))
+  } catch {
+    return undefined
+  }
+  const path = join(root, file)
   return existsSync(path) ? path : undefined
 }
 

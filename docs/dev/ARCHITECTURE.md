@@ -113,7 +113,7 @@ version number does not tell: official Node 22.0–22.15 has SQLite 3.46–3.49 
 built package on Node 22.15.0 to see the refusal (`scripts/check-old-node.mjs`).
 
 Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` (built in
-`packages/sqlite`, published by `.github/workflows/sqlite.yml`) takes its place
+`packages/sqlite`, published by `.github/workflows/sqlite.yml` with one optional package per platform) takes its place
 (plan):
 
 - **Bun on macOS** always loads ours (`bunDatabase`, `src/store/drivers/bun-sqlite.ts`), once, before
