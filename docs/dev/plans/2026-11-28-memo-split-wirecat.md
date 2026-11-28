@@ -208,7 +208,7 @@ The store ids are written by cli-core, not by memo
 [link-scorers/scan.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/services/link-scorers/scan.ts#L33)),
 and cli-core owns every store migration (section 2). So the rewrite is a cli-core pull request: the new constants and
 a migration (version 79) that rewrites the ids in one transaction, with a copy of the store file taken first. It
-merges on the release day. Whether version 79 raises `minCompatible` is open question 4.
+merges on the release day. Version 79 raises `minCompatible` to 79 (open question 4, answered A).
 
 The files CLI's readers (`src/sources/readers/keys.ts`) read the provider key from memo's service, account
 `embeddings:<provider>`. They switch to cli-core's shared `models ai` key (service `WireCat`) in the extraction, so
@@ -302,7 +302,8 @@ Total: about 10 to 12 days of work, in about two to three weeks with reviews and
 5. Desktop release.
 6. Docs deploy with the redirects, then the plugins and the n8n node.
 7. `npm deprecate @wirecat/cli-memo`. Digest note and announcement.
-8. Other CLIs pick up the cli-core text on their next bump. No release only for this, unless open question 4 is A.
+8. Every CLI that opens the store bumps to that cli-core and releases the same day, because version 79 raises
+   `minCompatible` (open question 4).
 
 ### How people move
 
@@ -332,11 +333,6 @@ Total: about 10 to 12 days of work, in about two to three weeks with reviews and
 2. **Keep the internal names?** Answered 2026-11-28: **B**, rename them with a migration (section 0, 3.6).
 3. **How long do `memo` and the `memo_*` MCP tool names live?** Answered 2026-11-28: **C**, they stop on the
    release day (section 0, 3.5).
-4. **NEED: does store version 79 raise `minCompatible` to 79?**
-   - A: yes. A CLI on an older cli-core then refuses the store, so it can never write `memo:bulk` again and make a
-     second bulk box. But every CLI that opens the store must release on the release day.
-   - B: no. Other CLIs bump on their next release. Until then an old mail-cli can write a new `memo:bulk` row
-     beside `wcat:bulk`, and the duplicate stays until a cleanup.
-   - Recommendation: **A**. The split is a coordinated release already, Desktop updates every tool at once, and A
-     is the only choice that never leaves two bulk boxes. The cost is one cli-core bump per CLI that day. Switching
-     to B is one line in the migration.
+4. **Does store version 79 raise `minCompatible` to 79?** Answered 2026-11-28: **A**, yes. A CLI on an older
+   cli-core refuses the store, so none can write `memo:bulk` again. Every CLI that opens the store releases on the
+   release day, as for 2.0.
