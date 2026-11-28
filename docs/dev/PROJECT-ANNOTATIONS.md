@@ -1,6 +1,6 @@
 # Project annotation manifests
 
-`decodeProjectAnnotations` and `projectAnnotationsFingerprint` from `@wirecat/cli-core/store` validate
+`decodeProjectAnnotations` and `projectAnnotationsFingerprint` from `@wirecat/cli-core` validate
 the selected annotation graph independently of a provider, CLI, model or database. They perform no
 store or filesystem access. They are not project export/restore commands.
 

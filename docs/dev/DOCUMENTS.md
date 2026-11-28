@@ -80,7 +80,7 @@ operations.
 ## A source from a manifest
 
 A `files` CLI made from `wirecat.config.ts` can describe its source there instead of writing one.
-`documentSourceFromManifest(source, { api, call, hooks })` (`@wirecat/cli-core/documents/cli`) reads the manifest,
+`documentSourceFromManifest(source, { api, call, hooks })` (`@wirecat/cli-core/documents`) reads the manifest,
 checks it against the generated API (`parseDocumentManifest`: each operation exists and only reads, each call places
 the value it needs, an unknown operation names the one most likely meant) and answers a `DocumentSource`:
 
@@ -369,7 +369,7 @@ reference is `undefined`, so a caller tells an added source from a folder docume
 
 ## Shared commands
 
-`@wirecat/cli-core/documents/cli` (in `src/cli/documents/`: the domain layer `src/documents/` may not import
+`@wirecat/cli-core/documents` (in `src/cli/documents/`: the domain layer `src/documents/` may not import
 commands, the store or services) holds the commands every documents CLI shares, built over these services the way
 `addCalendarCommands` and `addCrmCommands` are. `addDocumentCommands(program, options)` mounts them all, and
 `documents history` and `changes` when `history` is given. One builder per group lets a CLI place its own groups between them (drive puts `transcripts` and `store` after
@@ -445,7 +445,7 @@ Every generated `api <operation>` marks every string of the provider's answer (`
 `items.*`), with no code in the CLI: the answer's shape is the provider's, and a list of paths would miss a field the
 CLI did not foresee. Ids, dates and URLs come marked too; `api list` and `api show` are the CLI's own text and stay
 as they are. A CLI that wraps an operation with its own `marksUntrusted` list adds that list to every string; a CLI's
-own raw call, such as drive-cli's `api call`, declares `API_UNTRUSTED` from `@wirecat/cli-core/documents/cli`.
+own raw call, such as drive-cli's `api call`, declares `API_UNTRUSTED` from `@wirecat/cli-core/documents`.
 
 A `*` in a path stands for every key of an object, for keys that differ from one answer to the next, as a database's
 own property names: `properties.*.name`. A path that ends in `*` marks every string under it, at any depth:
@@ -461,11 +461,11 @@ text is cut inside its markers, so the closing one stays.
 A CLI with its own reads of the same text marks them itself: drive-cli's own `documents`, `catalog` and knowledge
 commands, notion-cli's `documents get` and `folders browse`, yandex-disk-cli's `files` reads. It imports
 `DOCUMENT_UNTRUSTED` (or `DOCUMENT_CONTEXT_UNTRUSTED` for a context answer, `KNOWLEDGE_UNTRUSTED` for memories and
-facts, `IDENTITY_UNTRUSTED` for `identities list`) and `marksUntrusted` from `@wirecat/cli-core/documents/cli` and
+facts, `IDENTITY_UNTRUSTED` for `identities list`) and `marksUntrusted` from `@wirecat/cli-core/documents` and
 wraps each such command: `marksUntrusted(command, DOCUMENT_UNTRUSTED)`. These lists name cli-core's fields; a CLI
 whose rows use other names passes its own, such as drive-cli's `displayName` for an account.
 
-`@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
+`@wirecat/cli-core/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
 for pages with sub-pages, `change` to check the change feed, and `change` with `remove` for a source without one), and `documentCommandsContract` the CLI's mounted
 commands over its fakes: every shared path, its effects, no override of a shared contract, and the answers by id.
 `fakeDocumentSource` is a provider in memory, and the kit's own test runs both contracts over a reference CLI on a
@@ -686,12 +686,12 @@ as it is, and the next sync sends it. A conflict's resolution does the same with
     no longer has the recorded hash, or the remote not the recorded one: the remote is written first, by an upload
     or trash that expects that hash, then the local file while it still has its own. Both sides get the final
     content, the entry is recorded, the conflict removed, and a `resolved` event logs it. `fileConflictsCommand`
-    (`@wirecat/cli-core/cli/documents`) mounts them as `mirrors conflicts list [id]`, `show <id> <path>` and
+    (`@wirecat/cli-core/documents`) mounts them as `mirrors conflicts list [id]`, `show <id> <path>` and
     `resolve <id> <path> (--keep local|<remote>|both | --file <file>)`, `--file` owner-only, with the app's mirrors,
     state and stores as its helpers. Its `connect(command, mirror, body)` runs `body` inside the app's run (its
     `--timeout`, run record and request log) with the connected target, so `resolve` writes only inside it.
 
-    `fileMirrorsCommand` (`@wirecat/cli-core/documents/cli`) is the whole `mirrors` group over this engine, so a
+    `fileMirrorsCommand` (`@wirecat/cli-core/documents`) is the whole `mirrors` group over this engine, so a
     file CLI mounts one command instead of writing its own: `add <folder> <path> [--ignore <path>]`, `list`,
     `status [id]`, `preview [id] [--keep]`, `sync [id] [--keep] [--allow-deletions <count>]
     [--allow-replacements <count> | --replace] [--repin]`, `watch [id] [--every]`, `update <id> [--ignore] [--clear]`,
@@ -790,7 +790,7 @@ writes over the content the caller read and nothing else, through the same `File
    the write replaced is kept and logged (`changed`, `from: "remote"`), so the write can be undone. A `conflict` the
    target raises with a reason of its own other than `mirror.remote-changed` (`upload.replace-interrupted`) reaches
    the caller as the target worded it, here and in a mirror's sync, since it says what was done.
-4. A target whose replace gives the file a new id calls `rekeySyncedDocument` (`@wirecat/cli-core/documents/cli`)
+4. A target whose replace gives the file a new id calls `rekeySyncedDocument` (`@wirecat/cli-core/documents`)
    after it, with the CLI's documents ingestion: the synced copy moves to the new id (`renameFileNote` with
    `fold`), so the owner's tags, the notes about it and its links follow the file. A sync that ran in between and
    filed the file anew is folded into the old document. A failure only warns: the write already happened.
@@ -798,7 +798,7 @@ writes over the content the caller read and nothing else, through the same `File
 The answer is the file as the remote now has it and the replaced sha256. The store's retention is not run here: it
 runs under a mirror sync's lock.
 
-`addFileUpdateCommand(files, helpers)` (`@wirecat/cli-core/documents/cli`) adds
+`addFileUpdateCommand(files, helpers)` (`@wirecat/cli-core/documents`) adds
 `<files> update <path> (--text <text> | stdin) [--expected-fingerprint <sha256>]` to the CLI's own files group. It is
 a remote write, so the MCP catalogue lists it as one and a global `--dry-run` previews it. The CLI passes `words`,
 `output`, `path` (what the user typed as the target's path), `reread` (the command that shows the file's sha256),
@@ -819,7 +819,7 @@ sha256 out, so an agent has nothing to pass to `update`; an Office file is edite
 
 ### Office files edited in place, and earlier versions put back
 
-`addFileEditCommands(files, helpers)` (`@wirecat/cli-core/documents/cli`) mounts, under the CLI's own files group, the
+`addFileEditCommands(files, helpers)` (`@wirecat/cli-core/documents`) mounts, under the CLI's own files group, the
 `update` above and:
 
 | Command | Effects | What it does |
@@ -843,7 +843,7 @@ style_from?}` and `{delete}`, by the indexes `documents show` gave (`insert_afte
 
 An edit downloads the file, refuses another sha256 than `--expected-fingerprint` (`conflict`,
 `mirror.remote-changed`, naming the `show` that reads it again), runs the Office editor from
-[`@wirecat/cli-core/office`](../../src/office/index.ts), and writes the result with `guardedFileWrite`: the file is
+[`@wirecat/cli-core`](../../src/office/index.ts), and writes the result with `guardedFileWrite`: the file is
 checked again, the replaced content is kept, and the write asks `files.delete` (or `deleteKey`). The editor's refusal
 (a tracked change, an image, a formula, a table header, …) passes through with its `office.*` reason, and nothing is
 uploaded. The answer is the update's (`path`, `sha256`, `replaced`) plus `changed` and `calc_chain_dropped` for cells,
@@ -857,7 +857,7 @@ the whole file in memory, so a large file needs about that much free memory.
 #### New Office files
 
 `sheets create` and `documents create` build the file with `createXlsx` or `createDocx` from
-[`@wirecat/cli-core/office`](../../src/office/create.ts) and write it with `guardedFileWrite` as a new file: no
+[`@wirecat/cli-core`](../../src/office/create.ts) and write it with `guardedFileWrite` as a new file: no
 fingerprint, and the write asks only the command's own permission key, as `update` of a new file and a provider's
 `upload` without `--replace` do. A file already there is refused before anything is uploaded (`conflict`,
 `office.file-exists`, naming the `show` and the `update` that change it), and the provider's absent-file check catches
@@ -902,7 +902,7 @@ asks each command's own permission key and records it in the send journal under 
 
 ## Copy a document collection to another database
 
-Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core/store` to retain
+Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core` to retain
 annotations when a provider changes databases. This persistence workflow lives in
 `src/store/document-transfer/` and `src/store/sqlite/document-transfer/`; provider adapters bind the
 explicit account, namespace, cached-content checks, profile lock and final checkpoint update.
@@ -954,7 +954,7 @@ its original refusal guard for store changes that have not completed this operat
 
 A new workbook or Word document comes from `createXlsx` or `createDocx` (see [New Office files](#create-office-files)).
 A provider with no document API, such as Yandex Disk, changes a workbook or a Word document by downloading the
-file, editing it and uploading it whole. `@wirecat/cli-core/office` does the edit: `editXlsxCells` by cell address,
+file, editing it and uploading it whole. `@wirecat/cli-core` does the edit: `editXlsxCells` by cell address,
 `editDocxParagraphs` by paragraph, each spliced into the original XML with every other zip entry copied byte for
 byte, so fonts, styles, images, comments and tracked changes survive. It never rebuilds the file from text. What
 it refuses and what collapses is in [Editing Office files](../office.md).

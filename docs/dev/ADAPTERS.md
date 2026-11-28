@@ -11,17 +11,17 @@ contract. This page is the order to read them in, and the rules that are not in 
 
 | Entry point | What a connector takes from it |
 |---|---|
-| `@wirecat/cli-core/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
+| `@wirecat/cli-core` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
 | `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests; `runScopeCases` for the run scope; `syncAfterInstallCases` for sync after install |
-| `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
-| `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
-| `@wirecat/cli-core/calendar` | `CalendarSource` and `syncCalendars`, for a calendar provider ([CALENDARS.md](CALENDARS.md)) |
-| `@wirecat/cli-core/calendar/testing` | the calendar contract kit: `calendarSourceContract`, `calendarSyncContract`, `fakeCalendarSource`, `memoryEventStore` |
-| `@wirecat/cli-core/files` | native ordinary-file identity checks, directory syncing, `writeFileAtomic` and `acquireLock` |
-| `@wirecat/cli-core/speech/wav` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
-| `@wirecat/cli-core/update` | `appUpdate`: an app's installer, npm's latest version, the update itself and the daily notice, which `run()` shows when the program definition's `update` is set |
-| `@wirecat/cli-core/oauth` | sign-in for a provider the CLI declares: `tokenKeeper` (refresh under a lock shared by every process; `tokens({ refresh: true })` after the server refuses a token that looked fresh), `authorize`, `credentialStorage` and the codecs for drive's and zm's saved entries |
-| `@wirecat/cli-core/tasks` | `TaskStore`, when a host keeps tasks itself |
+| `@wirecat/cli-core` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
+| `@wirecat/cli-core/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
+| `@wirecat/cli-core` | `CalendarSource` and `syncCalendars`, for a calendar provider ([CALENDARS.md](CALENDARS.md)) |
+| `@wirecat/cli-core/testing` | the calendar contract kit: `calendarSourceContract`, `calendarSyncContract`, `fakeCalendarSource`, `memoryEventStore` |
+| `@wirecat/cli-core` | native ordinary-file identity checks, directory syncing, `writeFileAtomic` and `acquireLock` |
+| `@wirecat/cli-core` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
+| `@wirecat/cli-core` | `appUpdate`: an app's installer, npm's latest version, the update itself and the daily notice, which `run()` shows when the program definition's `update` is set |
+| `@wirecat/cli-core` | sign-in for a provider the CLI declares: `tokenKeeper` (refresh under a lock shared by every process; `tokens({ refresh: true })` after the server refuses a token that looked fresh), `authorize`, `credentialStorage` and the codecs for drive's and zm's saved entries |
+| `@wirecat/cli-core` | `TaskStore`, when a host keeps tasks itself |
 
 There is no `/sdk` entry point that gathers these; import each name from its own.
 

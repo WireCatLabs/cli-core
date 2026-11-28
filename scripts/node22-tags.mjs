@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { existsSync } from "node:fs"
-import { openStore } from "@wirecat/cli-core/store"
+import { openStore } from "@wirecat/cli-core"
 import { openStore as openLegacyStore } from "@wirecat/cli-core-legacy-tags/store"
 
 const path = process.argv[2]

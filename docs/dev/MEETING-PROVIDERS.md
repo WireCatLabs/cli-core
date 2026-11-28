@@ -124,7 +124,7 @@ no `cancel` and gets no `meetings cancel`. They mount only inside the group, whi
 has one. Each write's permission key is its path
 (`meetings.create`, `meetings.update`, `meetings.cancel`), `ask` by default. `deny` and `readonly` stop it before it
 runs (`refuseByCommandPermissions`). The `ask` step is the host's `askFirst`, `askBeforeWrite` from
-`@wirecat/cli-core/cli`: it asks at a terminal, `--yes` answers, an agent goes ahead, and with nobody to answer it
+`@wirecat/cli-core`: it asks at a terminal, `--yes` answers, an agent goes ahead, and with nobody to answer it
 refuses with `confirmation_required`. It comes after the change is validated, so a change the service cannot take is
 refused without the question. A host that passes `management` without `askFirst` gets a refusal for every write.
 The host's `signal` (the run's stop signal) reaches each port's `signal`, so `--timeout` and Ctrl-C end a write or an
@@ -161,7 +161,7 @@ line, such as an operator's extension.
 
 ## Stored meeting reads
 
-Import the read interfaces from `@wirecat/cli-core/meetings`. A provider using the shared SQLite
+Import the read interfaces from `@wirecat/cli-core`. A provider using the shared SQLite
 store already receives these capabilities; it should not implement another participant index or
 transcript-window formatter. Existing store-entry imports of read contracts remain aliases.
 A custom `MeetingStore` implements `account(id)` as well as meeting reads: return the provider
@@ -216,7 +216,7 @@ legacy full-detail hydration for every occurrence or derive membership from matc
 ## Remote management
 
 ```ts
-import { createMeetingManagement, type ManagedMeeting } from "@wirecat/cli-core/meetings"
+import { createMeetingManagement, type ManagedMeeting } from "@wirecat/cli-core"
 
 const example: ManagedMeeting = {
   id: "opaque/meeting:a", title: "Alice Example planning", kind: "scheduled",
@@ -355,7 +355,7 @@ tokens, transcript content or a claim of global archive completeness.
 import {
   installRecordingArchiveSchedule, planRecordingArchiveSchedule,
   recordingArchiveScheduleWindow,
-} from "@wirecat/cli-core/meetings"
+} from "@wirecat/cli-core"
 
 const schedule = planRecordingArchiveSchedule({
   name: "Alice Example backup", scope: { provider: "example-video", account: "Alice Example" },
@@ -399,7 +399,7 @@ append receipts do not imply bounded legacy meeting-history hydration in a produ
 
 ## Decoding a recording, and cloud speech
 
-`decodeChannels(bytes)` from `@wirecat/cli-core/speech` gives one `Pcm` per channel at 16 kHz. A stereo call keeps
+`decodeChannels(bytes)` from `@wirecat/cli-core` gives one `Pcm` per channel at 16 kHz. A stereo call keeps
 one speaker per channel whatever the format: Opus, Vorbis, FLAC and MP3 by the bundled decoders, and WAV, GSM, AAC
 and M4A by the machine's ffmpeg, which keeps a mono file one channel and mixes a file of more than two channels down
 to two. `mixed` is true only when a host's own `Ffmpeg` seam answers one `Pcm`. Every channel stops at an hour of
@@ -431,8 +431,8 @@ not matter. The voice detector comes with any local speech model (`models downlo
 ## Native file and WAV helpers
 
 Native connectors can import `openOrdinaryFile` and `syncDirectory` from
-`@wirecat/cli-core/files`, and `preflightWavAudio` and `openWavAudio` from
-`@wirecat/cli-core/speech/wav`. These host helpers sit outside the pure meeting module and
+`@wirecat/cli-core`, and `preflightWavAudio` and `openWavAudio` from
+`@wirecat/cli-core`. These host helpers sit outside the pure meeting module and
 import no store, provider or speech engine.
 
 WAV preflight takes explicit byte and duration budgets (at most 4 GiB and 24 hours), validates PCM16
@@ -497,13 +497,13 @@ reviewed findings intake remain separate work. Core does not mount provider comm
 
 ## Reverse project suggestions from supplied evidence
 
-`createMeetingProjectCandidateReader` from `@wirecat/cli-core/services` captures a provider/account,
+`createMeetingProjectCandidateReader` from `@wirecat/cli-core` captures a provider/account,
 a numeric store account and a narrow `vocabulary` reader. Its input and output types are exported
 from `/meetings` and `/services`. It suggests existing global projects from evidence already selected
 by the host. It does not search all meeting history, infer membership or write a project link.
 
 ```ts
-import { createMeetingProjectCandidateReader } from "@wirecat/cli-core/services"
+import { createMeetingProjectCandidateReader } from "@wirecat/cli-core"
 
 const suggest = createMeetingProjectCandidateReader(
   { provider: "example-calendar", account: "AliceExample" },
@@ -677,7 +677,7 @@ Native providers must separately prove bounded HTTP and selected-credential beha
 ## Provider answer contracts
 
 Prefer an existing shared entity for a command's answer. When a provider must retain its own public wire fields,
-call `answerEntity(command, "provider_recording", schema)` from `@wirecat/cli-core/cli` with a Valibot object
+call `answerEntity(command, "provider_recording", schema)` from `@wirecat/cli-core` with a Valibot object
 schema. The shared command contract, help field reference and `--json` projection all use that schema.
 The binding belongs to that command instance; it cannot replace a shared entity or alter another program.
 Validate real synthetic command answers against the advertised contract, including preview and applied variants.

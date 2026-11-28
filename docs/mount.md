@@ -1,6 +1,6 @@
 # Read-only mount
 
-`@wirecat/cli-core/mount` shows a folder of a service (Yandex Disk, Google Drive, Notion) as a folder on the owner's
+`@wirecat/cli-core` shows a folder of a service (Yandex Disk, Google Drive, Notion) as a folder on the owner's
 computer, read-only. It serves the folder over WebDAV on 127.0.0.1, and the system's own WebDAV client mounts it, so
 nothing is installed: no FUSE, no driver.
 

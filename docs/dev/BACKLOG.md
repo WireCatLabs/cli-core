@@ -32,7 +32,7 @@ None open.
 - **CORE-70** · P2 · gcal-cli and zoom-cli pass no `signal` to `addMeetingCommands`, so `meetings list` and `show`
   still answer from the store when the run is stopped mid-read. Pass `signal` in the deps after a release
   (gcal `src/commands/meetings.ts` `depsOf`, zoom `src/program-bindings.ts:289`). `src/meetings/read-through.ts`.
-- **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
+- **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core`: their own `googleError` and page
   loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
   gcal keeps its own Calendar-only `forbiddenForNonOrganizer` → `event.organizer-only` mapping and its reason
   registration before calling `googleError`, which maps that reason to the generic 403 `access.denied`. `src/google/`.

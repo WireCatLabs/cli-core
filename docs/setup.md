@@ -7,11 +7,11 @@ same text. Desktop runs no command and opens no link from the document: it only 
 
 ## Define the flow
 
-`defineSetup` from `@wirecat/cli-core/cli` takes the CLI's identity, its `settingsFor` configuration, the steps, the
+`defineSetup` from `@wirecat/cli-core` takes the CLI's identity, its `settingsFor` configuration, the steps, the
 texts and the check. It builds the document and checks it at once, so a wrong flow fails the CLI's own tests:
 
 ```ts
-import { defineSetup, setupCommand } from "@wirecat/cli-core/cli"
+import { defineSetup, setupCommand } from "@wirecat/cli-core"
 import en from "../setup/texts.en.json" with { type: "json" }
 import ru from "../setup/texts.ru.json" with { type: "json" }
 

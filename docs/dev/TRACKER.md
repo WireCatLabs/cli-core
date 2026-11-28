@@ -1,6 +1,6 @@
 # Trackers
 
-`src/tracker/`, exported as `@wirecat/cli-core/tracker` and `/tracker/testing`. A tracker CLI (Linear first) writes its
+`src/tracker/`, exported as `@wirecat/cli-core` and `/tracker/testing`. A tracker CLI (Linear first) writes its
 sign-in and one adapter, a `TrackerSource`; the copy in the shared store, the sync, the commands and the contract kit
 are shared, as for [CRMs](CRM.md) and [mail](MAIL.md). The tables are in the [schema](../storage/schema.md); this page
 covers what runs over them.

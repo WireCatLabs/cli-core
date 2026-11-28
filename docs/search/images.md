@@ -252,7 +252,7 @@ so adding an entry to the list makes it downloadable but does not make search us
 
 ### Documents
 
-Documents get one picture chunk. These exports come from `@wirecat/cli-core/services`:
+Documents get one picture chunk. These exports come from `@wirecat/cli-core`:
 
 - `openPictureEmbedderFor({ env, command })` opens the model, or throws `not_found` with
   `reason: "model.not-downloaded"` and the command that downloads it. Close the embedder when done.

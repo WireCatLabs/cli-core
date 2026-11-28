@@ -16,15 +16,9 @@
   "wirecat": {
     "stable": [
       ".",
-      "./cli",
-      "./cli/start",
       "./mcp",
-      "./sends",
-      "./skill-validation",
-      "./sqlite-runtime",
-      "./store",
-      "./testing",
-      "./update"
+      "./start",
+      "./testing"
     ],
     "store": {
       "speaks": 78,
@@ -51,219 +45,41 @@
     "schemas"
   ],
   "exports": {
-    "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
-    "./schemas/examples/records-business.jsonl": "./schemas/examples/records-business.jsonl",
-    "./documents": {
-      "types": "./dist/documents.d.ts",
-      "default": "./dist/documents.js"
-    },
-    "./documents/cli": {
-      "types": "./dist/cli/documents/index.d.ts",
-      "default": "./dist/cli/documents/index.js"
-    },
-    "./documents/testing": {
-      "types": "./dist/cli/documents/testing/index.d.ts",
-      "default": "./dist/cli/documents/testing/index.js"
-    },
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/entries/main.d.ts",
+      "default": "./dist/bundle/index.js"
     },
-    "./sqlite-runtime": {
-      "types": "./dist/sqlite-runtime.d.ts",
-      "default": "./dist/sqlite-runtime.js"
-    },
-    "./store": {
-      "types": "./dist/store/public.d.ts",
-      "default": "./dist/store/public.js"
-    },
-    "./store/areas": {
-      "types": "./dist/store/areas.d.ts",
-      "default": "./dist/store/areas.js"
-    },
-    "./cli": {
-      "types": "./dist/cli/index.d.ts",
-      "default": "./dist/cli/index.js"
-    },
-    "./cli/start": {
-      "types": "./dist/cli/entry.d.ts",
-      "default": "./dist/cli/entry.js"
-    },
-    "./sends": {
-      "types": "./dist/sends/index.d.ts",
-      "default": "./dist/sends/index.js"
-    },
-    "./speech": {
-      "types": "./dist/speech/index.d.ts",
-      "default": "./dist/speech/index.js"
-    },
-    "./services": {
-      "types": "./dist/services/index.d.ts",
-      "default": "./dist/services/index.js"
-    },
-    "./background": {
-      "types": "./dist/background/index.d.ts",
-      "default": "./dist/background/index.js"
-    },
-    "./parity": {
-      "types": "./dist/parity/index.d.ts",
-      "default": "./dist/parity/index.js"
+    "./start": {
+      "types": "./dist/entries/start.d.ts",
+      "default": "./dist/bundle/start.js"
     },
     "./mcp": {
-      "types": "./dist/mcp/index.d.ts",
-      "default": "./dist/mcp/index.js"
+      "types": "./dist/entries/mcp.d.ts",
+      "default": "./dist/bundle/mcp.js"
     },
-    "./testing": {
-      "types": "./dist/kit/index.d.ts",
-      "default": "./dist/kit/index.js"
-    },
-    "./parity.json": "./parity.json",
-    "./charts": {
-      "types": "./dist/charts/index.d.ts",
-      "default": "./dist/charts/index.js"
-    },
-    "./tasks": {
-      "types": "./dist/tasks/index.d.ts",
-      "default": "./dist/tasks/index.js"
-    },
-    "./tasks/testing": {
-      "types": "./dist/tasks/testing/index.d.ts",
-      "default": "./dist/tasks/testing/index.js"
-    },
-    "./meetings": {
-      "types": "./dist/meetings/index.d.ts",
-      "default": "./dist/meetings/index.js"
-    },
-    "./meetings/cli": {
-      "types": "./dist/meetings/cli/index.d.ts",
-      "default": "./dist/meetings/cli/index.js"
-    },
-    "./meetings/mcp": {
-      "types": "./dist/meetings/mcp/index.d.ts",
-      "default": "./dist/meetings/mcp/index.js"
-    },
-    "./meetings/testing": {
-      "types": "./dist/meetings/testing/index.d.ts",
-      "default": "./dist/meetings/testing/index.js"
-    },
-    "./calendar": {
-      "types": "./dist/calendar/index.d.ts",
-      "default": "./dist/calendar/index.js"
-    },
-    "./calendar/cli": {
-      "types": "./dist/calendar/cli/index.d.ts",
-      "default": "./dist/calendar/cli/index.js"
-    },
-    "./calendar/mcp": {
-      "types": "./dist/calendar/mcp/index.d.ts",
-      "default": "./dist/calendar/mcp/index.js"
-    },
-    "./calendar/testing": {
-      "types": "./dist/calendar/testing/index.d.ts",
-      "default": "./dist/calendar/testing/index.js"
-    },
-    "./manifest": {
-      "types": "./dist/manifest/index.d.ts",
-      "default": "./dist/manifest/index.js"
-    },
-    "./crm": {
-      "types": "./dist/crm/index.d.ts",
-      "default": "./dist/crm/index.js"
-    },
-    "./crm/cli": {
-      "types": "./dist/crm/cli/index.d.ts",
-      "default": "./dist/crm/cli/index.js"
-    },
-    "./crm/testing": {
-      "types": "./dist/crm/testing/index.d.ts",
-      "default": "./dist/crm/testing/index.js"
-    },
-    "./content": {
-      "types": "./dist/content/index.d.ts",
-      "default": "./dist/content/index.js"
-    },
-    "./content/testing": {
-      "types": "./dist/content/testing/index.d.ts",
-      "default": "./dist/content/testing/index.js"
-    },
-    "./tracker": {
-      "types": "./dist/tracker/index.d.ts",
-      "default": "./dist/tracker/index.js"
-    },
-    "./tracker/testing": {
-      "types": "./dist/tracker/testing/index.d.ts",
-      "default": "./dist/tracker/testing/index.js"
+    "./documents": {
+      "types": "./dist/entries/documents.d.ts",
+      "default": "./dist/bundle/documents.js"
     },
     "./mail": {
-      "types": "./dist/mail/index.d.ts",
-      "default": "./dist/mail/index.js"
+      "types": "./dist/entries/mail.d.ts",
+      "default": "./dist/bundle/mail.js"
     },
-    "./mail/cli": {
-      "types": "./dist/mail/cli/index.d.ts",
-      "default": "./dist/mail/cli/index.js"
+    "./testing": {
+      "types": "./dist/entries/testing.d.ts",
+      "default": "./dist/bundle/testing.js"
     },
-    "./mail/testing": {
-      "types": "./dist/mail/testing/index.d.ts",
-      "default": "./dist/mail/testing/index.js"
+    "./preload": {
+      "types": "./dist/bundle/preload.d.ts",
+      "default": "./dist/bundle/preload.js"
     },
-    "./models": {
-      "types": "./dist/models/index.d.ts",
-      "default": "./dist/models/index.js"
-    },
-    "./skill-validation": {
-      "types": "./dist/skills/validate.d.ts",
-      "default": "./dist/skills/validate.js"
-    },
-    "./files": {
-      "types": "./dist/files/index.d.ts",
-      "default": "./dist/files/index.js"
-    },
-    "./persistence/native": {
-      "types": "./dist/persistence/native/index.d.ts",
-      "default": "./dist/persistence/native/index.js"
-    },
-    "./speech/wav": {
-      "types": "./dist/speech/wav.d.ts",
-      "default": "./dist/speech/wav.js"
-    },
-    "./update": {
-      "types": "./dist/update/index.d.ts",
-      "default": "./dist/update/index.js"
-    },
-    "./sftp": {
-      "types": "./dist/sftp/index.d.ts",
-      "default": "./dist/sftp/index.js"
-    },
-    "./mount": {
-      "types": "./dist/mount/index.d.ts",
-      "default": "./dist/mount/index.js"
-    },
-    "./office": {
-      "types": "./dist/office/index.d.ts",
-      "default": "./dist/office/index.js"
-    },
-    "./sql": {
-      "types": "./dist/sql/index.d.ts",
-      "default": "./dist/sql/index.js"
-    },
-    "./google": {
-      "types": "./dist/google/index.d.ts",
-      "default": "./dist/google/index.js"
-    },
-    "./oauth": {
-      "types": "./dist/oauth/index.d.ts",
-      "default": "./dist/oauth/index.js"
-    },
-    "./constants": {
-      "types": "./dist/constants/index.d.ts",
-      "default": "./dist/constants/index.js"
-    },
-    "./internal/*": {
-      "types": "./dist/*.d.ts"
-    }
+    "./parity.json": "./parity.json",
+    "./package.json": "./package.json",
+    "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
+    "./schemas/examples/records-business.jsonl": "./schemas/examples/records-business.jsonl"
   },
   "scripts": {
-    "build": "tsc --build --force && node scripts/bundle-drizzle.ts && node scripts/bundle-echarts.ts && node scripts/bundle-libraries.ts && node scripts/copy-snowball.ts && node scripts/copy-chart-fonts.ts && node scripts/copy-report-templates.ts",
+    "build": "tsc --build --force && node scripts/bundle-drizzle.ts && node scripts/bundle-echarts.ts && node scripts/bundle-libraries.ts && node scripts/copy-snowball.ts && node scripts/copy-chart-fonts.ts && node scripts/copy-report-templates.ts && node scripts/bundle-dist.ts",
     "check:dist": "node scripts/check-dist.ts",
     "typecheck": "tsc --build --force --emitDeclarationOnly && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
@@ -350,7 +166,7 @@
     "@types/pngjs": "6.0.5",
     "@types/ssh2": "1.15.5",
     "@vitest/coverage-v8": "^5.0.5",
-    "@wirecat/cli-base": "1.0.0",
+    "@wirecat/cli-base": "2.0.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
     "ajv": "8.17.1",
     "commander": "15.0.0",
@@ -371,6 +187,7 @@
     "pg": "8.23.1",
     "pngjs": "7.0.0",
     "psl": "1.15.0",
+    "rolldown": "1.2.15",
     "sherpa-onnx": "2.0.0",
     "ssh2": "1.17.0",
     "tldts": "7.4.19",
@@ -383,7 +200,7 @@
   "peerDependencies": {
     "@modelcontextprotocol/server": "^2.4.0",
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": "^1.0.0-0",
+    "@wirecat/cli-base": "^2.0.0",
     "commander": "^15.0.0",
     "liquidjs": "^10.30.0",
     "mysql2": "^3.24.6",

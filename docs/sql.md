@@ -1,6 +1,6 @@
 # SQL
 
-`@wirecat/cli-core/sql` reads a MySQL, MariaDB or PostgreSQL database for a CLI that keeps its records there: a
+`@wirecat/cli-core` reads a MySQL, MariaDB or PostgreSQL database for a CLI that keeps its records there: a
 PBX's call records (CDR), a system's export table. It only reads. The host brings its own schema: which table, which
 columns, which order, and what a row means.
 
@@ -19,7 +19,7 @@ Without the package, the first connection fails with `configuration_error` and r
 ## Read
 
 ```ts
-import { openSqlReader } from "@wirecat/cli-core/sql"
+import { openSqlReader } from "@wirecat/cli-core"
 
 await context.run(async (events) => {
   const db = await openSqlReader({

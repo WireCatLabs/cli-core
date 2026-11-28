@@ -1,13 +1,13 @@
 # Editing Office files in place
 
-`@wirecat/cli-core/office` changes cells of an Excel workbook (`.xlsx`) and paragraph text of a Word document
+`@wirecat/cli-core` changes cells of an Excel workbook (`.xlsx`) and paragraph text of a Word document
 (`.docx`) without rebuilding the file. It is for a service with no document API, such as Yandex Disk: the CLI
 downloads the whole file, edits it here and uploads the whole file back. Fonts, styles, images, comments, tracked
 changes and every part the editor does not read come back as they were. It also makes a new workbook or document from values
 (see [New files](#new-files)).
 
 ```ts
-import { editDocxParagraphs, editXlsxCells, readDocxParagraphs, readXlsxCells } from "@wirecat/cli-core/office"
+import { editDocxParagraphs, editXlsxCells, readDocxParagraphs, readXlsxCells } from "@wirecat/cli-core"
 
 const [sheet] = await readXlsxCells(bytes, { sheet: "Budget", range: "A1:D20" })
 const { bytes: edited } = await editXlsxCells(bytes, [{ sheet: "Budget", cell: "B7", value: 1200 }])
@@ -101,7 +101,7 @@ readers above take. The same input gives the same bytes: the zip has a fixed tim
 author, no creation time).
 
 ```ts
-import { createDocx, createXlsx } from "@wirecat/cli-core/office"
+import { createDocx, createXlsx } from "@wirecat/cli-core"
 
 const workbook = createXlsx({
   sheets: [

@@ -2,12 +2,12 @@ import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
 import type { Provider } from "../domain/models.js"
 import { pickPerson } from "../resolve.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import { type AccountKey, type MessageStore, SCOPES } from "../store/store.js"
 import { readableScopes } from "./person-context.js"
 
 export const TIMELINE_ITEMS = 50
 export const TIMELINE_MAX = 500
-export const SCOPES = ["personal", "work"] as const
+export { SCOPES }
 export type Scope = (typeof SCOPES)[number]
 
 export interface TimelineItem {

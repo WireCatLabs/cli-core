@@ -1,6 +1,6 @@
 # CRM
 
-What a CRM CLI (b24, amo) gets from `@wirecat/cli-core/crm` and `/crm/cli`, and what its adapter supplies.
+What a CRM CLI (b24, amo) gets from `@wirecat/cli-core` and `/crm/cli`, and what its adapter supplies.
 
 - [The port](#the-port)
 - [Live reads](#live-reads)
@@ -256,7 +256,7 @@ The files of a deal, lead, contact or company (NEED-2701 C): listed live, downlo
   CLI knows its profile's `files.list` level.
 - `fetchCrmFile(link, { hosts, headers })` is the adapters' download: https only, the account's own hosts only,
   redirects only on them, an HTML page refused, and no error naming the link.
-- `crmFilesContract` in `@wirecat/cli-core/crm/testing` checks an adapter's `files`: the listing's shape and ids, a
+- `crmFilesContract` in `@wirecat/cli-core/testing` checks an adapter's `files`: the listing's shape and ids, a
   download saved 600 with its text found and its token nowhere, refused links, and the day's limit.
 
 ## A source from a manifest
@@ -293,9 +293,9 @@ hooks })` builds the `CrmSource` (design and evidence: cli-private `plans/2026-1
   answers; a CLI runs it in a test, so a wrong path fails before any sync.
 - `hooks.enrich` reads more for a whole page in one batch before the map; `optional` makes a refused kind, or one the service says is not there (404), a gap;
   `select.max` caps the account's own fields in `{select}`; mapped fields are always asked for.
-- `defineCli` and `parseCliConfig` (`@wirecat/cli-core/manifest`) give the whole CLI's `wirecat.config.ts`: identity,
+- `defineCli` and `parseCliConfig` (`@wirecat/cli-core`) give the whole CLI's `wirecat.config.ts`: identity,
   API description, sign-in preset, category and this source.
-- `manifestVerify` (`@wirecat/cli-core/cli`) is `tokenSessionCommand`'s `verify` from the config's `auth.verify`: it
+- `manifestVerify` (`@wirecat/cli-core`) is `tokenSessionCommand`'s `verify` from the config's `auth.verify`: it
   sends the one operation, refuses a token the answer does not call `active`, and keeps the id and name the answer
   holds. `hostsFetch(hosts, environment.fetch)` is the fetch for it and the source: only the CLI's hosts, over a test's
   fake when there is one. A CLI made from the config holds no check of its own.
@@ -329,7 +329,7 @@ the operation id, so a manifest's writes are never idempotent.
   unguarded, as a hand-written writer is: a CLI calls it only through `crm/writes.ts`, by `CrmRun.writes`.
   `crmManifestWriteCapabilities` gives `addCrmCommands` its `writes`, `crmManifestWriteKeys` gives `crmAlsoChecks`
   the same keys for `--dry-run`.
-- `crmManifestWriteContract(manifest, { api, definitions, hooks })` (`@wirecat/cli-core/crm/testing`) runs
+- `crmManifestWriteContract(manifest, { api, definitions, hooks })` (`@wirecat/cli-core/testing`) runs
   `crmWriteContract` against `crmManifestFake`, which answers the manifest's writes: it reads each rule backwards,
   keeps the record in our fields and answers as its schema says. `loseNextAnswer()` and `requests()` are on the fake.
 - **Activities are the CLI's own functions**, since a note's or task's body differs too much from one service to the
@@ -342,7 +342,7 @@ the operation id, so a manifest's writes are never idempotent.
 
 ### A test for a source from a manifest
 
-A CLI made from `wirecat.config.ts` tests its source with no code of its own (`@wirecat/cli-core/crm/testing`):
+A CLI made from `wirecat.config.ts` tests its source with no code of its own (`@wirecat/cli-core/testing`):
 
 ```ts
 for (const { name, run } of crmManifestContract(SOURCE, { api, definitions, hooks })) it(name, run)
@@ -402,10 +402,10 @@ it sees the profiles the configuration names.
 - `crmCustomValues(fields, pairs)`: `--field` pairs into codes and option ids.
 - `crmValues`: JSON coercions (`crmValues.text`, `id`, `ids`, `number`, `time`, `epoch`, `amountOf`, `fullName`,
   `isRaw`, `fieldOf`, `rawsOf`, `crmValuesOf`).
-- `accountTokenCodec(provider)` in `@wirecat/cli-core/oauth`: a sign-in entry through the owner's own app, which
+- `accountTokenCodec(provider)` in `@wirecat/cli-core`: a sign-in entry through the owner's own app, which
   keeps the app's secret, the account's `host` and `userId` and saves a rotated refresh token. A new sign-in takes
   `host` and `userId` from its own `extra` only. The codec is `rotating`: a run with moved folders never refreshes it
   (`oauth.moved-rotating`), since the rotated token would land in the temporary entry and leave the owner's dead.
-- `@wirecat/cli-core/crm/testing`: `fakeCrmSource` (strict: a condition it does not know fails; `stageHistory`,
+- `@wirecat/cli-core/testing`: `fakeCrmSource` (strict: a condition it does not know fails; `stageHistory`,
   `activities` and `files` options give it those reads; each fake file's link holds `FAKE_FILE_TOKEN`), `crmSourceContract` and `crmWriteContract` cover the live reads and the
   contact and company writes, and `crmSyncContract` the sync (a fixture's `activitiesOn` adds the activity case).

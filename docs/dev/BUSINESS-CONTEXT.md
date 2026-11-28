@@ -98,7 +98,7 @@ never changes, else a CRM's own-company flag.
 
 ## Testing
 
-`acmeScenario(store)` in `@wirecat/cli-core/crm/testing` builds plan §8's synthetic scenario through the CRM sync
+`acmeScenario(store)` in `@wirecat/cli-core/testing` builds plan §8's synthetic scenario through the CRM sync
 and the store's own calls: Northstar Consulting (own, the CRM portal), Acme Ltd (its client), Alice and Bob
 (Acme's CRM contacts), Emma (a portal user, Northstar's sales owner and the deal's), the deal "Acme renewal" with
 project Atlas set by the owner on the CRM copy, a Telegram dialog with Alice, a mail from Bob, a Zoom call with the

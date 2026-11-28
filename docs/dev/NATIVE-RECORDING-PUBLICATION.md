@@ -1,6 +1,6 @@
 # Native recording publication and recovery
 
-`NativeRecordingPublication` from `@wirecat/cli-core/persistence/native` shares native publication
+`NativeRecordingPublication` from `@wirecat/cli-core` shares native publication
 mechanics across recording providers. It knows recording fingerprints and scoped checkpoints, but
 no provider manifest format. The host supplies a codec, final filename, journal prefix, limits and
 an evidence projection. Keep the same prefix, scope and codec to retain a legacy journal format.
@@ -10,7 +10,7 @@ The journal name is the prefix plus SHA-256 of the JSON array
 ## Bind a host
 
 ```ts
-import { NativeRecordingPublication } from "@wirecat/cli-core/persistence/native"
+import { NativeRecordingPublication } from "@wirecat/cli-core"
 
 const publication = new NativeRecordingPublication(root, locator, {
   prefix: ".example-promotion-",

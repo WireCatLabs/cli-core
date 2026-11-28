@@ -189,7 +189,7 @@ without `ref`, `as` or `amount` keeps the fingerprint v1 stored, so an old file 
 ## Streaming
 
 ```ts
-import { ingest, ingestLines, jsonlLines } from "@wirecat/cli-core/services"
+import { ingest, ingestLines, jsonlLines } from "@wirecat/cli-core"
 
 const receipt = await ingestLines(store, jsonlLines(process.stdin), { account: "demo", onIssue: (e) => log(e) })
 ```
@@ -360,7 +360,7 @@ by the number or its contact id; a vCard contact with the same number links to t
 
 **vCard → envelope.** `envelopeOfVcard(text, { provider, account, batchId, region })` in `src/domain/vcard.ts`,
 exported from the package, gives `{ envelope, issues }`. `isVcard(text)` tells a `.vcf` from a JSON or JSONL file,
-and `ingestVcard(store, text, { account, provider, batchId, region })` (`@wirecat/cli-core/services`) converts and
+and `ingestVcard(store, text, { account, provider, batchId, region })` (`@wirecat/cli-core`) converts and
 imports it in one call, its receipt with the converter's `vcard` issues beside the import's.
 
 - vCard 2.1, 3.0 and 4.0: folded lines, quoted-printable (with 2.1's soft breaks) decoded in its `CHARSET`

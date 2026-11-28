@@ -63,38 +63,43 @@ names, keys and aliases; it neither reads other meetings nor confirms membership
 [Project evidence gathering](PROJECT-GATHERING.md) plans bounded reads of those context readers across
 alias, keyword and person lanes and returns cited evidence with a resume checkpoint; it writes nothing.
 
-| Export | Directory | What it holds |
-|---|---|---|
-| `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |
-| `./documents` | `src/documents/`, `src/services/documents/`, `src/fetch/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction, and the one-page fetch for a link the owner adds; existing readers remain available — see [Document workflows](DOCUMENTS.md) and [Reading one page](#reading-one-page) |
-| `./store` | `src/store/` | the SQLite seam and the shared message store |
-| `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
-| `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding (ffmpeg included), timed local pieces, OpenAI transcription and `cloudSpeech` for a host that opts a profile in; import alone loads no engine, and the voice engines install on first use ([Engines](#engines-installed-on-first-use)) |
-| `./charts` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads the bundled ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
-| `./models` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
-| `./services` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
-| `./background` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
-| `./cli` | `src/cli/`, `src/mcp/` | the command skeleton, the shared commands and the MCP server |
-| `./cli/start` | `src/cli/entry.ts` | `startCli` without the barrel: about 50 files where `./cli` loads about 1,000, checked by `check:dist`; a bare `--version` never loads the program |
-| `./sqlite-runtime` | `src/sqlite-runtime.ts` | `ensureSqlite`, the first thing `tg` and `max` run: restarts the command with the bundled SQLite when the system's lacks FTS5 — see [The store](#the-store) |
-| `./parity` | `src/parity/` | the command manifest, page and wording checks behind `cli-core-parity`, which compares `tg` and `max` |
-| `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |
-| `./tasks`, `./tasks/testing` | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
-| `./meetings`, `/meetings/cli`, `/meetings/mcp`, `/meetings/testing` | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
-| `./calendar`, `/calendar/cli`, `/calendar/mcp`, `/calendar/testing` | `src/calendar/` | the calendar provider port, the sync engine over `EventStore`, the shared commands and MCP reads; the store types stay in `src/meetings/`, which depends on nothing else but the query simplifier `src/search/service-query.ts` and, in its commands, the past-time grammar `src/services/moment.ts` — see [Calendars](CALENDARS.md) |
-| `./constants` | `src/constants/` | the packaged constants (`constants`, `constantsSchema`), the app a sign-in uses (`googleApp`, `microsoftApp`, `oauthApp`) and `doctor`'s report of it (`oauthClientReport`) — see [Constants](CONSTANTS.md) |
-| `./mail`, `/mail/testing` | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
-| `./crm`, `/crm/cli`, `/crm/testing` | `src/crm/` | the CRM port, the sync engine, the guarded writes, the live `people`, `organizations` and `users` commands, the `files` commands, the adapter helpers and the contract kit — see [CRM](CRM.md) |
-| `./tracker`, `/tracker/testing` | `src/tracker/` | issue trackers: the `TrackerSource` port, the sync engine over `store.tracker` (changes by cursor, deletions by an id pass), the issue → owner task link, the shared commands and the contract kit — see [Trackers](TRACKER.md) |
-| `./content`, `/content/testing` | `src/content/` | content sites: the `ContentSource` and `ContentWriter` ports, the sync engine over `store.content`, posts commands with publishing behind `posts.publish`, the manifest source and writer, and the contract kits — see [Content](CONTENT.md) |
-| `./google` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
-| `./sftp` | `src/sftp/` | a read-only SFTP client and an SSH tunnel that only forwards: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
-| `./mount` | `src/mount/` | a read-only WebDAV server on 127.0.0.1 over a `MountSource` port (stat, list, read a range), behind a per-run secret, for the system's own client to mount — see [Read-only mount](../mount.md) |
-| `./office` | `src/office/` | in-place edits of `.xlsx` cells and `.docx` paragraph text for a service with no document API: spliced into the original XML, every other zip entry copied byte for byte; new files from rows or styled paragraphs — see [Editing Office files](../office.md) |
-| `./sql` | `src/sql/` | a read-only SQL reader: `reader.ts` opens mysql2 or pg (optional peers, imported on first use) read-only, pages a host's table and maps driver errors — see [SQL](../sql.md) |
+The package has seven entry points: `.`, `./start`, `./mcp`, `./documents`, `./mail`, `./testing` and `./preload`;
+`src/entries/` says which area goes into which. `pnpm build` ends with `scripts/bundle-dist.ts`, which bundles them
+into `dist/bundle/`: what `./start` loads is one chunk, the rest of what `.` loads another, and a CLI's `--help` reads
+about four files of cli-core. The other entries and every lazy `import()` stay chunks of their own.
+
+| Area | Entry point | Directory | What it holds |
+|---|---|---|---|
+| core | `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |
+| documents | `./documents` | `src/documents/`, `src/services/documents/`, `src/fetch/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction, and the one-page fetch for a link the owner adds; existing readers remain available — see [Document workflows](DOCUMENTS.md) and [Reading one page](#reading-one-page) |
+| store | `.` | `src/store/` | the SQLite seam and the shared message store |
+| sends | `.` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
+| speech | `.` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding (ffmpeg included), timed local pieces, OpenAI transcription and `cloudSpeech` for a host that opts a profile in; import alone loads no engine, and the voice engines install on first use ([Engines](#engines-installed-on-first-use)) |
+| charts | `.` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads the bundled ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
+| models | `.` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
+| services | `.` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
+| background | `.` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
+| cli | `.`, `./mcp` | `src/cli/`, `src/mcp/` | the command skeleton, the shared commands and the MCP server |
+| start | `./start` | `src/cli/entry.ts` | `startCli` without the barrel: its own small chunk of the bundle, checked by `check:dist`; a bare `--version` never loads the program |
+| sqlite-runtime | `./start` | `src/sqlite-runtime.ts` | `ensureSqlite`, the first thing `tg` and `max` run: restarts the command with the bundled SQLite when the system's lacks FTS5 — see [The store](#the-store) |
+| parity | `.` | `src/parity/` | the command manifest, page and wording checks behind `cli-core-parity`, which compares `tg` and `max` |
+| testing | `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |
+| tasks | `.` (and `./testing`) | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
+| meetings | `.` (and `./testing`) | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
+| calendar | `.` (and `./testing`) | `src/calendar/` | the calendar provider port, the sync engine over `EventStore`, the shared commands and MCP reads; the store types stay in `src/meetings/`, which depends on nothing else but the query simplifier `src/search/service-query.ts` and, in its commands, the past-time grammar `src/services/moment.ts` — see [Calendars](CALENDARS.md) |
+| constants | `.` | `src/constants/` | the packaged constants (`constants`, `constantsSchema`), the app a sign-in uses (`googleApp`, `microsoftApp`, `oauthApp`) and `doctor`'s report of it (`oauthClientReport`) — see [Constants](CONSTANTS.md) |
+| mail | `./mail` (and `./testing`) | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
+| crm | `.` (and `./testing`) | `src/crm/` | the CRM port, the sync engine, the guarded writes, the live `people`, `organizations` and `users` commands, the `files` commands, the adapter helpers and the contract kit — see [CRM](CRM.md) |
+| tracker | `.` (and `./testing`) | `src/tracker/` | issue trackers: the `TrackerSource` port, the sync engine over `store.tracker` (changes by cursor, deletions by an id pass), the issue → owner task link, the shared commands and the contract kit — see [Trackers](TRACKER.md) |
+| content | `.` (and `./testing`) | `src/content/` | content sites: the `ContentSource` and `ContentWriter` ports, the sync engine over `store.content`, posts commands with publishing behind `posts.publish`, the manifest source and writer, and the contract kits — see [Content](CONTENT.md) |
+| google | `.` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
+| sftp | `.` | `src/sftp/` | a read-only SFTP client and an SSH tunnel that only forwards: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
+| mount | `.` | `src/mount/` | a read-only WebDAV server on 127.0.0.1 over a `MountSource` port (stat, list, read a range), behind a per-run secret, for the system's own client to mount — see [Read-only mount](../mount.md) |
+| office | `.` | `src/office/` | in-place edits of `.xlsx` cells and `.docx` paragraph text for a service with no document API: spliced into the original XML, every other zip entry copied byte for byte; new files from rows or styled paragraphs — see [Editing Office files](../office.md) |
+| sql | `.` | `src/sql/` | a read-only SQL reader: `reader.ts` opens mysql2 or pg (optional peers, imported on first use) read-only, pages a host's table and maps driver errors — see [SQL](../sql.md) |
 
 Every document and every meeting of every account, as a page lists them, are [Listings](LISTINGS.md): services over
-`store.listings`, with the request builders in `./cli`.
+`store.listings`, with the request builders in `.`.
 
 The README's table lists what each export offers; this page does not repeat it.
 
@@ -119,7 +124,7 @@ Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` 
 - **Bun on macOS** always loads ours (`bunDatabase`, `src/store/drivers/bun-sqlite.ts`), once, before
   the first database: Bun uses the system's library there, which can be too old.
 - **A Linux distribution's Node** links the system's `libsqlite3`. `ensureSqlite`
-  (`src/sqlite-runtime.ts`, exported as `@wirecat/cli-core/sqlite-runtime`) is the first thing
+  (`src/sqlite-runtime.ts`, exported as `@wirecat/cli-core/start`) is the first thing
   `tg` and `max` run: when the system's SQLite fails the check above, it starts the command again
   with ours first on `LD_LIBRARY_PATH`, before anything is read or sent. Full validation runs it on Ubuntu's Node
   with SQLite 3.42 (`scripts/check-sqlite-restart.mjs`).

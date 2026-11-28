@@ -1,6 +1,6 @@
 # Content
 
-`src/content/`, exported as `@wirecat/cli-core/content` and `/content/testing`. A content CLI (WordPress first) keeps
+`src/content/`, exported as `@wirecat/cli-core` and `/content/testing`. A content CLI (WordPress first) keeps
 the posts and pages of a site in the shared store, syncs them, searches them and writes them, with publishing behind
 the owner's question. The CLI writes its sign-in and either a `ContentSource` adapter or a manifest; the copy, the
 sync, the commands and the contract kits are shared, as for [trackers](TRACKER.md) and [CRMs](CRM.md). The tables are

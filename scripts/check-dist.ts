@@ -4,8 +4,9 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { checkBundle } from "./check-bundle.ts"
 import { checkBundledLibraries } from "./check-bundled-libraries.ts"
-import { checkCliEntry, checkStartEntry } from "./check-cli-entry.ts"
+import { checkEntries } from "./check-cli-entry.ts"
 import { checkEngines } from "./check-engines.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
@@ -13,8 +14,8 @@ import { checkRecordingPublication } from "./check-recording-publication.ts"
 import { scratch } from "./scratch.ts"
 
 const root = join(import.meta.dirname, "../dist")
-checkCliEntry(root)
-checkStartEntry(root)
+checkEntries(root)
+console.log(`dist: the bundle loads ${(await checkBundle(root)).join(", ")}, without cli-base or commander inside`)
 await checkFileLeases(root)
 await checkRecordingPartials(root)
 await checkRecordingPublication(root)
@@ -68,7 +69,7 @@ const rows = await store.orm.select().from(accounts)
 store.database.close()
 if (rows.length !== 1) throw new Error(`bundled Drizzle read ${rows.length} rows, not 1`)
 
-const { openStore } = await import(join(root, "store/public.js"))
+const { openStore } = await import("@wirecat/cli-core")
 const messages = await openStore({ path: join(scratch("cli-messaging-dist-"), "messages.db") })
 const key = { provider: "telegram", account: "1" }
 const message = {
@@ -87,11 +88,11 @@ const message = {
 }
 await messages.messages.saveMessages(key, "-1002", [message], { via: "check" })
 const read = await messages.messages.messages(key, "-1002", { limit: 5 })
-const { readEvidencePacket } = await import(join(root, "services/index.js"))
+const { readEvidencePacket } = await import("@wirecat/cli-core")
 const storedEvidence = await readEvidencePacket(messages, key, { chat: "-1002", limit: 5 })
 if (storedEvidence.items[0]?.locator !== "msg:telegram/1/-1002/3" || storedEvidence.nextBeforeId !== null)
   throw new Error("./services from dist did not read a stored evidence packet")
-const { searchStore } = await import(join(root, "services/index.js"))
+const { searchStore } = await import("@wirecat/cli-core")
 const strictSearch = await searchStore(messages, key, { text: "через", limit: 5 })
 if (strictSearch.items[0]?.id !== "3" || strictSearch.query?.language !== "lucene-v1")
   throw new Error("strict Lucene search failed from dist")
@@ -104,13 +105,13 @@ const stems = createStemmer().stemTokens("Квартиру canciones")
 if (stems.join(" ") !== "квартир cancion") throw new Error(`the vendored Snowball stemmers gave ${stems} from dist`)
 console.log("dist: the vendored Snowball stemmers load and stem")
 
-const { prepareEvidencePacket } = await import(join(root, "services/index.js"))
+const { prepareEvidencePacket } = await import("@wirecat/cli-core")
 const evidence = prepareEvidencePacket({ kind: "chats", source: { ...key, chat: message.chatId }, page: read })
 if (evidence.items[0]?.text !== message.text || evidence.items[0]?.locator !== "msg:telegram/1/-1002/3")
   throw new Error("./services from dist did not package the stored message with its source")
 console.log("dist: ./services prepares an evidence packet from stored messages")
 
-const { contractCases, fakeAdapter } = await import(join(root, "kit/index.js"))
+const { contractCases, fakeAdapter } = await import("@wirecat/cli-core/testing")
 for (const one of contractCases({ connect: fakeAdapter, orderBy: "time" })) await one.run()
 console.log("dist: ./testing exports the fake adapter, and it passes the contract cases")
 
@@ -138,7 +139,7 @@ const late = await apart.embed(["fish"], "query").then(
 if (!late.startsWith("the embedding process stopped")) throw new Error(`a closed embedding process ${late}`)
 console.log("dist: the embedding process answers, and refuses once closed")
 
-const speech = await import("@wirecat/cli-core/speech")
+const speech = await import("@wirecat/cli-core")
 const speechCache = join(scratch("speech-export-dist-"), "common")
 const speechDirectory = speech.modelsDirectory({ WIRECAT_STATE_DIR: speechCache })
 if (speechDirectory !== join(speechCache, "models", "audio"))
@@ -150,7 +151,7 @@ if (
   throw new Error("./speech lost consumer model ordering or claims absent files are installed")
 console.log("dist: ./speech reuses the pinned catalogue and shared model directory")
 
-const { chartRenderer, chartPng, CHART_SIZE } = await import("@wirecat/cli-core/charts")
+const { chartRenderer, chartPng, CHART_SIZE } = await import("@wirecat/cli-core")
 const chart = {
   version: 1 as const,
   kind: "bar" as const,
@@ -188,8 +189,8 @@ if (!readFileSync(join(root, "charts/fonts/OFL.txt"), "utf8").includes("SIL OPEN
   throw new Error("the chart font license is absent from dist")
 console.log("dist: ./charts renders bar and line SVG through the bundled ECharts, and dark PNG with the bundled font")
 
-const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-core/files")
-const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-core/speech/wav")
+const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-core")
+const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-core")
 const mediaFolder = scratch("cli-messaging-dist-media-")
 const mediaPath = join(mediaFolder, "AliceExample.wav")
 const pcm = Buffer.alloc(44 + 32000)
@@ -226,7 +227,7 @@ if (sampleCount !== 16000 || mediaPlan.media.durationMs !== 1000 || JSON.stringi
   throw new Error("public WAV streaming or path redaction failed from dist")
 console.log("dist: ./files and ./speech/wav verify and decode an invented bounded file")
 
-const { appUpdate } = await import("@wirecat/cli-core/update")
+const { appUpdate } = await import("@wirecat/cli-core")
 const update = appUpdate({
   packageName: "@wirecat/demo-cli",
   command: "demo",
@@ -240,7 +241,7 @@ if (update.installer({ scriptPath: "/usr/lib/node_modules/@wirecat/demo-cli/dist
   throw new Error("./update did not read the installer from the app's script")
 console.log("dist: ./update reads an app's installer")
 
-const { credentialStorage, oauthAccount, standardCodec } = await import("@wirecat/cli-core/oauth")
+const { credentialStorage, oauthAccount, standardCodec } = await import("@wirecat/cli-core")
 const { memoryKeyring } = await import("@wirecat/cli-base/testing")
 const signIn = credentialStorage({
   credentials: { service: "demo-cli", configDir: mediaFolder, storage: "keyring", keyring: memoryKeyring() },
@@ -251,7 +252,7 @@ signIn.write({ tokens: { refreshToken: "invented", scopes: [] }, client: { clien
 if (signIn.read()?.tokens.refreshToken !== "invented") throw new Error("./oauth did not read back an invented sign-in")
 console.log("dist: ./oauth saves and reads an invented sign-in")
 
-const { googleError, googlePages } = await import("@wirecat/cli-core/google")
+const { googleError, googlePages } = await import("@wirecat/cli-core")
 if (googleError({ status: 404, body: null, mutates: false }).code !== "not_found")
   throw new Error("./google did not map a 404 to not_found")
 if ((await googlePages("items", async () => ({ items: [1] }))).length !== 1) throw new Error("./google lost a page")

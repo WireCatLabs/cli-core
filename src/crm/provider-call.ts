@@ -13,7 +13,7 @@ export interface ProviderCallOptions<T> {
   write: boolean
   /** One HTTP exchange; it throws a cli-base `CliError` with a reason. */
   send: () => Promise<T>
-  /** The profile's shared pace (`@wirecat/cli-core/sends`): each attempt waits its turn, and a refused rate holds it. */
+  /** The profile's shared pace (`@wirecat/cli-core`): each attempt waits its turn, and a refused rate holds it. */
   pace?: { pacer: Pacer } & TurnOptions
   /** One token refresh on `oauth.expired`; false gives up. A refused token did nothing, so a write goes again too. */
   refresh?: () => Promise<boolean>

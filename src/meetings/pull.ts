@@ -27,7 +27,7 @@ export interface RunReport {
 
 export type MeetingBudgetStop = "requests" | "deadline" | "cancelled"
 
-/** One meeting more, or why not: `runBudgetOf(command)` from `@wirecat/cli-core/cli` fits. */
+/** One meeting more, or why not: `runBudgetOf(command)` from `@wirecat/cli-core` fits. */
 export interface MeetingBudget {
   take(): MeetingBudgetStop | null
 }

@@ -1,61 +1,49 @@
 /**
- * The `cli` entry loads neither the MCP SDK nor zod: they are about a tenth of its files, and a CLI's `--help`
- * pays for every file the entry reaches. They come through `@wirecat/cli-core/mcp`, imported where MCP is served.
+ * A CLI's `--help` pays for every byte of the bundle that `.` loads, and every command pays for what `./start` loads
+ * before the program. A module that slips into the wrong chunk shows here first: the MCP SDK and zod (1.1 MB) belong to
+ * `./mcp`, loaded where MCP is served, and `./start` must not pull in the chunk of `.`.
  */
 import { spawnSync } from "node:child_process"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 
-const HOOK = `import { registerHooks } from "node:module"
-registerHooks({ resolve(specifier, context, next) {
-  const resolved = next(specifier, context)
-  if (/@modelcontextprotocol|\\/zod\\//.test(resolved.url)) process.stdout.write(resolved.url + "\\n")
-  return resolved
-} })`
+/** Measured 2026-11-28: `.` loads 10.9 MB of the bundle, `./start` 0.02 MB. */
+export const ENTRY_BYTES = { index: 11_300_000, start: 200_000 }
 
-export const checkCliEntry = (root: string): void => {
-  if (process.versions.bun) return
-  const entry = pathToFileURL(join(root, "cli/index.js")).href
+const HOOK = (bundle: string) => `import { registerHooks } from "node:module"
+let bytes = 0
+registerHooks({ load(url, context, next) {
+  const loaded = next(url, context)
+  if (url.startsWith(${JSON.stringify(bundle)})) bytes += loaded.source?.length ?? 0
+  if (/@modelcontextprotocol|\\/zod\\//.test(url)) process.stderr.write("outside: " + url + "\\n")
+  return loaded
+} })
+process.on("exit", () => process.stdout.write(String(bytes)))`
+
+export const entryBytes = (root: string, entry: keyof typeof ENTRY_BYTES): number => {
+  const bundle = pathToFileURL(join(root, "bundle/")).href
   const run = spawnSync(
     process.execPath,
     [
       "--import",
-      `data:text/javascript,${encodeURIComponent(HOOK)}`,
+      `data:text/javascript,${encodeURIComponent(HOOK(bundle))}`,
       "--input-type=module",
       "-e",
-      `await import(${JSON.stringify(entry)})`,
+      `await import(${JSON.stringify(new URL(`${entry}.js`, bundle).href)})`,
     ],
     { encoding: "utf8" },
   )
-  if (run.status !== 0) throw new Error(`importing dist/cli/index.js failed: ${run.stderr}`)
-  const loaded = run.stdout.trim()
-  if (loaded)
-    throw new Error(`dist/cli/index.js loads the MCP SDK or zod:\n${loaded.split("\n").slice(0, 5).join("\n")}`)
+  if (run.status !== 0) throw new Error(`importing dist/bundle/${entry}.js failed: ${run.stderr}`)
+  if (run.stderr.includes("outside: "))
+    throw new Error(`dist/bundle/${entry}.js loads the MCP SDK or zod:\n${run.stderr}`)
+  return Number(run.stdout.trim())
 }
 
-/** Every command, `--version` included, pays for what `cli/start` loads before the program; it was 837 files. */
-const START_MODULES = 80
-
-export const checkStartEntry = (root: string): void => {
+export const checkEntries = (root: string): void => {
   if (process.versions.bun) return
-  const count = `import { registerHooks } from "node:module"
-let loaded = 0
-registerHooks({ load(url, context, next) { loaded++; return next(url, context) } })
-process.on("exit", () => process.stdout.write(String(loaded)))`
-  const entry = pathToFileURL(join(root, "cli/entry.js")).href
-  const run = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      `data:text/javascript,${encodeURIComponent(count)}`,
-      "--input-type=module",
-      "-e",
-      `await import(${JSON.stringify(entry)})`,
-    ],
-    { encoding: "utf8" },
-  )
-  if (run.status !== 0) throw new Error(`importing dist/cli/entry.js failed: ${run.stderr}`)
-  const loaded = Number(run.stdout.trim())
-  if (!(loaded > 0 && loaded <= START_MODULES))
-    throw new Error(`dist/cli/entry.js loads ${run.stdout.trim()} modules, more than ${START_MODULES}`)
+  for (const [entry, most] of Object.entries(ENTRY_BYTES) as [keyof typeof ENTRY_BYTES, number][]) {
+    const bytes = entryBytes(root, entry)
+    if (!(bytes > 0 && bytes <= most))
+      throw new Error(`dist/bundle/${entry}.js loads ${bytes} bytes of the bundle, more than ${most}`)
+  }
 }

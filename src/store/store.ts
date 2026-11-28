@@ -39,6 +39,9 @@ import { filesStoreOver } from "./sqlite/files.js"
 import { financeStoreOver } from "./sqlite/finance.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
 import { knowledgeStoreOver } from "./sqlite/knowledge.js"
+
+export { SCOPES } from "./sqlite/knowledge.js"
+
 import { logPruner } from "./sqlite/log-pruning.js"
 import { mailFindingsStoreOver } from "./sqlite/mail-findings.js"
 import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
