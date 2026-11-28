@@ -1,4 +1,4 @@
-### Changed — may break callers
+### Changed — experimental
 
 - **A messenger's `account sessions` is now `account devices`, with no alias.** The group lists the
   devices and apps where the messenger account is signed in. Its old name read like `session`, the profiles on this
@@ -16,4 +16,5 @@
     cli-core bump.
   - Unchanged: the answers keep their entities, `account_session` and `ended_account_sessions`, with the `sessions`
     field. The adapter methods `sessions()` and `endOtherSessions()` keep their names, so no messenger adapter
-    changes. Nothing in the store changes, so this ships in a minor.
+    changes. Nothing in the store changes. The commands a CLI mounts are not part of the stable API, and
+    `accountCommand` keeps its signature, so this ships in a minor, as the removal of `account list` did.
