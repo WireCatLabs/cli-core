@@ -1,6 +1,6 @@
 {
   "measures": "disk use of node_modules after npm i of the packed @wirecat/cli-core tarball, Linux x64",
-  "ceilingMB": 295,
-  "measuredMB": 280.4,
+  "ceilingMB": 187,
+  "measuredMB": 178.3,
   "measuredOn": "2026-11-28"
 }
