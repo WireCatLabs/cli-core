@@ -1,5 +1,5 @@
+read  account devices list
 read  account privacy show
-read  account sessions list
 read  account show
 read  attachments check
 read  attachments jobs status
@@ -128,8 +128,8 @@ read  templates preview
 read  templates show
 read  topics icons list
 read  topics list
+write account devices end
 write account privacy set
-write account sessions end
 write account update
 write attachments download
 write attachments extract

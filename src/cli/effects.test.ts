@@ -61,7 +61,7 @@ describe("command effects", () => {
     })
     // Reads behind a key a profile must allow: the session list is private, and `conversations embeddings status`
     // shares the whole `conversations.embeddings` group's key (FIND-1262).
-    expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embeddings status"])
+    expect(wrong.map(({ path }) => path)).toEqual(["account devices list", "conversations embeddings status"])
   })
 
   it("mark the local writes the read-only lock refuses: what changes a later run's authority, and no read", () => {

@@ -27,7 +27,7 @@ export const skipFlagFor = (key: string): "--allow-dangerous" | "--yes" =>
 export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   // Owner, 2026-11-14: deleting a message does not ask; a profile that wants the question sets `ask`.
   "messages.delete": "allow",
-  "account.sessions.end": "ask",
+  "account.devices.end": "ask",
   "bot.messages.delete": "allow",
   "topics.enable": "ask",
   "topics.delete": "ask",
@@ -256,7 +256,7 @@ const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "folder-delete": "chats.folders.delete",
   "folder-order": "chats.folders.order",
   "folder-join": "chats.folders.join",
-  "sessions-end": "account.sessions.end",
+  "sessions-end": "account.devices.end",
   "chat-mute": "chats.mute",
   "chat-unmute": "chats.unmute",
   "chat-archive": "chats.archive",
@@ -326,7 +326,7 @@ const NAMED_WRITE_KEYS = [
   "stats.messages.show.sync-first",
   "stats.messages.top.sync-first",
   "stats.contacts.top.sync-first",
-  "account.sessions.list",
+  "account.devices.list",
   "attachments.extract",
   "attachments.move",
   "attachments.update",

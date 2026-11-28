@@ -1306,9 +1306,9 @@ describe("chats create, join and leave", () => {
       env,
     )
     const empty = await call(["account", "update"], adapter, env)
-    const without = await call(["account", "sessions", "end", "--yes"], adapter, env)
-    const unasked = await call(["account", "sessions", "end", "--others"], adapter, env)
-    const ended1 = await call(["account", "sessions", "end", "--others", "--yes", "--json"], adapter, env)
+    const without = await call(["account", "devices", "end", "--yes"], adapter, env)
+    const unasked = await call(["account", "devices", "end", "--others"], adapter, env)
+    const ended1 = await call(["account", "devices", "end", "--others", "--yes", "--json"], adapter, env)
 
     expect(v.safeParse(ENTITIES.account_change, answer(updated)).success).toBe(true)
     expect(v.safeParse(ENTITIES.ended_account_sessions, answer(ended1)).success).toBe(true)

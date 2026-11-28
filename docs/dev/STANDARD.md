@@ -55,9 +55,9 @@ is in the [glossary](GLOSSARY.md).
 
 One word per idea in help, docs and errors. The **local store** is the message database the messenger CLIs share;
 max's per-profile **cache** is a different thing until it is replaced, and keeps its name until then. `session` is
-this tool's login; `account sessions` are the other devices. **`flood`** is what the messenger told this profile to
-hold off on — the waits it asked for and a hold on writes — kept on this machine; `flood clear` is the owner's and
-has no MCP tool. The **pace** is how fast one profile may ask its messenger, counted across every process
+this tool's login; `account devices` are the other devices and apps signed in to the account. **`flood`** is what
+the messenger told this profile to hold off on — the waits it asked for and a hold on writes — kept on this machine;
+`flood clear` is the owner's and has no MCP tool. The **pace** is how fast one profile may ask its messenger, counted across every process
 (`requests_per_minute`).
 
 ### Bot
@@ -1216,7 +1216,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--open-new` |  | open a task from a message the chat's task point already passed; without it a read again only updates and closes tasks |  | `tasks add` |
 | `--operation-id` | `<id>` | identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated |  | `messages forward`, `messages send`, `polls create`, `topics create` (tg-only) |
 | `--order` | `<recent\|name>` | newest conversation first, or alphabetical |  | `contacts list` |
-| `--others` |  | every session but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account sessions end` |
+| `--others` |  | every device but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account devices end` |
 | `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10** | `.` | `doctor reports create`, `stats charts`, `store decrypt`, `store export` |
 | `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download`, `store export` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
@@ -1317,7 +1317,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |
-| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `conversations embed`, `conversations links rebuild`, `mcp config` (planned), `mcp serve` (planned), `tasks scan` |
+| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account devices end` (planned), `conversations embed`, `conversations links rebuild`, `mcp config` (planned), `mcp serve` (planned), `tasks scan` |
 
 <!-- end of the option catalogue -->
 
@@ -1484,7 +1484,7 @@ The three tools, their arguments and what each permission shows are on the handb
 - **The writes no level stopped before have keys of their own, `ask` by default** (NEED-1663 A), so MCP offers them
   and over MCP they go ahead as any `ask` write: `store backup|restore|migrate|repair|reset|clear|decrypt` and
   `store copies delete` (`store.<command>`), `server start|stop|restart`, `models audio|text download` and `images
-  models download`, `schedule run|exec`, `doctor report create`, `account sessions end`, `chats delete|clear`, and
+  models download`, `schedule run|exec`, `doctor report create`, `account devices end`, `chats delete|clear`, and
   `bot messages sync`. The key is the command's path; `deny` or `readonly` marks the command unavailable without hiding it. `store reset|clear|decrypt`
   are still stopped by `deny messages` too. On the command line nothing changes: these commands ask no new question.
 - **A command that changes what a later run may do requires `mcp.authority` to execute** (NEED-1662 B): `config
