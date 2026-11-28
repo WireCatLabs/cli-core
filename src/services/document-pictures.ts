@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import { modelRetry } from "../embeddings/engine.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import {
   DEFAULT_IMAGE_MODEL,
@@ -36,7 +37,9 @@ export const openPictureEmbedderFor = async ({ env, command }: PictureOptions = 
       { reason: "model.not-downloaded", model: model.id },
     )
   const { openPictureEmbedder } = await import("../images/picture/embedder.js")
-  return openPictureEmbedder(model, directory)
+  return openPictureEmbedder(model, directory, {
+    engine: { ...(env ? { env } : {}), retry: modelRetry(model.id, command, "images models download") },
+  })
 }
 
 /**

@@ -5,7 +5,6 @@ import { dirname, join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { gunzipSync } from "fflate"
-import { onMusl } from "../embeddings/onnx-runtime.js"
 import { acquireLock, type FileLock } from "../files/lock.js"
 import { tarEntries } from "../files/tar.js"
 import { type Fetch, installFiles, megabytes } from "../speech/install.js"
@@ -95,6 +94,14 @@ export const engineFolder = (
 ): string => join(versionFolder(pin, env), keyOf(markerOf(pin, target)))
 
 const keyOf = (marker: string) => createHash("sha256").update(marker).digest("hex").slice(0, 12)
+
+export const onMusl = (): boolean => {
+  try {
+    return readFileSync("/proc/self/maps", "utf8").includes("ld-musl")
+  } catch {
+    return false
+  }
+}
 
 export const currentTarget = (): Target => ({
   platform: process.platform,

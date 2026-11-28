@@ -1,4 +1,5 @@
 import { defaultThreads, loadModel, truncated } from "./embed.js"
+import type { EngineContext } from "./engine.js"
 import type { RerankModel } from "./models.js"
 
 export interface Reranker {
@@ -11,9 +12,9 @@ export interface Reranker {
 export const openReranker = async (
   model: RerankModel,
   directory: string,
-  { threads = defaultThreads() }: { threads?: number } = {},
+  { threads = defaultThreads(), engine }: { threads?: number; engine?: EngineContext } = {},
 ): Promise<Reranker> => {
-  const { ort, tokenizer, session } = await loadModel(model, directory, threads)
+  const { ort, tokenizer, session } = await loadModel(model, directory, threads, engine)
   const typeIds = session.inputNames.includes("token_type_ids")
   const output = session.outputNames[0] as string
 

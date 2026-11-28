@@ -11,6 +11,7 @@ import {
   textModelsDirectory,
   type WarmEmbedders,
 } from "../embeddings/embed.js"
+import { type EngineContext, modelRetry } from "../embeddings/engine.js"
 import { chosenTextModel, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
@@ -177,7 +178,8 @@ export const localModel = (
       reason: "model.not-downloaded",
       model: model.id,
     })
-  return { model, directory, key: vectorModelKey(model) }
+  const engine: EngineContext = { ...(env ? { env } : {}), retry: modelRetry(model.id, command) }
+  return { model, directory, key: vectorModelKey(model), engine }
 }
 
 export const withLocal = async <T>(
@@ -186,14 +188,11 @@ export const withLocal = async <T>(
   threads: number | undefined,
   work: (embedder: Embedder) => Promise<T>,
   shared?: Pick<WarmEmbedders, "get">,
+  engine?: EngineContext,
 ): Promise<T> => {
-  if (shared)
-    return work(
-      await shared.get(vectorModelKey(model), () =>
-        openEmbedder(model, directory, { threads: threads ?? defaultThreads() }),
-      ),
-    )
-  const embedder = await openEmbedder(model, directory, { threads: threads ?? defaultThreads() })
+  const options = { threads: threads ?? defaultThreads(), ...(engine ? { engine } : {}) }
+  if (shared) return work(await shared.get(vectorModelKey(model), () => openEmbedder(model, directory, options)))
+  const embedder = await openEmbedder(model, directory, options)
   try {
     return await work(embedder)
   } finally {
@@ -227,7 +226,7 @@ export const embedChunks = async (
     command?: string
   } = {},
 ): Promise<NotesEmbedded> => {
-  const { model, directory, key } = localModel(choice, env, command)
+  const { model, directory, key, engine } = localModel(choice, env, command)
   if ((await source.chunksToEmbed(key, { limit: 1 })).length === 0) return { model: model.id, embedded: 0, left: false }
   const until = stopsAt(deadline)
   const stopped = (slowest: number) =>
@@ -239,36 +238,43 @@ export const embedChunks = async (
   // Loading the model alone takes seconds.
   const early = stopped(0)
   if (early) return stop(0, early)
-  return withLocal(model, directory, threads, async (embedder) => {
-    let embedded = 0
-    let after: string | undefined
-    let slowest = 0
-    while (embedded < maxChunks) {
-      const started = Date.now()
-      const batch = await source.chunksToEmbed(key, {
-        limit: Math.min(NOTE_BATCH, maxChunks - embedded),
-        ...(after === undefined ? {} : { after }),
-      })
-      // Nothing left is done, even at the deadline.
-      if (batch.length === 0) break
-      const why = stopped(slowest)
-      if (why) return stop(embedded, why)
-      after = batch.at(-1)?.hash
-      const vectors = await embedder.embed(
-        batch.map(({ text }) => text),
-        "passage",
-      )
-      await store.vectors.saveVectors(
-        key,
-        model.dims,
-        batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
-      )
-      embedded += batch.length
-      slowest = Math.max(slowest, Date.now() - started)
-    }
-    const left = (await source.chunksToEmbed(key, { limit: 1, ...(after === undefined ? {} : { after }) })).length > 0
-    return { model: model.id, embedded, left }
-  })
+  return withLocal(
+    model,
+    directory,
+    threads,
+    async (embedder) => {
+      let embedded = 0
+      let after: string | undefined
+      let slowest = 0
+      while (embedded < maxChunks) {
+        const started = Date.now()
+        const batch = await source.chunksToEmbed(key, {
+          limit: Math.min(NOTE_BATCH, maxChunks - embedded),
+          ...(after === undefined ? {} : { after }),
+        })
+        // Nothing left is done, even at the deadline.
+        if (batch.length === 0) break
+        const why = stopped(slowest)
+        if (why) return stop(embedded, why)
+        after = batch.at(-1)?.hash
+        const vectors = await embedder.embed(
+          batch.map(({ text }) => text),
+          "passage",
+        )
+        await store.vectors.saveVectors(
+          key,
+          model.dims,
+          batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
+        )
+        embedded += batch.length
+        slowest = Math.max(slowest, Date.now() - started)
+      }
+      const left = (await source.chunksToEmbed(key, { limit: 1, ...(after === undefined ? {} : { after }) })).length > 0
+      return { model: model.id, embedded, left }
+    },
+    undefined,
+    engine,
+  )
 }
 
 /**
@@ -358,7 +364,7 @@ const queryVector = async (
   { model: choice, folderIds, withInternal, source, env, threads, command, embedders }: Omit<NearestOptions, "limit">,
 ): Promise<{ key: string; vector: Float32Array; floor: number }> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
-  const { model, directory, key } = localModel(choice ?? (await meaningModel(store, env)), env, command)
+  const { model, directory, key, engine } = localModel(choice ?? (await meaningModel(store, env)), env, command)
   const scope = {
     ...(folderIds ? { folderIds } : {}),
     ...(withInternal ? { withInternal: true } : {}),
@@ -366,7 +372,14 @@ const queryVector = async (
   }
   if (!(await store.notes.embedded(key, scope)))
     throw new CliError("not_found", `nothing searched here has vectors of ${model.id} yet, so only words were matched`)
-  const [vector] = await withLocal(model, directory, threads, (embedder) => embedder.embed([query], "query"), embedders)
+  const [vector] = await withLocal(
+    model,
+    directory,
+    threads,
+    (embedder) => embedder.embed([query], "query"),
+    embedders,
+    engine,
+  )
   return { key, vector: vector as Float32Array, floor: meaningFloor(key) }
 }
 

@@ -19,9 +19,6 @@ importers:
       '@bomb.sh/tab':
         specifier: 0.0.22
         version: 0.0.22(commander@15.0.0)
-      '@huggingface/tokenizers':
-        specifier: 0.2.0
-        version: 0.2.0
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
@@ -34,9 +31,6 @@ importers:
       '@wasm-audio-decoders/ogg-vorbis':
         specifier: 0.1.20
         version: 0.1.20
-      '@wirecat/cli-core-onnx':
-        specifier: 1.2.0
-        version: 1.2.0
       '@wirecat/cli-core-sqlite':
         specifier: 1.1.0
         version: 1.1.0
@@ -137,6 +131,9 @@ importers:
       '@cspell/dict-ru_ru':
         specifier: 2.3.4
         version: 2.3.4
+      '@huggingface/tokenizers':
+        specifier: 0.2.0
+        version: 0.2.0
       '@modelcontextprotocol/client':
         specifier: 2.4.0
         version: 2.4.0
@@ -170,6 +167,9 @@ importers:
       '@wirecat/cli-core-legacy-tags':
         specifier: npm:@wirecat/cli-core@0.414.0
         version: '@wirecat/cli-core@0.414.0(@napi-rs/canvas@1.0.13)(@wirecat/cli-base@2.0.0(commander@15.0.0)(esbuild@0.28.2)(rolldown@1.2.15)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)'
+      '@wirecat/cli-core-onnx':
+        specifier: 1.2.0
+        version: 1.2.0
       ajv:
         specifier: 8.17.1
         version: 8.17.1

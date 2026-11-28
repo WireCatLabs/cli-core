@@ -204,7 +204,12 @@ should take. A chunk whose messages changed after the build waits for the next b
 | e5-small | 384 | ~135 MB | ~100, Russian and English among them | ~31 chunks/s |
 | an API: OpenAI `text-embedding-3-small`, or any server with OpenAI's `/v1/embeddings` (`--base-url`) | the model's | — | the model's | the API's |
 
-They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alike:
+They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alike. It and the tokenizer
+(`@huggingface/tokenizers`) are not dependencies of the package: they are
+[engines](../dev/ARCHITECTURE.md#engines-installed-on-first-use), installed into `<WireCat data>/engines/` the first
+time a model loads (about 4 MB, with no question; `models download` shows the progress). When that install fails, the
+search answers by words alone and names `<cli> models download <model>`, which installs them again
+(`model.engine-missing`).
 
 - **Native** on Linux x64 and arm64 (glibc), macOS arm64 and Windows x64 and arm64, 2–3× faster. `models download`
   of a text model or reranker also fetches the library for the system, checked by sha256, and places it beside a copy

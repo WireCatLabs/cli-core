@@ -7,6 +7,7 @@ import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { holdsKind, INTERNAL_NOTES, isDocumentAccountProvider } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
+import { skipsMeaning } from "../embeddings/engine.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import { formatMeetingReference } from "../meetings/index.js"
 import type { MessengerTraits } from "../ports/traits.js"
@@ -231,7 +232,7 @@ const refusal = (error: CliError, text: string): { why?: string; token?: string 
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
 const skippable = (error: unknown): error is CliError =>
-  error instanceof CliError && (error.code === "validation_error" || error.code === "not_found")
+  skipsMeaning(error) || (error instanceof CliError && error.code === "validation_error")
 
 export type SearchAllMessenger = Partial<Pick<MessengerTraits, "savedChatId" | "app">> & {
   /**
@@ -610,7 +611,7 @@ export const searchAll = async (
                 ...(request.env === undefined ? {} : { env: request.env }),
               })
             } catch (error) {
-              if (!(error instanceof CliError && error.code === "not_found")) throw error
+              if (!skipsMeaning(error)) throw error
               meaningSkipped = error.message
             }
           crm = {

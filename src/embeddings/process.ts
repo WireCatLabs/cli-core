@@ -2,6 +2,7 @@ import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import type { Embedder, Kind } from "./embed.js"
+import { type EngineContext, meaningEngine } from "./engine.js"
 import type { RerankModel, TextModel } from "./models.js"
 import type { Reranker } from "./rerank.js"
 
@@ -17,9 +18,9 @@ type Request = { texts: string[]; kind?: Kind; question?: string }
 export const openProcess = async (
   model: TextModel,
   directory: string,
-  { threads }: { threads: number },
+  { threads, engine }: { threads: number; engine?: EngineContext },
 ): Promise<Embedder> => {
-  const child = await modelProcess({ model, directory, threads })
+  const child = await modelProcess({ model, directory, threads }, engine)
   return {
     model,
     embed: async (texts, kind) =>
@@ -32,9 +33,9 @@ export const openProcess = async (
 export const openRerankerProcess = async (
   model: RerankModel,
   directory: string,
-  { threads }: { threads: number },
+  { threads, engine }: { threads: number; engine?: EngineContext },
 ): Promise<Reranker> => {
-  const child = await modelProcess({ model, directory, threads, rerank: true })
+  const child = await modelProcess({ model, directory, threads, rerank: true }, engine)
   return {
     model,
     score: async (question, passages) => (await child.ask({ question, texts: passages })).scores ?? [],
@@ -42,10 +43,12 @@ export const openRerankerProcess = async (
   }
 }
 
-const modelProcess = async (setup: object) => {
+/** The engines are installed here, under the caller's env: the child inherits `process.env`, which may differ. */
+const modelProcess = async (setup: object, engine: EngineContext = {}) => {
+  const { folders } = await meaningEngine(engine)
   const child = spawn(
     process.execPath,
-    [fileURLToPath(new URL("./child.js", import.meta.url)), JSON.stringify(setup)],
+    [fileURLToPath(new URL("./child.js", import.meta.url)), JSON.stringify({ ...setup, folders })],
     { stdio: ["pipe", "pipe", "pipe"] },
   )
   const pending = new Map<number, { resolve: (reply: Reply) => void; reject: (error: Error) => void }>()

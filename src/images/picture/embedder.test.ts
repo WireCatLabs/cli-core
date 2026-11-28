@@ -11,22 +11,26 @@ const fake = vi.hoisted(() => ({
   preprocess: vi.fn(async () => new Float32Array([0.25, 0.5])),
   env: { wasm: { numThreads: 0 } },
 }))
-vi.mock("@huggingface/tokenizers", () => ({
-  Tokenizer: class {
-    encode = fake.encode
-  },
-}))
-vi.mock("@wirecat/cli-core-onnx", () => ({
-  env: fake.env,
-  InferenceSession: { create: fake.create },
-  Tensor: class {
-    constructor(
-      public type: string,
-      public data: Float32Array | BigInt64Array,
-      public dims: number[],
-    ) {}
-  },
-}))
+vi.mock("../../embeddings/engine.js", () => {
+  const engine = {
+    Tokenizer: class {
+      encode = fake.encode
+    },
+    ort: {
+      env: fake.env,
+      InferenceSession: { create: fake.create },
+      Tensor: class {
+        constructor(
+          public type: string,
+          public data: Float32Array | BigInt64Array,
+          public dims: number[],
+        ) {}
+      },
+    },
+    folders: { onnx: "fake", tokenizers: "fake" },
+  }
+  return { meaningEngine: async () => engine }
+})
 vi.mock("./preprocess.js", () => ({ SIZE: 224, preprocess: fake.preprocess }))
 
 const fixture = () => {

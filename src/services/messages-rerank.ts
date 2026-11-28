@@ -1,4 +1,5 @@
 import { defaultThreads, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
+import { modelRetry } from "../embeddings/engine.js"
 import { DEFAULT_RERANK_MODEL, rerankModel } from "../embeddings/models.js"
 import type { ServiceDeps } from "./deps.js"
 import type { RerankLane } from "./messages-discovery.js"
@@ -18,13 +19,15 @@ export const rerankLane = (deps: ServiceDeps): RerankLane | undefined => {
       return { skipped: { reason: `${model.id} is not downloaded`, step: "models.download", model: model.id } }
     try {
       const warm = deps.embedders
+      const engine = { ...(deps.env ? { env: deps.env } : {}), retry: modelRetry(model.id, deps.messenger.app.command) }
       const reranker = warm
         ? await warm.reranker(`rerank:${model.id}`, async () =>
             (await import("../embeddings/process.js")).openRerankerProcess(model, directory, {
               threads: defaultThreads(),
+              engine,
             }),
           )
-        : await (await import("../embeddings/rerank.js")).openReranker(model, directory)
+        : await (await import("../embeddings/rerank.js")).openReranker(model, directory, { engine })
       return {
         model: model.id,
         score: (question, passages) => reranker.score(plainWords(question), passages),

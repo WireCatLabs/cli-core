@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { holdsKind } from "../domain/providers.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
+import { skipsMeaning } from "../embeddings/engine.js"
 import { meaningFloor } from "../embeddings/models.js"
 import { RRF_K } from "../search/fusion.js"
 import { plainQuery } from "../search/lucene/plain.js"
@@ -128,7 +129,7 @@ const nearestEvents = async (
     embedders,
   }: Pick<EventsQuery, "env" | "command" | "embedders"> & { limit: number; accountIds?: string[] },
 ): Promise<NearestEvent[]> => {
-  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
+  const { model, directory, key, engine } = localModel(await meaningModel(store, env), env, command)
   if (!(await store.calendar.embedded(key, accountIds ? { accountIds } : {})))
     throw new CliError("not_found", `no event has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(
@@ -137,6 +138,7 @@ const nearestEvents = async (
     undefined,
     (embedder) => embedder.embed([words], "query"),
     embedders,
+    engine,
   )
   const floor = meaningFloor(key)
   return (
@@ -197,7 +199,7 @@ export const searchEvents = async (
         ...(embedders === undefined ? {} : { embedders }),
       })
     } catch (error) {
-      if (!(error instanceof CliError && error.code === "not_found")) throw error
+      if (!skipsMeaning(error)) throw error
       meaningSkipped = error.message
     }
   const found = await store.calendar.search({

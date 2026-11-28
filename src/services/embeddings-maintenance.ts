@@ -9,6 +9,7 @@ import {
   openEmbedder,
   textModelsDirectory,
 } from "../embeddings/embed.js"
+import { modelRetry } from "../embeddings/engine.js"
 import { chosenTextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import { remoteKey } from "../embeddings/remote.js"
 import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
@@ -90,11 +91,15 @@ export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = chosenTex
       apart?: boolean
     } = {}): Promise<Embedder> => {
       if (!isTextModelInstalled(model, directory)) throw notDownloaded(model.id)
+      const engine = {
+        ...(deps.env ? { env: deps.env } : {}),
+        retry: modelRetry(model.id, deps.messenger.app.command),
+      }
       if (apart) {
         const { openProcess } = await import("../embeddings/process.js")
-        return openProcess(model, directory, { threads: threads ?? defaultThreads() })
+        return openProcess(model, directory, { threads: threads ?? defaultThreads(), engine })
       }
-      return openEmbedder(model, directory, { threads: threads ?? defaultThreads() })
+      return openEmbedder(model, directory, { threads: threads ?? defaultThreads(), engine })
     },
   }
 }

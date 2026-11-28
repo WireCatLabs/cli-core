@@ -12,9 +12,11 @@ import {
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { gunzipSync } from "fflate"
+import { onMusl } from "../engines/install.js"
 import { tarMember } from "../files/tar.js"
 import { type Fetch, installFiles, megabytes, sharedModelsDirectory } from "../speech/install.js"
 import type { ModelFile } from "../speech/models.js"
+import { type EngineContext, type MeaningEngine, meaningEngine } from "./engine.js"
 
 export const ONNX_RUNTIME_VERSION = "1.30.0"
 
@@ -94,14 +96,6 @@ const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
   ),
 }
 
-export const onMusl = (): boolean => {
-  try {
-    return readFileSync("/proc/self/maps", "utf8").includes("ld-musl")
-  } catch {
-    return false
-  }
-}
-
 export const nativeRuntimeFor = ({
   platform = process.platform,
   arch = process.arch,
@@ -143,15 +137,17 @@ export const installNativeRuntime = async ({
   fetch,
   runtime = nativeRuntimeFor(),
   binding,
+  retry,
 }: {
   env?: NodeJS.ProcessEnv
   progress?: (line: string) => void
   fetch?: Fetch
   runtime?: NativeRuntime
   binding?: string
+  retry?: string
 } = {}): Promise<string | undefined> => {
   if (!runtime) return undefined
-  const source = binding ?? (await import("@wirecat/cli-core-onnx")).nativeBindingFor()
+  const source = binding ?? (await meaningEngine({ env, progress, ...(retry ? { retry } : {}) })).ort.nativeBindingFor()
   if (!source) return undefined
   const folder = runtimeFolder(runtime, env)
   if (isInstalled(runtime, folder)) return folder
@@ -194,13 +190,14 @@ const opened = new Map<string, Promise<OnnxRuntime>>()
  * The native runtime when `models download` placed it for this system and it loads, else WebAssembly. One per
  * process: a binding, once loaded, stays.
  */
-export const onnxRuntime = (env: NodeJS.ProcessEnv = process.env): Promise<OnnxRuntime> => {
+export const onnxRuntime = (engine: MeaningEngine, env: NodeJS.ProcessEnv = process.env): Promise<OnnxRuntime> => {
   const runtime = nativeRuntimeFor()
   const folder = runtime ? runtimeFolder(runtime, env) : ""
-  let found = opened.get(folder)
+  const key = `${engine.folders.onnx}\n${folder}`
+  let found = opened.get(key)
   if (!found) {
     found = (async () => {
-      const wasm = await import("@wirecat/cli-core-onnx")
+      const wasm = engine.ort
       if (runtime && isInstalled(runtime, folder)) {
         try {
           return { ort: wasm.openNative(join(folder, BINDING)) as Ort, native: true }
@@ -210,7 +207,7 @@ export const onnxRuntime = (env: NodeJS.ProcessEnv = process.env): Promise<OnnxR
       }
       return { ort: wasm, native: false }
     })()
-    opened.set(folder, found)
+    opened.set(key, found)
   }
   return found
 }
@@ -223,8 +220,10 @@ export const openSession = async (
   bytes: Uint8Array,
   threads: number,
   options: { externalData?: { path: string; data: Uint8Array }[] } = {},
+  context: EngineContext = {},
 ) => {
-  const runtime = await onnxRuntime()
+  const engine = await meaningEngine(context)
+  const runtime = await onnxRuntime(engine, context.env)
   if (runtime.native) {
     try {
       const session = await runtime.ort.InferenceSession.create(bytes, {
@@ -237,7 +236,7 @@ export const openSession = async (
       // A model the native runtime will not open still runs through WebAssembly.
     }
   }
-  const ort = await import("@wirecat/cli-core-onnx")
+  const ort = engine.ort
   ort.env.wasm.numThreads = threads
   return { ort, session: await ort.InferenceSession.create(bytes, options) }
 }

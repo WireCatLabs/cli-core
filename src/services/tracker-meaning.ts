@@ -38,7 +38,7 @@ export const nearestTracker = async (
     embedders,
   }: Pick<NearestOptions, "env" | "command" | "embedders"> & { limit: number; accounts: readonly AccountKey[] },
 ): Promise<TrackerNearest[]> => {
-  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
+  const { model, directory, key, engine } = localModel(await meaningModel(store, env), env, command)
   if (!(await store.tracker.embedded(key, accounts)))
     throw new CliError(
       "not_found",
@@ -51,6 +51,7 @@ export const nearestTracker = async (
     undefined,
     (embedder) => embedder.embed([words], "query"),
     embedders,
+    engine,
   )
   const floor = meaningFloor(key)
   return (await store.tracker.nearest(key, vector as Float32Array, { limit, accounts })).filter(

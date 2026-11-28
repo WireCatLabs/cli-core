@@ -4,6 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
 import { type Id, senderIsMe } from "../domain/models.js"
+import { modelRetry, skipsMeaning } from "../embeddings/engine.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import {
   DEFAULT_IMAGE_MODEL,
@@ -110,7 +111,12 @@ export const picturesService = (deps: ServiceDeps) => {
     if (!isImageModelInstalled(model, directory))
       throw new CliError("not_found", missingModel(model.id), { reason: "model.not-downloaded", model: model.id })
     const { openPictureEmbedder } = await import("../images/picture/embedder.js")
-    return openPictureEmbedder(model, directory)
+    return openPictureEmbedder(model, directory, {
+      engine: {
+        ...(deps.env ? { env: deps.env } : {}),
+        retry: modelRetry(model.id, deps.messenger.app.command, "images models download"),
+      },
+    })
   }
   const embedder = () => {
     opened ??= open().catch((error: unknown) => {
@@ -241,8 +247,7 @@ export const picturesService = (deps: ServiceDeps) => {
         const use = await embedder()
         vector = await use.embedQuery(words)
       } catch (error) {
-        if (error instanceof CliError && error.code === "not_found")
-          return { picturesSkipped: error.message, picturesModel: model.id }
+        if (skipsMeaning(error)) return { picturesSkipped: error.message, picturesModel: model.id }
         throw error
       } finally {
         const held = opened
