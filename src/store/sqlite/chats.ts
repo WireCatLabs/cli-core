@@ -200,13 +200,14 @@ export const answeredChatPk = (context: StoreContext, accountKey: number, chatId
 }
 
 export const upsertChat = (context: StoreContext, accountKey: number, chat: ChatUpdate): void => {
-  const { orm, now } = context
+  const { orm, now, database } = context
   const parent = chat.parentChatId == null ? null : chatPkFor(context, accountKey, chat.parentChatId)
   const stored = orm
     .select({ metadata: chats.metadata })
     .from(chats)
     .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, chat.id)))
     .get()
+  const metadata = mergedMetadata(stored?.metadata ?? null, chat.providerMetadata)
   orm
     .insert(chats)
     .values({
@@ -220,7 +221,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       unreadCount: chat.unreadCount ?? null,
       lastMessageAt: toMs(chat.lastMessageAt),
       participantsCount: chat.participantsCount ?? null,
-      metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
+      metadata,
       membershipState: chat.membershipState === "member" ? null : (chat.membershipState ?? null),
       ...stateOf(chat, now()),
       ...(chat.searchable === false ? { searchable: 0 } : {}),
@@ -249,6 +250,22 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       },
     })
     .run()
+  if (chat.kind === "dialog" && metadataObject(metadata).isBot === true)
+    markDialogBot(database, accountKey, chat.id, now())
+}
+
+/**
+ * A bot's dialog marks the bot's identity, for senders a sync saved before it carried `senderIsBot` (tg-cli #932).
+ * Only an identity whose id is the chat's and that wrote in it: where dialog ids are not user ids, none is marked.
+ */
+const markDialogBot = (database: StoreContext["database"], accountKey: number, chatId: Id, at: number): void => {
+  database
+    .prepare(
+      "UPDATE identities SET bot = 1, updated_at = ? WHERE bot IS NOT 1 AND external_id = ? AND id IN " +
+        "(SELECT m.sender_identity_id FROM messages m JOIN chats c ON c.id = m.chat_id " +
+        "WHERE c.account_id = ? AND c.external_id = ? AND m.outgoing IS NOT 1)",
+    )
+    .run(at, chatId, accountKey, chatId)
 }
 
 /** Moves a chat's newest-message time forward only: messages imported out of order never move it back. */

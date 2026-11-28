@@ -398,6 +398,8 @@ export interface Message {
   mentions?: Id[]
   /** `senderId` is a chat, not a person — a channel post, or a message sent as the group. */
   senderIsChat?: boolean
+  /** The messenger marks the sender as a bot account: the store files its identity under Bots, not People. */
+  senderIsBot?: boolean
   /** ISO 8601. */
   timestamp: string
   /**
