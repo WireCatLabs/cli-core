@@ -1471,6 +1471,7 @@ Message · interface · senderName: string | null;
 Message · interface · senderUsername?: string;
 Message · interface · mentions?: Id[];
 Message · interface · senderIsChat?: boolean;
+Message · interface · senderIsBot?: boolean;
 Message · interface · timestamp: string;
 Message · interface · editedAt: string | null;
 Message · interface · text: string;

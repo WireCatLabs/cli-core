@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
+import type { Message } from "../domain/models.js"
 import type { CacheDatabase } from "./driver.js"
 import { openCache } from "./open.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
@@ -312,4 +313,68 @@ it("keeps one holder through a re-key: the bot takes the identity that stays, fr
   expect((await store.people.showBot(other.bot)).moves).toEqual(
     expect.arrayContaining([expect.objectContaining({ from: kim, reason: "the source re-keyed the identity" })]),
   )
+})
+
+const dialog = (id: string, title: string, providerMetadata?: Record<string, unknown>) => ({
+  id,
+  title,
+  kind: "dialog" as const,
+  ...(providerMetadata ? { providerMetadata } : {}),
+})
+
+const said = (id: string, chatId: string, from: string, more: Partial<Message> = {}): Message => ({
+  id,
+  chatId,
+  senderId: from,
+  senderName: from === "1" ? "Me" : "Weather Bot",
+  timestamp: `2026-11-0${id}T10:00:00.000Z`,
+  editedAt: null,
+  text: "hello",
+  outgoing: from === "1",
+  attachments: [],
+  replyTo: null,
+  forwardedFrom: null,
+  reactions: null,
+  ...more,
+})
+
+it("files a messenger's bot the owner chatted with under bots, and keeps the owner's move of it to people", async () => {
+  const { store } = await opened()
+  await store.chats.saveChats(TG, [dialog("700", "Weather Bot")])
+  await store.messages.saveMessages(
+    TG,
+    "700",
+    [said("1", "700", "1"), said("2", "700", "700", { senderIsBot: true, senderUsername: "weather_test_bot" })],
+    { via: "history" },
+  )
+
+  expect(await people(store)).not.toContain("Weather Bot")
+  expect(await bots(store)).toEqual([{ displayName: "Weather Bot", identities: ["telegram:700"], author: "rules" }])
+
+  await store.people.moveToPerson({ provider: "telegram", id: "700" }, "owner")
+  await store.chats.saveChats(TG, [dialog("700", "Weather Bot", { isBot: true })])
+  await store.messages.saveMessages(TG, "700", [said("3", "700", "700", { senderIsBot: true })], { via: "update" })
+
+  expect(await people(store)).toContain("Weather Bot")
+  expect(await bots(store)).toEqual([])
+})
+
+it("marks the bot of a bot's dialog whose messages came without the sender's flag, and only that bot", async () => {
+  const { store } = await opened()
+  await store.chats.saveChats(TG, [dialog("701", "Weather Bot"), dialog("702", "Lena Marsh")])
+  await store.messages.saveMessages(TG, "701", [said("1", "701", "1"), said("2", "701", "701")], { via: "history" })
+  await store.messages.saveMessages(
+    TG,
+    "702",
+    [said("3", "702", "1"), said("4", "702", "702", { senderName: "Lena Marsh" })],
+    {
+      via: "history",
+    },
+  )
+  expect(await bots(store)).toEqual([])
+
+  await store.chats.saveChats(TG, [dialog("701", "Weather Bot", { isBot: true }), dialog("702", "Lena Marsh")])
+
+  expect(await bots(store)).toEqual([{ displayName: "Weather Bot", identities: ["telegram:701"], author: "rules" }])
+  expect(await people(store)).toContain("Lena Marsh")
 })

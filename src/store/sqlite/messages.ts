@@ -179,14 +179,10 @@ export const upsertMessage = (
   const sender =
     message.senderId === null || message.senderIsChat
       ? null
-      : identityPk(
-          context,
-          accountKey,
-          key.provider,
-          message.senderId,
-          message.senderName,
-          message.senderUsername === undefined ? {} : { username: message.senderUsername },
-        )
+      : identityPk(context, accountKey, key.provider, message.senderId, message.senderName, {
+          ...(message.senderUsername === undefined ? {} : { username: message.senderUsername }),
+          ...(message.senderIsBot ? { isBot: true } : {}),
+        })
   const fields = fieldsOf(message, sender)
 
   const found = statements.find.get({ chatId: chatKey, externalId: message.id })
