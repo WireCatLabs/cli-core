@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { fakeRegistry, fixtureEngine, packageFiles } from "../testing/engine-fixtures.js"
 import {
@@ -31,7 +31,7 @@ const threePackages = (base = "https://registry.test") =>
   ])
 
 const leftovers = (pin: EnginePin, env: NodeJS.ProcessEnv) => {
-  const parent = dirname(engineFolder(pin, env))
+  const parent = dirname(engineFolder(pin, env, LINUX))
   return existsSync(parent) ? readdirSync(parent).filter((entry) => !entry.endsWith(".lock")) : []
 }
 
@@ -53,12 +53,12 @@ describe("ensureEngine", () => {
       progress: (line) => lines.push(line),
     })
 
-    const folder = join(root, "engines", "demo-engine", "1.0.0")
+    const folder = join(root, "engines", "demo-engine", "1.0.0", basename(engineFolder(pin, {}, LINUX)))
     expect(state).toEqual({ status: "ready", engine: "demo-engine", version: "1.0.0", folder, installed: true })
     expect(engineRequire(folder)("demo-engine")).toEqual({ answer: "engine", needs: "helper" })
     expect(await importFromEngine(folder, "demo-extra")).toMatchObject({ default: { answer: "extra" } })
     expect(lines[0]).toContain(`installing demo-engine 1.0.0`)
-    expect(leftovers(pin, env)).toEqual(["1.0.0"])
+    expect(leftovers(pin, env)).toEqual([basename(folder)])
 
     expect(await install(pin, env, registry.fetch)).toMatchObject({ status: "ready", installed: false })
     expect([...registry.requests.values()]).toEqual([1, 1, 1])
@@ -162,17 +162,17 @@ describe("ensureEngine", () => {
   it("**a staging folder left by a killed install is never loaded, and the next install clears it**", async () => {
     const { env } = dataFolder()
     const { pin, bodies } = threePackages()
-    const parent = dirname(engineFolder(pin, env))
+    const parent = dirname(engineFolder(pin, env, LINUX))
     mkdirSync(join(parent, ".staging-killed", "node_modules", "demo-engine"), { recursive: true })
     writeFileSync(join(parent, ".staging-killed", "node_modules", "demo-engine", "index.js"), "half")
 
     expect(isEngineInstalled(pin, env, LINUX)).toBe(false)
     expect(installedEngines({}, env, LINUX)).toEqual([])
     expect(await install(pin, env, fakeRegistry(bodies).fetch)).toMatchObject({ status: "ready", installed: true })
-    expect(leftovers(pin, env)).toEqual(["1.0.0"])
+    expect(leftovers(pin, env)).toEqual([basename(engineFolder(pin, env, LINUX))])
   })
 
-  it("**an engine installed for an older cli-core is told by its version and marker, and installed again**", async () => {
+  it("**an engine installed for an older cli-core is told by its version and packages, installed again, never loaded**", async () => {
     const { env } = dataFolder()
     const older = fixtureEngine("https://registry.test", "demo-engine", "0.9.0", [
       { name: "demo-engine", version: "0.9.0", files: packageFiles("demo-engine", "0.9.0", "older") },
@@ -188,12 +188,17 @@ describe("ensureEngine", () => {
     const state = await install(pin, env, fakeRegistry(bodies).fetch)
 
     expect(state).toMatchObject({ status: "ready", installed: true })
-    expect(engineRequire(engineFolder(pin, env))("demo-engine")).toEqual({ answer: "engine", needs: "helper" })
+    expect(engineRequire(engineFolder(pin, env, LINUX))("demo-engine")).toEqual({ answer: "engine", needs: "helper" })
+    const rebuilt = engineFolder(sameVersionOtherFiles.pin, env, LINUX)
+    expect(rebuilt).not.toBe(engineFolder(pin, env, LINUX))
+    expect(engineRequire(rebuilt)("demo-engine")).toEqual({ answer: "rebuilt" })
     expect(installedEngines({ "demo-engine": pin }, env, LINUX)).toEqual([
-      { name: "demo-engine", version: "0.9.0", path: engineFolder(older.pin, env), current: false },
-      { name: "demo-engine", version: "1.0.0", path: engineFolder(pin, env), current: true },
+      { name: "demo-engine", version: "0.9.0", path: engineFolder(older.pin, env, LINUX), current: false },
+      ...[
+        { name: "demo-engine", version: "1.0.0", path: rebuilt, current: false },
+        { name: "demo-engine", version: "1.0.0", path: engineFolder(pin, env, LINUX), current: true },
+      ].sort((a, b) => a.path.localeCompare(b.path)),
     ])
-    expect(leftovers(pin, env)).toEqual(["0.9.0", "1.0.0"])
   })
 
   it("**two installs of one engine at once: one downloads, the other waits and uses it**", async () => {
@@ -240,7 +245,7 @@ describe("ensureEngine", () => {
     const { env } = dataFolder()
     const { pin, bodies } = threePackages()
     const { acquireLock } = await import("../files/lock.js")
-    const lock = await acquireLock(join(dirname(engineFolder(pin, env)), "1.0.0.lock"))
+    const lock = await acquireLock(`${engineFolder(pin, env, LINUX)}.lock`)
     try {
       expect(
         await ensureEngine(pin, { retry: RETRY, env, fetch: fakeRegistry(bodies).fetch, target: LINUX, lockWaitMs: 0 }),
@@ -320,7 +325,7 @@ describe("one package per system", () => {
       "native-engine-2.0.3.tgz",
       "native-engine-linux-x64-2.0.3.tgz",
     ])
-    const marker = JSON.parse(readFileSync(join(engineFolder(pin, env), "engine.json"), "utf8"))
+    const marker = JSON.parse(readFileSync(join(engineFolder(pin, env, LINUX), "engine.json"), "utf8"))
     expect(marker.packages.map((pkg: { name: string }) => pkg.name)).toEqual([
       "native-engine",
       "native-engine-linux-x64",
@@ -332,7 +337,8 @@ describe("one package per system", () => {
       status: "ready",
       installed: true,
     })
-    expect(engineRequire(engineFolder(pin, env))("native-engine-linux-arm64")).toEqual({ answer: "linux-arm64" })
+    expect(engineRequire(engineFolder(pin, env, arm))("native-engine-linux-arm64")).toEqual({ answer: "linux-arm64" })
+    expect(isEngineInstalled(pin, env, LINUX)).toBe(true)
   })
 
   it("**refuses a system it has no package for**", async () => {

@@ -202,7 +202,9 @@ locally; no owner store or credentials are needed.
 
 CI runs on Linux: the test suite on Node 24, smoke checks on Bun and on Node 22.16, a parity workflow that builds the
 Telegram, MAX and WhatsApp CLIs against this repository, and gitleaks over the full history. macOS and Windows run
-only four workflows. The SQLite library build (macOS) and the ONNX runtime probe (macOS and Windows) run monthly and
+only five workflows. The SQLite library build (macOS) and the ONNX runtime probe (macOS and Windows) run monthly and
 when started by hand. The native-runtime check (Linux, macOS and Windows, x64 and arm64, and Alpine) runs monthly and
-on every pull request that changes how models load. The scheduler test (macOS and Windows) runs only when started by
+on every pull request that changes how models load. The engines check (Linux, macOS and Windows) runs the first-use
+installer's tests, then the built installer under Node and Bun with the pinned engines from npm, monthly and on every
+pull request that changes the installer or its pins. The scheduler test (macOS and Windows) runs only when started by
 hand. The rest of the suite does not run on macOS or Windows.

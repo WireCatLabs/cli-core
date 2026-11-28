@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { createHash, randomUUID } from "node:crypto"
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -72,8 +72,21 @@ const LOCK_WAIT_MS = 15 * 60_000
 
 export const enginesDirectory = (env: NodeJS.ProcessEnv = process.env): string => join(wirecatDirectory(env), "engines")
 
-export const engineFolder = (pin: Pick<EnginePin, "name" | "version">, env: NodeJS.ProcessEnv = process.env) =>
+const versionFolder = (pin: Pick<EnginePin, "name" | "version">, env: NodeJS.ProcessEnv) =>
   join(enginesDirectory(env), ...pin.name.split("/"), pin.version)
+
+/**
+ * `engines/<name>/<version>/<key>`, the key a hash of the packages this system gets. A placed folder never changes:
+ * another cli-core pinning other tarballs of the same version, or Node of the other CPU on one Mac, gets its own,
+ * so nothing a running process loaded is ever replaced under it.
+ */
+export const engineFolder = (
+  pin: EnginePin,
+  env: NodeJS.ProcessEnv = process.env,
+  target: Target = currentTarget(),
+): string => join(versionFolder(pin, env), keyOf(markerOf(pin, target)))
+
+const keyOf = (marker: string) => createHash("sha256").update(marker).digest("hex").slice(0, 12)
 
 export const currentTarget = (): Target => ({
   platform: process.platform,
@@ -94,10 +107,7 @@ export const packagesFor = (pin: EnginePin, target: Target = currentTarget()): E
     (pkg) => fits(pkg.os, target.platform) && fits(pkg.cpu, target.arch) && fits(pkg.libc, target.libc),
   )
 
-/**
- * What the marker of a usable install says. A folder of the same version installed by another cli-core, for another
- * system or from other tarballs says something else, and is installed again rather than loaded.
- */
+/** What the marker of a usable install says, written last: a folder without it is not loaded. */
 const markerOf = (pin: EnginePin, target: Target) =>
   JSON.stringify({
     engine: pin.name,
@@ -117,7 +127,7 @@ export const isEngineInstalled = (
   pin: EnginePin,
   env: NodeJS.ProcessEnv = process.env,
   target: Target = currentTarget(),
-): boolean => readMarker(engineFolder(pin, env)) === markerOf(pin, target)
+): boolean => readMarker(engineFolder(pin, env, target)) === markerOf(pin, target)
 
 /** `require` as the engine's own folder sees it: its packages, never the ones beside cli-core. */
 export const engineRequire = (folder: string): NodeJS.Require => createRequire(join(folder, MARKER))
@@ -133,7 +143,7 @@ export const importFromEngine = async <T = unknown>(folder: string, specifier: s
 export const ensureEngine = async (pin: EnginePin, options: EnsureOptions): Promise<EngineState> => {
   const env = options.env ?? process.env
   const target = options.target ?? currentTarget()
-  const folder = engineFolder(pin, env)
+  const folder = engineFolder(pin, env, target)
   const ready = (installed: boolean): EngineState => ({
     status: "ready",
     engine: pin.name,
@@ -168,8 +178,7 @@ export const ensureEngine = async (pin: EnginePin, options: EnsureOptions): Prom
 
 const minutes = (options: EnsureOptions) => `${Math.round((options.lockWaitMs ?? LOCK_WAIT_MS) / 60_000)} min`
 
-const lockPath = (pin: EnginePin, env: NodeJS.ProcessEnv) =>
-  join(dirname(engineFolder(pin, env)), `${pin.version}.lock`)
+const lockPath = (pin: EnginePin, env: NodeJS.ProcessEnv, target: Target) => `${engineFolder(pin, env, target)}.lock`
 
 const waitForLock = async (
   pin: EnginePin,
@@ -182,7 +191,7 @@ const waitForLock = async (
   let told = false
   for (let waited = 0; ; waited += poll) {
     try {
-      return await acquireLock(lockPath(pin, env))
+      return await acquireLock(lockPath(pin, env, target))
     } catch (error) {
       if (!(isCliError(error) && error.details.reason === "file.locked")) throw error
     }
@@ -195,7 +204,7 @@ const waitForLock = async (
 }
 
 /**
- * Downloads and unpacks into a staging folder beside the version's, writes the marker last and renames the folder
+ * Downloads and unpacks into a staging folder beside the engine's, writes the marker last and renames the folder
  * into place, so an interrupted install leaves only a staging folder that nothing loads and the next install clears.
  */
 const place = async (pin: EnginePin, folder: string, target: Target, options: EnsureOptions): Promise<void> => {
@@ -204,7 +213,7 @@ const place = async (pin: EnginePin, folder: string, target: Target, options: En
     throw new CliError("validation_error", `${pin.name} has no package for ${target.platform}-${target.arch}`)
   const parent = dirname(folder)
   mkdirSync(parent, { recursive: true, mode: 0o700 })
-  clearLeftovers(parent)
+  clearLeftovers(parent, folder)
   const staging = join(parent, `.staging-${randomUUID()}`)
   mkdirSync(join(staging, ".tarballs"), { recursive: true, mode: 0o700 })
   try {
@@ -230,34 +239,40 @@ const place = async (pin: EnginePin, folder: string, target: Target, options: En
     })
     rmSync(join(staging, ".tarballs"), { recursive: true, force: true })
     writeFileSync(join(staging, MARKER), markerOf(pin, target), { mode: 0o600 })
-    swapIn(staging, folder, parent)
+    await moveIntoPlace(staging, folder, options)
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
 }
 
-const swapIn = (staging: string, folder: string, parent: string) => {
-  if (!existsSync(folder)) {
-    renameSync(staging, folder)
-    return
-  }
-  const old = join(parent, `.old-${randomUUID()}`)
-  renameSync(folder, old)
-  renameSync(staging, folder)
-  try {
-    rmSync(old, { recursive: true, force: true })
-  } catch {
-    // A process still running the old files may hold them open on Windows; the next install clears them.
-  }
+/** Defender and the indexer hold a file just written for a moment on Windows, and a rename then fails. */
+const moveIntoPlace = async (staging: string, folder: string, options: EnsureOptions) => {
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  for (let attempt = 1; ; attempt += 1)
+    try {
+      renameSync(staging, folder)
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? ""
+      if (attempt < 10 && ["EPERM", "EBUSY", "EACCES"].includes(code) && process.platform === "win32") {
+        await sleep(attempt * 50)
+        continue
+      }
+      throw new CliError("conflict", `could not move the installed engine into ${folder} (${code}) — try again`)
+    }
 }
 
-/** Only called under the lock: a staging or old folder then belongs to no running install. */
-const clearLeftovers = (parent: string) => {
+/**
+ * Only called under the lock: a staging folder then belongs to no running install, and a folder at the engine's own
+ * place without its marker was never loaded.
+ */
+const clearLeftovers = (parent: string, folder: string) => {
   for (const entry of readdirSync(parent))
-    if (entry.startsWith(".staging-") || entry.startsWith(".old-"))
+    if (entry.startsWith(".staging-"))
       try {
         rmSync(join(parent, entry), { recursive: true, force: true })
       } catch {}
+  rmSync(folder, { recursive: true, force: true })
 }
 
 /**
@@ -319,16 +334,25 @@ export const installedEngines = (
     entries(folder).flatMap((entry) =>
       entry.startsWith("@") && prefix === "" ? names(join(folder, entry), `${entry}/`) : [`${prefix}${entry}`],
     )
+  const placed = (folder: string) =>
+    entries(folder).filter((entry) => !entry.startsWith(".") && !entry.endsWith(".lock"))
   return names(root).flatMap((name) =>
-    entries(join(root, ...name.split("/")))
-      .filter((version) => !version.startsWith(".") && !version.endsWith(".lock"))
-      .flatMap((version) => {
-        const path = join(root, ...name.split("/"), version)
-        const marker = readMarker(path)
-        if (!marker) return []
+    placed(join(root, ...name.split("/"))).flatMap((version) =>
+      placed(join(root, ...name.split("/"), version)).flatMap((key) => {
+        const path = join(root, ...name.split("/"), version, key)
+        if (!readMarker(path)) return []
         const pin = pins[name]
-        return [{ name, version, path, current: pin?.version === version && marker === markerOf(pin, target) }]
+        return [
+          {
+            name,
+            version,
+            path,
+            current:
+              pin !== undefined && path === engineFolder(pin, env, target) && isEngineInstalled(pin, env, target),
+          },
+        ]
       }),
+    ),
   )
 }
 

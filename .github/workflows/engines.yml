@@ -42,11 +42,12 @@ jobs:
           cache: pnpm
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run src/engines src/cli/engines.test.ts scripts/engine-pins.test.ts
+      - run: pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
       - run: pnpm build
-      - run: node scripts/check-engines.ts
+      # The line is checked, not only the exit code: a script that never reached its check also exits 0.
+      - run: node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "pinned engines install" "$RUNNER_TEMP/node.log"
         env:
           ENGINE_CHECK_REAL: "1"
-      - run: bun scripts/check-engines.ts
+      - run: bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "pinned engines install" "$RUNNER_TEMP/bun.log"
         env:
           ENGINE_CHECK_REAL: "1"

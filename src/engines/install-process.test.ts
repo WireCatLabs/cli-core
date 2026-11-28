@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process"
 import { once } from "node:events"
 import { mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { build } from "esbuild"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -137,9 +137,11 @@ describe("installing in two processes", () => {
     expect(readdirSync(dirname(engineFolder(pin, env))).filter((entry) => !entry.endsWith(".lock"))).toEqual([
       expect.stringMatching(/^\.staging-/),
     ])
-    const state = await ensureEngine(pin, { retry: "demo speech install", env })
+    const state = await ensureEngine(pin, { retry: "demo speech install", env, lockWaitMs: 1000 })
     expect(state).toMatchObject({ status: "ready", installed: true })
     expect(engineRequire(engineFolder(pin, env))("process-engine")).toEqual({ answer: "engine", needs: "helper" })
-    expect(readdirSync(dirname(engineFolder(pin, env))).filter((entry) => !entry.endsWith(".lock"))).toEqual(["2.0.0"])
+    expect(readdirSync(dirname(engineFolder(pin, env))).filter((entry) => !entry.endsWith(".lock"))).toEqual([
+      basename(engineFolder(pin, env)),
+    ])
   })
 })
