@@ -29,8 +29,8 @@ importers:
         specifier: 0.1.20
         version: 0.1.20
       '@wirecat/cli-core-sqlite':
-        specifier: 1.1.0
-        version: 1.1.0
+        specifier: 1.2.0
+        version: 1.2.0
       '@xmldom/xmldom':
         specifier: 0.9.12
         version: 0.9.12
@@ -1416,11 +1416,45 @@ packages:
   '@wirecat/cli-core-onnx@1.2.0':
     resolution: {integrity: sha512-GxiJdiu3sT2R9vw5AYXsDpQdAgjLpsnXElDFMlK2x1SNbYsrx2kPc/z/+EUuLDHL2MevngjaLnUq/TJlGVPRGg==}
 
+  '@wirecat/cli-core-sqlite-darwin@1.2.0':
+    resolution: {integrity: sha512-3duQwhIMoQfpI8lmXz3sOqEWcrzbmOPHgnXezYiu5/raQyXnbCslubN9mQfcPjrf++xU6k2RYV5rqgBHHgUVAQ==}
+    cpu: [arm64, x64]
+    os: [darwin]
+
+  '@wirecat/cli-core-sqlite-linux-arm64-gnu@1.2.0':
+    resolution: {integrity: sha512-GL1iChTQgYuRfkNYN0ghle7dD2zdkf4UDv0OBD37Yr29CHJGfV5QakDTNFGTyvPKarUzjxwSq8QLJIDV5PszaA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@wirecat/cli-core-sqlite-linux-arm64-musl@1.2.0':
+    resolution: {integrity: sha512-TZcelh1EQXPlsas/wOjBeAAk/DPLV8NgM1ga7S6HEQ/qGfSEOwnRQoXgPKZilExtJHo27hehKZHKg7W5REU2cw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@wirecat/cli-core-sqlite-linux-x64-gnu@1.2.0':
+    resolution: {integrity: sha512-uN3K8i+0sTIaf19Mkje5TQQ+K6JasqVhovQ0/FTfde9/pFdEvt/lQvEecRVmYHfURBmk45OYXBX0aI2OCwtpvw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@wirecat/cli-core-sqlite-linux-x64-musl@1.2.0':
+    resolution: {integrity: sha512-QCUbotHmsWC7qDnwM3zuAR57QqWoxPxHMsOS+ryM6rMEii5evm9bxcoUAS5LKXXe4Et7vlwtjaXQpc59KXztjg==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@wirecat/cli-core-sqlite-win32-x64@1.2.0':
+    resolution: {integrity: sha512-QGRmkW9FeSWK5ntk5wq4/BoqByOi3Qjb50Aewvq06W8CvOOakwQz/Gf78ZWJr2dNGVASDD/BTNhHVPsGbPn/VQ==}
+    cpu: [x64]
+    os: [win32]
+
   '@wirecat/cli-core-sqlite@1.0.1':
     resolution: {integrity: sha512-dFkTE3+XdvZwrt7bZZEd2fzdqR2vFgnnGPOhmBKGNa7uKQHjOdqJL8Q9O5cajIjy5o8Gl0LVn0OZbYajhLvQ1A==}
 
-  '@wirecat/cli-core-sqlite@1.1.0':
-    resolution: {integrity: sha512-GpGlh/dAIX/nblBYCdT6DfWSLFxav9mxxeELQAfEuw+QZdT9unKxbi5xa02s/s4JS1P7n0PQx2sCABj4FlMRNw==}
+  '@wirecat/cli-core-sqlite@1.2.0':
+    resolution: {integrity: sha512-Xu8eeuvgjNMsGiJz5V29jmuMkxrEYZQ5gQnf8lHSnqrf/wHSGEhskPSrvT9J293orUM1YSqMsDo56CwYLN0xJg==}
 
   '@wirecat/cli-core@0.414.0':
     resolution: {integrity: sha512-Qk0Bp3LdChAQFwS240hsOynelT7HTcHHugTTGTBLUfIlABTgB/SBW7XgjoGq0PcP3ysRWGvOetoTb9YxHhD8aQ==}
@@ -3901,9 +3935,34 @@ snapshots:
     dependencies:
       onnxruntime-common: 1.30.0
 
+  '@wirecat/cli-core-sqlite-darwin@1.2.0':
+    optional: true
+
+  '@wirecat/cli-core-sqlite-linux-arm64-gnu@1.2.0':
+    optional: true
+
+  '@wirecat/cli-core-sqlite-linux-arm64-musl@1.2.0':
+    optional: true
+
+  '@wirecat/cli-core-sqlite-linux-x64-gnu@1.2.0':
+    optional: true
+
+  '@wirecat/cli-core-sqlite-linux-x64-musl@1.2.0':
+    optional: true
+
+  '@wirecat/cli-core-sqlite-win32-x64@1.2.0':
+    optional: true
+
   '@wirecat/cli-core-sqlite@1.0.1': {}
 
-  '@wirecat/cli-core-sqlite@1.1.0': {}
+  '@wirecat/cli-core-sqlite@1.2.0':
+    optionalDependencies:
+      '@wirecat/cli-core-sqlite-darwin': 1.2.0
+      '@wirecat/cli-core-sqlite-linux-arm64-gnu': 1.2.0
+      '@wirecat/cli-core-sqlite-linux-arm64-musl': 1.2.0
+      '@wirecat/cli-core-sqlite-linux-x64-gnu': 1.2.0
+      '@wirecat/cli-core-sqlite-linux-x64-musl': 1.2.0
+      '@wirecat/cli-core-sqlite-win32-x64': 1.2.0
 
   '@wirecat/cli-core@0.414.0(@napi-rs/canvas@1.0.13)(@wirecat/cli-base@2.0.0(commander@15.0.0)(esbuild@0.28.2)(rolldown@1.2.15)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
