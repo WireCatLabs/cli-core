@@ -29,6 +29,13 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
    `bin/release` publishes the next free version through GitHub; a change that may break a
    caller goes under "Changed — may break callers" in the changelog.
 
+## Two packages per release
+
+Every release publishes `X.Y.Z` (no `.d.ts`, maps or `src/`: what users install) and `X.Y.Z-dev` (the same
+JavaScript with them), split from one pack by `scripts/release-pair.ts`, `-dev` first. Never publish the repository
+directly with `npm publish`: that ships the full package as `latest`. A CLI gets the types through its root override
+to `X.Y.Z-dev` ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md#the-two-packages-of-a-release)).
+
 ## Comments
 
 Sparse, and only *why*. No comment restating the line, no banners, no narrating the change.

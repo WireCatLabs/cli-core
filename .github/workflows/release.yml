@@ -196,8 +196,6 @@ jobs:
           [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "Expected exactly one package tarball"; exit 1; }
           [ -n "$EXPECTED_SHA256" ] || { echo "Missing validation digest"; exit 1; }
           printf '%s  %s\n' "$EXPECTED_SHA256" "$1" | sha256sum --check -
-      - name: Install size under the ceiling
-        run: node scripts/install-size.ts ./*.tgz
 
       - name: version not yet on npm
         id: version
@@ -211,10 +209,20 @@ jobs:
             exit 1
           fi
 
+      # The validated tarball holds both packages; neither is published as it is.
+      - name: Split into the user package and its -dev twin
+        run: node scripts/release-pair.ts ./*.tgz pair
+      - name: Install size under the ceiling
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/install-size.ts "pair/wirecat-cli-core-$VERSION.tgz"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package
-          path: wirecat-cli-core-${{ steps.version.outputs.version }}.tgz
+          path: |
+            pair/wirecat-cli-core-${{ steps.version.outputs.version }}.tgz
+            pair/wirecat-cli-core-${{ steps.version.outputs.version }}-dev.tgz
           if-no-files-found: error
           retention-days: 7
 
@@ -234,10 +242,13 @@ jobs:
           name: package
       # Permit checking an already published version; this job has no publishing permissions.
       # A pre-release goes to the next tag: npm refuses one without a tag, and latest must stay a release.
-      - run: |
-          tag=latest
-          case "$(ls ./*.tgz)" in *[0-9]-*.tgz) tag=next ;; esac
-          npm publish ./*.tgz --access public --dry-run --force --tag "$tag"
+      - env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tag=latest dev=dev
+          case "$VERSION" in *-*) tag=next dev=next-dev ;; esac
+          npm publish "wirecat-cli-core-$VERSION-dev.tgz" --access public --dry-run --force --tag "$dev"
+          npm publish "wirecat-cli-core-$VERSION.tgz" --access public --dry-run --force --tag "$tag"
 
   publish:
     needs: build
@@ -260,6 +271,22 @@ jobs:
 
       # npm, not pnpm: npm's trusted publishing is the documented path. A tarball runs no
       # lifecycle scripts, and nothing is installed here.
+      # -dev first: CLI repositories override cli-core to X.Y.Z-dev, so a latest without its -dev would fail
+      # every CLI's install the day it adopts X.Y.Z, while a -dev without its latest is pinned by nobody.
+      - name: publish the -dev twin
+        run: |
+          dev=dev
+          case "$VERSION" in *-*) dev=next-dev ;; esac
+          file="wirecat-cli-core-$VERSION-dev.tgz"
+          # A rerun after latest failed finds the -dev from the first run: the same bytes are fine, others are not.
+          published=$(npm view "@wirecat/cli-core@$VERSION-dev" dist.shasum --prefer-online 2>/dev/null || true)
+          if [ -n "$published" ]; then
+            [ "$published" = "$(sha1sum "$file" | cut -d ' ' -f 1)" ] && { echo "$VERSION-dev is already on npm"; exit 0; }
+            echo "::error::npm has a different $VERSION-dev — raise the version and release again"
+            exit 1
+          fi
+          npm publish "$file" --access public --tag "$dev"
+
       - run: |
           tag=latest
           case "$VERSION" in *-*) tag=next ;; esac
