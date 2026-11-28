@@ -163,8 +163,12 @@ const searchable = async () => {
 /** Every write to stdout and stderr while `work` runs: a search installing an engine must add none. */
 const printed = async <T>(work: () => Promise<T>) => {
   const lines: string[] = []
-  const out = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => (lines.push(String(chunk)), true))
-  const err = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => (lines.push(String(chunk)), true))
+  const keep = (chunk: unknown) => {
+    lines.push(String(chunk))
+    return true
+  }
+  const out = vi.spyOn(process.stdout, "write").mockImplementation(keep)
+  const err = vi.spyOn(process.stderr, "write").mockImplementation(keep)
   try {
     return { result: await work(), lines }
   } finally {

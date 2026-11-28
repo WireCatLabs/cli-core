@@ -1,12 +1,6 @@
 import type { Tokenizer } from "@huggingface/tokenizers"
 import { CliError } from "@wirecat/cli-base"
-import {
-  type EngineMissing,
-  type EnginePin,
-  engineRequire,
-  ensureEngine,
-  importFromEngine,
-} from "../engines/install.js"
+import type { EngineMissing, EnginePin } from "../engines/install.js"
 import { ENGINE_PINS } from "../engines/pins.js"
 import type { Fetch } from "../speech/install.js"
 import type { Ort } from "./onnx-runtime.js"
@@ -44,6 +38,7 @@ export const installMeaningEngines = async (
   { env, retry = "models download", progress, fetch }: EngineContext,
   pins: readonly [EnginePin, EnginePin] = MEANING_ENGINES,
 ): Promise<MeaningFolders> => {
+  const { ensureEngine } = await import("../engines/install.js")
   const states = await Promise.all(
     pins.map((pin) =>
       ensureEngine(pin, {
@@ -85,12 +80,15 @@ export const meaningEngineAt = (folders: MeaningFolders): Promise<MeaningEngine>
   const key = `${folders.onnx}\n${folders.tokenizers}`
   let found = loaded.get(key)
   if (!found) {
-    found = (async () => ({
-      ort: await importFromEngine<Ort>(folders.onnx, ONNX),
-      // Its `require` export is CommonJS, which names `Tokenizer` for certain; an `import` of it might not.
-      Tokenizer: (engineRequire(folders.tokenizers)(TOKENIZERS) as { Tokenizer: typeof Tokenizer }).Tokenizer,
-      folders,
-    }))()
+    found = (async () => {
+      const { engineRequire, importFromEngine } = await import("../engines/install.js")
+      return {
+        ort: await importFromEngine<Ort>(folders.onnx, ONNX),
+        // Its `require` export is CommonJS, which names `Tokenizer` for certain; an `import` of it might not.
+        Tokenizer: (engineRequire(folders.tokenizers)(TOKENIZERS) as { Tokenizer: typeof Tokenizer }).Tokenizer,
+        folders,
+      }
+    })()
     found.catch(() => loaded.delete(key))
     loaded.set(key, found)
   }
