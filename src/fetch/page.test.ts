@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs"
 import { createServer, type IncomingHttpHeaders } from "node:http"
 import type { AddressInfo } from "node:net"
 import { allowNetwork } from "@wirecat/cli-base/testing"
-import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { registerReader } from "../readers/registry.js"
 import { isPublicAddress } from "./addresses.js"
 import {
@@ -14,6 +15,8 @@ import {
   type PageResponse,
   type ResolvedAddress,
 } from "./page.js"
+
+beforeAll(() => placeEngines())
 
 const PUBLIC: ResolvedAddress = { address: "93.184.216.34", family: 4 }
 

@@ -196,7 +196,7 @@ const diagnose = async (
         profile: null,
         config,
         store: snakeKeys(await storeSummary(env, summaryOptions(command, app))),
-        readers: engineStates(),
+        readers: engineStates(undefined, env),
         engines: enginesReport(env),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
         files: filesReport(files),
@@ -234,7 +234,7 @@ const diagnose = async (
       // A session file on disk says nothing about whether the messenger still accepts it.
       login: { state: "not checked" },
       store: snakeKeys(await storeSummary(env, summaryOptions(command, app))),
-      readers: engineStates(),
+      readers: engineStates(undefined, env),
       engines: enginesReport(env),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),

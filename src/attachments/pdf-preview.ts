@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { imageSize } from "image-size"
+import { EngineUnavailable, engineMissingError } from "../engines/install.js"
 import { importEngine, type LoadEngine } from "./extract.js"
 import { pdfPreviewLimits } from "./limits.js"
 
@@ -39,7 +40,8 @@ export const pdfPreview = async (
   const optional = async (name: "unpdf" | "@napi-rs/canvas") => {
     try {
       return await load(name)
-    } catch {
+    } catch (error) {
+      if (error instanceof EngineUnavailable) throw engineMissingError(error.state)
       throw new CliError("validation_error", `PDF page previews need the optional package ${name}`)
     }
   }

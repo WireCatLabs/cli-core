@@ -22,7 +22,7 @@ import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { PNG } from "pngjs"
 import * as v from "valibot"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { provide } from "../cli/context.js"
 import { type Messenger, messengerContext } from "../cli/messenger/context.js"
 import { inboxCommand } from "../cli/messenger/inbox.js"
@@ -38,6 +38,7 @@ import type { Chat, Message } from "../domain/models.js"
 import { placedText, textModelsDirectory } from "../embeddings/embed.js"
 import { textModel } from "../embeddings/models.js"
 import { ENTITIES } from "../entities/index.js"
+import { placeEngines } from "../kit/engines.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { type ChatSendingMode, writeChatSending } from "../models/chat-sending.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
@@ -60,6 +61,8 @@ import { serveOverHttp } from "./http/serve.js"
 import { instructions } from "./instructions.js"
 import { createServer, type ServerOptions } from "./server.js"
 import { type AnyTool, inputOf } from "./tool.js"
+
+beforeAll(() => placeEngines())
 
 const models = vi.hoisted(() => ({ opened: 0, closed: 0 }))
 vi.mock("../embeddings/embed.js", async (original) => {

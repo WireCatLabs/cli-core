@@ -75,7 +75,7 @@ about four files of cli-core. The other entries and every lazy `import()` stay c
 | store | `.` | `src/store/` | the SQLite seam and the shared message store |
 | sends | `.` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
 | speech | `.` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding (ffmpeg included), timed local pieces, OpenAI transcription and `cloudSpeech` for a host that opts a profile in; import alone loads no engine, and the voice engines install on first use ([Engines](#engines-installed-on-first-use)) |
-| charts | `.` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads the bundled ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
+| charts | `.` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads the bundled ECharts only on demand; a separate PNG encoder uses resvg, installed on first use, and bundled fonts |
 | models | `.` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
 | services | `.` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
 | background | `.` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
@@ -247,7 +247,8 @@ the re-key included, stay.
 **The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this
 version's package) — plain text, HTML, RTF, Word 97–2003 through `word-extractor`, a
-PDF's text layer through `unpdf` (dependencies of this package, loaded on first use: `src/readers/pdf/`, picked by `src/readers/registry.ts`),
+PDF's text layer through `unpdf` (installed into the data folder on first use, see
+[engines](#engines-installed-on-first-use): `src/readers/pdf/`, picked by `src/readers/registry.ts`),
 Word through the built-in reader (`src/readers/docx/`), ODF/OOXML/EPUB through the built-in readers (`src/attachments/documents.ts`) — or what an agent wrote back after reading a scan
 (`origin`: `extracted` or `agent`; an extraction never replaces an agent's text). Its words are in
 `attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; a voice note's transcript
@@ -1127,7 +1128,8 @@ their override at it.
 
 An engine is an npm package and everything it needs, which cli-core installs into the shared data folder the first
 time a command needs it, instead of shipping it in every install (`src/engines/install.ts`). It lives in
-`<WireCat data>/engines/<name>/<version>/<key>/node_modules/`, one flat folder, and is loaded only from there
+`<WireCat data>/engines/<name>/<version>/<key>/node_modules/`, laid out as npm would (a second version of a package
+nested under the package that needs it), and is loaded only from there
 (`engineRequire`, `importFromEngine`), never from the packages beside cli-core. So npx, a global npm install, pnpm and
 WireCat Desktop all load the same files, under Node and under Bun.
 
@@ -1135,7 +1137,8 @@ WireCat Desktop all load the same files, under Node and under Bun.
   the tarball's size, plus npm's `os`, `cpu` and `libc` for a package built for some systems only, so each system
   downloads only its own. `node scripts/engine-pins.ts` writes the file from `pnpm-lock.yaml` and the registry; no
   hash is written by hand, and `scripts/engine-pins.test.ts` fails when the lockfile moved on without it. An engine's
-  package therefore stays in the lockfile, as a development dependency once it leaves `dependencies`.
+  package therefore stays in the lockfile, as a development dependency once it leaves `dependencies`. A peer
+  dependency is never part of an engine: unpdf's optional `@napi-rs/canvas` stays the caller's to install.
 - **The install** (`ensureEngine`) downloads through the models' `installFiles` (each file checked against its hash,
   in full, before it is kept), unpacks into a staging folder beside the version's, writes `engine.json` last and
   renames the folder into place. Package scripts never run, and a tarball holding a link or a path out of its folder
@@ -1168,8 +1171,18 @@ catches it (`skipsMeaning`) and answers by words alone. cli-core's own tests res
 (`locateMeaningEngine` in `src/testing/sandbox.ts`), because most of them move the data folder per test;
 `src/embeddings/engine.test.ts` runs the installer.
 
+**Readers and PNG charts** come third. The PDF reader (`unpdf`), the web-page and HTML readers (`defuddle`, which
+brings `linkedom`) and the PNG charts (`@resvg/resvg-js`, a package for each system) are development dependencies
+only. `importEngine` (`src/attachments/extract.ts`) installs a reader the first time a file needs it, quietly, and a
+reader whose engine cannot be installed answers `engine-missing` with its `reason` and `retry`, so the file is read on
+a later run. `chartPng` answers the engine's `engine-missing` state instead of a PNG; the SVG needs no engine, and
+`stats charts --output x.png` still prints the chart, marked incomplete (`engine.missing`). `doctor`'s `readers` says
+`on first use` until they are installed. Their tests place the engines with `placeEngines`;
+`src/attachments/first-use.test.ts` runs the installer.
+
 The [Engines workflow](../../.github/workflows/engines.yml) runs these tests, voice's and search by meaning's on Linux, macOS and Windows,
-then the built installer, voice (a recording decoded and cut at its pauses) and a synthetic text found by meaning from an empty data folder under Node and
+then the built installer, voice (a recording decoded and cut at its pauses), a synthetic text found by meaning, and a synthetic article and PDF
+read and a PNG chart drawn, from an empty data folder under Node and
 Bun, downloading the pinned engines from npm. Its `installs` job does the same from the packed package installed by
 npm into a folder (npx's layout), by a global npm install, by pnpm (WireCat Desktop's) and by Bun.
 

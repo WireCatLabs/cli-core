@@ -1,8 +1,21 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { PNG } from "pngjs"
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
+import { placeEngines } from "../kit/engines.js"
+import type { Fetch } from "../speech/install.js"
 import { CHART_SIZE, type ChartData, type RenderedChart } from "./model.js"
-import { chartPng } from "./png.js"
+import { chartPng, type RenderedPng } from "./png.js"
 import { chartRenderer } from "./render.js"
+
+const png = async (svg: RenderedChart): Promise<RenderedPng> => {
+  const rendered = await chartPng(svg)
+  if ("status" in rendered) throw new Error(rendered.reason)
+  return rendered
+}
+
+beforeAll(() => placeEngines(process.env, ["@resvg/resvg-js"]))
 
 const chart: ChartData = {
   version: 1,
@@ -18,7 +31,7 @@ const chart: ChartData = {
 
 describe("PNG chart encoding", () => {
   it("keeps dimensions, dark background, observed bars and visible Cyrillic text", async () => {
-    const rendered = await chartPng(await (await chartRenderer()).render(chart, CHART_SIZE))
+    const rendered = await png(await (await chartRenderer()).render(chart, CHART_SIZE))
     expect(rendered).toMatchObject({ ...CHART_SIZE, format: "png", mimeType: "image/png" })
     const image = PNG.sync.read(Buffer.from(rendered.bytes))
     expect(image).toMatchObject(CHART_SIZE)
@@ -49,10 +62,25 @@ describe("PNG chart encoding", () => {
       format: "svg",
       mimeType: "image/svg+xml",
     })
-    const letters = PNG.sync.read(Buffer.from((await chartPng(svg("ЖЩЫ"))).bytes))
-    const missing = PNG.sync.read(Buffer.from((await chartPng(svg("\u0378\u0378\u0378"))).bytes))
+    const letters = PNG.sync.read(Buffer.from((await png(svg("ЖЩЫ"))).bytes))
+    const missing = PNG.sync.read(Buffer.from((await png(svg("\u0378\u0378\u0378"))).bytes))
     expect(letters).toMatchObject({ width: 100, height: 40 })
     expect(letters.data.some((value, index) => index % 4 === 3 && value > 0)).toBe(true)
     expect(letters.data.equals(missing.data)).toBe(false)
+  })
+
+  it("**offline, with no engine yet: engine-missing with the command to retry, and the SVG still drawn**", async () => {
+    const offline: Fetch = async () => {
+      throw new TypeError("fetch failed")
+    }
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "png-offline-")) }
+    const svg = await (await chartRenderer()).render(chart, CHART_SIZE)
+    expect(svg.format).toBe("svg")
+    expect(await chartPng(svg, { env, fetch: offline })).toMatchObject({
+      status: "engine-missing",
+      engine: "@resvg/resvg-js",
+      reason: "fetch failed",
+      retry: "the same command, once this computer can reach registry.npmjs.org",
+    })
   })
 })

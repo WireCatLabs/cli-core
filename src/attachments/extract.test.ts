@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { zipSync } from "fflate"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { docx, pdf, zip } from "../testing/files.js"
 import {
   type Engine,
@@ -11,6 +14,8 @@ import {
   type LoadEngine,
   tooLarge,
 } from "./extract.js"
+
+beforeAll(() => placeEngines())
 
 const hint = (name: string, extra: { kind?: string; mime?: string } = {}) => ({
   kind: extra.kind ?? "file",
@@ -188,7 +193,8 @@ describe("reading the text layer of a file", () => {
       status: "engine-missing",
       engine: "unpdf",
     })
-    expect(engineHint("unpdf", "tg")).toContain("ships with tg, could not be loaded — reinstall the tool")
+    expect(engineHint("word-extractor", "tg")).toContain("ships with tg, could not be loaded — reinstall the tool")
+    expect(engineHint("unpdf", "tg")).toContain("installs on first use and could not be installed now — run the same")
     expect(engineHint("@napi-rs/canvas", "tg")).toContain("npm install -g @napi-rs/canvas")
   })
 
@@ -213,16 +219,18 @@ it("honors a configured file budget for local text extraction", async () => {
 })
 
 describe("engineStates", () => {
-  it("says which reader is built in, which optional one is installed, and which would not load", () => {
+  it("says which reader is built in, which installs on first use, which optional one is installed, and which would not load", () => {
     const resolve = (name: string) => {
-      if (name === "unpdf") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
+      if (name === "word-extractor") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
       return `file:///node_modules/${name}/index.js`
     }
-    expect(engineStates(resolve)).toEqual({
-      unpdf: "missing",
-      "word-extractor": "built in",
-      linkedom: "built in",
-      "defuddle/node": "built in",
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "reader-states-")) }
+    placeEngines(env, ["unpdf"])
+    expect(engineStates(resolve, env)).toEqual({
+      unpdf: "installed",
+      "word-extractor": "missing",
+      linkedom: "on first use",
+      "defuddle/node": "on first use",
       "@napi-rs/canvas": "installed",
     })
   })

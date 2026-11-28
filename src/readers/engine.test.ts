@@ -16,5 +16,6 @@ it("**a reader whose engine could not be installed answers engine-missing with t
     status: "engine-missing",
     engine: "unpdf",
     retry: "demo documents sync",
+    reason: "fetch failed",
   })
 })

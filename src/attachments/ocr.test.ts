@@ -1,8 +1,11 @@
 import { PNG } from "pngjs"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { pdf } from "../testing/files.js"
 import { type Engine, importEngine, type LoadEngine } from "./extract.js"
 import { type OcrPipeline, ocrImage, ocrPdf } from "./ocr.js"
+
+beforeAll(() => placeEngines())
 
 const image = () => PNG.sync.write(new PNG({ width: 2, height: 2 }))
 const pipeline = (text = "invoice 42"): OcrPipeline => ({

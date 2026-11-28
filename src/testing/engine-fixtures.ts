@@ -61,6 +61,7 @@ export interface FixturePackage {
   files: TarFile[]
   os?: string[]
   cpu?: string[]
+  path?: string
 }
 
 /** An engine of `packages`, each served at `${base}/<name>-<version>.tgz`, with the bytes each URL answers. */
@@ -73,7 +74,7 @@ export const fixtureEngine = (
   const bodies = new Map<string, Uint8Array>()
   const pinned: EnginePackage[] = packages.map((pkg) => {
     const bytes = tarball(pkg.files)
-    const url = `${base}/${pkg.name.replace("/", "-")}-${pkg.version}.tgz`
+    const url = `${base}/${(pkg.path ?? pkg.name).replaceAll("/", "-")}-${pkg.version}.tgz`
     bodies.set(url, bytes)
     return {
       name: pkg.name,
@@ -83,6 +84,7 @@ export const fixtureEngine = (
       bytes: bytes.length,
       ...(pkg.os ? { os: pkg.os } : {}),
       ...(pkg.cpu ? { cpu: pkg.cpu } : {}),
+      ...(pkg.path ? { path: pkg.path } : {}),
     }
   })
   return { pin: { name, version, packages: pinned }, bodies }

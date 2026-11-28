@@ -7,13 +7,15 @@ import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { PNG } from "pngjs"
 import * as v from "valibot"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import type { LoadEngine } from "../../attachments/extract.js"
 import { importEngine } from "../../attachments/extract.js"
 import { writePictureReading } from "../../attachments/picture-reading.js"
 import type { Attachment, Chat, Message } from "../../domain/models.js"
+import { EngineUnavailable } from "../../engines/install.js"
 import { attachment } from "../../entities/attachment.js"
 import { ENTITIES } from "../../entities/index.js"
+import { placeEngines } from "../../kit/engines.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
@@ -27,6 +29,16 @@ import type { Messenger } from "./context.js"
 import { imagesCommand } from "./images-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { searchCommand } from "./search-command.js"
+
+const offlineUnpdf = {
+  status: "engine-missing" as const,
+  engine: "unpdf",
+  version: "1.9.1",
+  reason: "fetch failed",
+  retry: "the same command, once this computer can reach registry.npmjs.org",
+}
+
+beforeAll(() => placeEngines())
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const OWNER = { provider: "chat", account: "500" }
@@ -495,28 +507,26 @@ describe("attachments extract", () => {
     expect(json(await call("attachments", "extract", "--chat", "7", "--json")).extracted).toBe(0)
   })
 
-  it("**says once which package could not be loaded, and reads those files on a later run**", async () => {
+  it("**says once which reader could not be installed, and reads those files on a later run**", async () => {
     const without: LoadEngine = async (name) => {
-      if (name === "unpdf")
-        throw Object.assign(new Error("Cannot find package 'unpdf'"), { code: "ERR_MODULE_NOT_FOUND" })
+      if (name === "unpdf") throw new EngineUnavailable(offlineUnpdf)
       return importEngine(name)
     }
     const { call } = await setup({ load: without })
     const done = await call("attachments", "extract", "--json")
     expect(json(done)).toMatchObject({ engines_missing: ["unpdf"], extracted: 2 })
-    expect(done.stderr.match(/package unpdf, which ships with chat, could not be loaded/g)).toHaveLength(1)
+    expect(done.stderr.match(/the reader unpdf installs on first use and could not be installed now/g)).toHaveLength(1)
   })
 
-  it("**names the missing package on each file it could not read**, as `messages download --extract` reports it", async () => {
+  it("**names the reader it could not install on each file it could not read**, as `messages download --extract` reports it", async () => {
     const without: LoadEngine = async (name) => {
-      if (name === "unpdf")
-        throw Object.assign(new Error("Cannot find package 'unpdf'"), { code: "ERR_MODULE_NOT_FOUND" })
+      if (name === "unpdf") throw new EngineUnavailable(offlineUnpdf)
       return importEngine(name)
     }
     const { call } = await setup({ load: without })
     const done = json(await call("attachments", "extract", "--json"))
     const pdf = done.files.find(({ status }: { status: string }) => status === "engine-missing")
-    expect(pdf.issue.message).toContain("the package unpdf, which ships with this tool, could not be loaded")
+    expect(pdf.issue.message).toContain("the reader unpdf installs on first use and could not be installed now")
   })
 
   it("prints one line per file in a terminal, and the summary on stderr", async () => {

@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { imageSize } from "image-size"
 import { withRecovery } from "../domain/recovery.js"
+import { EngineUnavailable } from "../engines/install.js"
 import { isCliFailure } from "../errors/failures.js"
 import type { ModelImage } from "../models/index.js"
 import { MAX_MODEL_IMAGE_BYTES } from "../models/types.js"
+import { engineUnavailable } from "../readers/engine.js"
 import { type Extraction, type LoadEngine, MAX_TEXT_CHARS } from "./extract.js"
 
 export interface OcrPipeline {
@@ -111,8 +113,10 @@ export const ocrPdf = async (
   let unpdf: PdfEngine
   try {
     unpdf = (await load("unpdf")) as PdfEngine
-  } catch {
-    return { status: "engine-missing", engine: "unpdf" }
+  } catch (error) {
+    return error instanceof EngineUnavailable
+      ? engineUnavailable("unpdf", error)
+      : { status: "engine-missing", engine: "unpdf" }
   }
   let document: PdfDocument | undefined
   let rendered: PdfDocument | undefined

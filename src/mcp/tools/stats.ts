@@ -2,7 +2,7 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { chatChart } from "../../charts/chat.js"
 import { CHART_KINDS, CHART_SIZE } from "../../charts/model.js"
-import { chartPng } from "../../charts/png.js"
+import { chartPng, engineIssue } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
 import { sealed } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
@@ -45,6 +45,7 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
       const chart = chatChart(stats, { kind: args.chart_kind ?? "messages", by, timezone })
       if (args.format !== "png") return chartAnswer(chart, undefined, window.meta)
       const image = await chartPng(await (await chartRenderer()).render(chart, CHART_SIZE))
+      if ("status" in image) return chartAnswer(chart, undefined, { ...window.meta, ...engineIssue(image) })
       return new Picture(image.bytes, image.mimeType, sealed(chartAnswer(chart, undefined, window.meta)))
     },
   }),

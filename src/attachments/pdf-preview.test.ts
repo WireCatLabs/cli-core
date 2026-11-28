@@ -1,8 +1,11 @@
 import { PNG } from "pngjs"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { pdf } from "../testing/files.js"
 import { importEngine, type LoadEngine } from "./extract.js"
 import { pdfPreview } from "./pdf-preview.js"
+
+beforeAll(() => placeEngines())
 
 const png = () => PNG.sync.write(new PNG({ width: 2, height: 2 }))
 const fake = (options: { pages?: number; width?: number; render?: () => Promise<ArrayBuffer> } = {}) => {

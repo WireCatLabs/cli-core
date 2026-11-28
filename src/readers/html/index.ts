@@ -2,7 +2,8 @@ import { isCliError } from "@wirecat/cli-base"
 import { ReaderLimit } from "../../attachments/container.js"
 import { decodeText } from "../../attachments/encoding.js"
 import { htmlText } from "../../attachments/markup.js"
-import { capped, derived, extensionOf } from "../engine.js"
+import { EngineUnavailable } from "../../engines/install.js"
+import { capped, derived, engineUnavailable, extensionOf } from "../engine.js"
 import type { Extraction, LoadEngine, Reader } from "../types.js"
 import { markdownSections, type PageDocument, pageMetadata } from "./page.js"
 
@@ -22,15 +23,21 @@ interface DefuddleNode {
 const first = (...values: (string | string[] | undefined)[]) =>
   values.find((value): value is string => typeof value === "string" && value !== "")
 
+class Unavailable {
+  constructor(readonly extraction: Extraction) {}
+}
+
 const loaded = async <T>(load: LoadEngine, name: "linkedom" | "defuddle/node"): Promise<T | undefined> => {
   try {
     return (await load(name)) as T
-  } catch {
+  } catch (error) {
+    // Installed on first use and not installable now: read again later, rather than keep the plain reader's text.
+    if (error instanceof EngineUnavailable) throw new Unavailable(engineUnavailable(name, error))
     return undefined
   }
 }
 
-/** Main text as Markdown with the page's own metadata; `undefined` when the engines are absent or find no text. */
+/** Main text as Markdown with the page's own metadata; `undefined` when the engines will not load or find no text. */
 const readPage = async (source: string, load: LoadEngine): Promise<Extraction | undefined> => {
   const dom = await loaded<Linkedom>(load, "linkedom")
   const engine = await loaded<DefuddleNode>(load, "defuddle/node")
@@ -87,6 +94,7 @@ export const html: Reader = {
         const page = await readPage(decoded.text, context.load)
         if (page) return page
       } catch (error) {
+        if (error instanceof Unavailable) return error.extraction
         if (error instanceof ReaderLimit) return { status: "too-large" }
         if (isCliError(error) && error.code === "cancelled") throw error
       }

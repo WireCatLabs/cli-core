@@ -72,6 +72,7 @@ headings.
 | `catalog.not-found` | `not_found` | the file or folder is not in the local catalog; run catalog import or sync |  |
 | `catalog.tree-limit` | `validation_error` | the tree is over 10000 entries; name a smaller folder or lower --depth |  |
 | `catalog.unavailable` | `configuration_error` | the store has no shared catalog for this account |  |
+| `chart.engine-missing` | `configuration_error` | a PNG chart needs resvg, which could not be installed; an SVG needs nothing |  |
 | `chat-sending.ask` | `confirmation_required` | models chats is ask: pass --yes, or the owner sets it to allowed | `emails`, `threads`, `tokens`, `host`, `model`, `estimated_cost_usd` |
 | `chat-sending.denied` | `permission_error` | models chats is denied: chat text never goes to a model off this computer, even with --yes |  |
 | `chat-sending.owner-only` | `permission_error` | only the owner makes models chats less strict, not an agent |  |
@@ -153,7 +154,6 @@ headings.
 | `documents.other-account` | `configuration_error` | the documents are signed in as another account than the tracker copy of the same provider |  |
 | `domain-lists.offline` | `permission_error` | updating the domain lists needs the network; --offline was requested |  |
 | `download.mismatch` | `invalid_response` | the downloaded file has other content than the listing said |  |
-| `engine.missing` | `configuration_error` | a feature's engine is not installed and could not be installed now; details.retry is the command that installs it | `engine`, `version`, `retry` |
 | `enrichment.owner-only` | `permission_error` | only the owner turns enrichment on, not an agent |  |
 | `event.conference-exists` | `validation_error` | the event has a meeting link already, which its attendees use |  |
 | `event.conflict` | `validation_error` | the event changed at the provider since the last sync; sync and try again |  |

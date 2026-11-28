@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { fixtureEngine, packageFiles, serveRegistry } from "../src/testing/engine-fixtures.ts"
+import { pdf } from "../src/testing/files.ts"
 import { scratch } from "./scratch.ts"
 
 const runtime = typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? "node" : "bun"
@@ -40,6 +41,41 @@ export const checkEngines = async (dist: string): Promise<void> => {
   if (process.env.ENGINE_CHECK_REAL !== "1") return
   await checkVoice(dist)
   await checkMeaning(dist)
+  await checkReaders(dist)
+}
+
+const ARTICLE = `<!doctype html><html lang="en"><head><title>Pond survey | Field Club</title>
+<meta name="author" content="Avery Stone"></head><body>
+<nav><a href="/">Home</a> <a href="/about">About</a></nav>
+<article><h1>Pond survey</h1><p>The north pond held eleven frogs and two herons this spring.</p>
+<p>Water clarity rose after the reeds were cut back in March.</p></article>
+<footer>Copyright Field Club, all rights reserved</footer></body></html>`
+
+/** The readers and the PNG charts as a person meets them: the first read installs the engine into an empty folder. */
+const checkReaders = async (dist: string) => {
+  const { engineLoader, extractText } = await import(pathToFileURL(join(dist, "attachments/extract.js")).href)
+  const { chartPng } = await import(pathToFileURL(join(dist, "charts/png.js")).href)
+  const env = { WIRECAT_STATE_DIR: scratch("core-dist-readers-") }
+  const load = engineLoader({ env })
+  const hint = (name: string, mime: string) => ({ kind: "file", name, mime, path: `/saved/${name}` })
+  const page = await extractText(new TextEncoder().encode(ARTICLE), hint("survey.html", "text/html"), load)
+  if (
+    page.status !== "extracted" ||
+    page.extractor !== "html:v2" ||
+    !page.text.includes("eleven frogs") ||
+    page.text.includes("all rights reserved")
+  )
+    throw new Error(`${runtime}: the HTML reader did not read the article: ${JSON.stringify(page)}`)
+  const document = await extractText(pdf("Quarterly pond levels"), hint("levels.pdf", "application/pdf"), load)
+  if (document.status !== "extracted" || !document.text.includes("Quarterly pond levels"))
+    throw new Error(`${runtime}: the PDF reader did not read the file: ${JSON.stringify(document)}`)
+  const svg = new TextEncoder().encode(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#123"/></svg>`,
+  )
+  const image = await chartPng({ bytes: svg, width: 40, height: 20, format: "svg", mimeType: "image/svg+xml" }, { env })
+  if (image.status !== undefined || image.width !== 40 || image.bytes[1] !== 0x50)
+    throw new Error(`${runtime}: the PNG chart was not drawn: ${JSON.stringify(image.status ? image : {})}`)
+  console.log(`dist (${runtime}): HTML, PDF and PNG engines install on first use into an empty folder and work`)
 }
 
 const TINY = {

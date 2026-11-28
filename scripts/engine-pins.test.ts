@@ -10,9 +10,23 @@ describe("the engine pins", () => {
   for (const [name, pin] of Object.entries(ENGINE_PINS))
     it(`**${name} pins what pnpm-lock.yaml resolved** (else run node scripts/engine-pins.ts)`, () => {
       expect(pin.name).toBe(name)
-      expect(pin.packages.map(({ name, version, integrity }) => ({ name, version, integrity }))).toEqual(
-        lockedClosure(lock, name).map(({ name, version, integrity }) => ({ name, version, integrity })),
-      )
+      const placed = ({
+        name,
+        version,
+        integrity,
+        path,
+      }: {
+        name: string
+        version: string
+        integrity: string
+        path?: string
+      }) => ({
+        name,
+        version,
+        integrity,
+        path,
+      })
+      expect(pin.packages.map(placed)).toEqual(lockedClosure(lock, name).map(placed))
       expect(pin.version).toBe(pin.packages[0]?.version)
       for (const pkg of pin.packages) {
         expect(pkg.url).toBe(`https://registry.npmjs.org/${pkg.name}/-/${pkg.name.split("/").pop()}-${pkg.version}.tgz`)
@@ -20,7 +34,7 @@ describe("the engine pins", () => {
       }
     })
 
-  it("**refuses a closure that needs two versions of one package**", () => {
+  it("**nests a second version of a package under the package that needs it, where Node finds it**", () => {
     const twice = `lockfileVersion: '9.0'
 importers:
   .:
@@ -48,7 +62,12 @@ snapshots:
     dependencies:
       b: 2.0.0
 `
-    expect(() => lockedClosure(twice, "a")).toThrow("a needs b at 1.0.0 and 2.0.0")
+    expect(lockedClosure(twice, "a")).toEqual([
+      { name: "a", version: "1.0.0", integrity: "sha512-a" },
+      { name: "b", version: "1.0.0", integrity: "sha512-b1" },
+      { name: "c", version: "1.0.0", integrity: "sha512-c" },
+      { name: "b", version: "2.0.0", integrity: "sha512-b2", path: "c/node_modules/b" },
+    ])
     expect(() => lockedClosure(twice, "missing")).toThrow("missing is not a dependency of cli-core")
   })
 
