@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# A live check of the Anthropic adapter on SDK 1.x: one request through the adapter, and one raw request
+# A live check of the Anthropic adapter: one streamed request through the adapter, and one raw request
 # with `temperature` to see whether the API really refuses it. Prints statuses only, never the key.
 #
 #   bin/live-anthropic
@@ -24,7 +24,6 @@ if [ -z "$key" ]; then
 fi
 
 LIVE_ANTHROPIC_KEY="$key" node --input-type=module <<'EOF'
-import Anthropic from "@anthropic-ai/sdk"
 import { anthropic } from "./dist/models/anthropic.js"
 
 const key = process.env.LIVE_ANTHROPIC_KEY
@@ -46,15 +45,15 @@ try {
 }
 
 try {
-  const client = new Anthropic({ apiKey: key, maxRetries: 0 })
-  await client.messages.create({
-    model,
-    max_tokens: 16,
-    temperature: 0.5,
-    messages: [{ role: "user", content: "Say OK." }],
+  const response = await fetch(`${target.baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "anthropic-version": "2026-10-21", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model, max_tokens: 16, temperature: 0.5, messages: [{ role: "user", content: "Say OK." }] }),
   })
-  console.log("temperature: accepted (the adapter's comment that the API refuses it is wrong)")
+  const body = await response.json().catch(() => ({}))
+  if (response.ok) console.log("temperature: accepted (the adapter's comment that the API refuses it is wrong)")
+  else console.log(`temperature: refused ${response.status} ${redact(body?.error?.message)}`)
 } catch (error) {
-  console.log(`temperature: refused ${error?.status ?? ""} ${redact(error?.message)}`)
+  console.log(`temperature: request failed ${redact(error?.message)}`)
 }
 EOF
