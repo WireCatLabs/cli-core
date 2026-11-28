@@ -60,13 +60,23 @@ if ! npm whoami >/dev/null 2>&1; then
   echo "npm does not know you on this computer. Open the link npm prints and sign in."
   npm login --auth-type=web --browser=false
 fi
+failed=""
 for package in $packages; do
-  if npm trust list "$package" 2>/dev/null | grep -q "sqlite.yml"; then
-    echo "OK    $package already trusts sqlite.yml"
+  # A version published from GitHub Actions proves the trust is set; npm shows that without signing in,
+  # while `npm trust list` itself asks for a second factor.
+  if npm view "$package" _npmUser 2>/dev/null | grep -q "GitHub Actions"; then
+    echo "OK    $package already publishes from GitHub Actions"
     continue
   fi
+  echo ""
   echo "$package → WireCatLabs/cli-core, sqlite.yml, environment npm. Open the link npm prints and confirm."
-  npm trust github "$package" --file sqlite.yml --repository WireCatLabs/cli-core --environment npm \
-    --allow-publish --yes --browser=false
+  if npm trust github "$package" --file sqlite.yml --repository WireCatLabs/cli-core --environment npm \
+    --allow-publish --yes --browser=false; then
+    echo "OK    $package"
+  else
+    echo "FAIL  $package: see npm's message above; run this script again to retry it"
+    failed="$failed $package"
+  fi
 done
+[ -z "$failed" ] || { echo "not trusted yet:$failed" >&2; exit 1; }
 echo "done: tell Claude, it runs the SQLite workflow with publish"
