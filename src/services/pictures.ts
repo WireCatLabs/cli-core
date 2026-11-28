@@ -4,7 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
 import { type Id, senderIsMe } from "../domain/models.js"
-import { modelRetry } from "../embeddings/engine.js"
+import { modelRetry, skipsMeaning } from "../embeddings/engine.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import {
   DEFAULT_IMAGE_MODEL,
@@ -247,8 +247,7 @@ export const picturesService = (deps: ServiceDeps) => {
         const use = await embedder()
         vector = await use.embedQuery(words)
       } catch (error) {
-        if (error instanceof CliError && error.code === "not_found")
-          return { picturesSkipped: error.message, picturesModel: model.id }
+        if (skipsMeaning(error)) return { picturesSkipped: error.message, picturesModel: model.id }
         throw error
       } finally {
         const held = opened

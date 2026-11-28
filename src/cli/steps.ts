@@ -316,7 +316,7 @@ export const failureSteps = (
 ): NextStep[] => {
   const model = error.details?.model
   const own =
-    (error.reason === "model.not-downloaded" || error.reason === "model.engine-missing") && typeof model === "string"
+    error.reason === "model.not-downloaded" && typeof model === "string"
       ? [
           nextStep(IMAGE_MODELS.some((one) => one.id === model) ? "models.download-image" : "models.download", {
             args: { model },

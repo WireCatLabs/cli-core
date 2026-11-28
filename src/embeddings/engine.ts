@@ -38,7 +38,7 @@ export const installMeaningEngines = async (
   { env, retry = "models download", progress, fetch }: EngineContext,
   pins: readonly [EnginePin, EnginePin] = MEANING_ENGINES,
 ): Promise<MeaningFolders> => {
-  const { ensureEngine } = await import("../engines/install.js")
+  const { engineMissingError, ensureEngine } = await import("../engines/install.js")
   const states = await Promise.all(
     pins.map((pin) =>
       ensureEngine(pin, {
@@ -50,21 +50,15 @@ export const installMeaningEngines = async (
     ),
   )
   const missing = states.find((state): state is EngineMissing => state.status === "engine-missing")
-  if (missing) throw engineMissing(missing)
+  if (missing) throw engineMissingError(missing)
   const [onnx, tokenizers] = states.map((state) => (state.status === "ready" ? state.folder : ""))
   return { onnx: onnx as string, tokenizers: tokenizers as string }
 }
 
-/**
- * `not_found`, as a model that is not downloaded is: every search that has a word lane catches that code and answers
- * by words alone, naming why.
- */
-export const engineMissing = (state: EngineMissing): CliError =>
-  new CliError(
-    "not_found",
-    `search by meaning needs ${state.engine} ${state.version}, which could not be installed: ${state.reason} — run the command again, or \`${state.retry}\``,
-    { reason: "model.engine-missing", engine: state.engine, version: state.version, retry: state.retry },
-  )
+/** What a search's meaning lane steps aside for, answering by words: a model not downloaded, or no engine to run it. */
+export const skipsMeaning = (error: unknown): error is CliError =>
+  error instanceof CliError &&
+  (error.code === "not_found" || (error.details as { reason?: unknown } | undefined)?.reason === "engine.missing")
 
 let locate = (context: EngineContext) => installMeaningEngines(context)
 

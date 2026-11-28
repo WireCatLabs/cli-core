@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { holdsKind } from "../domain/providers.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
+import { skipsMeaning } from "../embeddings/engine.js"
 import { meaningFloor } from "../embeddings/models.js"
 import { RRF_K } from "../search/fusion.js"
 import { plainQuery } from "../search/lucene/plain.js"
@@ -198,7 +199,7 @@ export const searchEvents = async (
         ...(embedders === undefined ? {} : { embedders }),
       })
     } catch (error) {
-      if (!(error instanceof CliError && error.code === "not_found")) throw error
+      if (!skipsMeaning(error)) throw error
       meaningSkipped = error.message
     }
   const found = await store.calendar.search({

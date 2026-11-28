@@ -123,7 +123,7 @@ export const packagesFor = (pin: EnginePin, target: Target = currentTarget()): E
   )
 
 /** What the marker of a usable install says, written last: a folder without it is not loaded. */
-export const markerOf = (pin: EnginePin, target: Target = currentTarget()) =>
+const markerOf = (pin: EnginePin, target: Target) =>
   JSON.stringify({
     engine: pin.name,
     version: pin.version,

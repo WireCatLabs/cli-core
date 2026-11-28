@@ -3,6 +3,7 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import { hasGlobalItemIds } from "../domain/providers.js"
 import { type TrackerIssue, trackerBodyOf, trackerTitleOf } from "../domain/tracker.js"
 import { runEmbedders, type WarmEmbedders } from "../embeddings/embed.js"
+import { skipsMeaning } from "../embeddings/engine.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { questionPeriod } from "../search/question-period.js"
 import { questionLookup, questionText } from "../search/question-plan.js"
@@ -139,7 +140,7 @@ export const trackerLane = async (
         ...(env === undefined ? {} : { env }),
       })
     } catch (error) {
-      if (!(error instanceof CliError && error.code === "not_found")) throw error
+      if (!skipsMeaning(error)) throw error
       meaningSkipped = error.message
       const { reason } = error.details as { reason?: unknown }
       if (typeof reason === "string") meaningReason = reason

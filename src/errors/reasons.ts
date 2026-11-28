@@ -674,11 +674,6 @@ const OTHERS: Entry[] = [
   validation("order.status", "a rejected or deleted order's status does not change"),
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
   [
-    "model.engine-missing",
-    "not_found",
-    "the engine that runs local models could not be installed; the model's download installs it again",
-  ],
-  [
     "tracker.no-vectors",
     "not_found",
     "no issue, project or comment is embedded with the model yet; sync --embed builds them",

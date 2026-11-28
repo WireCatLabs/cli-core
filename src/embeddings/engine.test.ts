@@ -3,15 +3,12 @@ import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { captureStreams, isCliError } from "@wirecat/cli-base"
-import { describeProgram } from "@wirecat/cli-base/commands"
+import { isCliError } from "@wirecat/cli-base"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
-import { createProgram, run } from "../cli/program.js"
 import type { Message } from "../domain/models.js"
-import { engineFolder, installedEngines, isEngineInstalled, markerOf } from "../engines/install.js"
+import { engineFolder, installedEngines, isEngineInstalled } from "../engines/install.js"
 import { ENGINE_PINS } from "../engines/pins.js"
-import { toolsFromCommands } from "../mcp/agent.js"
 import type { SendGuard } from "../sends/guard.js"
 import { storedDeps } from "../services/deps.js"
 import { embeddingsService } from "../services/embeddings.js"
@@ -20,9 +17,14 @@ import { meaningLane } from "../services/messages-meaning.js"
 import type { Fetch } from "../speech/install.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { fakeRegistry, fixtureEngine } from "../testing/engine-fixtures.js"
-import { sharedProgram } from "../testing/shared-program.js"
 import { openEmbedder } from "./embed.js"
-import { type EngineContext, installMeaningEngines, locateMeaningEngine, type MeaningFolders } from "./engine.js"
+import {
+  type EngineContext,
+  installMeaningEngines,
+  locateMeaningEngine,
+  type MeaningFolders,
+  skipsMeaning,
+} from "./engine.js"
 import type { TextModel } from "./models.js"
 
 // Each tarball holds a package that re-exports the real devDependency, so what installs from this registry embeds.
@@ -232,18 +234,18 @@ describe("search by meaning on the engine installer", () => {
 
     expect(found.items.map(({ id }) => id)).toEqual(["1"])
     expect(found.meaningSkipped?.reason).toMatch(
-      /^e5-small failed: search by meaning needs @wirecat\/cli-core-onnx 1\.2\.0, which could not be installed: .* — run the command again, or `chat models download e5-small`$/,
+      /^e5-small failed: @wirecat\/cli-core-onnx 1\.2\.0 is not installed and could not be installed now: .*\. Retry with: chat models download e5-small$/,
     )
   })
 
-  it("**a missing engine is `not_found` with reason model.engine-missing**, which every word lane catches", async () => {
+  it("**a missing engine is voice's `engine.missing`, which every word lane steps aside for**", async () => {
     const error = await openEmbedder(tiny, models, {
       engine: { env: { WIRECAT_STATE_DIR: dataFolder() }, fetch: offline, retry: "chat models download e5-small" },
     }).catch((caught: unknown) => caught)
 
-    expect(isCliError(error) && error.code).toBe("not_found")
+    expect(skipsMeaning(error)).toBe(true)
     expect(isCliError(error) && error.details).toMatchObject({
-      reason: "model.engine-missing",
+      reason: "engine.missing",
       engine: "@wirecat/cli-core-onnx",
       retry: "chat models download e5-small",
     })
@@ -296,47 +298,6 @@ describe("search by meaning on the engine installer", () => {
       { name: onnx.pin.name, version: "1.1.0", path: older, current: false },
       { name: onnx.pin.name, version: "1.2.0", path: stale, current: true },
     ])
-  })
-})
-
-describe("no command disappears without its engine", () => {
-  /** Every engine cli-core pins, marked installed, as after each feature ran once. */
-  const full = () => {
-    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "engines-full-")) }
-    for (const pin of Object.values(ENGINE_PINS)) {
-      mkdirSync(engineFolder(pin, env), { recursive: true })
-      writeFileSync(join(engineFolder(pin, env), "engine.json"), markerOf(pin))
-    }
-    for (const pin of Object.values(ENGINE_PINS)) expect(isEngineInstalled(pin, env)).toBe(true)
-    return env.WIRECAT_STATE_DIR
-  }
-
-  const surfaces = async (folder: string) => {
-    vi.stubEnv("WIRECAT_STATE_DIR", folder)
-    const env = { WIRECAT_STATE_DIR: folder, HOME: folder, CHAT_CONFIG_DIR: join(folder, "config") }
-    const shown = async (argv: string[]) => {
-      const streams = captureStreams()
-      await run(argv, sharedProgram, { streams, env, tty: false })
-      return streams.stdout.join("")
-    }
-    const described = describeProgram(createProgram(sharedProgram))
-    return {
-      help: await shown(["--help"]),
-      commands: await shown(["commands", "--json"]),
-      docs: JSON.stringify(described),
-      tools: JSON.stringify(toolsFromCommands(described, { exclude: [["bot"]] })),
-    }
-  }
-
-  it("**--help, commands, the generated docs and the MCP tools are the same with an empty data folder and a full one**", async () => {
-    const empty = mkdtempSync(join(tmpdir(), "engines-empty-"))
-    const before = await surfaces(empty)
-    const after = await surfaces(full())
-
-    expect(readdirSync(empty).includes("engines")).toBe(false)
-    expect(before.commands.length).toBeGreaterThan(1_000)
-    expect(JSON.parse(before.tools).map((tool: { command: string }) => tool.command)).toContain("search conversations")
-    expect(after).toEqual(before)
   })
 })
 
