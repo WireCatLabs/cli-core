@@ -1,6 +1,6 @@
+import { posix } from "node:path"
 import type { Element, Node } from "@xmldom/xmldom"
-import { readContainer, xmlPart } from "../../attachments/container.js"
-import { relationships } from "../../attachments/documents.js"
+import { elements, readContainer, xmlPart } from "../../attachments/container.js"
 import { capped, extensionOf, guarded, startsWith } from "../engine.js"
 import type { Reader } from "../types.js"
 
@@ -10,6 +10,7 @@ const WORD = [
   "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
   "http://purl.oclc.org/ooxml/wordprocessingml/main",
 ]
+const PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 const COMPATIBILITY = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 // Properties hold tab stops and deletion marks, not text; deleted and moved-away runs are not the document's text.
 const SKIPPED = new Set(["pPr", "rPr", "sectPr", "sdtPr", "del", "moveFrom"])
@@ -24,12 +25,16 @@ const CHARACTERS: Record<string, string> = {
   softHyphen: "\u00ad",
 }
 
-/** The main part as mammoth finds it: the package's officeDocument relationship, else the usual path. */
+/**
+ * The main part as mammoth finds it: the package's officeDocument relationship, else the usual path. Only a part that
+ * is in the zip is taken, and a target may be absolute, as packaging libraries write it.
+ */
 const mainDocument = (archive: Map<string, Uint8Array>) => {
   const declared = archive.has("_rels/.rels")
-    ? [...relationships(archive, "").values()].find(
-        (entry) => entry.type.endsWith("/officeDocument") && archive.has(entry.path),
-      )?.path
+    ? elements(xmlPart(archive, "_rels/.rels"), "Relationship", PACKAGE_REL)
+        .filter((entry) => entry.getAttribute("Type")?.endsWith("/officeDocument"))
+        .map((entry) => posix.normalize((entry.getAttribute("Target") ?? "").replace(/^\//, "")))
+        .find((path) => archive.has(path))
     : undefined
   return declared ?? "word/document.xml"
 }

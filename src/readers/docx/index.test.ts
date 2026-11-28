@@ -24,11 +24,11 @@ const theirs = async (bytes: Uint8Array) => (await mammoth.extractRawText({ buff
 const zipEntries = (entries: Record<string, string>) =>
   zipSync(Object.fromEntries(Object.entries(entries).map(([name, text]) => [name, strToU8(text)])))
 const MAIN = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-const word = (body: string, { namespace = MAIN, rels = true } = {}) =>
+const word = (body: string, { namespace = MAIN, rels = true, target = "word/main.xml" } = {}) =>
   zipEntries({
     ...(rels
       ? {
-          "_rels/.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/main.xml"/></Relationships>`,
+          "_rels/.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${target}"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/docProps/core.xml"/></Relationships>`,
         }
       : {}),
     [rels ? "word/main.xml" : "word/document.xml"]:
@@ -104,8 +104,9 @@ describe("the Word reader, against mammoth's raw text", () => {
     expect(await theirs(bytes)).toBe("Page \n\n")
   })
 
-  it("reads the Strict namespace and a package with no relationships, as mammoth does", async () => {
+  it("reads the Strict namespace, an absolute target and a package with no relationships, as mammoth does", async () => {
     for (const bytes of [
+      word(p(t("strict")), { target: "/word/main.xml" }),
       word(p(t("strict")), { namespace: "http://purl.oclc.org/ooxml/wordprocessingml/main" }),
       word(p(t("strict")), { rels: false }),
     ]) {
