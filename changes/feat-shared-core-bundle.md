@@ -5,8 +5,8 @@
   copy: tg's `dist/bundle` goes from 14.7 MB to 1.7 MB, the template's from 13.0 MB to 0.03 MB. Warm `--help` of tg
   measured +28 ms against the private copy, the template's +19 ms (Node 24, median of 30 and 10 runs). A CLI must take
   this release together with cli-base 2.0.0, the peer range now: an older `cli-dev bundle` copies cli-core privately
-  again. The unbundled `dist/**/*.js` stay in the package: a bundled module names its own file through
-  `import.meta.url`, and the embedding process starts from `dist/embeddings/child.js`.
+  again. The unbundled `dist/**/*.js` stay only in `X.Y.Z-dev`; users get the 12 files that a process starts by
+  path (the embedding process `dist/embeddings/child.js`, the `cli-core-parity` bin) and what they import.
 
   | Before | Now |
   |---|---|
@@ -35,7 +35,8 @@
   - Deep `dist/` imports read unbundled files the bundle does not use, so a mock of them no longer reaches cli-core:
     cli-memo mocks `node_modules/@wirecat/cli-core/dist/embeddings/models.js` (`src/search/search-meaning.test.ts`),
     cli-testing imports `dist`, `dist/cli/index.js` and `dist/store/index.js`, cli-base `dist/index.js`. Move them to
-    an entry point.
+    an entry point: those files are only in `X.Y.Z-dev`, so such an import passes in a CLI's own checkout and fails
+    where users install it.
   - biome rules naming `@wirecat/cli-core/store/*` (slack-cli, whatsapp-cli) and `@wirecat/cli-core/*`
     (whatsapp-cli) match nothing now.
   - The stable API is `.`, `./mcp`, `./start` and `./testing`; names from the areas that were experimental entry

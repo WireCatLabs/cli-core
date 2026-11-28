@@ -1098,9 +1098,12 @@ Both pin an exact version; a change here reaches them through a release and a bu
 Every release publishes two versions of `@wirecat/cli-core` from one build:
 
 - **`X.Y.Z`** (npm tag `latest`) is what users get when npm, pnpm, Bun, npx or WireCat Desktop install a CLI. It has
-  no `.d.ts`, `.d.ts.map` or `.js.map` files and no `src/`: those were 12.3 MB and 1,676 files of the install.
-- **`X.Y.Z-dev`** (npm tag `dev`) has the same JavaScript plus the type files, their maps, the JavaScript maps and
-  `src/`. "Go to definition" opens the TypeScript source, and a stack trace under `--enable-source-maps` names
+  no `.d.ts`, `.d.ts.map` or `.js.map` files and no `src/`: those were 12.3 MB and 1,676 files of the install. It has
+  no unbundled `.js` outside `dist/bundle/` either, except the files `dist/by-path.json` lists: what a process starts
+  by path (the embedding process, the bins) and what they import. A bundled module names its tsc file through
+  `import.meta.url` only as a place; the files beside it stay. That saves 17.4 MB on disk.
+- **`X.Y.Z-dev`** (npm tag `dev`) has the same bundle plus the unbundled `.js`, the type files, their maps, the
+  JavaScript maps and `src/`. "Go to definition" opens the TypeScript source, and a stack trace under `--enable-source-maps` names
   source lines.
 
 A CLI repository pins `"@wirecat/cli-core": "X.Y.Z"` in `package.json` and overrides it in `pnpm-workspace.yaml`:
