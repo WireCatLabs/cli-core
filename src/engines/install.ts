@@ -199,7 +199,8 @@ const waitForLock = async (
     if (waited >= (options.lockWaitMs ?? LOCK_WAIT_MS)) return undefined
     if (!told) options.progress?.(`${pin.name} ${pin.version} is being installed by another process; waiting for it`)
     told = true
-    await sleep(poll)
+    // Two that tried at the same instant both see the other and both back off; unequal pauses part them.
+    await sleep(poll * (0.5 + Math.random()))
   }
 }
 

@@ -205,39 +205,31 @@ describe("ensureEngine", () => {
     const { env } = dataFolder()
     const { pin, bodies } = threePackages()
     const registry = fakeRegistry(bodies)
-    const waits: string[] = []
+    const lines: string[] = []
     let waiting = () => {}
-    const secondWaits = new Promise<void>((resolve) => {
+    const oneWaits = new Promise<void>((resolve) => {
       waiting = resolve
     })
+    // Whichever takes the lock downloads only once the other is waiting on it.
     const options = {
       retry: RETRY,
       env,
       target: LINUX,
       sleep: () => new Promise<void>((resolve) => setImmediate(resolve)),
-    }
-
-    const first = ensureEngine(pin, {
-      ...options,
-      fetch: async (url) => {
-        await secondWaits
+      fetch: async (url: string) => {
+        await oneWaits
         return registry.fetch(url)
       },
-    })
-    const second = ensureEngine(pin, {
-      ...options,
-      fetch: registry.fetch,
-      progress: (line) => {
-        waits.push(line)
-        waiting()
+      progress: (line: string) => {
+        lines.push(line)
+        if (line.endsWith("waiting for it")) waiting()
       },
-    })
+    }
 
-    expect(await Promise.all([first, second])).toEqual([
-      expect.objectContaining({ status: "ready", installed: true }),
-      expect.objectContaining({ status: "ready", installed: false }),
-    ])
-    expect(waits).toEqual(["demo-engine 1.0.0 is being installed by another process; waiting for it"])
+    const states = await Promise.all([ensureEngine(pin, options), ensureEngine(pin, options)])
+
+    expect(states.map((state) => state.status === "ready" && state.installed).sort()).toEqual([false, true])
+    expect(lines).toContain("demo-engine 1.0.0 is being installed by another process; waiting for it")
     expect([...registry.requests.values()]).toEqual([1, 1, 1])
   })
 
