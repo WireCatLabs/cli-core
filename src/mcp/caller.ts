@@ -1,4 +1,4 @@
-import { CLIENT_INFO_META_KEY } from "@modelcontextprotocol/server"
+import { CLIENT_INFO_META_KEY } from "../bundled/mcp-server.js"
 import {
   agentOf,
   clientHash,

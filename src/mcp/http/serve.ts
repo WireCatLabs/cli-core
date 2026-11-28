@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto"
+import type { AuthInfo } from "@modelcontextprotocol/server"
+import { CliError } from "@wirecat/cli-base"
 import {
-  type AuthInfo,
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
   hostHeaderValidationResponse,
   isLegacyRequest,
-  type McpServer,
+  McpServer,
   oauthMetadataResponse,
   requireBearerAuth,
   WebStandardStreamableHTTPServerTransport,
-} from "@modelcontextprotocol/server"
-import { CliError } from "@wirecat/cli-base"
+} from "../../bundled/mcp-server.js"
 import { type Listening, listen } from "../../http/listen.js"
 import { activityRecorder, calledTools, httpActivityFile } from "./activity.js"
 import { ownerLogin } from "./oauth.js"
@@ -170,7 +170,13 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
     ...(now ? { now } : {}),
   })
   const insecure = issuer.protocol === "http:" && LOCAL.includes(issuer.hostname)
-  const mcp = createMcpHandler(build, { legacy: "reject", ...(onError ? { onerror: onError } : {}) })
+  // The handler tells an McpServer by `instanceof`, so one built from an app's own copy of the SDK (memo's) would
+  // pass for a bare Server; hand it the Server inside, which the handler serves either way.
+  const served = () => {
+    const server = build()
+    return server instanceof McpServer ? server : (server as McpServer).server
+  }
+  const mcp = createMcpHandler(served, { legacy: "reject", ...(onError ? { onerror: onError } : {}) })
   const legacy = legacySessions(build, now ?? Date.now)
   const bearer = requireBearerAuth({
     verifier: login.verifier,

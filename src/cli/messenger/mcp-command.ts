@@ -609,7 +609,7 @@ const firstProfileCommand = (self: Command, app: AppIdentity): string => {
  */
 const catalogueOf = async (self: Command, app: AppIdentity): Promise<Tool[]> => {
   const [{ McpServer }, { registerCommands }, { toolsFromCommands }, { listedTools }] = await Promise.all([
-    import("@modelcontextprotocol/server"),
+    import("../../bundled/mcp-server.js"),
     import("../../mcp/surface.js"),
     import("../../mcp/agent.js"),
     import("../../mcp/all-profiles.js"),

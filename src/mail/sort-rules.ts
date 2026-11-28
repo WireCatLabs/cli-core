@@ -1,4 +1,4 @@
-import { getDomain } from "tldts"
+import { getDomain } from "../bundled/tldts.js"
 import { listIdOf } from "./headers.js"
 import type { MailType } from "./mail-types.js"
 

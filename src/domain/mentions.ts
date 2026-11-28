@@ -1,6 +1,5 @@
-/// <reference path="../types/psl.d.ts" />
 import { domainToUnicode } from "node:url"
-import psl from "psl"
+import * as psl from "../bundled/psl.js"
 import { googleDocumentId, trimUrl } from "./google-documents.js"
 import { DEFAULT_PHONE_COUNTRIES, nationalPhone, type PhoneOptions, typedPhone } from "./phones.js"
 import { findPlaces } from "./places.js"

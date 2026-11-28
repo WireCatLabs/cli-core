@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { gunzipSync } from "node:zlib"
 import { fold } from "../store/normalize.js"
 import { LANGUAGES, type Language } from "./languages.js"
 
@@ -29,6 +30,12 @@ const folded = (word: string): string =>
 
 const loaded = new Map<DictionaryLanguage, Dictionary>()
 
+/** Russian ships gzipped beside this module (3.4 MB → 0.6 MB); the others are read from their packages. */
+export const dictionaryFile = (language: DictionaryLanguage, name: "index.dic" | "index.aff"): string =>
+  language === "russian"
+    ? gunzipSync(readFileSync(new URL(`./dictionaries/russian/${name}.gz`, import.meta.url))).toString("utf8")
+    : readFileSync(new URL(name, import.meta.resolve(DICTIONARIES[language])), "utf8")
+
 /**
  * Hunspell's own check, an affix at a time, instead of nspell's: nspell expands Russian's 146,269 entries into
  * 1.44 million forms (1.4 s, 172 MB) where this loads in about 0.2 s. The index stores words folded as `normalize`
@@ -39,9 +46,8 @@ const loaded = new Map<DictionaryLanguage, Dictionary>()
 const dictionary = (language: DictionaryLanguage): Dictionary => {
   const cached = loaded.get(language)
   if (cached) return cached
-  const file = (name: string) => readFileSync(new URL(name, import.meta.resolve(DICTIONARIES[language])), "utf8")
   const words = new Map<string, string>()
-  for (const line of file("index.dic").split("\n").slice(1)) {
+  for (const line of dictionaryFile(language, "index.dic").split("\n").slice(1)) {
     const [entry, flags = ""] = line.trim().split("/")
     if (!entry) continue
     // Names and abbreviations are capitalised in the dictionary; the index is lower case.
@@ -53,7 +59,7 @@ const dictionary = (language: DictionaryLanguage): Dictionary => {
   const prefixes = new Map<string, Affix[]>()
   const crosses = new Set<string>()
   let longest = 0
-  for (const line of file("index.aff").split("\n")) {
+  for (const line of dictionaryFile(language, "index.aff").split("\n")) {
     const [kind, flag, strip, add, condition] = line.trim().split(/\s+/)
     if ((kind !== "SFX" && kind !== "PFX") || flag === undefined || strip === undefined || add === undefined) continue
     if (!condition) {

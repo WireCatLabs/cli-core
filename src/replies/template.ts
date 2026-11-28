@@ -1,14 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import {
-  Context,
-  type Emitter,
-  type Liquid,
-  type Parser,
-  Tag,
-  type TagToken,
-  type Template,
-  type TopLevelToken,
-} from "liquidjs"
+import type { Emitter, Liquid, Parser, TagToken, Template, TopLevelToken } from "liquidjs"
+import { Context, Tag } from "../bundled/liquidjs.js"
 import { safeLiquid } from "../render/liquid.js"
 import type { WarningEvent } from "../runs/events.js"
 import type { ReplyRule } from "./rules.js"
