@@ -34,5 +34,125 @@
     "pr": 3424,
     "until": "2026-12-12",
     "reason": "#3424 removes \"mammoth\" from Engine; src/notes/documents.test.ts still compares a loaded name with \"mammoth\" and expects engine-missing for a .docx"
+  },
+  {
+    "repo": "mail-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "cli-memo",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "tg-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "max-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "whatsapp-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "drive-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "attio-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "gcal-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "zoom-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "bitrix24-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "amo-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "asterisk-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "beeline-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "hubspot-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "linear-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "notion-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "slack-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "wordpress-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "ydisk-cli",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
+  },
+  {
+    "repo": "cli-template",
+    "pr": 3437,
+    "until": "2026-12-12",
+    "reason": "#3437 (3.0) merges cli-core's 51 entry points into 7: the CLI still imports the old subpaths (@wirecat/cli-core/cli, /store, /cli/start, …) until it adopts 3.0 and cli-base 2.0.0"
   }
 ]
