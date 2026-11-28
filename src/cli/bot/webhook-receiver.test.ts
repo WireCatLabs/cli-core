@@ -207,7 +207,7 @@ describe("bot watch --public-url", () => {
       { streams, tty: false, env, signal: stop.signal },
     )
     const portOnly = await run(
-      ["sales", "bot", "watch", "--jsonl", "--port", "8766"],
+      ["sales", "bot", "watch", "--jsonl", "--port", "9466"],
       { app, commands: () => [botCommand(bot)] },
       { streams, tty: false, env, signal: stop.signal },
     )

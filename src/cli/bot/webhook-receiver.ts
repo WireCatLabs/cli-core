@@ -1,8 +1,8 @@
 import { listen } from "../../http/listen.js"
 import type { BotEvent, BotWebhookIntake, BotWebhookRequest } from "./port.js"
 
-/** The local port behind the tunnel; MCP's `--http` has 8765. */
-export const WEBHOOK_PORT = 8766
+/** The local port behind the tunnel: outside 8700-8999, which Desktop gives the tools' MCP servers. */
+export const WEBHOOK_PORT = 9466
 /** Meta sends at most 3 MB in one delivery; anything larger is refused unread. */
 export const WEBHOOK_BODY = 3 * 1024 * 1024
 
