@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { CliError } from "@wirecat/cli-base"
+import type { VoiceEngines } from "./engines.js"
 import { decodeOgg, SAMPLE_RATE } from "./recognize.js"
 
 export interface Pcm {
@@ -263,7 +264,7 @@ export const runFfmpeg = async (bytes: Uint8Array): Promise<Pcm[]> => {
   }
 }
 
-const BUNDLED: Record<Exclude<Format, "other">, (bytes: Uint8Array) => Promise<Pcm[]>> = {
+const BUNDLED: Record<Exclude<Format, "other">, (bytes: Uint8Array, engines: VoiceEngines) => Promise<Pcm[]>> = {
   opus: decodeOgg,
   vorbis: decodeVorbis,
   flac: decodeFlac,
@@ -287,14 +288,18 @@ const fromFfmpeg = (answer: Pcm | Pcm[]): DecodedChannels =>
 /**
  * Every channel the file has, one `Pcm` each: a phone call recorded in stereo keeps one speaker per channel. Opus,
  * Vorbis, FLAC and MP3 by the bundled decoders; anything else, or what one of them could not read, by ffmpeg when the
- * machine has it. The bundled decoder's error wins: it names the file's own problem.
+ * machine has it. The bundled decoder's error wins: it names the file's own problem. Opus needs the voice engine, installed on first use (`engines`); without it ffmpeg reads the file when it can.
  */
-export const decodeChannels = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<DecodedChannels> => {
+export const decodeChannels = async (
+  bytes: Uint8Array,
+  ffmpeg: Ffmpeg = runFfmpeg,
+  engines: VoiceEngines = {},
+): Promise<DecodedChannels> => {
   const format = formatOf(bytes)
   const decoded =
     format === "other"
       ? fromFfmpeg(await ffmpeg(bytes))
-      : await BUNDLED[format](bytes).then(
+      : await BUNDLED[format](bytes, engines).then(
           (channels) => ({ channels, mixed: false }),
           (error: unknown) =>
             ffmpeg(bytes).then(fromFfmpeg, () => {
@@ -316,7 +321,8 @@ export const decodeChannelsFile = async (
   {
     maxBytes = 640 * 1024 * 1024,
     ffmpegFile = runFfmpegFile,
-  }: { maxBytes?: number; ffmpegFile?: (path: string) => Promise<Pcm[]> } = {},
+    engines = {},
+  }: { maxBytes?: number; ffmpegFile?: (path: string) => Promise<Pcm[]>; engines?: VoiceEngines } = {},
 ): Promise<DecodedChannels> => {
   const file = await open(path, "r")
   let start: Uint8Array
@@ -338,7 +344,7 @@ export const decodeChannelsFile = async (
     throw new CliError("validation_error", `the audio file is larger than ${Math.round(maxBytes / 1024 / 1024)} MB`, {
       reason: "file.too-large",
     })
-  return decodeChannels(new Uint8Array(await readFile(path)), () => ffmpegFile(path))
+  return decodeChannels(new Uint8Array(await readFile(path)), () => ffmpegFile(path), engines)
 }
 
 /** Every channel averaged into one, so a caller that wants one text keeps both sides of a stereo recording. */
@@ -355,5 +361,8 @@ export const mixDown = (channels: readonly Pcm[]): Pcm => {
 }
 
 /** One voice for a caller that wants the text and not the turns, a voice message: the channels mixed into one. */
-export const decodeAudio = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<Pcm> =>
-  mixDown((await decodeChannels(bytes, ffmpeg)).channels)
+export const decodeAudio = async (
+  bytes: Uint8Array,
+  ffmpeg: Ffmpeg = runFfmpeg,
+  engines: VoiceEngines = {},
+): Promise<Pcm> => mixDown((await decodeChannels(bytes, ffmpeg, engines)).channels)

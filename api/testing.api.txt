@@ -14,6 +14,7 @@ ContractOptions · interface · orderBy?: "id" | "time";
 ContractOptions · interface · waitMs?: number;
 ContractOptions · interface · history?: "server" | "store";
 ContractOptions · interface · }
+EngineName · type · export type EngineName = keyof typeof ENGINE_PINS;
 IdKind · type · export type IdKind = "chat" | "message" | "person";
 IdMaker · type · export type IdMaker = (kind: IdKind, n: number, time: Date) => Id;
 McpStdio · interface · export interface McpStdio {

@@ -1,4 +1,5 @@
-import { createRequire } from "node:module"
+import { engineRequire, importFromEngine } from "../engines/install.js"
+import { type VoiceEngines, voiceEngineFolder } from "./engines.js"
 import type { SpeechModel } from "./models.js"
 import { checkOggDuration } from "./ogg-limit.js"
 
@@ -45,9 +46,15 @@ export const toModelRate = (samples: Float32Array, rate: number): Float32Array =
   return pcm
 }
 
-export const decodeOgg = async (bytes: Uint8Array): Promise<{ samples: Float32Array; rate: number }[]> => {
+export const decodeOgg = async (
+  bytes: Uint8Array,
+  engines: VoiceEngines = {},
+): Promise<{ samples: Float32Array; rate: number }[]> => {
   checkOggDuration(bytes)
-  const { OggOpusDecoder } = await import("ogg-opus-decoder")
+  const { OggOpusDecoder } = await importFromEngine<typeof import("ogg-opus-decoder")>(
+    await voiceEngineFolder("ogg-opus-decoder", engines),
+    "ogg-opus-decoder",
+  )
   const decoder = new OggOpusDecoder()
   await decoder.ready
   try {
@@ -143,8 +150,8 @@ export interface SpeechCutter {
 }
 
 /** The voice detector alone, for a recognizer that is not on this machine. */
-export const openSpeechCutter = (vadModel: string): SpeechCutter => {
-  const vad = loadSherpa().createVad(detector(vadModel))
+export const openSpeechCutter = async (vadModel: string, engines: VoiceEngines = {}): Promise<SpeechCutter> => {
+  const vad = (await loadSherpa(engines)).createVad(detector(vadModel))
   return {
     cut: (pcm) => {
       const spans: { start: number; end: number }[] = []
@@ -159,33 +166,42 @@ export const openSpeechCutter = (vadModel: string): SpeechCutter => {
  * The model, and a voice detector that cuts the audio at pauses into pieces of at most 20 seconds.
  * The cutting is not optional: five minutes in one piece crash the WebAssembly build (measured).
  *
- * `sherpa-onnx` is loaded here, on first use, so no other command pays for its 15 MB of WebAssembly.
+ * `sherpa-onnx` is installed into the WireCat data folder and loaded from there on first use, so no other command
+ * pays for its 15 MB of WebAssembly.
  */
-let loaded: Sherpa | undefined
+const loaded = new Map<string, Sherpa>()
 
 /**
  * The engine's WebAssembly writes its logs (a growing buffer says "Overflow! … No data loss!") with
  * `printf`, which its file system sends straight to file descriptor 1 and so into `--json` output.
  * `sherpa-onnx`'s own entry keeps that file system to itself; built here, descriptor 1 is pointed at 2.
  */
-export const loadSherpa = (): Sherpa => {
-  if (loaded) return loaded
-  const load = createRequire(import.meta.url)
+export const loadSherpa = async (engines: VoiceEngines = {}): Promise<Sherpa> => {
+  const folder = await voiceEngineFolder("sherpa-onnx", engines)
+  const cached = loaded.get(folder)
+  if (cached) return cached
+  const load = engineRequire(folder)
   const wasm: { FS?: { getStream(fd: number): { nfd: number } | null } } = {}
   load("sherpa-onnx/sherpa-onnx-wasm-nodejs.js")(wasm)
   const stdout = wasm.FS?.getStream(1)
   if (stdout) stdout.nfd = 2
   const asr = load("sherpa-onnx/sherpa-onnx-asr.js")
   const vad = load("sherpa-onnx/sherpa-onnx-vad.js")
-  loaded = {
+  const sherpa: Sherpa = {
     createOfflineRecognizer: (config) => new asr.OfflineRecognizer(config, wasm),
     createVad: (config) => vad.createVad(wasm, config),
   }
-  return loaded
+  loaded.set(folder, sherpa)
+  return sherpa
 }
 
-export const openRecognizer = (model: SpeechModel, path: (name: string) => string, vadModel: string): Recognizer => {
-  const sherpa = loadSherpa()
+export const openRecognizer = async (
+  model: SpeechModel,
+  path: (name: string) => string,
+  vadModel: string,
+  engines: VoiceEngines = {},
+): Promise<Recognizer> => {
+  const sherpa = await loadSherpa(engines)
   const engine = sherpa.createOfflineRecognizer({
     featConfig: { sampleRate: SAMPLE_RATE, featureDim: model.featureDim },
     modelConfig: { ...model.config(path), numThreads: 1, provider: "cpu", debug: 0 },

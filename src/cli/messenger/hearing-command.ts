@@ -30,6 +30,13 @@ export const hearForCommand = async (
   if (transcribe && offline) context.renderer.note("--offline: only voice messages heard before show their text")
   const kept = await openKept(messenger, context.profile, context.env)
   try {
+    const chosen = choose(
+      messenger,
+      context.settings,
+      model === undefined ? {} : { model },
+      context.env,
+      context.keyring,
+    )
     const hearing = await hearVoices(
       messenger,
       messages,
@@ -37,13 +44,8 @@ export const hearForCommand = async (
       transcribe && !offline
         ? {
             choice: {
-              ...choose(
-                messenger,
-                context.settings,
-                model === undefined ? {} : { model },
-                context.env,
-                context.keyring,
-              ),
+              ...chosen,
+              engines: { ...chosen.engines, ...context.engineInstall },
               ...(context.recognizer ? { open: context.recognizer } : {}),
             },
             connect: connect ?? ((work) => context.withMessenger(work)),

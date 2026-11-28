@@ -6,8 +6,9 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CliError } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
+import { placeEngines } from "../kit/engines.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import {
   DEFAULT_ORDER,
@@ -143,7 +144,11 @@ describe("the voice detector", () => {
     flush(): void
     free(): void
   }
-  const sherpa = loadSherpa() as unknown as { createVad(config: object): Vad }
+  let sherpa: { createVad(config: object): Vad }
+  beforeAll(async () => {
+    placeEngines()
+    sherpa = (await loadSherpa()) as unknown as typeof sherpa
+  })
 
   /** The stretches, in seconds of the recording, that the detector hands to the model. */
   const heard = (pcm: Float32Array, config: ReturnType<typeof detector>) => {

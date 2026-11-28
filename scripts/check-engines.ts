@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { fixtureEngine, packageFiles, serveRegistry } from "../src/testing/engine-fixtures.ts"
@@ -7,10 +8,10 @@ const runtime = typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? "
 
 /**
  * The built installer, from an empty data folder, under whichever runtime runs this: a test engine from a registry on
- * 127.0.0.1 always, and with `ENGINE_CHECK_REAL=1` the engines cli-core pins, from npm.
+ * 127.0.0.1 always, and with `ENGINE_CHECK_REAL=1` the engines cli-core pins, from npm, and voice on them.
  */
 export const checkEngines = async (dist: string): Promise<void> => {
-  const { ensureEngine, engineFolder, engineRequire, importFromEngine } = await import(
+  const { ensureEngine, engineRequire, importFromEngine } = await import(
     pathToFileURL(join(dist, "engines/install.js")).href
   )
   const files = new Map<string, Uint8Array>()
@@ -37,18 +38,45 @@ export const checkEngines = async (dist: string): Promise<void> => {
   console.log(`dist (${runtime}): an engine installs into an empty data folder and loads from it`)
 
   if (process.env.ENGINE_CHECK_REAL !== "1") return
-  const { ENGINE_PINS } = await import(pathToFileURL(join(dist, "engines/pins.js")).href)
-  const env = { WIRECAT_STATE_DIR: scratch("core-dist-real-engines-") }
-  for (const pin of Object.values(ENGINE_PINS) as { name: string }[]) {
-    const state = await ensureEngine(pin, { retry: "check", env, progress: (line: string) => console.error(line) })
-    if (state.status !== "ready") throw new Error(`${runtime}: ${pin.name}: ${state.reason}`)
-  }
-  const sherpa = engineRequire(engineFolder(ENGINE_PINS["sherpa-onnx"], env))("sherpa-onnx/sherpa-onnx-asr.js")
-  const opus = await importFromEngine(engineFolder(ENGINE_PINS["ogg-opus-decoder"], env), "ogg-opus-decoder")
-  if (typeof sherpa.OfflineRecognizer !== "function" || typeof opus.OggOpusDecoder !== "function")
-    throw new Error(`${runtime}: the pinned engines did not load from the data folder`)
-  console.log(`dist (${runtime}): the pinned engines install from npm and load`)
+  await checkVoice(dist)
 }
 
+/**
+ * Voice from an empty data folder through cli-core's own loaders, so the engines come from npm and nowhere else: a
+ * public-domain recording decoded by the Opus engine, then cut at its pauses by the speech engine's voice detector.
+ */
+const checkVoice = async (dist: string): Promise<void> => {
+  const { decodeChannels } = await import(pathToFileURL(join(dist, "speech/decode.js")).href)
+  const { openSpeechCutter, toModelRate } = await import(pathToFileURL(join(dist, "speech/recognize.js")).href)
+  const engines = {
+    env: { WIRECAT_STATE_DIR: scratch("core-dist-voice-") },
+    progress: (line: string) => console.error(line),
+  }
+  const fixture = (name: string) => join(import.meta.dirname, "../src/testing/fixtures", name)
+  const refusing = async () => {
+    throw new Error("ffmpeg was asked: the Opus engine did not decode")
+  }
+  const { channels } = await decodeChannels(
+    new Uint8Array(readFileSync(fixture("quiet-middle.ogg"))),
+    refusing,
+    engines,
+  )
+  const [channel] = channels
+  if (channel?.rate !== 48_000 || channel.samples.length < 19 * 48_000)
+    throw new Error(`${runtime}: the Opus engine did not decode the 20-second recording`)
+  const cutter = await openSpeechCutter(fixture("silero_vad.onnx"), engines)
+  let spans: { start: number; end: number }[]
+  try {
+    spans = cutter.cut(toModelRate(channel.samples, channel.rate))
+  } finally {
+    cutter.free()
+  }
+  if (spans.length < 2 || spans.some(({ start, end }) => !(end > start)))
+    throw new Error(`${runtime}: the speech engine's voice detector found no speech: ${JSON.stringify(spans)}`)
+  console.log(`dist (${runtime}): the pinned engines install from npm and load`)
+  console.log(`dist (${runtime}): voice works from an empty data folder (${spans.length} stretches of speech)`)
+}
+
+// A `dist` other than this checkout's is an installed copy of the package: what npm, pnpm or Bun put on a machine.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  await checkEngines(join(import.meta.dirname, "../dist"))
+  await checkEngines(process.argv[2] ?? join(import.meta.dirname, "../dist"))

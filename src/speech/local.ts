@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path"
 import { setImmediate } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import type { Pcm } from "./decode.js"
+import type { VoiceEngines } from "./engines.js"
 import { isInstalled, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { type SpeechModel, speechModel, VAD } from "./models.js"
 import type { TimedText } from "./recognize.js"
@@ -31,7 +32,14 @@ export interface LocalSpeechRecognizerOptions {
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   maxTextBytes?: number
-  open?: (model: SpeechModel, path: (name: string) => string, vad: string) => LocalSpeechBackend
+  /** How the speech engine installs on first use; `env` is its data folder when this leaves it out. */
+  engines?: VoiceEngines
+  open?: (
+    model: SpeechModel,
+    path: (name: string) => string,
+    vad: string,
+    engines?: VoiceEngines,
+  ) => LocalSpeechBackend | Promise<LocalSpeechBackend>
 }
 const cancelled = (signal?: AbortSignal) => {
   if (!signal?.aborted) return
@@ -61,6 +69,11 @@ export const localSpeechRecognitionModel = (id: string): Readonly<LocalSpeechRec
     maxChunkSamples: 480000,
   })
 }
+const enginesOf = (options: Pick<LocalSpeechRecognizerOptions, "engines" | "env">): VoiceEngines => ({
+  ...(options.env ? { env: options.env } : {}),
+  ...options.engines,
+})
+
 const notInstalled = (id: string) =>
   new CliError(
     "not_found",
@@ -75,13 +88,18 @@ const notInstalled = (id: string) =>
 export const recognizeLocalPieces = async (
   id: string,
   audio: Pcm,
-  options: Pick<LocalSpeechRecognizerOptions, "directory" | "env" | "open" | "signal"> = {},
+  options: Pick<LocalSpeechRecognizerOptions, "directory" | "engines" | "env" | "open" | "signal"> = {},
 ): Promise<TimedText[]> => {
   const model = speechModel(id)
   const directory = options.directory ?? modelsDirectory(options.env)
   if (!isInstalled(model, directory)) throw notInstalled(model.id)
   const { openRecognizer, toModelRate } = await import("./recognize.js")
-  const engine = (options.open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
+  const engine = await (options.open ?? openRecognizer)(
+    model,
+    modelPath(directory, model),
+    vadPath(directory),
+    enginesOf(options),
+  )
   try {
     if (!engine.pieces) throw new CliError("configuration_error", "this speech backend gives no timed pieces")
     const pcm = toModelRate(audio.samples, audio.rate)
@@ -122,7 +140,12 @@ export const openLocalSpeechRecognizer = async (
   if (!isInstalled(model, directory)) throw notInstalled(description.model)
   const { openRecognizer, toModelRate } = await import("./recognize.js")
   cancelled(options.signal)
-  const engine = (options.open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
+  const engine = await (options.open ?? openRecognizer)(
+    model,
+    modelPath(directory, model),
+    vadPath(directory),
+    enginesOf(options),
+  )
   let closing = false
   let active: Promise<string> | undefined
   let closed: Promise<void> | undefined

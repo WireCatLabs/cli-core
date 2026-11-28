@@ -24,6 +24,7 @@ import {
 import { typedCommand } from "../../runs/scope.js"
 import { downloadImageModel, downloadRerankModel, downloadTextModel } from "../../services/model-downloads.js"
 import { addCustomTextModel, useTextModel } from "../../services/text-model-choice.js"
+import { installVoiceEngines, type VoiceEngines } from "../../speech/engines.js"
 import {
   install,
   installedBytes,
@@ -39,6 +40,7 @@ import { readSecret } from "../../terminal/prompt.js"
 import { chatSendingCommand } from "../chat-sending-command.js"
 import { baseContext, environmentOf } from "../context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
+import { engineInstall } from "../engines.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import {
@@ -125,11 +127,17 @@ const downloadAudioModel = async (command: Command, messenger: Messenger, id: st
         )
         await install(model, directory, { progress: (line) => context.renderer.note(line) })
       }
+      const engines: VoiceEngines = {
+        env: context.env,
+        retry: typedCommand(messenger.app.command, `models download ${model.id}`),
+        ...engineInstall(command),
+      }
+      await installVoiceEngines(engines)
       // Loading is the test — the files, the WebAssembly engine and the memory it needs — on a
       // second of silence, since no recording ships with the package.
       context.renderer.note(`${model.id}: loading it once to check it works`)
       const { openRecognizer, SAMPLE_RATE } = await import("../../speech/recognize.js")
-      const recognizer = openRecognizer(model, modelPath(directory, model), vadPath(directory))
+      const recognizer = await openRecognizer(model, modelPath(directory, model), vadPath(directory), engines)
       try {
         recognizer.recognize(new Float32Array(SAMPLE_RATE))
       } finally {
