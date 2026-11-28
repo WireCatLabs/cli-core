@@ -87,6 +87,12 @@ coverage/tests.json`. The step
 each CLI's `main`; a release builds `main` or the branch `bin/release --app-ref` names.
 The same full validation runs again on each push to `main`, in the release and in the monthly run.
 
+A release installs the tarball it is about to publish into an empty folder and fails when `node_modules` takes more
+disk than `ceilingMB` in [`scripts/install-size.json`](../../scripts/install-size.json)
+([`scripts/install-size.ts`](../../scripts/install-size.ts)); it prints the five largest packages. The `Install size`
+workflow, run by hand, measures `main` the same way. Each step of the
+[install-size plan](plans/2026-10-18-install-size.md) lowers the ceiling to its new measure plus 5%.
+
 ## No test touches the owner's store, keyring or network
 
 ⚠ vitest's `setupFiles` runs cli-base's shared setup (`@wirecat/cli-base/testing/setup`) before every test

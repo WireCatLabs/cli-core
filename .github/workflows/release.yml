@@ -196,6 +196,8 @@ jobs:
           [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "Expected exactly one package tarball"; exit 1; }
           [ -n "$EXPECTED_SHA256" ] || { echo "Missing validation digest"; exit 1; }
           printf '%s  %s\n' "$EXPECTED_SHA256" "$1" | sha256sum --check -
+      - name: Install size under the ceiling
+        run: node scripts/install-size.ts ./*.tgz
 
       - name: version not yet on npm
         id: version
