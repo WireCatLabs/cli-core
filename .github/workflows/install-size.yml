@@ -23,4 +23,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: npm pack --ignore-scripts
-      - run: node scripts/install-size.ts ./*.tgz
+      - run: node scripts/release-pair.ts ./*.tgz pair
+      - run: node scripts/install-size.ts pair/wirecat-cli-core-"$(node -p 'require("./package.json").version')".tgz

@@ -76,6 +76,9 @@ nothing now.
   (`$XDG_RUNTIME_DIR/leemour-release-<package>.lock`, e.g. `leemour-release-wirecat-cli-core.lock`), so two
   releases of one package never run at once on this machine, from any checkout; different packages release
   side by side. No package waits between releases.
+- **A release is two packages:** `X.Y.Z` for users, without type files, and `X.Y.Z-dev` with them, published first.
+  CLI repositories override cli-core to `X.Y.Z-dev` at their root
+  ([ARCHITECTURE.md](ARCHITECTURE.md#the-two-packages-of-a-release)).
 - To try an unreleased cli-core in tg-cli first, use `bin/try-messaging` in the tg worktree, never a
   committed `file:` path.
 

@@ -192,6 +192,13 @@ pnpm lint && pnpm typecheck && pnpm test
 pnpm smoke:bun    # the same exports, run under Bun
 ```
 
+**A CLI built on cli-core needs the `-dev` release for its types.** The `X.Y.Z` that users install has no type files.
+Each release also publishes `X.Y.Z-dev`: the same code with `.d.ts` files, maps and `src/`. Keep
+`"@wirecat/cli-core": "X.Y.Z"` in `package.json`, and add `"@wirecat/cli-core": X.Y.Z-dev` under `overrides:` in
+`pnpm-workspace.yaml`. Your users still get `X.Y.Z`: pnpm reads that file only in the project it installs, and npm and
+Bun never read it. Without that line, `tsc` fails with TS7016, "Could not find a declaration file for module
+'@wirecat/cli-core'". How the pair is built is in [Architecture](docs/dev/ARCHITECTURE.md#the-two-packages-of-a-release).
+
 Releases go through `bin/release` from `main`. It refuses a dirty tree, runs every check, publishes to npm and tags
 `v<version>`. The steps and the release rules are in [RELEASING.md](docs/dev/RELEASING.md).
 

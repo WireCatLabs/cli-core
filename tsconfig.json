@@ -3,9 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    // src/ is not published, so maps in the tarball would point at files a consumer never has
-    "sourceMap": false,
-    "declarationMap": false
+    // For the X.Y.Z-dev release, which ships src/; the X.Y.Z users install drops the maps (scripts/release-pair.ts)
+    "sourceMap": true,
+    "declarationMap": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/testing/**"]

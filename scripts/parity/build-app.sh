@@ -41,6 +41,10 @@ peers=$(node -e '
 # Under the name the app imports: until each app switches, that is still the old @wirecat/cli-messaging.
 name=@wirecat/cli-core
 grep -q '"@wirecat/cli-core"' package.json || name=@wirecat/cli-messaging
+# A CLI's root override to the released X.Y.Z-dev (docs/dev/RELEASING.md) wins over any dependency, this one too.
+if [ -f pnpm-workspace.yaml ]; then
+  sed -i "s|^\(\s*[\"']\?$name[\"']\?:\).*|\1 \"file:$tarball\"|" pnpm-workspace.yaml
+fi
 # shellcheck disable=SC2086
 pnpm add "$name@file:$tarball" $peers
 

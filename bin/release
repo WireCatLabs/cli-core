@@ -222,13 +222,20 @@ export NPM_TOKEN
 # A config of our own that names the variable, not the value: the token stays in the environment,
 # and the user's ~/.npmrc is neither read nor changed.
 config=$(mktemp)
-trap 'rm -f "$config"' EXIT
+pair=$(mktemp -d)
+trap 'rm -f "$config"; rm -rf "$pair"' EXIT
 printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$config"
 
-echo "== publishing $version =="
+# What release.yml publishes: the user package and its -dev twin, split from one pack of this build.
+npm pack --ignore-scripts --loglevel=warn --pack-destination "$pair" >/dev/null
+node scripts/release-pair.ts "$pair/wirecat-cli-core-$version.tgz" "$pair/out"
+
+echo "== publishing $version-dev, then $version =="
 # npm 11 refuses a pre-release without a tag, and one must never become `latest`.
-case "$version" in *-*) tag=next ;; *) tag=latest ;; esac
-npm publish --access public --userconfig "$config" --tag "$tag"
+case "$version" in *-*) tag=next dev=next-dev ;; *) tag=latest dev=dev ;; esac
+# -dev first, and set -e stops here when it fails: a latest without its -dev breaks every CLI that adopts it.
+npm publish "$pair/out/wirecat-cli-core-$version-dev.tgz" --access public --userconfig "$config" --tag "$dev"
+npm publish "$pair/out/wirecat-cli-core-$version.tgz" --access public --userconfig "$config" --tag "$tag"
 
 echo "== waiting for npm to show $version (up to three minutes) =="
 seen=""

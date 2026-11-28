@@ -37,6 +37,9 @@
   "packageManager": "pnpm@11.28.8",
   "files": [
     "dist",
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/testing/**",
     "constants.json",
     "parity.json",
     "skills",

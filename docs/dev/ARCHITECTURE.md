@@ -1088,6 +1088,35 @@ Saving what a read answered and timing each call stay decorators on the adapter 
 
 Both pin an exact version; a change here reaches them through a release and a bump in each.
 
+## The two packages of a release
+
+Every release publishes two versions of `@wirecat/cli-core` from one build:
+
+- **`X.Y.Z`** (npm tag `latest`) is what users get when npm, pnpm, Bun, npx or WireCat Desktop install a CLI. It has
+  no `.d.ts`, `.d.ts.map` or `.js.map` files and no `src/`: those were 12.3 MB and 1,676 files of the install.
+- **`X.Y.Z-dev`** (npm tag `dev`) has the same JavaScript plus the type files, their maps, the JavaScript maps and
+  `src/`. "Go to definition" opens the TypeScript source, and a stack trace under `--enable-source-maps` names
+  source lines.
+
+A CLI repository pins `"@wirecat/cli-core": "X.Y.Z"` in `package.json` and overrides it in `pnpm-workspace.yaml`:
+
+```yaml
+overrides:
+  "@wirecat/cli-core": X.Y.Z-dev
+```
+
+pnpm reads that file only in the project it installs, so the CLI's own checkout gets `-dev` and its users get
+`X.Y.Z`. Without the override, `pnpm typecheck` fails with TS7016, "Could not find a declaration file for module
+'@wirecat/cli-core'". The fix is the line above, then `pnpm install`. `cli-dev adopt` writes both lines, and
+`cli-dev version` fails when the override is missing or names another version
+([WC-TOOL-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/toolchain.md)).
+
+`npm pack` of this repository makes the full package. `scripts/release-pair.ts` splits it into the two tarballs and
+fails unless every other file is byte-identical in both, `package.json` differing only in its version. The release
+publishes `-dev` first and stops if that fails, so a `latest` never exists without its `-dev`. The install-size
+ceiling (`scripts/install-size.json`) measures `X.Y.Z`. Parity builds the CLIs against the full package: it points
+their override at it.
+
 
 ## Engines installed on first use
 
