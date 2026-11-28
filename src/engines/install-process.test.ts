@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process"
 import { once } from "node:events"
 import { mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, isAbsolute, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { build } from "esbuild"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -26,7 +26,12 @@ beforeAll(async () => {
       {
         name: "packages-from-this-checkout",
         setup(builder) {
-          builder.onResolve({ filter: /^[^./]/ }, (args) => ({ path: import.meta.resolve(args.path), external: true }))
+          // A Windows entry point (D:\\…) also starts with neither a dot nor a slash.
+          builder.onResolve({ filter: /^[^./]/ }, (args) =>
+            args.kind === "entry-point" || isAbsolute(args.path)
+              ? undefined
+              : { path: import.meta.resolve(args.path), external: true },
+          )
         },
       },
     ],
