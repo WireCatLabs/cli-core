@@ -1,6 +1,7 @@
 # Plan: memo becomes wcat, local files move to a files CLI
 
-Status: draft for review, nothing built. It answers the RFC in
+Status: approved with the owner's rulings of 2026-11-28 (section 0). Build in progress. Section 3.4 is the command
+map every agent follows. It answers the RFC in
 [#3383](https://github.com/WireCatLabs/cli-core/issues/3383) by Petya (pikerr).
 
 Owner's ruling, 2026-11-28: yes. The local files part leaves memo, and memo is renamed to wirecat. The command is
@@ -12,6 +13,18 @@ wirecat-desktop `9d03511b`. "Checked" means a command was run. "Inferred" means 
 
 The plan lives here, not in cli-memo: the RFC is in this repository, plans that span repositories live in
 `docs/dev/`, and cli-memo is the repository that gets renamed.
+
+## 0. Owner's rulings, 2026-11-28 (they override the rest of this plan)
+
+1. **No backward compatibility for commands.** No `memo` or `wcat-memo` program, no `memo_*` MCP tool names, no
+   deprecation period and no daily notice. On the release day the commands simply change. Section 3.5 says what that
+   means in detail. Open question 3 is answered C.
+2. **Internal names are renamed too, and the data moves with them.** Config and state folders, the environment
+   prefix, the keyring service and the ids stored in the store get the new names, with a one-time automatic
+   migration on first start. Section 3.6 lists each name and which tool moves it. Open question 2 is answered B.
+3. **mail-cli changes in the same release.** It reads `mail-trash` from wcat's new state folder, and reads the old
+   `cli-memo` folder only to move the file.
+4. **The names in 3.1 stand.**
 
 ## 1. What memo is today
 
@@ -102,7 +115,7 @@ So the change goes into cli-base, and it is small:
 
 One name collides: memo's `mail` group (`mail findings`, `mail review`) against the mail CLI. With the order above a
 `mail` group would hide `wcat mail`, so the group moves to `wcat review mail` and `wcat review findings
-list|show|add`. `memo mail …` keeps working through the alias. No other memo group has the name of a tool (checked
+list|show|add`. `memo mail …` stops on the release day with the rest of `memo`. No other memo group has the name of a tool (checked
 against `FIRST_PARTY_TOOLS` and cli-core's `WIRECAT_TOOLS`).
 
 ### 3.3 The files CLI: `files`, not `fs`
@@ -137,41 +150,69 @@ sources, or that no source brought in, belongs to the knowledge tool.
 In phase 3, check whether memo's `notes` group is cli-core's shared notes builder (the one tg mounts) or memo's own.
 If it is shared, `wcat` keeps the shared part (a note on a person) and `files` gets the folder part.
 
-### 3.5 Old names and how long they live
+### 3.5 Old names stop on the release day
 
-The new package ships the programs `memo` and `wcat-memo` as aliases of `wcat-wirecat`.
+Owner's ruling (section 0): no aliases.
 
-- `memo <words>` runs `wcat <words>`. A command that moved to `files` runs `files <words>` when it is installed, else
-  it names the install command.
-- When it is started as `memo`, the program takes its command name from how it was started, so its MCP tools keep
-  their old names (`memo_read`, `memo_write`). This is phase 4 work. So
-  `claude mcp add memo -- memo mcp serve`, agents' permission lists and the n8n node keep working.
-- It prints one line to stderr once a day: "memo is now wcat". Never in `--json` output, and never on an MCP stdio
-  channel.
-- Timers written by `memo jobs` and `memo schedule`, and Desktop prompts that say "Run memo skill show …", keep
-  working through the alias. They are not rewritten.
-- The aliases go in the following major release (open question 3).
+- `@wirecat/wirecat` ships one program, `wcat-wirecat`. There is no `memo` and no `wcat-memo`.
+- The MCP server is `wirecat` and its tools are only `wcat_read`, `wcat_write` and `wcat_tools_search`. `memo_*`
+  names are gone. n8n, the plugins and Desktop change in the same release.
+- No notice is printed. The final `@wirecat/cli-memo` (phase 5) is the only place that says "memo is now wcat",
+  through `memo upgrade`.
+- Timers written by `memo jobs` and `memo schedule` would stop working, because their unit files run `memo …`. So
+  wcat's first start rewrites them (3.6). Desktop's prompts that say "Run memo skill show …" change in the Desktop
+  pull request.
+- A command that moved to `files` is simply `files <words>`. wcat does not forward it.
 
-### 3.6 What keeps its old name inside
+### 3.6 Internal names: renamed, with a first-start migration
 
-The rename that people see is decided. These names are not visible to people, and renaming them moves data for no
-gain, so the plan keeps them (open question 2):
+Owner's ruling (section 0). The new internal name is `wcat`, not `wirecat`:
 
-- `appName: "cli-memo"` and the `MEMO_` environment prefix
-  ([app.ts](https://github.com/WireCatLabs/cli-memo/blob/1b2c9ae4160eee131fbfd354a8b9a7fcef870602/src/app.ts#L7)).
-  They decide the config and state folders and the keyring service, where memo keeps the AI model key. mail-cli reads
-  memo's state folder `mail-trash` by that name (`src/mail/changes.ts:184` in mail-cli).
-- Ids stored in the store: `memo:bulk`, `memo:envelope:…`, the bot `memo-scan`, systemd units `memo-*`.
-- Desktop's internal catalog id `memo`. Desktop keys saved state on it. The visible fields change.
-- The n8n node's internal name `wireCatMemo` and its credential type. Renaming them breaks saved workflows. Its
-  display name changes.
+- cli-core already uses `appName: "WireCat"` with the prefix `WIRECAT` for the shared store and the shared AI key
+  ([store/path.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/store/path.ts#L8),
+  [models/ai.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/models/ai.ts#L128)).
+  A prefix `WIRECAT` would make `WIRECAT_STATE_DIR` mean both the shared store and wcat's own state.
+- On macOS and Windows file names ignore case, so a folder `wirecat` is the folder `WireCat`.
+- `WCAT_` is used nowhere today (checked with grep in cli-base, cli-core, wirecat-desktop and cli-docs).
 
-The store needs no migration for the split. Nothing here raises `minCompatible`.
+| What | Old | New | Who moves it |
+|---|---|---|---|
+| `appName` (config, state and cache folders) | `cli-memo` (`~/.config/cli-memo`, `~/.local/share/cli-memo`, `~/.cache/cli-memo`) | `wcat` | wcat, first start |
+| Environment prefix | `MEMO_` (`MEMO_CONFIG_DIR`, …) | `WCAT_` | nothing to move. The old variables are no longer read |
+| Keyring service | `cli-memo` | `wcat` | wcat, first start |
+| Agent skill folder (cli-base requires it to equal `appName`) | `skills/cli-memo` | `skills/wcat` | `wcat skill install` writes the new one and removes the `cli-memo` skill folder it wrote |
+| Timers and units of `memo jobs` and `memo schedule` | `memo-*`, running `memo …` | `wcat-*`, running `wcat-wirecat …` | wcat, first start |
+| Ids in the store | `memo:bulk`, `memo:envelope:…`, the bot `memo-scan` | `wcat:bulk`, `wcat:envelope:…`, `wcat-scan` | cli-core store migration, version 79 |
+| `mail-trash` in memo's state folder | `cli-memo/mail-trash` | `wcat/mail-trash` | mail-cli reads the new path. It reads the old one only to move it |
+| Notes state of files | memo's state folder, `memo:` mark on exported files | files-cli's state folder, `files:` mark | files-cli, first start. Only its state file is rewritten, never the owner's notes |
+| Desktop's catalog id `memo` | `memo` | the Desktop pull request decides, and moves its saved state if it renames | Desktop |
+| n8n internal name `wireCatMemo` and its credential type | stay | stay | renaming them breaks saved workflows. Display names change |
 
-The files CLI's readers need the AI model key. That key is already shared: cli-core's `models ai` keeps it under the
-service `WireCat` ([AI model plan](2026-11-09-ai-model-setting.md)), so files reads it the same way and no keyring
-entry is copied. memo's older `models keys` entries under `cli-memo` stay with wcat. Phase 3 checks that no reader
-files takes over still reads them.
+How the first start of wcat moves things:
+
+- **Folders.** A rename of each folder. When the rename fails across file systems (`EXDEV`), a copy, then removal
+  of the old folder. When both the old and the new folder exist, nothing is merged: wcat warns once and keeps the
+  new one.
+- **Keyring.** The keyring has get, set and delete, with no list. So the accounts are named in code:
+  `embeddings:openai`, `embeddings:anthropic`, `registries:cas`, and every other account memo writes under
+  `cli-memo` (phase 4 lists them all). For each: read the old entry, set the new one, read it back and compare
+  in-process, then delete the old one. On any failure the old entry stays and the next start retries. A secret is
+  never printed. A moved run (`isMovedRun`) never touches the keyring. Tests use `memoryKeyring()`.
+- **Units.** Unit and timer files that memo wrote are rewritten to the new names and the new program, then
+  reloaded.
+- **Once.** A marker in the new state folder records the migration, so later starts skip it.
+
+The store ids are written by cli-core, not by memo
+([mail/bulk.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/mail/bulk.ts#L4),
+[mail/rules.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/mail/rules.ts#L168),
+[link-scorers/scan.ts](https://github.com/WireCatLabs/cli-core/blob/de644f313eacadb57c2f16ce2b19a0bdd791ddb2/src/services/link-scorers/scan.ts#L33)),
+and cli-core owns every store migration (section 2). So the rewrite is a cli-core pull request: the new constants and
+a migration (version 79) that rewrites the ids in one transaction, with a copy of the store file taken first. It
+merges on the release day. Whether version 79 raises `minCompatible` is open question 4.
+
+The files CLI's readers (`src/sources/readers/keys.ts`) read the provider key from memo's service, account
+`embeddings:<provider>`. They switch to cli-core's shared `models ai` key (service `WireCat`) in the extraction, so
+files keeps no key of its own and no entry is copied for it.
 
 ### 3.7 GitHub and npm
 
@@ -218,10 +259,10 @@ code.
 | cli-core | The `memo` entry in `src/ports/wirecat-tools.ts:56`, `MEMO_SCENARIOS` in `src/cli/guide.ts:34`, and about 35 hints users see ("install @wirecat/cli-memo, then memo search mail" in `search-command.ts:36`). They produce the "Works with" line and help text in every CLI. Stored ids stay (3.6) |
 | other CLIs | Nothing by hand for the help text: each CLI's next cli-core bump regenerates `contracts/help.snap` and `docs/commands.md`. By hand: `scripts/audit.sh` in 5 CLIs, `config/parity-groups.json`, the install hints in `docs/search.md` of tg, max and wa, `bin/b24-import:108` and `bin/gcal-live-check:119`, `zoom-cli/src/contract-overrides.ts:50`, and mail-cli's `--format memo` |
 | cli-docs | English pages are copied from the tool repository by `pnpm sync` (`tools.json:131`), so they follow the rename. RU and ES: 50 files in `translations/memo/`, moved to `wcat/` and `files/`. Sidebar `meta*.json`, `lib/seo-copy.json` and `registry/official-manifests.json`. Redirects are meta-refresh stubs in `public/<lang>/docs/`: about 25 pages times 3 languages from `/docs/memo/*` |
-| claude-plugins | `plugins/wirecat-memo` becomes `plugins/wirecat` with the skill `wirecat`. A new `plugins/wirecat-files`. `bin/sync-skills` reads the package and skill names from `plugin.json`. There is no `.mcp.json` to change |
-| n8n-nodes-wirecat | Display texts, `memo_read`/`memo_write` in `run.ts:78` become `wcat_*` (the old names keep working through the alias), the CI install line. Internal names stay (3.6) |
+| claude-plugins | `plugins/wirecat-memo` becomes `plugins/wirecat` with the skill `wcat` (cli-base requires the skill name to equal `appName`). A new `plugins/wirecat-files`. `bin/sync-skills` reads the package and skill names from `plugin.json`. There is no `.mcp.json` to change |
+| n8n-nodes-wirecat | Display texts, `memo_read`/`memo_write` in `run.ts:78` become `wcat_*`, the CI install line. Internal names `wireCatMemo` and its credential type stay (3.6) |
 | cli-template | `kit/src/new.ts:70`, `config/parity-groups.json`, `docs/dev/reference-clis.md` |
-| memo's skills | `skills/cli-memo` becomes `skills/wirecat`. `wcat skill install` replaces an installed `cli-memo` skill it wrote. `mail-triage`, `morning-digest` and `task-triage` move with it |
+| memo's skills | `skills/cli-memo` becomes `skills/wcat` (the folder must equal `appName`, 3.6). `wcat skill install` replaces an installed `cli-memo` skill it wrote. `mail-triage`, `morning-digest` and `task-triage` move with it |
 | cli-private | A `highlight` note in `community/digest/NOTES.md` for the release, and the announcement post in Slava's voice |
 
 ## 4. Phases
@@ -241,7 +282,9 @@ packages not yet on npm must not reach `main` early. Hence two kinds of pull req
 | 1b | cli-base | `FIRST_PARTY_TOOLS` lists `wirecat` and `files`, drops `memo` | Release day | with 1a |
 | 2 | cli-core | The tool list entry and the hints say `wcat` and `files`, with a test that no hint names `memo` | Release day | 0.5 day |
 | 3 | files-cli, new | Made from cli-template with the `new-cli` skill. Takes `notes`, `folders`, `sources`, `import` and the notes sync, their tests and docs. On first start it copies the `notes` section from memo's config. First publish and trusted publisher on the release day | Early in its own repository, unpublished | 2 to 3 days |
-| 4 | cli-memo, renamed wirecat | Removes what phase 3 took. Package `@wirecat/wirecat`, programs `wcat-wirecat`, `memo`, `wcat-memo`, command name `wcat`, the `review mail` move, the aliases and forwarding, the first-start launcher, skill and `server.json` | Release day, after phase 5 is published. Until then memo keeps releasing from `main` | 2 days |
+| 2b | cli-core | Store version 79: the ids of 3.6 renamed, one transaction, a copy of the store first | Release day, with phase 2 | 0.5 day |
+| 3b | mail-cli | Reads `mail-trash` from `wcat`'s state folder, moves it from `cli-memo` when only the old one exists | Release day, with phase 4 | 0.5 day |
+| 4 | cli-memo, renamed wirecat | Removes what phase 3 took. Package `@wirecat/wirecat`, program `wcat-wirecat` only, command name `wcat`, the `review mail` move, internal names and the first-start migration of 3.6, the first-start launcher, skill and `server.json` | Release day, after phase 5 is published. Until then memo keeps releasing from `main` | 2 days |
 | 5 | cli-memo | The final `@wirecat/cli-memo`. `memo upgrade` switches: removes `@wirecat/cli-memo`, installs `@wirecat/wirecat`, and `@wirecat/files-cli` when notes folders are set, with the package manager that installed memo. A start says "run memo upgrade" once a day, from a date in the code, with no npm call | Release day, first | 0.5 day |
 | 6 | wirecat-desktop | Section 3.8 | Release day | 2 to 3 days |
 | 7 | cli-docs, claude-plugins, n8n-nodes-wirecat, cli-template, other CLIs | Section 3.9 | Release day, docs last | 2 days |
@@ -252,13 +295,14 @@ Total: about 10 to 12 days of work, in about two to three weeks with reviews and
 
 1. Announce on #3157. Merge phase 5 and release the final `@wirecat/cli-memo` from `cli-memo` `main`. Its
    `memo upgrade` checks that `@wirecat/wirecat` is on npm and says "not yet" when it is not.
-2. Merge phase 4 and rename the repository. First publish of `@wirecat/files-cli`, then `@wirecat/wirecat`, with
-   `bin/release --first`. Trusted publishers for both.
-3. Merge phases 1b and 2 and release cli-base and cli-core with whatever else is on `main`.
-4. Desktop release.
-5. Docs deploy with the redirects, then the plugins and the n8n node.
-6. `npm deprecate @wirecat/cli-memo`. Digest note and announcement.
-7. Other CLIs pick up the cli-core text on their next bump. No release only for this.
+2. Merge phases 1b, 2 and 2b and release cli-base and cli-core with whatever else is on `main`.
+3. Merge phase 4 (bumped to that cli-core) and rename the repository with `gh repo rename wirecat`. First publish of
+   `@wirecat/files-cli`, then `@wirecat/wirecat`, with `bin/release --first`. Trusted publishers for both.
+4. Merge phase 3b and release mail-cli.
+5. Desktop release.
+6. Docs deploy with the redirects, then the plugins and the n8n node.
+7. `npm deprecate @wirecat/cli-memo`. Digest note and announcement.
+8. Other CLIs pick up the cli-core text on their next bump. No release only for this, unless open question 4 is A.
 
 ### How people move
 
@@ -266,36 +310,33 @@ Total: about 10 to 12 days of work, in about two to three weeks with reviews and
 - **CLI:** one command, `memo upgrade`. From a version before the final one it upgrades to the final one first,
   which says to run `memo upgrade` once more. By hand it is
   `npm rm -g @wirecat/cli-memo && npm i -g @wirecat/wirecat @wirecat/files-cli`.
-- **Config, data and keys:** nothing moves (3.6). The store is the same file.
-- **Agents:** `memo …` and `memo mcp serve` keep working until the aliases go.
+- **Config, data and keys:** wcat's first start moves them (3.6). The store is the same file, and store version 79
+  renames the ids in it.
+- **Agents:** `memo …` and `memo mcp serve` stop. Agents, MCP configs and n8n workflows use `wcat …`,
+  `claude mcp add wirecat -- wcat mcp serve` and the `wcat_*` tools.
 
 ### What can be skipped
 
 - A `wcat db` or `wcat migrate` command. cli-core owns migrations, and every CLI has `store`.
 - Renaming `@wirecat/cli-core` (the RFC defers it too).
-- Every internal rename in 3.6.
 - Folding `jobs` into `schedule`. It is a cleanup for later.
-- Rewriting timers and prompts that say `memo`. The alias runs them.
 - Phase 5, if CLI users may run the two npm commands by hand. It is small, so the plan keeps it.
 
 ## 5. Open questions for the owner
 
 1. **NEED: does the split ride cli-core 3.0, or come after it?** cli-core 3.0 is not released, and its breaking
-   changes are merged (#3428 to #3438, the install size plan). The split needs no store or cli-core break.
-   - A: ride 3.0. 3.0 waits about two weeks for phases 3 to 6.
-   - B: release 3.0 as it is, and ship the split as the next coordinated release (4.0 if cli-core needs a major
-     then, else a release of the CLIs only).
+   changes are merged (#3428 to #3438, the install size plan). The split needs no cli-core break.
+   - A: ride 3.0. 3.0 waits for phases 3 to 6.
+   - B: release 3.0 as it is, and ship the split as the next coordinated release.
    - Recommendation: **B**. 3.0 is being verified now, and the split does not need it.
-2. **NEED: keep the internal names (3.6)?** This is not the rename people see, which is decided. It is about names
-   only programs see.
-   - A: keep `cli-memo` folders, the `MEMO_` prefix, the keyring service and stored ids.
-   - B: rename them too, with a move of config, state and keyring entries on first start, and a migration for the
-     stored ids.
-   - Recommendation: **A**. Nobody sees them. B moves keyring secrets, rewrites stored ids, and breaks mail-cli,
-     which reads `cli-memo/mail-trash` by name.
-3. **NEED: how long do `memo` and the `memo_*` MCP tool names live?**
-   - A: until the next major after the split, and at least three months.
-   - B: no end date.
-   - C: none, `memo` stops on the release day.
-   - Recommendation: **A**. Timers, agent configs and n8n workflows carry the old name, and three months covers a
-     Desktop update cycle.
+2. **Keep the internal names?** Answered 2026-11-28: **B**, rename them with a migration (section 0, 3.6).
+3. **How long do `memo` and the `memo_*` MCP tool names live?** Answered 2026-11-28: **C**, they stop on the
+   release day (section 0, 3.5).
+4. **NEED: does store version 79 raise `minCompatible` to 79?**
+   - A: yes. A CLI on an older cli-core then refuses the store, so it can never write `memo:bulk` again and make a
+     second bulk box. But every CLI that opens the store must release on the release day.
+   - B: no. Other CLIs bump on their next release. Until then an old mail-cli can write a new `memo:bulk` row
+     beside `wcat:bulk`, and the duplicate stays until a cleanup.
+   - Recommendation: **A**. The split is a coordinated release already, Desktop updates every tool at once, and A
+     is the only choice that never leaves two bulk boxes. The cost is one cli-core bump per CLI that day. Switching
+     to B is one line in the migration.
