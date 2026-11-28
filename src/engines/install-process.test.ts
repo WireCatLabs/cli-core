@@ -26,7 +26,7 @@ beforeAll(async () => {
       {
         name: "packages-from-this-checkout",
         setup(builder) {
-          // A Windows entry point (D:\\…) also starts with neither a dot nor a slash.
+          // A Windows entry point (D:\…) also starts with neither a dot nor a slash.
           builder.onResolve({ filter: /^[^./]/ }, (args) =>
             args.kind === "entry-point" || isAbsolute(args.path)
               ? undefined
