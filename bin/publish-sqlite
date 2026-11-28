@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 # Publishes an empty 0.0.0 of @wirecat/cli-core-sqlite and of each of its platform packages once, so each
-# name exists and npm lets its trusted publisher be set (npmjs.com → the package → Settings → Trusted
-# Publisher: GitHub Actions, WireCatLabs/cli-core, workflow sqlite.yml, environment npm). Every version
-# with libraries is published by that workflow, never from this machine. A name already on npm is skipped.
+# name exists, then makes each name trust GitHub Actions (WireCatLabs/cli-core, workflow sqlite.yml,
+# environment npm). npm asks you to sign in and confirm in the browser for that. Every version with
+# libraries is published by that workflow, never from this machine. A name already on npm, or already
+# trusting the workflow, is skipped, so the script can run again after a failure.
 #
 #   bin/publish-sqlite
 set -eu
@@ -23,11 +24,7 @@ for package in $packages; do
     missing="$missing $package"
   fi
 done
-if [ -z "$missing" ]; then
-  echo "every name is on npm — set each one's trusted publisher, then run the SQLite workflow with publish"
-  exit 0
-fi
-
+publish_missing() {
 if [ -z "${NPM_TOKEN:-}" ]; then
   NPM_TOKEN=$(secret-tool lookup service npm account leemour 2>/dev/null) || {
     echo "no npm token: export NPM_TOKEN, or store one with: secret-tool store --label=npm service npm account leemour" >&2
@@ -55,4 +52,21 @@ JSON
   (cd "$work" && npm publish --access public --userconfig "$work/.npmrc")
   echo "published $package@0.0.0"
 done
-echo "now set the trusted publisher of each name published above on npmjs.com (see the top of this file)"
+}
+[ -z "$missing" ] || (publish_missing)
+
+# A token in ~/.npmrc that bypasses 2FA cannot change trust (npm answers 401), so trust runs as you, signed in.
+if ! npm whoami >/dev/null 2>&1; then
+  echo "npm does not know you on this computer. Open the link npm prints and sign in."
+  npm login --auth-type=web --browser=false
+fi
+for package in $packages; do
+  if npm trust list "$package" 2>/dev/null | grep -q "sqlite.yml"; then
+    echo "OK    $package already trusts sqlite.yml"
+    continue
+  fi
+  echo "$package → WireCatLabs/cli-core, sqlite.yml, environment npm. Open the link npm prints and confirm."
+  npm trust github "$package" --file sqlite.yml --repository WireCatLabs/cli-core --environment npm \
+    --allow-publish --yes --browser=false
+done
+echo "done: tell Claude, it runs the SQLite workflow with publish"
