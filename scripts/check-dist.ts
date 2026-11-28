@@ -21,6 +21,13 @@ const leaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js"))
   .filter((name) => /\b(from|import)\s*\(?\s*"drizzle-orm/.test(readFileSync(join(root, name), "utf8")))
 if (leaks.length > 0) throw new Error(`dist still imports drizzle-orm: ${leaks.join(", ")}`)
+// ECharts' own error messages quote `import … from "echarts/…"`, so only a statement counts, not a string.
+const echartsImport =
+  /(^|[;{}\s])(import|export)\b[^"'`;]*?\bfrom\s*["'](echarts|zrender|tslib)\b|\b(import|require)\(\s*["'](echarts|zrender|tslib)\b/m
+const echartsLeaks = readdirSync(root, { recursive: true, encoding: "utf8" })
+  .filter((name) => name.endsWith(".js") || name.endsWith(".d.ts"))
+  .filter((name) => echartsImport.test(readFileSync(join(root, name), "utf8")))
+if (echartsLeaks.length > 0) throw new Error(`dist still imports echarts: ${echartsLeaks.join(", ")}`)
 
 const { openSqlite } = await import(join(dist, "open.js"))
 const { migrate } = await import(join(dist, "../migrations.js"))
@@ -128,7 +135,20 @@ const chart = {
   partial: true,
   reasons: ["store-incomplete" as const],
 }
-const png = await chartPng(await (await chartRenderer()).render(chart, CHART_SIZE))
+const renderer = await chartRenderer()
+const svgOf = async (kind: "bar" | "line") =>
+  new TextDecoder().decode((await renderer.render({ ...chart, kind }, CHART_SIZE)).bytes)
+const barSvg = await svgOf("bar")
+const lineSvg = await svgOf("line")
+if (
+  !barSvg.startsWith('<svg width="800" height="400"') ||
+  !barSvg.includes("<title>Сообщения клуба</title>") ||
+  !chart.x.values.every((day) => barSvg.includes(day)) ||
+  barSvg.match(/fill="#818cf8"/g)?.length !== 2 ||
+  !/<path d="M[\d.]+ [\d.]+M[\d.]+ [\d.]+" fill="none"[^>]* stroke="#818cf8"/.test(lineSvg)
+)
+  throw new Error("./charts from dist did not render the bar and line SVG through the bundled ECharts")
+const png = await chartPng(await renderer.render(chart, CHART_SIZE))
 const pngBytes = Buffer.from(png.bytes)
 if (
   png.mimeType !== "image/png" ||
@@ -139,7 +159,7 @@ if (
   throw new Error("./charts from dist did not encode an 800×400 PNG")
 if (!readFileSync(join(root, "charts/fonts/OFL.txt"), "utf8").includes("SIL OPEN FONT LICENSE"))
   throw new Error("the chart font license is absent from dist")
-console.log("dist: ./charts renders dark PNG with the bundled Cyrillic font")
+console.log("dist: ./charts renders bar and line SVG through the bundled ECharts, and dark PNG with the bundled font")
 
 const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-core/files")
 const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-core/speech/wav")
