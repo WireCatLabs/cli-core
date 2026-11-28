@@ -1,14 +1,17 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 import { chatChart } from "../../charts/chat.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { placeEngines } from "../../kit/engines.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { openStore } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { answered, type Defaults, Picture } from "../tool.js"
 import { statsTools } from "./stats.js"
+
+beforeAll(() => placeEngines())
 
 const messenger = {
   app: { command: "chat" },

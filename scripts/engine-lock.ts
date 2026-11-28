@@ -7,19 +7,31 @@ export interface LockedPackage {
   os?: string[]
   cpu?: string[]
   libc?: string[]
+  /** Where it goes under the engine's `node_modules` when not at the top, such as `htmlparser2/node_modules/entities`. */
+  path?: string
 }
 
 interface Lockfile {
   importers: Record<string, Record<string, Record<string, { version: string }> | undefined>>
-  packages: Record<string, { resolution: { integrity?: string }; os?: string[]; cpu?: string[]; libc?: string[] }>
+  packages: Record<
+    string,
+    {
+      resolution: { integrity?: string }
+      os?: string[]
+      cpu?: string[]
+      libc?: string[]
+      peerDependencies?: Record<string, string>
+    }
+  >
   snapshots: Record<string, { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }>
 }
 
 const plain = (version: string) => version.replace(/\(.*$/, "")
 
 /**
- * The package `root` that cli-core itself depends on, and everything it needs, at the versions pnpm resolved. An
- * engine is unpacked into one flat `node_modules`, so a closure needing two versions of one package is refused.
+ * The package `root` that cli-core itself depends on, and everything it needs, at the versions pnpm resolved, each at
+ * the place in the engine's `node_modules` where Node finds it: the first version met of a package at the top, and
+ * another version a package needs under that package's own `node_modules` (`path`), as npm lays them out.
  */
 export const lockedClosure = (lockText: string, root: string): LockedPackage[] => {
   const lock = parse(lockText) as Lockfile
@@ -28,31 +40,42 @@ export const lockedClosure = (lockText: string, root: string): LockedPackage[] =
     .map((group) => own[group]?.[root]?.version)
     .find((version) => version !== undefined)
   if (!direct) throw new Error(`${root} is not a dependency of cli-core in pnpm-lock.yaml`)
-  const found = new Map<string, LockedPackage>()
-  const visit = (name: string, version: string) => {
-    const exact = plain(version)
-    const seen = found.get(name)
-    if (seen) {
-      if (seen.version !== exact)
-        throw new Error(`${root} needs ${name} at ${seen.version} and ${exact}; an engine holds one version of each`)
-      return
+  const placed = new Map<string, LockedPackage>()
+  /** The folders Node looks in for a dependency of the package at `path`, nearest first. */
+  const lookups = (path: string | undefined, name: string) => {
+    const found: string[] = []
+    for (let at = path; at !== undefined; ) {
+      found.push(`${at}/node_modules/${name}`)
+      const up = at.lastIndexOf("/node_modules/")
+      at = up < 0 ? undefined : at.slice(0, up)
     }
+    return [...found, name]
+  }
+  const visit = (name: string, version: string, parent: string | undefined) => {
+    const exact = plain(version)
+    const nearest = lookups(parent, name).find((path) => placed.has(path))
+    if (nearest && placed.get(nearest)?.version === exact) return
+    const path = nearest === undefined ? name : `${parent}/node_modules/${name}`
+    if (placed.has(path))
+      throw new Error(`${root} needs ${name} at ${placed.get(path)?.version} and ${exact} in ${path}`)
     const key = `${name}@${exact}`
     const entry = lock.packages[key]
     const integrity = entry?.resolution.integrity
     if (!entry || !integrity) throw new Error(`${key} has no integrity in pnpm-lock.yaml`)
-    found.set(name, {
+    placed.set(path, {
       name,
       version: exact,
       integrity,
+      ...(path === name ? {} : { path }),
       ...(entry.os ? { os: entry.os } : {}),
       ...(entry.cpu ? { cpu: entry.cpu } : {}),
       ...(entry.libc ? { libc: entry.libc } : {}),
     })
     const snapshot = lock.snapshots[`${name}@${version}`] ?? lock.snapshots[key] ?? {}
+    // A peer is the caller's to bring, as unpdf's optional @napi-rs/canvas: never part of the engine.
     for (const [dependency, at] of Object.entries({ ...snapshot.dependencies, ...snapshot.optionalDependencies }))
-      visit(dependency, at)
+      if (!entry.peerDependencies?.[dependency]) visit(dependency, at, path)
   }
-  visit(root, direct)
-  return [...found.values()]
+  visit(root, direct, undefined)
+  return [...placed.values()]
 }

@@ -1,4 +1,4 @@
-import { engineMissingError, ensureEngine } from "../engines/install.js"
+import { engineMissingError, ensureEngine, SAME_COMMAND_AGAIN } from "../engines/install.js"
 import { ENGINE_PINS } from "../engines/pins.js"
 import type { Fetch } from "./install.js"
 
@@ -21,8 +21,6 @@ export type VoiceEngine = "sherpa-onnx" | "ogg-opus-decoder"
  */
 const failed = new WeakMap<VoiceEngines, Map<VoiceEngine, Error>>()
 
-const RETRY = "the same command, once this computer can reach registry.npmjs.org"
-
 /**
  * The folder the engine loads from, installed there first when it is not, with no question asked. One that cannot be
  * installed now is an `engine.missing` error naming the command that installs it.
@@ -31,7 +29,7 @@ export const voiceEngineFolder = async (name: VoiceEngine, engines: VoiceEngines
   const before = failed.get(engines)?.get(name)
   if (before) throw before
   const state = await ensureEngine(ENGINE_PINS[name], {
-    retry: engines.retry ?? RETRY,
+    retry: engines.retry ?? SAME_COMMAND_AGAIN,
     ...(engines.env ? { env: engines.env } : {}),
     ...(engines.fetch ? { fetch: engines.fetch } : {}),
     ...(engines.progress ? { progress: engines.progress } : {}),

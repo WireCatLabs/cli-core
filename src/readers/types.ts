@@ -29,8 +29,8 @@ export type Extraction =
   | { status: "needs-agent"; extractor?: string }
   | { status: "unreadable"; extractor: string; error: string; issue?: ActionableError }
   | { status: "unsupported" }
-  /** `retry`: the command that installs it again, when the engine is one cli-core installs on first use. */
-  | { status: "engine-missing"; engine: Engine; retry?: string }
+  /** `retry` and `reason`: what to run again and why the install failed, for an engine installed on first use. */
+  | { status: "engine-missing"; engine: Engine; retry?: string; reason?: string }
   | { status: "too-large" }
 
 export interface FileHint {

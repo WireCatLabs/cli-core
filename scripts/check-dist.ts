@@ -176,7 +176,11 @@ if (
   !/<path d="M[\d.]+ [\d.]+M[\d.]+ [\d.]+" fill="none"[^>]* stroke="#818cf8"/.test(lineSvg)
 )
   throw new Error("./charts from dist did not render the bar and line SVG through the bundled ECharts")
-const png = await chartPng(await renderer.render(chart, CHART_SIZE))
+// resvg installs on first use: into a scratch data folder, never the owner's.
+const png = await chartPng(await renderer.render(chart, CHART_SIZE), {
+  env: { WIRECAT_STATE_DIR: scratch("core-dist-png-") },
+})
+if ("status" in png) throw new Error(`./charts from dist could not install resvg: ${png.reason}`)
 const pngBytes = Buffer.from(png.bytes)
 if (
   png.mimeType !== "image/png" ||

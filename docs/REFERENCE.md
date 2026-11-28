@@ -634,8 +634,9 @@ Both interfaces inherit the `messages` read permission.
 
 `./charts` exports the library-neutral `ChartData`, `ChartRenderer`, `chatChart`, `CHART_SIZE`
 and the lazy `chartRenderer()` loader, plus the separate `chartPng(svg)` encoder. ECharts types stay in the renderer module; JSON-only commands
-do not load it. PNG lazily loads resvg-js 2.6.2 and uses bundled Noto Sans Regular (SIL OFL 1.1),
-with system fonts disabled. SVG does not load resvg. Pass a renderer loader as the second argument to `statsCommand` to replace the image implementation
+do not load it. PNG uses resvg-js 2.6.2, installed into the WireCat data folder on first use, and bundled Noto Sans Regular
+(SIL OFL 1.1), with system fonts disabled; when resvg cannot be installed `chartPng` answers `engine-missing`.
+SVG does not load resvg. Pass a renderer loader as the second argument to `statsCommand` to replace the image implementation
 while keeping the neutral data and command contract. Images default to a dark theme. ECharts is pinned at 6.1.0; its published unpacked files
 plus zrender and tslib total about 61.6 MiB before package-manager deduplication.
 

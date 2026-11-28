@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { strToU8, zipSync } from "fflate"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
+import { placeEngines } from "../kit/engines.js"
 import { zip } from "../testing/files.js"
 import {
   bookEntries,
@@ -13,6 +14,8 @@ import {
 import { readContainer } from "./container.js"
 import { documentExtractor, readSpreadsheet } from "./documents.js"
 import { extractText, importEngine } from "./extract.js"
+
+beforeAll(() => placeEngines())
 
 const hint = (kind: string) => ({ kind: "file", name: `fixture.${kind}`, mime: null, path: `/fixture.${kind}` })
 const read = (kind: string, entries: Record<string, string>) => extractText(zip(entries), hint(kind), importEngine)

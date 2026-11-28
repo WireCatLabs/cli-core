@@ -6,11 +6,15 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { chartKindOf, chartPeriodOf, chatChart } from "../../charts/chat.js"
 import { CHART_SIZE, type ChartKind, type ChartPeriod } from "../../charts/model.js"
-import { chartPng } from "../../charts/png.js"
+import { chartPng, engineIssue, type PngOptions } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
+import type { EngineMissing } from "../../engines/install.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { dateWindow } from "../../services/moment.js"
+import type { Fetch } from "../../speech/install.js"
+import { type BaseEnvironment, environmentOf } from "../context.js"
 import { destroysNothing, LOCAL_WRITE } from "../effects.js"
+import { engineProgress } from "../engines.js"
 import { renderAnswer } from "../envelope.js"
 import { commandAt } from "../steps.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
@@ -24,6 +28,12 @@ import { replyResponsesCommand, replyWaitingCommand } from "./reply-stats-comman
 import { retentionCommand } from "./retention-command.js"
 import { chartAnswer, refuseJsonl } from "./stats-answers.js"
 import { tasksStatsCommand } from "./tasks-command.js"
+
+const pngOptions = (command: Command): PngOptions => {
+  const { env, fetch } = environmentOf<BaseEnvironment & { fetch?: Fetch }>(command)
+  const progress = engineProgress(command)
+  return { ...(env ? { env } : {}), ...(fetch ? { fetch } : {}), ...(progress ? { progress } : {}) }
+}
 
 export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer): Command => {
   const stats = new Command("stats").description("statistics about messages, chats and their authors")
@@ -95,9 +105,15 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
       )
       const chart = chatChart(found, { kind: chartKind, by, timezone })
       let chartFile: { path: string; format: "svg" | "png"; width: number; height: number } | undefined
-      if (output !== undefined) {
-        const svg = await (await loadRenderer()).render(chart, CHART_SIZE)
-        const rendered = extension === ".png" ? await chartPng(svg) : svg
+      let missing: EngineMissing | undefined
+      const svg = output === undefined ? undefined : await (await loadRenderer()).render(chart, CHART_SIZE)
+      const rendered = svg && extension === ".png" ? await chartPng(svg, pngOptions(this)) : svg
+      if (rendered && "status" in rendered) {
+        missing = rendered
+        context.renderer.note(
+          `no PNG written: ${missing.engine} could not be installed (${missing.reason}) — run ${missing.retry}, or write a .svg`,
+        )
+      } else if (output !== undefined && rendered) {
         const path = resolve(output)
         try {
           writeFileSync(path, rendered.bytes, { flag: "wx", mode: 0o600 })
@@ -110,7 +126,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         context.renderer.note(`chart written to ${path}`)
       }
       if (chart.partial) context.renderer.note("partial data — the chart shows lower bounds")
-      renderAnswer(this, context, chartAnswer(chart, chartFile, window.meta))
+      renderAnswer(this, context, chartAnswer(chart, chartFile, { ...window.meta, ...engineIssue(missing) }))
     })
   const examples: Record<string, string> = {
     charts: '"Book club" --output ./activity.svg',

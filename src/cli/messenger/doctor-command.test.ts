@@ -102,15 +102,15 @@ describe("doctor", () => {
     })
   })
 
-  it("**says the file readers are built in, and whether the optional OCR renderer is installed**", async () => {
+  it("**says which file readers are built in, which install on first use, and whether the OCR renderer is installed**", async () => {
     const { env } = setup()
     const { answer } = await call(["doctor", "--json"], env, refused)
 
     expect(answer.readers).toEqual({
-      unpdf: "built in",
+      unpdf: "on first use",
       "word-extractor": "built in",
-      linkedom: "built in",
-      "defuddle/node": "built in",
+      linkedom: "on first use",
+      "defuddle/node": "on first use",
       "@napi-rs/canvas": "installed",
     })
   })

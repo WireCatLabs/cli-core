@@ -65,8 +65,9 @@ PDF pages to it; it is not automatically triggered by transfer or agent OCR.
 
 An HTML file (`.html`, `.htm`, `.xhtml`, or `text/html`) is read for its main text, not its markup. The reader
 parses the page with linkedom and takes the main content with defuddle: menus, footers and cookie banners are
-dropped, and the text is Markdown with headings, lists, tables, link text and image `alt` text. Nothing is
-fetched from the network.
+dropped, and the text is Markdown with headings, lists, tables, link text and image `alt` text. The page itself
+is never fetched. The two packages are installed into the WireCat data folder the first time a page is read (about
+3 MB from npm); until that can succeed the page is `engine-missing` and is read on a later run.
 
 It also records what the page says about itself: title, description, author (also from JSON-LD), published
 date, `<html lang>`, site name, canonical link, keywords, `og:*` tags and the JSON-LD type. The headings become

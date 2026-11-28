@@ -16,6 +16,11 @@ on:
       - "src/files/tar.ts"
       - "src/files/lock.ts"
       - "src/cli/engines.ts"
+      - "src/attachments/extract.ts"
+      - "src/readers/engine.ts"
+      - "src/readers/html/**"
+      - "src/charts/png.ts"
+      - "src/kit/engines.ts"
       - "src/testing/engine-fixtures.ts"
       - "src/testing/placed-engines.ts"
       - "src/testing/voice-engine-fixtures.ts"
@@ -53,16 +58,19 @@ jobs:
       - run: >-
           pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
           src/speech/voice-install.test.ts src/cli/engine-surface.test.ts src/embeddings
+          src/attachments/first-use.test.ts
       - run: pnpm build
       # The line is checked, not only the exit code: a script that never reached its check also exits 0.
       - run: >-
           node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "voice works" "$RUNNER_TEMP/node.log"
           && grep -q "finds by meaning" "$RUNNER_TEMP/node.log"
+          && grep -q "install on first use" "$RUNNER_TEMP/node.log"
         env:
           ENGINE_CHECK_REAL: "1"
       - run: >-
           bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "voice works" "$RUNNER_TEMP/bun.log"
           && grep -q "finds by meaning" "$RUNNER_TEMP/bun.log"
+          && grep -q "install on first use" "$RUNNER_TEMP/bun.log"
         env:
           ENGINE_CHECK_REAL: "1"
 
@@ -99,19 +107,21 @@ jobs:
           npm install --global --prefix "$RUNNER_TEMP/global" --no-audit --no-fund "$tgz"
           pnpm --dir "$RUNNER_TEMP/pnpm" add "$tgz"
           bun add --cwd "$RUNNER_TEMP/bun" "$tgz"
-      - name: Voice and search by meaning from each install, from an empty data folder
+      - name: Voice, search by meaning, readers and PNG charts from each install, from an empty data folder
         env:
           ENGINE_CHECK_REAL: "1"
         run: |
           set -euo pipefail
           global=$(npm root --global --prefix "$RUNNER_TEMP/global")
           check() {
-            for engine in sherpa-onnx ogg-opus-decoder @wirecat/cli-core-onnx @huggingface/tokenizers; do
+            engines="sherpa-onnx ogg-opus-decoder @wirecat/cli-core-onnx @huggingface/tokenizers"
+            for engine in $engines defuddle linkedom unpdf @resvg/resvg-js; do
               if [ -e "$2/../../$engine" ]; then echo "$engine is installed beside cli-core in $2" && exit 1; fi
             done
             "$1" scripts/check-engines.ts "$2/dist" | tee "$RUNNER_TEMP/check.log"
             grep -q "voice works" "$RUNNER_TEMP/check.log"
             grep -q "finds by meaning" "$RUNNER_TEMP/check.log"
+            grep -q "install on first use" "$RUNNER_TEMP/check.log"
           }
           check node "$RUNNER_TEMP/npm/node_modules/@wirecat/cli-core"
           check node "$global/@wirecat/cli-core"

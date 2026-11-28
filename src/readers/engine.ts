@@ -6,21 +6,33 @@ import { ReaderLimit } from "../attachments/container.js"
 import { decodeText } from "../attachments/encoding.js"
 import { MAX_TEXT_CHARS } from "../attachments/limits.js"
 import { EngineUnavailable } from "../engines/install.js"
+import { ENGINE_PINS } from "../engines/pins.js"
 import type { Extraction, FileHint, LoadEngine } from "./types.js"
 
+/** The packages that read formats and ship with this package: small, and on the common path. */
+export const BUILT_IN = ["word-extractor"] as const
 /**
- * The packages that read formats. Reading documents is core, so the readers ship with this package (the owner's
- * decision of 2026-10-12); only the page renderer for OCR stays optional, a native binary.
+ * The PDF, web-page and HTML readers: installed into the WireCat data folder the first time a file needs one (the
+ * owner's decision of 2026-11-26). Each names the engine that holds it; defuddle brings linkedom with it.
  */
-export const BUILT_IN = ["unpdf", "word-extractor", "linkedom", "defuddle/node"] as const
-export const ENGINES = [...BUILT_IN, "@napi-rs/canvas"] as const
+export const FIRST_USE = { unpdf: "unpdf", linkedom: "defuddle", "defuddle/node": "defuddle" } as const
+export const ENGINES = [
+  ...BUILT_IN,
+  ...(Object.keys(FIRST_USE) as (keyof typeof FIRST_USE)[]),
+  "@napi-rs/canvas",
+] as const
 export type Engine = (typeof ENGINES)[number]
 
 const isMissing = (error: unknown, name: Engine) =>
   (error as NodeJS.ErrnoException)?.code === "ERR_MODULE_NOT_FOUND" && String((error as Error).message).includes(name)
 
-/** `name@version` from the package's own manifest, found beside the module that loaded. */
+/** `name@version` from the pins for an engine installed on first use, else from the manifest beside the module. */
 const versionOf = (name: Engine): string => {
+  if (name in FIRST_USE) {
+    const pkg = name.split("/")[0]
+    const pinned = ENGINE_PINS[FIRST_USE[name as keyof typeof FIRST_USE]].packages.find((entry) => entry.name === pkg)
+    return pinned ? `${pkg}@${pinned.version}` : name
+  }
   try {
     let directory = dirname(fileURLToPath(import.meta.resolve(name)))
     for (let depth = 0; depth < 6; depth += 1) {
@@ -47,12 +59,19 @@ export const withEngine = async <T>(
     engine = (await load(name)) as T
   } catch (error) {
     if (isMissing(error, name)) return { status: "engine-missing", engine: name }
-    if (error instanceof EngineUnavailable) return { status: "engine-missing", engine: name, retry: error.state.retry }
+    if (error instanceof EngineUnavailable) return engineUnavailable(name, error)
     throw error
   }
   const extractor = `${name === "word-extractor" ? "doc" : "pdf"}:${versionOf(name)}`
   return guarded(extractor, () => read(engine, extractor))
 }
+
+export const engineUnavailable = (engine: Engine, error: EngineUnavailable): Extraction => ({
+  status: "engine-missing",
+  engine,
+  retry: error.state.retry,
+  reason: error.state.reason,
+})
 
 /** A reader's failure as a result: a limit is `too-large`, anything else but a cancel is `unreadable`. */
 export const guarded = async (extractor: string, read: () => Promise<Extraction>): Promise<Extraction> => {

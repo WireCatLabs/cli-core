@@ -4,9 +4,10 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import * as rendering from "../../charts/render.js"
 import { ENTITIES } from "../../entities/index.js"
+import { placeEngines } from "../../kit/engines.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
@@ -14,6 +15,8 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
 import { statsCommand } from "./stats-command.js"
+
+beforeAll(() => placeEngines())
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 

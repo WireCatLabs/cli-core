@@ -249,9 +249,13 @@ const readPage = async (
         reason: "source.unreadable",
       })
     case "engine-missing":
-      throw new CliError("configuration_error", `reading this page needs ${found.engine}, which is not installed`, {
-        reason: "source.engine-missing",
-      })
+      throw new CliError(
+        "configuration_error",
+        found.retry
+          ? `reading this page needs ${found.engine}, which could not be installed (${found.reason}) — run ${found.retry}`
+          : `reading this page needs ${found.engine}, which is not installed`,
+        { reason: "source.engine-missing" },
+      )
     case "too-large":
       throw new CliError("validation_error", "the page is larger than its reader reads", { reason: "source.too-large" })
   }

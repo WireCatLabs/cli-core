@@ -4,7 +4,7 @@ import { dirname, join } from "node:path"
 import { CliError, captureStreams, type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { PNG } from "pngjs"
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 import {
   documentIngestion,
   type FeedlessDocumentSource,
@@ -12,6 +12,7 @@ import {
   readableFile,
   type SourceFile,
 } from "../../documents.js"
+import { placeEngines } from "../../kit/engines.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { pdf } from "../../testing/files.js"
 import { officeFixture } from "../../testing/office-files.js"
@@ -31,6 +32,8 @@ import {
   fakeFile,
 } from "./testing/index.js"
 import type { DocumentWords } from "./words.js"
+
+beforeAll(() => placeEngines())
 
 const app = {
   command: "box",

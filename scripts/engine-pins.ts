@@ -13,7 +13,15 @@ import { join } from "node:path"
 import { lockedClosure } from "./engine-lock.ts"
 
 /** The package each engine is named after; its dependencies come with it. */
-export const ENGINE_ROOTS = ["sherpa-onnx", "ogg-opus-decoder", "@wirecat/cli-core-onnx", "@huggingface/tokenizers"]
+export const ENGINE_ROOTS = [
+  "sherpa-onnx",
+  "ogg-opus-decoder",
+  "@wirecat/cli-core-onnx",
+  "@huggingface/tokenizers",
+  "defuddle",
+  "unpdf",
+  "@resvg/resvg-js",
+]
 
 const REGISTRY = "https://registry.npmjs.org"
 const root = join(import.meta.dirname, "..")
@@ -60,11 +68,12 @@ for (const engine of ENGINE_ROOTS) {
       url: manifest.dist.tarball,
       integrity: locked.integrity,
       bytes: await sizeOf(locked.name, manifest.dist.tarball, locked.integrity),
+      ...(locked.path ? { path: locked.path } : {}),
       ...((manifest.os ?? locked.os) ? { os: manifest.os ?? locked.os } : {}),
       ...((manifest.cpu ?? locked.cpu) ? { cpu: manifest.cpu ?? locked.cpu } : {}),
       ...((manifest.libc ?? locked.libc) ? { libc: manifest.libc ?? locked.libc } : {}),
     })
-    console.error(`${engine}: ${locked.name}@${locked.version}`)
+    console.error(`${engine}: ${locked.path ?? locked.name}@${locked.version}`)
   }
   engines[engine] = { name: engine, version: packages[0]?.version, packages }
 }

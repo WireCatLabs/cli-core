@@ -23,6 +23,8 @@ export interface EnginePackage {
   readonly os?: readonly string[]
   readonly cpu?: readonly string[]
   readonly libc?: readonly string[]
+  /** Its folder under the engine's `node_modules` when not the top one: a second version of a package, nested. */
+  readonly path?: string
 }
 
 /** An engine is a package and everything it needs, installed into the WireCat data folder on first use. */
@@ -72,6 +74,9 @@ export interface EnsureOptions {
   lockWaitMs?: number
   sleep?: (ms: number) => Promise<void>
 }
+
+/** The retry for an engine any command of its feature installs, such as voice, a reader or the PNG charts. */
+export const SAME_COMMAND_AGAIN = "the same command, once this computer can reach registry.npmjs.org"
 
 const MARKER = "engine.json"
 const LOCK_POLL_MS = 250
@@ -123,11 +128,16 @@ export const packagesFor = (pin: EnginePin, target: Target = currentTarget()): E
   )
 
 /** What the marker of a usable install says, written last: a folder without it is not loaded. */
-const markerOf = (pin: EnginePin, target: Target) =>
+export const markerOf = (pin: EnginePin, target: Target = currentTarget()): string =>
   JSON.stringify({
     engine: pin.name,
     version: pin.version,
-    packages: packagesFor(pin, target).map(({ name, version, integrity }) => ({ name, version, integrity })),
+    packages: packagesFor(pin, target).map(({ name, version, integrity, path }) => ({
+      name,
+      version,
+      integrity,
+      ...(path ? { path } : {}),
+    })),
   })
 
 const readMarker = (folder: string): string | undefined => {
@@ -148,7 +158,34 @@ export const isEngineInstalled = (
 export const engineRequire = (folder: string): NodeJS.Require => createRequire(join(folder, MARKER))
 
 export const importFromEngine = async <T = unknown>(folder: string, specifier: string): Promise<T> =>
-  (await import(pathToFileURL(engineRequire(folder).resolve(specifier)).href)) as T
+  (await import(pathToFileURL(resolveInEngine(folder, specifier)).href)) as T
+
+const resolveInEngine = (folder: string, specifier: string): string => {
+  try {
+    return engineRequire(folder).resolve(specifier)
+  } catch (error) {
+    // `require` matches only its own export conditions, and a subpath such as `defuddle/node` exports only `import`.
+    const parts = specifier.split("/")
+    const name = parts.slice(0, specifier.startsWith("@") ? 2 : 1).join("/")
+    const directory = join(folder, "node_modules", ...name.split("/"))
+    try {
+      const { exports } = JSON.parse(readFileSync(join(directory, "package.json"), "utf8")) as { exports?: unknown }
+      const subpath = [".", ...parts.slice(name.split("/").length)].join("/")
+      const target = importTarget(
+        typeof exports === "object" && exports ? (exports as Record<string, unknown>)[subpath] : undefined,
+      )
+      if (target) return join(directory, target)
+    } catch {}
+    throw error
+  }
+}
+
+const importTarget = (entry: unknown): string | undefined => {
+  if (typeof entry === "string") return entry
+  if (!entry || typeof entry !== "object") return undefined
+  const conditions = entry as Record<string, unknown>
+  return importTarget(conditions.import ?? conditions.node ?? conditions.default)
+}
 
 /**
  * The engine installed and ready to load, installing it first when it is not: no question asked. A failure of any
@@ -249,7 +286,7 @@ const place = async (pin: EnginePin, folder: string, target: Target, options: En
     packages.forEach((pkg, index) => {
       unpack(
         gunzipSync(readFileSync(tarballs[index] as string)),
-        join(staging, "node_modules", ...pkg.name.split("/")),
+        join(staging, "node_modules", ...(pkg.path ?? pkg.name).split("/")),
         pkg,
       )
     })

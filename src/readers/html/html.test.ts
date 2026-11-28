@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import { extractText, importEngine, type LoadEngine } from "../../attachments/extract.js"
+import { placeEngines } from "../../kit/engines.js"
+
+beforeAll(() => placeEngines())
 
 const hint = (name: string) => ({ kind: "file", name, mime: "text/html", path: `/saved/${name}` })
 const read = (html: string, load: LoadEngine = importEngine) =>
