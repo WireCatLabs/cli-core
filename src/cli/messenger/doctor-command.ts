@@ -4,6 +4,7 @@ import { configFilePath, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineStates } from "../../attachments/extract.js"
+import { enginesReport } from "../../engines/report.js"
 import type { AccountStanding, MessengerAdapter } from "../../ports/messenger.js"
 import { providerErrorKey } from "../../runs/events.js"
 import { type ProviderWarnings, providerLogPathFor, providerWarnings } from "../../runs/provider-log.js"
@@ -169,6 +170,7 @@ const diagnose = async (
         config: { path, found: existsSync(path), issues: [] },
         settings: { error: messageOf(error) },
         store: snakeKeys(await storeSummary(env, summaryOptions(command, app))),
+        engines: enginesReport(env),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
         files: filesReport(files),
       },
@@ -195,6 +197,7 @@ const diagnose = async (
         config,
         store: snakeKeys(await storeSummary(env, summaryOptions(command, app))),
         readers: engineStates(),
+        engines: enginesReport(env),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
         files: filesReport(files),
       },
@@ -232,6 +235,7 @@ const diagnose = async (
       login: { state: "not checked" },
       store: snakeKeys(await storeSummary(env, summaryOptions(command, app))),
       readers: engineStates(),
+      engines: enginesReport(env),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),
       provider_log: providerLogState(providerWarnings(providerLog, new Date(Date.now() - DAY_MS))),

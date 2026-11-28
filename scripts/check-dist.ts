@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { checkCliEntry, checkStartEntry } from "./check-cli-entry.ts"
+import { checkEngines } from "./check-engines.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
 import { checkRecordingPublication } from "./check-recording-publication.ts"
@@ -16,6 +17,7 @@ checkStartEntry(root)
 await checkFileLeases(root)
 await checkRecordingPartials(root)
 await checkRecordingPublication(root)
+await checkEngines(root)
 const dist = join(root, "store/sqlite")
 const leaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js"))

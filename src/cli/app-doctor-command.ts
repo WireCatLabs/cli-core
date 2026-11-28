@@ -8,6 +8,7 @@ import { clockMeta } from "@wirecat/cli-base/standards"
 import { isNewer, latestVersion } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import type { OAuthClientReport } from "../constants/index.js"
+import { enginesReport } from "../engines/report.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath } from "../store/path.js"
 import type { ConfigIssue } from "./config-issues.js"
@@ -142,6 +143,7 @@ export const appDoctorReport = (
     runtime: { node: process.versions.node, platform: process.platform },
     paths: { config: paths.config, state: paths.state, cache: paths.cache },
     store: { path: store, exists: existsSync(store) },
+    engines: enginesReport(env),
     ...(oauth ? { oauth_client: oauth } : {}),
     read_only: readOnlyLockOf(app, env) ?? null,
     profile_lock: env[envName(app, "PROFILE_LOCK")]?.trim() || null,

@@ -12,6 +12,7 @@ import {
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { gunzipSync } from "fflate"
+import { tarMember } from "../files/tar.js"
 import { type Fetch, installFiles, megabytes, sharedModelsDirectory } from "../speech/install.js"
 import type { ModelFile } from "../speech/models.js"
 
@@ -93,7 +94,7 @@ const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
   ),
 }
 
-const onMusl = (): boolean => {
+export const onMusl = (): boolean => {
   try {
     return readFileSync("/proc/self/maps", "utf8").includes("ld-musl")
   } catch {
@@ -178,35 +179,6 @@ export const installNativeRuntime = async ({
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
-}
-
-/** One regular file of a ustar archive, by its path: PAX and GNU long names, and a leading `./`, are understood. */
-const tarMember = (tar: Uint8Array, member: string): Uint8Array | undefined => {
-  const text = (from: number, length: number) =>
-    new TextDecoder().decode(tar.subarray(from, from + length)).replace(/\0.*$/s, "")
-  const plain = (path: string) => path.replace(/^\.\//, "")
-  let longName: string | undefined
-  for (let offset = 0; offset + 512 <= tar.length; ) {
-    const name = text(offset, 100)
-    if (!name) return undefined
-    const size = Number.parseInt(text(offset + 124, 12).trim() || "0", 8)
-    const type = text(offset + 156, 1)
-    const prefix = text(offset + 345, 155)
-    const data = tar.subarray(offset + 512, offset + 512 + size)
-    offset += 512 + Math.ceil(size / 512) * 512
-    if (type === "x") {
-      longName = /(?:^|\n)\d+ path=([^\n]*)\n/.exec(new TextDecoder().decode(data))?.[1] ?? longName
-      continue
-    }
-    if (type === "L") {
-      longName = new TextDecoder().decode(data).replace(/\0.*$/s, "")
-      continue
-    }
-    const path = plain(longName ?? (prefix ? `${prefix}/${name}` : name))
-    longName = undefined
-    if (path === plain(member) && (type === "0" || type === "")) return data
-  }
-  return undefined
 }
 
 export type Ort = typeof import("@wirecat/cli-core-onnx")

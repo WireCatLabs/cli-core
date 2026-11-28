@@ -1,0 +1,53 @@
+name: Engines
+# The first-use installer on each system an engine ships for: its tests under Node, then the built installer from an
+# empty data folder under Node and Bun, with the engines cli-core pins downloaded from npm. Only when the installer or
+# its pins change, since every WireCat repository shares the Actions minutes.
+on:
+  pull_request:
+    paths:
+      - "src/engines/**"
+      - "src/speech/install.ts"
+      - "src/files/tar.ts"
+      - "src/files/lock.ts"
+      - "src/cli/engines.ts"
+      - "src/testing/engine-fixtures.ts"
+      - "scripts/engine-*.ts"
+      - "scripts/check-engines.ts"
+      - ".github/workflows/engines.yml"
+  schedule:
+    - cron: "17 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
+      - run: pnpm build
+      # The line is checked, not only the exit code: a script that never reached its check also exits 0.
+      - run: node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "pinned engines install" "$RUNNER_TEMP/node.log"
+        env:
+          ENGINE_CHECK_REAL: "1"
+      - run: bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "pinned engines install" "$RUNNER_TEMP/bun.log"
+        env:
+          ENGINE_CHECK_REAL: "1"

@@ -5,6 +5,7 @@ import { isCliError } from "@wirecat/cli-base"
 import { ReaderLimit } from "../attachments/container.js"
 import { decodeText } from "../attachments/encoding.js"
 import { MAX_TEXT_CHARS } from "../attachments/limits.js"
+import { EngineUnavailable } from "../engines/install.js"
 import type { Extraction, FileHint, LoadEngine } from "./types.js"
 
 /**
@@ -46,6 +47,7 @@ export const withEngine = async <T>(
     engine = (await load(name)) as T
   } catch (error) {
     if (isMissing(error, name)) return { status: "engine-missing", engine: name }
+    if (error instanceof EngineUnavailable) return { status: "engine-missing", engine: name, retry: error.state.retry }
     throw error
   }
   const extractor = `${name === "word-extractor" ? "doc" : "pdf"}:${versionOf(name)}`
