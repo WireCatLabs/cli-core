@@ -53,7 +53,17 @@ const placed = (model: SpeechModel, directory: string): [ModelFile, string][] =>
  */
 export const isInstalled = (model: SpeechModel, directory: string): boolean => filesPresent(placed(model, directory))
 
-export const filesPresent = (files: [ModelFile, string][]): boolean =>
+/** A file to download: a model file by its sha256, or an npm tarball by the registry's `integrity` (SRI, sha512). */
+export type Download = Omit<ModelFile, "sha256"> & ({ sha256: string } | { integrity: string })
+
+const digestOf = (file: Download) => {
+  if ("sha256" in file) return { hash: createHash("sha256"), expected: file.sha256, encoding: "hex" as const }
+  const sri = file.integrity.trim().split(/\s+/)[0] ?? ""
+  if (!sri.startsWith("sha512-")) throw new CliError("invalid_response", `${file.name}: integrity is not sha512`)
+  return { hash: createHash("sha512"), expected: sri.slice("sha512-".length), encoding: "base64" as const }
+}
+
+export const filesPresent = (files: [Download, string][]): boolean =>
   files.every(([file, path]) => sizeOf(path) === file.bytes)
 
 const sizeOf = (path: string): number | undefined => {
@@ -87,15 +97,15 @@ export const install = async (
 
 /** Each file not already in place, downloaded and checked against its sha256 before it takes its name. */
 export const installFiles = async (
-  files: [ModelFile, string][],
+  files: [Download, string][],
   { fetch: get = fetch, progress, bytes = () => {}, verifyExisting }: InstallOptions = {},
 ): Promise<void> => {
   if (verifyExisting)
     for (const [file, path] of files) {
       if (sizeOf(path) !== undefined) {
-        const hash = createHash("sha256")
+        const { hash, expected, encoding } = digestOf(file)
         for await (const chunk of createReadStream(path)) hash.update(chunk)
-        if (hash.digest("hex") !== file.sha256) {
+        if (hash.digest(encoding) !== expected) {
           progress?.(`${path}: not the file this version expects, downloading it again`)
           await rm(path, { force: true })
         }
@@ -117,7 +127,7 @@ export const installFiles = async (
 }
 
 const fetchVerified = async (
-  file: ModelFile,
+  file: Download,
   path: string,
   get: Fetch,
   received: (bytes: number) => void,
@@ -136,12 +146,13 @@ const fetchVerified = async (
 }
 
 const fetchInto = async (
-  file: ModelFile,
+  file: Download,
   path: string,
   get: Fetch,
   stalled: Watchdog,
   received: (bytes: number) => void,
 ): Promise<void> => {
+  const { hash, expected, encoding } = digestOf(file)
   const response = await get(file.url, { signal: stalled.signal })
   if (!response.ok || !response.body) {
     await response.body?.cancel()
@@ -149,7 +160,6 @@ const fetchInto = async (
   }
 
   const partial = `${path}.${randomUUID()}.part`
-  const hash = createHash("sha256")
   let bytes = 0
   const hashing = new Transform({
     transform(chunk: Buffer, _encoding, done) {
@@ -173,11 +183,11 @@ const fetchInto = async (
       hashing,
       createWriteStream(partial, { flags: "wx", mode: 0o600 }),
     )
-    const actual = hash.digest("hex")
-    if (actual !== file.sha256) {
+    const actual = hash.digest(encoding)
+    if (actual !== expected) {
       throw new CliError(
         "invalid_response",
-        `${file.name} is not the file this version expects (sha256 ${actual}) — nothing was installed`,
+        `${file.name} is not the file this version expects (${encoding === "hex" ? "sha256" : "sha512"} ${actual}) — nothing was installed`,
       )
     }
     await rename(partial, path)

@@ -1072,6 +1072,36 @@ Saving what a read answered and timing each call stay decorators on the adapter 
 Both pin an exact version; a change here reaches them through a release and a bump in each.
 
 
+## Engines installed on first use
+
+An engine is an npm package and everything it needs, which cli-core installs into the shared data folder the first
+time a command needs it, instead of shipping it in every install (`src/engines/install.ts`). It lives in
+`<WireCat data>/engines/<name>/<version>/node_modules/`, one flat folder, and is loaded only from there
+(`engineRequire`, `importFromEngine`), never from the packages beside cli-core, so npx, a global npm install, pnpm,
+WireCat Desktop and Bun all load the same files.
+
+- **The pins** are `src/engines/pins.ts`: each package's exact version, the registry's `dist.integrity` (sha512) and
+  the tarball's size, plus npm's `os`, `cpu` and `libc` for a package built for some systems only, so each system
+  downloads only its own. `node scripts/engine-pins.ts` writes the file from `pnpm-lock.yaml` and the registry; no
+  hash is written by hand, and `scripts/engine-pins.test.ts` fails when the lockfile moved on without it. An engine's
+  package therefore stays in the lockfile, as a development dependency once it leaves `dependencies`.
+- **The install** (`ensureEngine`) downloads through the models' `installFiles` (each file checked against its hash,
+  in full, before it is kept), unpacks into a staging folder beside the version's, writes `engine.json` last and
+  renames the folder into place. Package scripts never run, and a tarball holding a link or a path out of its folder
+  is refused. A staging folder left by a killed install is never loaded and is cleared by the next one.
+- **One install at a time**: a lock beside the version's folder (`acquireLock`, which clears a dead process's); a
+  second process waits for it, then loads what the first installed.
+- **Version**: a folder loads only when its `engine.json` names the same packages and integrity this cli-core pins
+  for this system. Any other folder, of an older cli-core or another system, is installed again; older versions'
+  folders are left in place.
+- **Never a crash**: every failure (offline, a wrong hash, a data folder it cannot write, another process's install
+  that does not finish) is an `engine-missing` state with the reason and the command to retry, so the command does
+  the rest of its work. `engineFor` (`src/cli/engines.ts`) prints progress to stderr for a person at a terminal only,
+  and nothing under `--json` or for an MCP call. `doctor` lists the folders under `engines`.
+
+The [Engines workflow](../../.github/workflows/engines.yml) runs these tests on Linux, macOS and Windows, and the built
+installer from an empty data folder under Node and Bun, downloading the pinned engines from npm.
+
 ## Package upgrades
 
 `upgradePackage` (`src/services/package-upgrade.ts`) owns the explicit upgrade decision and invokes
