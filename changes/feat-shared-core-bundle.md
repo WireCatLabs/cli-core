@@ -4,8 +4,8 @@
   build split into chunks and merged by rolldown, so a CLI loads cli-core from this package instead of carrying its own
   copy: tg's `dist/bundle` goes from 14.7 MB to 1.7 MB, the template's from 13.0 MB to 0.03 MB. Warm `--help` of tg
   measured +28 ms against the private copy, the template's +19 ms (Node 24, median of 30 and 10 runs). A CLI must take
-  this release together with the cli-base that bundles it this way: the older `cli-dev bundle` copies cli-core
-  privately again. The unbundled `dist/**/*.js` stay in the package: a bundled module names its own file through
+  this release together with cli-base 2.0.0, the peer range now: an older `cli-dev bundle` copies cli-core privately
+  again. The unbundled `dist/**/*.js` stay in the package: a bundled module names its own file through
   `import.meta.url`, and the embedding process starts from `dist/embeddings/child.js`.
 
   | Before | Now |

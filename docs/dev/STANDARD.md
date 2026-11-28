@@ -922,6 +922,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `raw-network` | high | source | the CLI's own source reaches the network only through `hostFetch`: no `node:http`, `https`, `net`, `tls`, `undici`, `axios`, `got`, `node-fetch` or `ws`, no global `fetch` |
 | `undeclared-host` | medium | source | every `http(s)://` host in the CLI's own source is in the manifest's `network.hosts` |
 | `result-shape` | medium | type | a list or search in the published TypeScript API returns `{ items, hasMore, nextOffset?, total? }`: no bare array, no `hits` or `has_more` |
+| `reserved-shared-command` | high | command | `session start\|status\|end\|list`, `doctor`, `mcp`, `account remove`, `mirrors` and `complete` are cli-core's shared commands, never built by the CLI |
 
 <!-- lint rules: end -->
 
