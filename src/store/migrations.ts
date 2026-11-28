@@ -231,14 +231,6 @@ const migrateLocked = (
     const raisedTo = migrations
       .filter((migration) => migration.version > file.version)
       .reduce((highest, { minCompatible }) => Math.max(highest, minCompatible), file.minCompatible)
-    const notice =
-      file.version > 0 && raisedTo > file.minCompatible
-        ? lockedOutNotice(storeClients(database), {
-            ...(command ? { command } : {}),
-            schema: ours,
-            minCompatible: raisedTo,
-          })
-        : undefined
     const notes: string[] = []
     for (const migration of migrations) {
       if (migration.version <= file.version) continue
@@ -267,6 +259,15 @@ const migrateLocked = (
         .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
         .run(migration.version, migration.minCompatible, now())
     }
+    // After the statements: version 79 renames the `memo` client to `wcat`, and the notice must not ask for `memo upgrade`.
+    const notice =
+      file.version > 0 && raisedTo > file.minCompatible
+        ? lockedOutNotice(storeClients(database), {
+            ...(command ? { command } : {}),
+            schema: ours,
+            minCompatible: raisedTo,
+          })
+        : undefined
     if (command && version) recordClient(database, { command, version, speaks: ours }, now())
     if (copy) recordRollbackCopy(database, copy, now())
     database.exec("COMMIT")

@@ -162,7 +162,7 @@ describe("syncMail over a quick listing", () => {
     const { store } = await harness([mail(1, { listId: "news.example" }), mail(2)]).sync()
 
     const boxes = await store.mail.mailboxes((await store.accounts.storedAccount(KEY)).id)
-    expect(boxes.map(({ externalId }) => externalId)).toContain("memo:bulk")
+    expect(boxes.map(({ externalId }) => externalId)).toContain("wcat:bulk")
   })
 
   it("leaves a message the server would not give for the next run", async () => {

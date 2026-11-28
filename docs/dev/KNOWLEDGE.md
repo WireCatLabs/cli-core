@@ -536,7 +536,7 @@ line in `SCORERS`: `chat-title`, `alias-hits`, `member-chats`, `member-dialog`, 
 scorer only reads the sources it is given (there is no default account) and returns candidates with a weight, a
 reason of ids and counts, never message text, and evidence references. The scan combines each pair's strongest
 signal per scorer as 1 − Π(1 − w), keeps those at `threshold` (0.5) or more, highest first, and writes at most
-`limit` (20) new ones through `proposeRelation` as the rule bot `memo-scan`, which only the owner decides. A pair a
+`limit` (20) new ones through `proposeRelation` as the rule bot `wcat-scan` (`memo-scan` before store version 79), which only the owner decides. A pair a
 link joins, or any rejected `relationship` proposal for it, is never proposed again, whatever the scorer or its
 version; a pending one is updated in place under the same id, and an agent's keeps its author. People are found
 only by an identity (a sender or a member): a person candidate without one, or with someone else's, is refused and

@@ -508,7 +508,7 @@ describe("syncMail with the owner's rules", () => {
     expect(
       await opening.mail.emailRefs({
         accountId: (await opening.accounts.storedAccount(KEY)).id,
-        mailbox: "memo:envelope:list-id:deals.shop.example",
+        mailbox: "wcat:envelope:list-id:deals.shop.example",
       }),
     ).toHaveLength(1)
     expect((await importRuled(env, [envelope({ list_id: "deals.shop.example" })])).envelopes).toBe(0)

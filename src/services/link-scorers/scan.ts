@@ -30,7 +30,7 @@ export const SCORERS: readonly LinkScorer[] = [chatTitle, aliasHits, memberChats
 export const PERSON_SCORERS: readonly LinkScorer[] = [emailDomain]
 
 /** The rule bot every scan proposal is written by: only the owner decides its proposals. */
-export const SCAN_BOT = { bot: "memo-scan", kind: "rule" } as const
+export const SCAN_BOT = { bot: "wcat-scan", kind: "rule" } as const
 
 export const DEFAULT_THRESHOLD = 0.5
 /** A person ↔ person scan keeps the old rule's reach: one weak signal is enough to ask the owner. */

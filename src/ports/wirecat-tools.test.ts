@@ -14,9 +14,10 @@ const sources = (dir: string): string[] =>
   })
 
 // Stored ids (`memo:bulk`, `memo-scan`), memo's unit names and its old folder stay until store version 79 and wcat's
-// first start move them; `search all`'s frozen template is the text CLIs reviewed before the split.
+// first start move them; `search all`'s frozen template is the text CLIs reviewed before the split. The migrations
+// are history: version 79's statements name the old `memo` values they rename.
 const KEPT = /\bmemo[:\-|*]|cli-memo/g
-const FROZEN = new Set(["cli/contract-templates.ts"])
+const FROZEN = new Set(["cli/contract-templates.ts", "store/sqlite/migrations.generated.ts"])
 
 describe("WireCat's tools", () => {
   it("name wcat and files, never memo, in what a person or an agent reads", () => {

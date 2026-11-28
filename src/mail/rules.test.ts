@@ -92,9 +92,9 @@ describe("decide", () => {
   })
 
   it("names the mailbox of a rule with several conditions by all of them", () => {
-    expect(envelopeBox({ domain: "Shop.example" }).externalId).toBe("memo:envelope:domain:shop.example")
+    expect(envelopeBox({ domain: "Shop.example" }).externalId).toBe("wcat:envelope:domain:shop.example")
     expect(envelopeBox({ subject: "deals", unread: true }).externalId).toBe(
-      "memo:envelope:rule:subject deals, unread true",
+      "wcat:envelope:rule:subject deals, unread true",
     )
   })
 })
