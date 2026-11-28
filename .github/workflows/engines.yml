@@ -114,8 +114,8 @@ jobs:
           set -euo pipefail
           global=$(npm root --global --prefix "$RUNNER_TEMP/global")
           check() {
-            for engine in sherpa-onnx ogg-opus-decoder @wirecat/cli-core-onnx @huggingface/tokenizers defuddle linkedom unpdf \\
-              @resvg/resvg-js; do
+            engines="sherpa-onnx ogg-opus-decoder @wirecat/cli-core-onnx @huggingface/tokenizers"
+            for engine in $engines defuddle linkedom unpdf @resvg/resvg-js; do
               if [ -e "$2/../../$engine" ]; then echo "$engine is installed beside cli-core in $2" && exit 1; fi
             done
             "$1" scripts/check-engines.ts "$2/dist" | tee "$RUNNER_TEMP/check.log"
