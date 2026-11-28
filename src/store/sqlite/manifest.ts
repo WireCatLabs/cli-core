@@ -95,6 +95,12 @@ const V78_TABLES = [
   "tasks",
 ]
 
+/**
+ * Version 79 gives memo's ids the name `wcat`: an older build would write a second bulk box and envelope boxes beside
+ * the renamed ones, and register the old bot handles again.
+ */
+const V79_TABLES = ["bots", "mail_sort_rules", "mailboxes", "store_settings", "templates", "templates_history"]
+
 /** Version 73 makes every base table with an integer `id` AUTOINCREMENT, by copying it: all of them change. */
 const V73_TABLES = [
   "accounts",
@@ -322,6 +328,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261125205013_version-77-mail-sort-rules", version: 77, minCompatible: 73 },
   { name: "20261125205014_version-77-mail-sort-triggers", version: 77, minCompatible: 73 },
   { name: "20261125231505_version-78-agent-refs", version: 78, minCompatible: 78, tables: V78_TABLES },
+  { name: "20261128151949_version-79-wcat-ids", version: 79, minCompatible: 79, tables: V79_TABLES },
 ]
 
 export const generatedMigrations = (

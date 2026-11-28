@@ -21,8 +21,8 @@
       "./testing"
     ],
     "store": {
-      "speaks": 78,
-      "minCompatible": 78
+      "speaks": 79,
+      "minCompatible": 79
     }
   },
   "engines": {

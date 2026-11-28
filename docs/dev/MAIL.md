@@ -244,8 +244,8 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 | `consumer:<holder>` | a holder's processing mark: `throughId`, `throughAt`, `held`, `read`, `skipped` by reason |
 | `mail_inbox` | `inbox`: where its next run starts and each sorted thread's bucket, reason, model, sender and newest email time; at most 500 threads of the last 30 days |
 
-Mail sent to many is in the mailbox `memo:bulk` (`BULK`); mail an envelope rule recorded is in a mailbox of kind
-`envelope` named by the rule (`envelopeBox`). Neither is a folder, so neither proves a deletion.
+Mail sent to many is in the mailbox `wcat:bulk` (`BULK`, `memo:bulk` before store version 79); mail an envelope rule
+recorded is in a mailbox of kind `envelope` named by the rule (`envelopeBox`). Neither is a folder, so neither proves a deletion.
 
 ## Scoring
 

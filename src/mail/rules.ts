@@ -165,7 +165,7 @@ export const envelopeBox = (match: MailRuleMatch) => {
     ? [keys[0] === "list_id" ? "list-id" : String(keys[0]), String(match[keys[0] as keyof MailRuleMatch])]
     : ["rule", describeMatch(match)]
   return {
-    externalId: `memo:envelope:${kind}:${value.toLowerCase()}`,
+    externalId: `wcat:envelope:${kind}:${value.toLowerCase()}`,
     name: `envelope: ${kind} ${value}`,
     kind: ENVELOPE,
   }

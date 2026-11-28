@@ -78,5 +78,5 @@ it("moves the agents' `bot` to `agent` in pairs and refs, then a sender bot's `s
     { before: "bot:3 rules", after: "person:1" },
     { before: "person:9 owner", after: "bot:3" },
   ])
-  expect(after.prepare("SELECT max(min_compatible) AS n FROM schema_migrations").get()?.n).toBe(78)
+  expect(after.prepare("SELECT min_compatible AS n FROM schema_migrations WHERE version = 78").get()?.n).toBe(78)
 })
