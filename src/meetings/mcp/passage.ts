@@ -29,7 +29,7 @@ export const meetingPassageTool = {
   },
 }
 /**
- * `forRun` is how the host prints the passage in this run: `passageForRun` from `@wirecat/cli-core/cli`, which marks
+ * `forRun` is how the host prints the passage in this run: `passageForRun` from `@wirecat/cli-core`, which marks
  * the cues in a scheduled agent's run. This module cannot read the run's mark.
  */
 export const callMeetingPassageTool = async (

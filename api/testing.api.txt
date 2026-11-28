@@ -54,6 +54,13 @@ Seed · interface · dialog: Id;
 Seed · interface · person: Id;
 Seed · interface · twins: string;
 Seed · interface · }
+SkillValidation · interface · export interface SkillValidation {
+SkillValidation · interface · folder?: string;
+SkillValidation · interface · file?: string;
+SkillValidation · interface · version?: string;
+SkillValidation · interface · program?: Command;
+SkillValidation · interface · maxBytes?: number;
+SkillValidation · interface · }
 SyncAfterInstallCase · interface · export interface SyncAfterInstallCase {
 SyncAfterInstallCase · interface · name: string;
 SyncAfterInstallCase · interface · run(): Promise<void>;
@@ -86,3 +93,4 @@ runScopeCases · const · export declare const runScopeCases: (options: RunScope
 seedSearchRecipes · const · export declare const seedSearchRecipes: (store: MessageStore, account: AccountKey) => Promise<void>;
 setupFileProblems · const · export declare const setupFileProblems: (setup: Setup, packageRoot: string | URL) => string[];
 syncAfterInstallCases · const · export declare const syncAfterInstallCases: (options: SyncAfterInstallOptions) => SyncAfterInstallCase[];
+validateSkill · const · export declare const validateSkill: (content: string, options?: SkillValidation) => string[];

@@ -227,6 +227,9 @@ importers:
       psl:
         specifier: 1.15.0
         version: 1.15.0
+      rolldown:
+        specifier: 1.2.15
+        version: 1.2.15
       sherpa-onnx:
         specifier: 2.0.0
         version: 2.0.0

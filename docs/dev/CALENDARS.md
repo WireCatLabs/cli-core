@@ -1,6 +1,6 @@
 # Calendars
 
-`src/calendar/`, exported as `@wirecat/cli-core/calendar`, `/calendar/cli`, `/calendar/mcp` and `/calendar/testing`. A calendar CLI (gcal, later an
+`src/calendar/`, exported as `@wirecat/cli-core`, `/calendar/cli`, `/calendar/mcp` and `/calendar/testing`. A calendar CLI (gcal, later an
 Outlook or an ICS/CalDAV CLI) writes its sign-in and one adapter, a `CalendarSource`; the sync, the store and the
 contract kit are shared. The store types (`EventStore`, `EntryInput`, the neutral words) are defined in
 `src/meetings/event-store.ts`, because `src/meetings/` depends on nothing else in cli-core; `./calendar` re-exports
@@ -70,7 +70,7 @@ provider confirmed deleted, never one that only left the window.
 
 `done` counts the entries the current or last round saved; `updatedAt` is when the cursor last moved.
 
-**The budget** (`options.budget`, a `RunBudget` from `@wirecat/cli-core/background`). The engine asks `take()` before
+**The budget** (`options.budget`, a `RunBudget` from `@wirecat/cli-core`). The engine asks `take()` before
 every request: the calendar list, each page, each series' `occurrences()`. When it says no, the run stops where it
 is, every finished page already saved, and the report says `state: "partial"`, `stopped` (`requests`, `deadline` or
 `cancelled`), `progress` (`calendars`, `calendarsDone`, `requests`, `saved`, `steps`) and `hint: "run sync again to
@@ -93,7 +93,7 @@ constant per CLI, `AppIdentity.requestMs` (2 s, `DEFAULT_REQUEST_MS`, when unset
 5 minutes and 19 in 45 s at 2 s each. A lower `--timeout` means fewer requests; `--max-pages` can lower the count
 further, never raise it past what fits. The run stops at whichever comes first: the count spent, or the deadline
 closer than the margin plus the slowest request so far (one `occurrences()` may page inside the adapter).
-`runBudgetOf(command, maxPages?)` from `@wirecat/cli-core/cli` builds it from the deadline `run()` started
+`runBudgetOf(command, maxPages?)` from `@wirecat/cli-core` builds it from the deadline `run()` started
 (`environment.deadline()`), the CLI's `requestMs` and the run's signal.
 
 **How to go on.** A partial answer without a failed calendar carries `next`: one command step, `sync` with the same
@@ -294,7 +294,7 @@ a feed on its own schedule apart from `sync` (a CLI documents a timer that runs 
 ## Testing an adapter
 
 ```ts
-import { calendarSourceContract } from "@wirecat/cli-core/calendar/testing"
+import { calendarSourceContract } from "@wirecat/cli-core/testing"
 
 const make = () => ({ source: adapterOverRecordedResponses(), window, deadCursor: "expired-token" })
 for (const { name, run } of calendarSourceContract(make)) it(name, run)

@@ -1,12 +1,12 @@
 # Native archive writer leases
 
 Use `WriterLeaseStore` when a native archive writer needs exclusive ownership of shared
-publication paths. The port and its native adapter are exported by `@wirecat/cli-core/files`.
+publication paths. The port and its native adapter are exported by `@wirecat/cli-core`.
 Core owns marker parsing, process status, recovery and release; a provider host owns its layout,
 credentials, transport policy and how contention is reported to a caller.
 
 ```ts
-import { nativeWriterLeaseStore } from "@wirecat/cli-core/files"
+import { nativeWriterLeaseStore } from "@wirecat/cli-core"
 
 const leases = nativeWriterLeaseStore({ markerDirectory: ".shared-archive-writers" })
 

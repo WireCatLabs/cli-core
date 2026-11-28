@@ -8,7 +8,7 @@ output and coverage. Production provider bindings are separate from this SDK cap
 ## Bind authorized sources
 
 Core's optional `MessageStore.contextEvidence` is the native read port. Wrap it with
-`createContextEvidenceReader` from `@wirecat/cli-core/services` and the host's authorized selection.
+`createContextEvidenceReader` from `@wirecat/cli-core` and the host's authorized selection.
 Account discovery is not authorization. Capture the selection from trusted profile/folder binding,
 not arbitrary account IDs supplied by a request.
 
@@ -31,8 +31,8 @@ fields, so a reused ID does not grant access to its replacement. Document folder
 `folder` account identity; never classify all imported files as an authorized Drive profile.
 
 ```ts
-import { createContextEvidenceReader } from "@wirecat/cli-core/services"
-import type { MessageStore, StoredAccount } from "@wirecat/cli-core/store"
+import { createContextEvidenceReader } from "@wirecat/cli-core"
+import type { MessageStore, StoredAccount } from "@wirecat/cli-core"
 
 async function readSelectedMessages(store: MessageStore, authorized: StoredAccount) {
   if (!store.contextEvidence) throw new Error("Host lacks bounded context reads")

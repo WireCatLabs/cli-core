@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { existsSync } from "node:fs"
-import { openStore } from "@wirecat/cli-core/store"
+import { openStore } from "@wirecat/cli-core"
 
 const path = process.argv[2]
 assert.ok(path && !existsSync(path), "supply a new isolated database path")

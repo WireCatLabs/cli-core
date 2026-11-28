@@ -13,9 +13,9 @@ const cli = process.argv[2],
   require = createRequire(`${repo}/package.json`)
 const { captureStreams, memoryKeyring } = await import(require.resolve("@wirecat/cli-base"))
 const { seedSearchRecipes } = await import(require.resolve("@wirecat/cli-core/testing"))
-const { servicesFor, storedDeps } = await import(require.resolve("@wirecat/cli-core/services"))
-const { openStore } = await import(require.resolve("@wirecat/cli-core/store"))
-const { rememberAccount } = await import(require.resolve("@wirecat/cli-core/cli"))
+const { servicesFor, storedDeps } = await import(require.resolve("@wirecat/cli-core"))
+const { openStore } = await import(require.resolve("@wirecat/cli-core"))
+const { rememberAccount } = await import(require.resolve("@wirecat/cli-core"))
 const temp = mkdtempSync(join(tmpdir(), `parity-deep-search-${cli}-`))
 for (const key of Object.keys(process.env)) {
   if (/^(MAX_|TG_|MESSAGING_|CLI_COMMON_|WIRECAT_|OPENAI_|ANTHROPIC_)/.test(key)) delete process.env[key]

@@ -86,7 +86,7 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
 
 /**
  * Transport fields become one validated word request before a host opens its selected source. `limit` is the page
- * without `--limit`: the profile's `defaults.limit`, which `pagingOf` from `@wirecat/cli-core/cli` reads.
+ * without `--limit`: the profile's `defaults.limit`, which `pagingOf` from `@wirecat/cli-core` reads.
  */
 export const meetingHitSearchRequest = (
   query: string,
@@ -155,7 +155,7 @@ const addMeetingSearchCommandDefinition = (
       options: MeetingSearchFlags & Record<string, unknown>,
     ) => Promise<MeetingSearchPage>
     signal: () => AbortSignal | undefined
-    /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core/cli`, which reads the profile's limit. */
+    /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core`, which reads the profile's limit. */
     pagingOf: (command: Command) => { limit: number }
     output: (value: unknown) => void
   },

@@ -9,7 +9,7 @@ TypeScript on Node or Bun. You write the adapter that talks to the service, and 
 search, the shared commands and an MCP server.
 
 ```ts
-import { type Messenger, mcpCommand, messagesCommand, run, searchCommand, settingsFor } from "@wirecat/cli-core/cli"
+import { type Messenger, mcpCommand, messagesCommand, run, searchCommand, settingsFor } from "@wirecat/cli-core"
 import { acmeAdapter } from "./adapter.js" // your code: the only part that speaks to Acme Chat
 
 const app = { command: "acme", appName: "acme-cli", envPrefix: "ACME", description: "Acme Chat", version: "0.1.0" }

@@ -1429,7 +1429,7 @@ separately as `serve_summary`.
 These moved to the handbook's [lifecycle](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#resumable-syncs)
 page: a long sync saves its work per item or per page ([WC-LIFE-12]), a rerun goes on from where the last run stopped
 ([WC-LIFE-13]), and its status command says how far it is in one shape ([WC-LIFE-14]). cli-core provides
-`saveCheckpoint`, `readCheckpoint`, `progressOf` and `progressLine` in `@wirecat/cli-core/background`.
+`saveCheckpoint`, `readCheckpoint`, `progressOf` and `progressLine` in `@wirecat/cli-core`.
 
 ## Permissions
 

@@ -14,7 +14,7 @@ Values that ship inside the packages and are the same for every owner. They are 
 
 ## Layer order
 
-`constants(toolLayer?, schema?)` from `@wirecat/cli-core/constants` calls cli-base's `loadConstants` with cli-base's
+`constants(toolLayer?, schema?)` from `@wirecat/cli-core` calls cli-base's `loadConstants` with cli-base's
 `constants.json`, then this one, then the tool's. Plain objects merge key by key and a later layer wins; an array or a
 scalar replaces what was below it; a missing file is an empty layer. The result is validated, frozen, and read once
 per process for each tool layer.

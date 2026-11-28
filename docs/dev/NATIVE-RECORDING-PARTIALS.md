@@ -1,6 +1,6 @@
 # Native recording partial storage
 
-Use `NativeRecordingPartialStore` from `@wirecat/cli-core/persistence/native` as the native
+Use `NativeRecordingPartialStore` from `@wirecat/cli-core` as the native
 `RecordingTransferStorage` adapter for `transferRecording`. The portable meetings module still owns
 HTTP range/ETag, restart, response-length and transfer-receipt policy. The adapter owns partial
 bytes, bounded metadata, prefix verification and native handle cleanup. It imports both meeting
@@ -9,7 +9,7 @@ ports and low-level file helpers; neither of those modules imports this adapter.
 ## Bind a host layout
 
 ```ts
-import { NativeRecordingPartialStore } from "@wirecat/cli-core/persistence/native"
+import { NativeRecordingPartialStore } from "@wirecat/cli-core"
 
 const storage = new NativeRecordingPartialStore(destination, locator, {
   prefix: ".example-partial-",

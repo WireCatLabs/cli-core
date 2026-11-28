@@ -292,7 +292,7 @@ A locator for another messenger or account is refused. Singular `link` differs f
 ## The entry point of a CLI with its own program
 
 A tool on `createProgram` starts through `run()`, which already handles signals and pipes. A tool that builds its own
-commander program starts through `startCli` (from `@wirecat/cli-core/cli`), so its `src/bin/<command>.ts` is a few
+commander program starts through `startCli` (from `@wirecat/cli-core/start`), so its `src/bin/<command>.ts` is a few
 lines:
 
 ```ts
@@ -302,7 +302,7 @@ import { APP } from "../app.js"
 import { reportFailure } from "../failure.js"
 
 enableCompileCache()
-const { startCli } = await import("@wirecat/cli-core/cli")
+const { startCli } = await import("@wirecat/cli-core/start")
 await startCli({
   app: APP,
   sqlite: true,
@@ -454,7 +454,7 @@ the command and names the directory, plus the cross-tool scenarios it lists by r
 
 ```ts
 import { fileURLToPath } from "node:url"
-import { checkGuide, guideCommand, MEMO_SCENARIOS } from "@wirecat/cli-core/cli"
+import { checkGuide, guideCommand, MEMO_SCENARIOS } from "@wirecat/cli-core"
 
 guideCommand(app, {
   directory: fileURLToPath(new URL("../scenarios", import.meta.url)),
@@ -471,11 +471,11 @@ expect(await checkGuide(() => createProgram(definition), { packageRoot: process.
 
 ## Evidence packets for agents
 
-`prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the
+`prepareEvidencePacket` from `@wirecat/cli-core` packages a message page that the
 caller has already read and authorised. It works with any messenger's domain messages:
 
 ```ts
-import { prepareEvidencePacket } from "@wirecat/cli-core/services"
+import { prepareEvidencePacket } from "@wirecat/cli-core"
 
 const packet = prepareEvidencePacket({
   kind: "chats", // or "news" or "person"
@@ -554,7 +554,7 @@ rejected before reading the meeting. Meeting-only references select current revi
 An explicit revision or cue keeps its historical text and reports `current` or `superseded`.
 
 ```ts
-import { readMeetingEvidence, resolveMeetingReference, proposeMeetingTask } from "@wirecat/cli-core/services"
+import { readMeetingEvidence, resolveMeetingReference, proposeMeetingTask } from "@wirecat/cli-core"
 
 // Invented local records; the caller must authorize account 1 first.
 const evidence = await readMeetingEvidence(store.meetings, 1, "meeting:1/2", { cues: 100, bytes: 65536 })
@@ -805,9 +805,10 @@ jobs build tg-cli, max-cli and whatsapp-cli from their `main` against every pull
 there, or passes only against a CLI branch made for it, needs those CLI branches ready before it is released.
 
 **From 1.0.0, only the stable API follows semver.** `wirecat.stable` in `package.json` lists the stable entry
-points: `.`, `./cli`, `./cli/start`, `./mcp`, `./sends`, `./skill-validation`, `./sqlite-runtime`, `./store`,
-`./testing` and `./update`. Inside them, a name whose doc comment carries `@experimental` is outside the promise, and
-every entry point not on the list is experimental as a whole (`./meetings`, `./mail`, `./crm`, `./store/areas`, …).
+points: `.`, `./mcp`, `./start` and `./testing`. Inside them, a name whose doc comment carries `@experimental` is
+outside the promise, and so is every name of an area `src/entries/` marks `@experimental` (the meetings, CRM, calendar,
+tracker and other areas that were entry points of their own before 3.0). `./documents` and `./mail` are experimental
+as a whole. `api/<entry>.api.txt` lists the stable names.
 
 - A break of a stable name raises the major, and comes first as a deprecation in a minor. It is listed under
   "Changed — may break callers" or "Removed".

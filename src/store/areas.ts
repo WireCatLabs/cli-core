@@ -1,5 +1,5 @@
 /**
- * Store area types and constants some CLIs use beyond the stable `@wirecat/cli-core/store`: experimental, so a
+ * Store area types and constants some CLIs use beyond the stable `@wirecat/cli-core`: experimental, so a
  * minor release may change them.
  */
 

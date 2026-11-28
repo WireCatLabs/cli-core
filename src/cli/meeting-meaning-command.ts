@@ -105,7 +105,7 @@ export interface MeetingCombinedSearchDeps {
   words: () => Promise<MeetingHitSearch>
   meaning: () => Promise<MeetingMeaning>
   signal: () => AbortSignal | undefined
-  /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core/cli`, which reads the profile's limit. */
+  /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core`, which reads the profile's limit. */
   pagingOf: (command: Command) => { limit: number }
   output: (body: Body, command: Command) => void
   /** One to three examples that run as written, with the host's command and a profile. */

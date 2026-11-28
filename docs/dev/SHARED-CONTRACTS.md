@@ -1,6 +1,6 @@
 # Shared CLI contracts
 
-Public command factories in `@wirecat/cli-core/cli` and `@wirecat/cli-core/meetings/cli`
+Public command factories in `@wirecat/cli-core` and `@wirecat/cli-core`
 protect their definitions before returning them to a host. The guards live in
 `@wirecat/cli-base/commands`, beside the command registry. Providers bind adapters,
 capabilities and I/O, and inherit the resulting grammar and output metadata.
@@ -13,7 +13,7 @@ also fails. A provider may add its own commands to an inherited group.
 Use an explicit override before changing an inherited definition:
 
 ```ts
-import { overrideSharedContract, tasksCommand } from "@wirecat/cli-core/cli"
+import { overrideSharedContract, tasksCommand } from "@wirecat/cli-core"
 
 const tasks = tasksCommand(messenger)
 overrideSharedContract(tasks, "This provider reads stored tasks and has no background scanner.", command => {

@@ -8,7 +8,7 @@ is a file at an older schema: it is first opened the ordinary way, which migrate
 maintenance, then closed and opened read-only, since a new tool's first command may only read.
 
 ```ts
-import { openStore } from "@wirecat/cli-core/store"
+import { openStore } from "@wirecat/cli-core"
 
 const store = await openStore({ path: authorizedStorePath, readOnly: true })
 try {

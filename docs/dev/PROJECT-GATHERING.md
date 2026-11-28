@@ -1,6 +1,6 @@
 # Project evidence gathering
 
-`gatherProjectEvidence` from `@wirecat/cli-core/services` collects cited evidence for one project from
+`gatherProjectEvidence` from `@wirecat/cli-core` collects cited evidence for one project from
 explicitly selected stored sources: messages, mail, imported documents and meeting transcript cues. It plans and bounds the reads,
 deduplicates references across search lanes and returns a reference-only checkpoint to resume from. It
 writes nothing: no entity, relationship, fact, task or migration. Interpreting the evidence is the agent's
@@ -9,7 +9,7 @@ job; matching it to entities is a later slice.
 ## Request
 
 ```ts
-import { gatherProjectEvidence } from "@wirecat/cli-core/services"
+import { gatherProjectEvidence } from "@wirecat/cli-core"
 
 const result = await gatherProjectEvidence(
   { evidence: store.contextEvidence, index: store.contextIndex, coverage, fetcher },
@@ -73,7 +73,7 @@ const result = await gatherProjectEvidence(
 
 - **Stored project.** `gatherStoredProject(store, input)` is the whole `projects evidence` over a store: the
   project's name, key and aliases, confirmed person members and confirmed linked chats, in the sources the host
-  resolved; `projectsCommand(messenger)` from `@wirecat/cli-core/cli` mounts it as `projects evidence` in a
+  resolved; `projectsCommand(messenger)` from `@wirecat/cli-core` mounts it as `projects evidence` in a
   messenger CLI, with `--sync-first` syncing through the profile's own connection. `withSyncCommands(found, sync)`
   gives each `linkedChats` entry the `syncCommand` the text names for it (null for a chat held in full), so `--json`
   carries the same command. The command declares `partial`: a chat held in part makes `meta.complete` false and

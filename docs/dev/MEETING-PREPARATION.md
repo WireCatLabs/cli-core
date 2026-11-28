@@ -1,12 +1,12 @@
 # Meeting preparation SDK
 
-`createMeetingPreparationService` from `@wirecat/cli-core/services` composes the next candidate of
+`createMeetingPreparationService` from `@wirecat/cli-core` composes the next candidate of
 one selected provider series with its stored history and related stored meetings. It is read-only: no login, index refresh,
 model invocation, project/person association, accepted finding or task is created.
 
 ```ts
-import { createUpcomingMeetingReader } from "@wirecat/cli-core/meetings"
-import { createMeetingPreparationService } from "@wirecat/cli-core/services"
+import { createUpcomingMeetingReader } from "@wirecat/cli-core"
+import { createMeetingPreparationService } from "@wirecat/cli-core"
 
 const scope = { provider: "example-calendar", account: "AliceExample" }
 const upcoming = createUpcomingMeetingReader(scope, {

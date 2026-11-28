@@ -148,7 +148,7 @@ language, with `list:` for a mailing list, and mail from a demoted sender after 
 each attachment, cut at `ATTACHMENT_CHARS` unless `full`. memo's `search mail` and `messages show` and mail-cli's
 commands call these two, so the answers match.
 
-`@wirecat/cli-core/mail/cli` mounts the commands on a mail CLI: `mailReadCommands({ app, read })` gives `search
+`@wirecat/cli-core/mail` mounts the commands on a mail CLI: `mailReadCommands({ app, read })` gives `search
 messages`, `review`, `messages show` and `conversations list|show`. `read(command, work)` opens the shared store for one run and
 names the profile's mailbox; every command reads that mailbox alone and refuses another one's reference. A thread is a
 conversation, `chat:email/<address>/<thread>`; `conversations list` filters on `subject`, `emails_count` and
@@ -257,7 +257,7 @@ reads them; `demotedSenders(store)` gives those whose mail ranks lower. `ages` i
 ## Contract kit
 
 ```ts
-import { CONTRACT_MAIL, fakeMailSource, mailSourceContract, mailSyncContract } from "@wirecat/cli-core/mail/testing"
+import { CONTRACT_MAIL, fakeMailSource, mailSourceContract, mailSyncContract } from "@wirecat/cli-core/testing"
 
 for (const { name, run } of mailSourceContract(() => makeAdapterOver(CONTRACT_MAIL))) it(name, run)
 for (const { name, run } of mailSyncContract(async () => ({ source: makeAdapterOver(CONTRACT_MAIL), store: await openStore(...) })))

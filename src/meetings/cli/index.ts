@@ -40,25 +40,25 @@ export interface MeetingCommandDeps {
   writeFile?: (path: string, content: string) => Promise<void>
   /**
    * Marks `meetings export`, whose only write is the new file `--output` names: a read without it, over MCP, and
-   * under the read-only lock. `writesNewFileOnlyWith` from `@wirecat/cli-core/cli`; pass it with a `writeFile` that
+   * under the read-only lock. `writesNewFileOnlyWith` from `@wirecat/cli-core`; pass it with a `writeFile` that
    * never writes over a file.
    */
   newFileOutput?: (command: Command, option: string) => void
-  /** Prints an answer; `meetingAnswerBody(command, value)` from `@wirecat/cli-core/cli` makes it the host's body. */
+  /** Prints an answer; `meetingAnswerBody(command, value)` from `@wirecat/cli-core` makes it the host's body. */
   write: (value: unknown, format: "json" | "jsonl" | "text", command: Command) => void
   /**
    * Runs a command that reaches the account inside cli-core's run, so it is recorded and ended by `--timeout`:
-   * `inCommandRun` from `@wirecat/cli-core/cli`. Required, since this module cannot reach the run itself.
+   * `inCommandRun` from `@wirecat/cli-core`. Required, since this module cannot reach the run itself.
    */
   inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
   /**
-   * The sync's budget from the run's deadline and stop signal: `runBudgetOf` from `@wirecat/cli-core/cli`. Given, the
+   * The sync's budget from the run's deadline and stop signal: `runBudgetOf` from `@wirecat/cli-core`. Given, the
    * sync is cooperative: it stops between meetings, keeps what it saved and answers `stopped`. Without it the sync
    * keeps the one-shot deadline.
    */
   budgetOf?: (command: Command) => MeetingBudget
   /**
-   * `meetings list`'s page from its flags and the profile's `defaults.limit`: `pagingOf` from `@wirecat/cli-core/cli`.
+   * `meetings list`'s page from its flags and the profile's `defaults.limit`: `pagingOf` from `@wirecat/cli-core`.
    * Required, since this module cannot reach the profile's settings itself.
    */
   pagingOf: (command: Command) => { limit: number; page: number }
@@ -71,7 +71,7 @@ export interface MeetingCommandDeps {
    */
   management?: MeetingManagement
   /**
-   * Puts the profile's question before a write to the service: `askBeforeWrite` from `@wirecat/cli-core/cli`, which
+   * Puts the profile's question before a write to the service: `askBeforeWrite` from `@wirecat/cli-core`, which
    * asks when the command's key is at `ask` and refuses when nobody can answer. Without it the writes refuse.
    */
   askFirst?: (command: Command) => Promise<void>

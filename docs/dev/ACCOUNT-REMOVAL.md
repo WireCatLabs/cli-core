@@ -78,7 +78,7 @@ A messenger sets `accountRemoval` on its `Messenger`; `accountCommand` then adds
 the command under its own `account` group, inside `run()`:
 
 ```ts
-import { accountRemoveCommand, type AccountRemoval } from "@wirecat/cli-core/cli"
+import { accountRemoveCommand, type AccountRemoval } from "@wirecat/cli-core"
 
 const removal: AccountRemoval = {
   signOut: async (profile, { mayRevoke }) => {

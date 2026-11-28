@@ -1,6 +1,6 @@
 # SFTP
 
-`@wirecat/cli-core/sftp` reads files from an SFTP server: a PBX's call recordings, an export a system drops on a
+`@wirecat/cli-core` reads files from an SFTP server: a PBX's call recordings, an export a system drops on a
 server. It only reads. There is no method that writes, renames, deletes or changes a file.
 
 ## Set up
@@ -31,7 +31,7 @@ A connection never trusts a server it has not been told about. The owner confirm
 and the CLI keeps the fingerprint with the profile:
 
 ```ts
-import { sftpHostKey } from "@wirecat/cli-core/sftp"
+import { sftpHostKey } from "@wirecat/cli-core"
 
 const key = await sftpHostKey({ host: "pbx.example.com", port: 22, signal })
 // { algorithm: "ssh-ed25519", fingerprint: "SHA256:Xb9…" }
@@ -44,8 +44,8 @@ It saves the fingerprint only after the owner says yes.
 ## Read
 
 ```ts
-import { baseContext, environmentOf } from "@wirecat/cli-core/cli"
-import { openSftp } from "@wirecat/cli-core/sftp"
+import { baseContext, environmentOf } from "@wirecat/cli-core"
+import { openSftp } from "@wirecat/cli-core"
 
 const context = baseContext(command, configuration.resolveSettings)
 const { signal } = environmentOf(command)
@@ -153,8 +153,8 @@ A database that listens only on its own server (a FreePBX CDR database) is reach
 `ssh -L` does, but with no port opened on this computer: no other program here can reach the database through it.
 
 ```ts
-import { openSshTunnel } from "@wirecat/cli-core/sftp"
-import { openSqlReader } from "@wirecat/cli-core/sql"
+import { openSshTunnel } from "@wirecat/cli-core"
+import { openSqlReader } from "@wirecat/cli-core"
 
 const tunnel = await openSshTunnel({
   host: "pbx.example.com",
