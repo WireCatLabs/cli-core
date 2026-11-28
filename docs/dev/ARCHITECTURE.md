@@ -1160,8 +1160,16 @@ command whose whole work is voice (`messages transcribe`) fails with it, a read 
 machine has it. Tests that are about voice rather than its install link the copies in the repository's node_modules into the data
 folder (`placeEngines`, in `@wirecat/cli-core/testing`, for the CLIs' tests too).
 
-The [Engines workflow](../../.github/workflows/engines.yml) runs these tests and voice's on Linux, macOS and Windows,
-then the built installer and voice (a recording decoded and cut at its pauses) from an empty data folder under Node and
+**Search by meaning** is the second. `@wirecat/cli-core-onnx` (ONNX Runtime) and `@huggingface/tokenizers` are
+development dependencies only; every model load goes through `meaningEngine` (`src/embeddings/engine.ts`), which
+installs both and loads them, and the embedding child process gets the parent's engine folders rather than an env of
+its own. A failure is the same `engine.missing`, naming `<cli> models download <model>`; every search's word lane
+catches it (`skipsMeaning`) and answers by words alone. cli-core's own tests resolve both from the devDependencies
+(`locateMeaningEngine` in `src/testing/sandbox.ts`), because most of them move the data folder per test;
+`src/embeddings/engine.test.ts` runs the installer.
+
+The [Engines workflow](../../.github/workflows/engines.yml) runs these tests, voice's and search by meaning's on Linux, macOS and Windows,
+then the built installer, voice (a recording decoded and cut at its pauses) and a synthetic text found by meaning from an empty data folder under Node and
 Bun, downloading the pinned engines from npm. Its `installs` job does the same from the packed package installed by
 npm into a folder (npx's layout), by a global npm install, by pnpm (WireCat Desktop's) and by Bun.
 

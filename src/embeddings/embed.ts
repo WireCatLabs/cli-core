@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { availableParallelism } from "node:os"
 import { basename, join } from "node:path"
 import { filesPresent, sharedModelsDirectory } from "../speech/install.js"
+import { type EngineContext, meaningEngine } from "./engine.js"
 import type { TextModel } from "./models.js"
 import { openSession } from "./onnx-runtime.js"
 import type { Reranker } from "./rerank.js"
@@ -174,8 +175,9 @@ export const loadModel = async (
   model: { id: string; onnx: string; externalData?: string },
   directory: string,
   threads: number,
+  engine: EngineContext = {},
 ) => {
-  const { Tokenizer } = await import("@huggingface/tokenizers")
+  const { Tokenizer } = await meaningEngine(engine)
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
     JSON.parse(readFileSync(path("tokenizer.json"), "utf8")),
@@ -187,6 +189,7 @@ export const loadModel = async (
     model.externalData
       ? { externalData: [{ path: basename(model.externalData), data: readFileSync(path(model.externalData)) }] }
       : {},
+    engine,
   )
   return { ort, tokenizer, session }
 }
@@ -194,9 +197,9 @@ export const loadModel = async (
 export const openEmbedder = async (
   model: TextModel,
   directory: string,
-  { threads = defaultThreads() }: { threads?: number } = {},
+  { threads = defaultThreads(), engine }: { threads?: number; engine?: EngineContext } = {},
 ): Promise<Embedder> => {
-  const { ort, tokenizer, session } = await loadModel(model, directory, threads)
+  const { ort, tokenizer, session } = await loadModel(model, directory, threads, engine)
   const typeIds = session.inputNames.includes("token_type_ids")
 
   const one = async (text: string): Promise<Float32Array> => {

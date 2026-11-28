@@ -128,7 +128,7 @@ const nearestEvents = async (
     embedders,
   }: Pick<EventsQuery, "env" | "command" | "embedders"> & { limit: number; accountIds?: string[] },
 ): Promise<NearestEvent[]> => {
-  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
+  const { model, directory, key, engine } = localModel(await meaningModel(store, env), env, command)
   if (!(await store.calendar.embedded(key, accountIds ? { accountIds } : {})))
     throw new CliError("not_found", `no event has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(
@@ -137,6 +137,7 @@ const nearestEvents = async (
     undefined,
     (embedder) => embedder.embed([words], "query"),
     embedders,
+    engine,
   )
   const floor = meaningFloor(key)
   return (

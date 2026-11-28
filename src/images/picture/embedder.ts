@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { truncated, unit } from "../../embeddings/embed.js"
+import { type EngineContext, meaningEngine } from "../../embeddings/engine.js"
 import { openSession } from "../../embeddings/onnx-runtime.js"
 import type { ImageModel } from "./models.js"
 import { type LoadCanvas, preprocess, SIZE } from "./preprocess.js"
@@ -17,9 +18,9 @@ export interface PictureEmbedder {
 export const openPictureEmbedder = async (
   model: ImageModel,
   directory: string,
-  { threads = 4, canvas }: { threads?: number; canvas?: LoadCanvas } = {},
+  { threads = 4, canvas, engine = {} }: { threads?: number; canvas?: LoadCanvas; engine?: EngineContext } = {},
 ): Promise<PictureEmbedder> => {
-  const { Tokenizer } = await import("@huggingface/tokenizers")
+  const { Tokenizer } = await meaningEngine(engine)
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
     JSON.parse(readFileSync(path("tokenizer.json"), "utf8")),
@@ -30,7 +31,7 @@ export const openPictureEmbedder = async (
   const lazy = (name: string) => {
     let opened: ReturnType<typeof openSession> | undefined
     return () => {
-      opened ??= openSession(readFileSync(path(name)), threads).then((created) => {
+      opened ??= openSession(readFileSync(path(name)), threads, {}, engine).then((created) => {
         sessions.push(created.session)
         return created
       })

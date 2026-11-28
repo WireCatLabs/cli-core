@@ -13,7 +13,7 @@ import { join } from "node:path"
 import { lockedClosure } from "./engine-lock.ts"
 
 /** The package each engine is named after; its dependencies come with it. */
-export const ENGINE_ROOTS = ["sherpa-onnx", "ogg-opus-decoder"]
+export const ENGINE_ROOTS = ["sherpa-onnx", "ogg-opus-decoder", "@wirecat/cli-core-onnx", "@huggingface/tokenizers"]
 
 const REGISTRY = "https://registry.npmjs.org"
 const root = join(import.meta.dirname, "..")

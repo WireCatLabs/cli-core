@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { ONNX_RUNTIME_VERSION as PACKAGE_VERSION } from "@wirecat/cli-core-onnx"
 import { gzipSync } from "fflate"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { meaningEngine } from "./engine.js"
 import {
   installNativeRuntime,
   type NativeRuntime,
@@ -123,7 +124,7 @@ describe("the native ONNX Runtime", () => {
     writeFileSync(join(folder, runtime.library.name), Buffer.alloc(runtime.library.bytes))
     writeFileSync(join(folder, "onnxruntime_binding.node"), "not a binding")
 
-    const { native, ort } = await onnxRuntime(env)
+    const { native, ort } = await onnxRuntime(await meaningEngine(), env)
 
     expect(native).toBe(false)
     expect(ort.env.wasm).toBeDefined()

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { fixtureEngine, packageFiles, serveRegistry } from "../src/testing/engine-fixtures.ts"
@@ -39,6 +39,59 @@ export const checkEngines = async (dist: string): Promise<void> => {
 
   if (process.env.ENGINE_CHECK_REAL !== "1") return
   await checkVoice(dist)
+  await checkMeaning(dist)
+}
+
+const TINY = {
+  id: "tiny",
+  title: "a five-word model",
+  languages: "test",
+  licence: "none",
+  dims: 4,
+  maxTokens: 64,
+  chunksPerSecond: 1,
+  pooling: "mean",
+  prefix: { query: "", passage: "" },
+  onnx: "onnx/model.onnx",
+  files: [],
+}
+
+/** No file of `dist` loads the meaning engines' packages itself: only the installer's folder may provide them. */
+const bareImports = (dist: string): string[] =>
+  readdirSync(dist, { recursive: true, encoding: "utf8" })
+    .filter((path) => path.endsWith(".js"))
+    .filter((path) =>
+      /(?:from\s*|import\(\s*|require\(\s*)["'](@wirecat\/cli-core-onnx|@huggingface\/tokenizers)["']/.test(
+        readFileSync(join(dist, path), "utf8"),
+      ),
+    )
+
+/** Search by meaning from an empty data folder: both engines from npm, then a synthetic word found by meaning. */
+const checkMeaning = async (dist: string): Promise<void> => {
+  const bare = bareImports(dist)
+  if (bare.length > 0) throw new Error(`${runtime}: ${bare.join(", ")} import the meaning engines' packages directly`)
+  const { openEmbedder } = await import(pathToFileURL(join(dist, "embeddings/embed.js")).href)
+  const { isEngineInstalled } = await import(pathToFileURL(join(dist, "engines/install.js")).href)
+  const { MEANING_ENGINES } = await import(pathToFileURL(join(dist, "embeddings/engine.js")).href)
+  const env = { WIRECAT_STATE_DIR: scratch("core-dist-meaning-") }
+  const embedder = await openEmbedder(TINY, join(import.meta.dirname, "../src/embeddings/fixtures"), {
+    threads: 1,
+    engine: { env, progress: (line: string) => console.error(line) },
+  })
+  let best: string | undefined
+  try {
+    const passages = ["dog", "kitten", "fish"]
+    const [query]: Float32Array[] = await embedder.embed(["cat"], "query")
+    const vectors: Float32Array[] = await embedder.embed(passages, "passage")
+    const scores = vectors.map((vector) => vector.reduce((sum, value, index) => sum + value * (query?.[index] ?? 0), 0))
+    best = passages[scores.indexOf(Math.max(...scores))]
+  } finally {
+    await embedder.close()
+  }
+  if (best !== "kitten") throw new Error(`${runtime}: "cat" found "${best}" by meaning, not "kitten"`)
+  for (const pin of MEANING_ENGINES)
+    if (!isEngineInstalled(pin, env)) throw new Error(`${runtime}: ${pin.name} is not in the empty data folder`)
+  console.log(`dist (${runtime}): search by meaning installs its engines from npm and finds by meaning`)
 }
 
 /**

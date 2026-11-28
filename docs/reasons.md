@@ -327,6 +327,7 @@ headings.
 | `mirror.version-not-kept` | `provider_error` | the earlier content could not be kept in the version store, so the sync did not replace it |  |
 | `model.address-refused` | `validation_error` | the model address is refused: https, or plain http and Ollama only on this computer |  |
 | `model.empty-answer` | `invalid_response` | the model answered nothing; given a picture, it may not read pictures — choose a vision model |  |
+| `model.engine-missing` | `not_found` | the engine that runs local models could not be installed; the model's download installs it again |  |
 | `model.key-rejected` | `invalid_response` | the model provider refused the API key (401 or 403) |  |
 | `model.not-downloaded` | `not_found` | the model is not downloaded on this machine |  |
 | `model.offline` | `permission_error` | downloading a model needs the network; --offline was requested |  |

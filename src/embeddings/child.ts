@@ -1,17 +1,19 @@
 import { createInterface } from "node:readline"
 import { type Kind, openEmbedder } from "./embed.js"
+import type { MeaningFolders } from "./engine.js"
 import type { RerankModel, TextModel } from "./models.js"
 import { openReranker } from "./rerank.js"
 
-const { model, directory, threads, rerank } = JSON.parse(process.argv[2] ?? "{}") as {
+const { model, directory, threads, rerank, folders } = JSON.parse(process.argv[2] ?? "{}") as {
   model: TextModel & RerankModel
   directory: string
   threads: number
   rerank?: boolean
+  folders: MeaningFolders
 }
 const session = rerank
-  ? { reranker: await openReranker(model, directory, { threads }) }
-  : { embedder: await openEmbedder(model, directory, { threads }) }
+  ? { reranker: await openReranker(model, directory, { threads, engine: { folders } }) }
+  : { embedder: await openEmbedder(model, directory, { threads, engine: { folders } }) }
 // stdout carries the answers alone, one JSON line each: anything else there breaks the parent's reading.
 const answer = (line: object) => process.stdout.write(`${JSON.stringify(line)}\n`)
 answer({ ready: true })

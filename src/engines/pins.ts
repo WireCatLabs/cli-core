@@ -70,4 +70,37 @@ export const ENGINE_PINS = {
       },
     ],
   },
+  "@wirecat/cli-core-onnx": {
+    name: "@wirecat/cli-core-onnx",
+    version: "1.2.0",
+    packages: [
+      {
+        name: "@wirecat/cli-core-onnx",
+        version: "1.2.0",
+        url: "https://registry.npmjs.org/@wirecat/cli-core-onnx/-/cli-core-onnx-1.2.0.tgz",
+        integrity: "sha512-GxiJdiu3sT2R9vw5AYXsDpQdAgjLpsnXElDFMlK2x1SNbYsrx2kPc/z/+EUuLDHL2MevngjaLnUq/TJlGVPRGg==",
+        bytes: 4244099,
+      },
+      {
+        name: "onnxruntime-common",
+        version: "1.30.0",
+        url: "https://registry.npmjs.org/onnxruntime-common/-/onnxruntime-common-1.30.0.tgz",
+        integrity: "sha512-7fdVWjAID1dVhH/G8qK3APARunV4VkBFoCQAP7qp4Wkab0mrorvmc+sqiT+mKXOzDqdjN5j+/Z9nb4gzNPWcyA==",
+        bytes: 66795,
+      },
+    ],
+  },
+  "@huggingface/tokenizers": {
+    name: "@huggingface/tokenizers",
+    version: "0.2.0",
+    packages: [
+      {
+        name: "@huggingface/tokenizers",
+        version: "0.2.0",
+        url: "https://registry.npmjs.org/@huggingface/tokenizers/-/tokenizers-0.2.0.tgz",
+        integrity: "sha512-LidMHe1FpcSYH4vcSjXooda34pC0M8m1gmDOv7SQi6Iv+ib1zX7J3sHBCC9/3FPCkn2k1b55FneVqMRxrr99pg==",
+        bytes: 87011,
+      },
+    ],
+  },
 } as const satisfies Record<string, EnginePin>

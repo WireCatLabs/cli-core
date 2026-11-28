@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../embeddings/embed.js"
+import { modelRetry } from "../embeddings/engine.js"
 import { type RerankModel, rerankModel, type TextModel, textModel } from "../embeddings/models.js"
 import { installNativeRuntime } from "../embeddings/onnx-runtime.js"
 import {
@@ -33,9 +34,9 @@ const bytesOf = (model: { files: readonly { bytes: number }[] }) =>
  * The native ONNX Runtime beside the text models, where this system has one. It only makes them faster, so a
  * failed download says why and the model is still installed, to run through WebAssembly.
  */
-const nativeRuntime = async ({ env, progress = () => {} }: ModelDownloadOptions): Promise<void> => {
+const nativeRuntime = async ({ env, progress = () => {} }: ModelDownloadOptions, retry: string): Promise<void> => {
   try {
-    await installNativeRuntime({ env, progress })
+    await installNativeRuntime({ env, progress, retry })
   } catch (error) {
     progress(
       `ONNX Runtime not installed (${error instanceof Error ? error.message : String(error)}); models run through WebAssembly`,
@@ -59,10 +60,11 @@ export const downloadTextModel = async (
   }
   // The licence asks for a notice with each copy, not for a click: it is kept beside the files.
   if (model.notice) writeFileSync(join(directory, model.id, "NOTICE"), `${model.notice}\n`)
-  await nativeRuntime({ env, progress })
+  const engine = { env, progress, retry: modelRetry(model.id, undefined) }
+  await nativeRuntime({ env, progress }, engine.retry)
   progress(`${model.id}: loading it once to check it works`)
   const { openEmbedder } = await import("../embeddings/embed.js")
-  const embedder = await openEmbedder(model, directory)
+  const embedder = await openEmbedder(model, directory, { engine })
   try {
     const [vector] = await embedder.embed(["check"], "query")
     if (vector?.length !== model.dims)
@@ -84,10 +86,11 @@ export const downloadRerankModel = async (
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
     await installFiles(placedText(model, directory), { progress, ...(bytes ? { bytes } : {}) })
   }
-  await nativeRuntime({ env, progress })
+  const engine = { env, progress, retry: modelRetry(model.id, undefined) }
+  await nativeRuntime({ env, progress }, engine.retry)
   progress(`${model.id}: loading it once to check it works`)
   const { openReranker } = await import("../embeddings/rerank.js")
-  const reranker = await openReranker(model, directory)
+  const reranker = await openReranker(model, directory, { engine })
   try {
     await reranker.score("check", ["check"])
   } finally {
@@ -109,7 +112,9 @@ export const downloadImageModel = async (
   }
   progress(`${model.id}: loading it once to check it works`)
   const { openPictureEmbedder } = await import("../images/picture/embedder.js")
-  const embedder = await openPictureEmbedder(model, directory)
+  const embedder = await openPictureEmbedder(model, directory, {
+    engine: { env, progress, retry: modelRetry(model.id, undefined, "images models download") },
+  })
   try {
     const vector = await embedder.embedQuery("check")
     if (vector.length !== model.dims)

@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "src/engines/**"
+      - "src/embeddings/**"
+      - "src/images/picture/embedder.ts"
       - "src/speech/**"
       - "src/cli/messenger/models-command.ts"
       - "src/cli/messenger/transcribe-command.ts"
@@ -50,13 +52,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: >-
           pnpm vitest run src/engines src/cli/engines.test.ts src/readers/engine.test.ts scripts/engine-pins.test.ts
-          src/speech/voice-install.test.ts src/cli/engine-surface.test.ts
+          src/speech/voice-install.test.ts src/cli/engine-surface.test.ts src/embeddings
       - run: pnpm build
       # The line is checked, not only the exit code: a script that never reached its check also exits 0.
-      - run: node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "voice works" "$RUNNER_TEMP/node.log"
+      - run: >-
+          node scripts/check-engines.ts | tee "$RUNNER_TEMP/node.log" && grep -q "voice works" "$RUNNER_TEMP/node.log"
+          && grep -q "finds by meaning" "$RUNNER_TEMP/node.log"
         env:
           ENGINE_CHECK_REAL: "1"
-      - run: bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "voice works" "$RUNNER_TEMP/bun.log"
+      - run: >-
+          bun scripts/check-engines.ts | tee "$RUNNER_TEMP/bun.log" && grep -q "voice works" "$RUNNER_TEMP/bun.log"
+          && grep -q "finds by meaning" "$RUNNER_TEMP/bun.log"
         env:
           ENGINE_CHECK_REAL: "1"
 
@@ -93,18 +99,19 @@ jobs:
           npm install --global --prefix "$RUNNER_TEMP/global" --no-audit --no-fund "$tgz"
           pnpm --dir "$RUNNER_TEMP/pnpm" add "$tgz"
           bun add --cwd "$RUNNER_TEMP/bun" "$tgz"
-      - name: Voice from each install, from an empty data folder
+      - name: Voice and search by meaning from each install, from an empty data folder
         env:
           ENGINE_CHECK_REAL: "1"
         run: |
           set -euo pipefail
           global=$(npm root --global --prefix "$RUNNER_TEMP/global")
           check() {
-            for engine in sherpa-onnx ogg-opus-decoder; do
+            for engine in sherpa-onnx ogg-opus-decoder @wirecat/cli-core-onnx @huggingface/tokenizers; do
               if [ -e "$2/../../$engine" ]; then echo "$engine is installed beside cli-core in $2" && exit 1; fi
             done
             "$1" scripts/check-engines.ts "$2/dist" | tee "$RUNNER_TEMP/check.log"
             grep -q "voice works" "$RUNNER_TEMP/check.log"
+            grep -q "finds by meaning" "$RUNNER_TEMP/check.log"
           }
           check node "$RUNNER_TEMP/npm/node_modules/@wirecat/cli-core"
           check node "$global/@wirecat/cli-core"

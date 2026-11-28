@@ -144,6 +144,7 @@ export const openMeetingEmbedder = async (
       throw new CliError("configuration_error", "The explicit local embedding model is not installed")
     engine = await openEmbedder(model, directory, {
       ...(options.threads === undefined ? {} : { threads: options.threads }),
+      engine: options.env ? { env: options.env } : {},
     })
   } else {
     const remote = validatedRemote(choice.remote)

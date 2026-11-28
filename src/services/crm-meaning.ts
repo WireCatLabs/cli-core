@@ -54,7 +54,7 @@ export const nearestCrmActivities = async (
     viewers?: readonly CopyViewer[]
   },
 ): Promise<CrmActivityNearest[]> => {
-  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
+  const { model, directory, key, engine } = localModel(await meaningModel(store, env), env, command)
   if (!(await store.crm.activityChunks.embedded(key, accounts)))
     throw new CliError("not_found", `no CRM activity has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(
@@ -63,6 +63,7 @@ export const nearestCrmActivities = async (
     undefined,
     (embedder) => embedder.embed([words], "query"),
     embedders,
+    engine,
   )
   const floor = meaningFloor(key)
   return (

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import { allowNetwork } from "@wirecat/cli-base/testing"
 import { describe, expect, it, onTestFinished } from "vitest"
 import { loadModel, openEmbedder } from "./embed.js"
+import { meaningEngine } from "./engine.js"
 import type { RerankModel, TextModel } from "./models.js"
 import { installNativeRuntime, nativeRuntimeFor, onnxRuntime } from "./onnx-runtime.js"
 import { openReranker } from "./rerank.js"
@@ -45,7 +46,7 @@ describe.skipIf(!expected)("the native ONNX Runtime on this system", () => {
       process.env.WIRECAT_STATE_DIR = env.WIRECAT_STATE_DIR
 
       const folder = await installNativeRuntime({ env })
-      const runtime = await onnxRuntime(env)
+      const runtime = await onnxRuntime(await meaningEngine(), env)
 
       if (expected !== "native") {
         expect([folder, nativeRuntimeFor(), runtime.native]).toEqual([undefined, undefined, false])
