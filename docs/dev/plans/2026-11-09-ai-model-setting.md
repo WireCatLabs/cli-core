@@ -80,8 +80,8 @@ Refs read, so every line number below can be checked:
   - It sends `max_completion_tokens` to api.openai.com and `max_tokens` to every other host (`:43-45`).
   - It sets `redirect: "error"` (`:48`).
   - It accepts only `finish_reason: "stop"` (`:57`).
-- **The Anthropic adapter.** It uses `@anthropic-ai/sdk` with `baseURL` from the target, `maxRetries: 0`,
-  `logLevel: "off"`, `redirect: "error"` and a 120 s timeout (`src/models/anthropic.ts:16-24`).
+- **The Anthropic adapter.** It sends one streamed `POST {baseUrl}/v1/messages` over plain `fetch`, with no
+  retries, `redirect: "error"` and a 120 s limit on the wait for the answer to start (`src/models/anthropic.ts`).
 - **memo's native Ollama reader.** It is pinned to `http://127.0.0.1:11434` on purpose ("a remote one would be a way
   to send the text off it"), and it calls `/api/generate`
   ([memo `src/sources/readers/ollama.ts:4-5`](https://github.com/WireCatLabs/cli-memo/blob/2ad55877a69611c88dc2d0d413d0c2aaf93296c2/src/sources/readers/ollama.ts#L4-L5)).
