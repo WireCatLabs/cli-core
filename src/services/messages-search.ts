@@ -222,7 +222,7 @@ export const prepareLucene = async (
     searchError(
       "query.unsupported-field",
       mailField.span,
-      `${mailField.field}: is a mail field — memo search mail reads it`,
+      `${mailField.field}: is a mail field — wcat search mail reads it`,
     )
   const globalChat =
     request.chat === undefined ? undefined : await chatAmong(messenger, chatLookup, scopeAccounts, request.chat)

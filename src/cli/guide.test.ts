@@ -35,7 +35,7 @@ describe("guide", () => {
         catch-up  Catch up after a day away
 
       Works with:
-        memo guide person-brief  One person across every tool"
+        wcat guide person-brief  One person across every tool"
     `)
   })
 
@@ -65,7 +65,7 @@ describe("guide", () => {
     const list = JSON.parse((await call(["guide", "--json"])).stdout)
     expect(list.items.map((one: { command: string }) => one.command)).toEqual([
       "chat guide catch-up",
-      "memo guide person-brief",
+      "wcat guide person-brief",
     ])
 
     const { item } = JSON.parse((await call(["guide", "catch-up", "--json"])).stdout)
@@ -84,7 +84,7 @@ describe("guide", () => {
     const { code, stderr } = await call(["guide", "person-brief"])
 
     expect(code).not.toBe(0)
-    expect(stderr).toContain("memo guide person-brief")
+    expect(stderr).toContain("wcat guide person-brief")
   })
 })
 

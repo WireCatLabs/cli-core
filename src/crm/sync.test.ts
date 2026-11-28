@@ -47,7 +47,7 @@ it("says on the first sync, and only then, how to add an ungrouped CRM account t
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1"))
   const first = await syncCrm(source, store, PORTAL)
-  expect(first.groupHint).toBe("add it to a work group: `memo groups add work example-crm:portal`")
+  expect(first.groupHint).toBe("add it to a work group: `wcat groups add work example-crm:portal`")
   expect((await syncCrm(source, store, PORTAL)).groupHint).toBeUndefined()
 })
 
@@ -68,7 +68,7 @@ it("still hints for a CRM account whose profile is named work but no saved group
   await store.accounts.saveProfile("crm", "work", PORTAL)
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1"))
-  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/memo groups add work example-crm:portal/)
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/wcat groups add work example-crm:portal/)
 })
 
 it("still hints for a CRM account when a work group exists without it", async () => {
@@ -79,7 +79,7 @@ it("still hints for a CRM account when a work group exists without it", async ()
   await store.accounts.saveAccountGroup("work", ["telegram:102"])
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1"))
-  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/memo groups add work example-crm:portal/)
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/wcat groups add work example-crm:portal/)
 })
 
 const KEY = `crm.${PORTAL.provider}:${PORTAL.account}`

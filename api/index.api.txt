@@ -1386,12 +1386,12 @@ LoginQrOptions · interface · json?: boolean;
 LoginQrOptions · interface · }
 MEMO_SCENARIOS · const · export declare const MEMO_SCENARIOS: {
 MEMO_SCENARIOS · const · readonly personBrief: {
-MEMO_SCENARIOS · const · readonly tool: "memo";
+MEMO_SCENARIOS · const · readonly tool: "wcat";
 MEMO_SCENARIOS · const · readonly name: "person-brief";
 MEMO_SCENARIOS · const · readonly title: "One person across every tool";
 MEMO_SCENARIOS · const · };
 MEMO_SCENARIOS · const · readonly decisionTrail: {
-MEMO_SCENARIOS · const · readonly tool: "memo";
+MEMO_SCENARIOS · const · readonly tool: "wcat";
 MEMO_SCENARIOS · const · readonly name: "decision-trail";
 MEMO_SCENARIOS · const · readonly title: "What did we decide about X, across every source";
 MEMO_SCENARIOS · const · };
@@ -2976,6 +2976,18 @@ UploadSource · type · } | {
 UploadSource · type · kind: "bytes";
 UploadSource · type · bytes: Uint8Array;
 UploadSource · type · };
+WCAT_SCENARIOS · const · export declare const WCAT_SCENARIOS: {
+WCAT_SCENARIOS · const · readonly personBrief: {
+WCAT_SCENARIOS · const · readonly tool: "wcat";
+WCAT_SCENARIOS · const · readonly name: "person-brief";
+WCAT_SCENARIOS · const · readonly title: "One person across every tool";
+WCAT_SCENARIOS · const · };
+WCAT_SCENARIOS · const · readonly decisionTrail: {
+WCAT_SCENARIOS · const · readonly tool: "wcat";
+WCAT_SCENARIOS · const · readonly name: "decision-trail";
+WCAT_SCENARIOS · const · readonly title: "What did we decide about X, across every source";
+WCAT_SCENARIOS · const · };
+WCAT_SCENARIOS · const · };
 WarningEvent · interface · export interface WarningEvent {
 WarningEvent · interface · event: "warning";
 WarningEvent · interface · code: string;

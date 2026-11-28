@@ -45,7 +45,7 @@ export const analysisChoice = (
   if (provider === "agent")
     throw new CliError(
       "validation_error",
-      "models.analysis.provider is off or not set and no AI model is chosen, so the agent links the chat: use your linking skill, choose a model with `memo models ai set`, or set models.analysis.provider to openai or anthropic to use --analyze",
+      "models.analysis.provider is off or not set and no AI model is chosen, so the agent links the chat: use your linking skill, choose a model with `wcat models ai set`, or set models.analysis.provider to openai or anthropic to use --analyze",
     )
   if (provider !== "openai" && provider !== "anthropic")
     throw new CliError("validation_error", "analysis provider must be agent, openai or anthropic")

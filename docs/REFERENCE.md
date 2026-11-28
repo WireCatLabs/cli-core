@@ -188,12 +188,12 @@ close-before-output rendering; Base supplies correlation, budgets and serial exe
 [bounded read batches](dev/STANDARD.md#bounded-read-batches) for caps and partial-result semantics.
 
 `searchAll` takes the messenger as `{ app, savedChatId?, hintCommand? }`: `hintCommand` is the tool a missing-model
-hint names when it is not `app.command`, and `null` names the tools with a `models` command — for a tool like memo
+hint names when it is not `app.command`, and `null` names the tools with a `models` command — for a tool like wcat
 that borrows tg's identity for `group:` lists.
 
 `searchAll` reads meetings as one more resource (`only` takes `meetings`), from the search index of every meeting
 account of the caller's scope, and ranks them with the other resources. The scope is that of the caller's stored
-account (personal or work), as a person's context reads; `meetingScopes` widens it, as memo does with both. `source`
+account (personal or work), as a person's context reads; `meetingScopes` widens it, as wcat does with both. `source`
 takes `--source` as typed (`zoom:<account>`, `zoom`, `meetings`, `all`, a list or `group:<name>`) and reads the
 accounts it names of each kind; `scope` does the same with accounts already chosen. A named meeting account of
 another scope is a `skipped` entry that says its scope. A failure of one meeting account is a `skipped` entry with
@@ -216,7 +216,7 @@ const found = await searchAll(store, account, {
 The meeting query language applies: phrases, OR, NOT, `"a b"~N`, `from:` (who said it) and `date:` (when the meeting
 started, in `timezone`); `exact` matches words as typed. A field meetings do not have (`in:`, `chat:`, `filename:`)
 skips meetings with the reason. Meeting hits have `kind: "meeting"`, `ref` (the meeting,
-`meeting:<account>/<meeting>`, which memo takes as evidence), `accountId`, `meetingId`, `scope`, `id`, `startMs` and
+`meeting:<account>/<meeting>`, which wcat takes as evidence), `accountId`, `meetingId`, `scope`, `id`, `startMs` and
 `foundBy`; a transcript hit also has `cueRef`, the matched cue (`meeting:<account>/<meeting>/<transcript>/<cue>`, which
 `meetings passage` opens), `speakerName`, the transcript's `language` (`null` when unknown), and `line` of
 `linesTotal`. The CLI answer names them `cue_ref`, `sender_name`, `language`, `line` and `lines_total`. A hit found
@@ -324,7 +324,7 @@ Import the program lazily, as above: the compile cache and the SQLite swap only 
 
 ### The command server
 
-`<cli> commands --serve` is in every CLI that starts through `startCli` (tg, max, wa and memo among them), for
+`<cli> commands --serve` is in every CLI that starts through `startCli` (tg, max, wa and wcat among them), for
 WireCat Desktop, which otherwise pays a whole Node start (about 0.6 s) for each read on a page. It is matched before
 the program loads, so it is in no help, no `commands --json` and no MCP catalogue. Protocol 1, one JSON object per
 line:
@@ -450,15 +450,15 @@ A step is written as a person types it: the tool's name first, no profile, as in
 a shell as is. A character a shell would act on — `>`, `<`, `|`, `&`, `;`, `` ` ``, `$(`, or a glob `*`, `?`, `[` —
 goes inside quotes: `'date>1d'`, not `date>1d`, which writes a file named `1d` and drops the filter. The tool mounts
 the command and names the directory, plus the cross-tool scenarios it lists by reference, taken from
-`MEMO_SCENARIOS` so every tool shows the same title:
+`WCAT_SCENARIOS` so every tool shows the same title:
 
 ```ts
 import { fileURLToPath } from "node:url"
-import { checkGuide, guideCommand, MEMO_SCENARIOS } from "@wirecat/cli-core"
+import { checkGuide, guideCommand, WCAT_SCENARIOS } from "@wirecat/cli-core"
 
 guideCommand(app, {
   directory: fileURLToPath(new URL("../scenarios", import.meta.url)),
-  worksWith: [MEMO_SCENARIOS.personBrief],
+  worksWith: [WCAT_SCENARIOS.personBrief],
 })
 
 // In the tool's tests: every file parses, no step leaves a shell character unquoted, every step's command path
@@ -653,13 +653,13 @@ same answer for a caller with a store.
 
 ## Task and mail statistics
 
-`stats tasks show` (`tasksStatsCommand(messenger)`, mounted by tg, max and memo) answers `{ item }`, the
+`stats tasks show` (`tasksStatsCommand(messenger)`, mounted by tg, max and wcat) answers `{ item }`, the
 `task_stats` entity: `open`, `created`, `closed`, `median_close_ms`, `mean_open_age_ms` and one row per group.
 
 - `--by chat` (the default) groups this account's tasks by where they were found; a row keeps `chat`, and its `key`
   is the same chat reference. `--by meeting` reads only tasks found in a meeting, keyed `meeting:<account>/<meeting>`.
   `--by project` reads the owner's project tasks across every project, keyed `project:<id>`; it ignores the account.
-- A `Messenger` with `accountsOf(command)` reads every account it returns when the command names none (memo without
+- A `Messenger` with `accountsOf(command)` reads every account it returns when the command names none (wcat without
   `--source`): the answer adds `accounts`, each chat row keeps its own account in `chat`, and `--chat` or a `chat:`
   term naming one chat is refused, since a chat belongs to one account.
 - The query after `--` takes the fields of `tasks list` except `created_at` and `closed_at`, plus `created`, the

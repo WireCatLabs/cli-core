@@ -128,12 +128,14 @@ const CREDENTIAL_RUNS: readonly (readonly string[])[] = [
 /**
  * Every WireCat app's folders hold its sessions and tokens; `max` must not send `tg`'s, nor the other way round. The
  * tools come from `WIRECAT_TOOLS`, so a new tool is covered once it is listed there; the rest are apps no first
- * screen names yet, the shared packages' own folders, and the name zoom-cli's folders had before.
+ * screen names yet, the shared packages' own folders, and the names zoom-cli's and memo's folders had before.
  */
 const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
   ...WIRECAT_TOOLS.map(({ appName, envPrefix }) => ({ appName, prefix: envPrefix })),
   { appName: "beeline-cli", prefix: "BEELINE" },
   { appName: "zm", prefix: "ZM" },
+  // memo's folders until wcat's first start moves them.
+  { appName: "cli-memo", prefix: "MEMO" },
   { appName: "cli-messaging", prefix: "MESSAGING" },
   { appName: "cli-common", prefix: "CLI_COMMON" },
 ]

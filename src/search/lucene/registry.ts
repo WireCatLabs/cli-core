@@ -226,7 +226,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     aliases: [],
     type: "enum",
     operators: terms,
-    normalization: "lowercase; notes only: internal is written in memo, file is from a notes folder",
+    normalization: "lowercase; notes only: internal is written in wcat, file is from a notes folder",
     support: "A1",
     values: ["internal", "file"],
   },

@@ -500,7 +500,7 @@ export const baseStagesOver = (context: StoreContext) => {
       const id = /^stage:(\d+)$/.exec(stage.trim())?.[1]
       if (id === undefined)
         refuse(
-          `a stage is named by its stage:<id> reference, as memo's \`stages list\` shows it; not ${stage}`,
+          `a stage is named by its stage:<id> reference, as wcat's \`stages list\` shows it; not ${stage}`,
           "stage.ref",
         )
       const kindRow = database
@@ -584,7 +584,7 @@ export const baseStagesOver = (context: StoreContext) => {
       throw new CliError(
         "validation_error",
         `no stage of ${found.pipelineName} (${found.pipeline}) is mapped to ${target.name}; map one with ` +
-          `memo's \`stages set <stage:id> ${stageRef(target.id)}\` (the stages: \`stages list pipeline:${found.pipeline}\`)`,
+          `wcat's \`stages set <stage:id> ${stageRef(target.id)}\` (the stages: \`stages list pipeline:${found.pipeline}\`)`,
         { reason: "stage.unmapped" },
       )
     },

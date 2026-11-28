@@ -11,7 +11,7 @@ export const SEARCH_SHELL: readonly SharedContractOverride[] = [
     command: ["search"],
     field: "description",
     before:
-      "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, the separate memo CLI: memo search mail",
+      "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, wcat: wcat search mail",
     after: "imported document search",
     reason: "This standalone source searches imported documents only.",
   },

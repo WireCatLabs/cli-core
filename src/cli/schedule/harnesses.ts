@@ -194,7 +194,7 @@ const AGENT_HARNESSES = {
     restricted: false,
     restrictedReason:
       "its Shell(<command>) rule matches the first word only, and its docs (https://cursor.com/docs/cli/reference/permissions) " +
-      "do not say a chained command such as `memo x; other` is denied",
+      "do not say a chained command such as `wcat x; other` is denied",
     start: ({ program, prompt, model }) => ({
       argv: [program, "-p", prompt, "--output-format", "text", ...modelFlag("--model", model)],
     }),
@@ -265,7 +265,7 @@ const AGENT_HARNESSES = {
     restricted: false,
     restrictedReason:
       "its dontAsk mode denies what no --allow rule names (https://docs.x.ai/build/features/permissions), but its docs " +
-      "do not say a chained command such as `memo x; other` is denied; superagent's grok-cli, also `grok`, has no rules",
+      "do not say a chained command such as `wcat x; other` is denied; superagent's grok-cli, also `grok`, has no rules",
     start: ({ program, prompt, model, clis }) => ({
       argv: [
         program,

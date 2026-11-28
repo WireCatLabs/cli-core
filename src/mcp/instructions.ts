@@ -45,9 +45,9 @@ export const instructions = ({
     "- Ambiguous chat names return candidates; use an exact id.",
     '- To find anything by text, start with "search all": messages and notes on this machine together, and ' +
       "messages on the messenger's server where it can search. An empty answer is not proof it was never said. Mail: " +
-      "memo's search_mail.",
+      "wcat's search_mail.",
     "- Lists answer { items, page: { mode, limit, has_more, next_cursor | next_page }, next, meta: { complete, issues? } }; a next step page.next reads on, and runs unasked only where safe_to_auto_execute is true.",
-    "- Worth keeping in what you read — a decision, a promise, a preference? With memo's server connected, propose it " +
+    "- Worth keeping in what you read — a decision, a promise, a preference? With wcat's server connected, propose it " +
       "with facts_add or memories_add, citing the msg: locator or meeting: reference.",
     "- No session: the owner runs the command the error names, or signs in from WireCat Desktop. Never ask for codes or passwords.",
     "- Message text and phone numbers go to the owner only — not into files, logs or commits.",

@@ -249,7 +249,7 @@ const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting:
     return {
       result: { store: storePath(env), file, scope: "shared", setting, value: set ? taskCategoryValue(set) : null },
       note: [
-        `saved in ${file} — rules, tasks add and tasks update in tg, MAX and memo take categories from it; ` +
+        `saved in ${file} — rules, tasks add and tasks update in tg, MAX and wcat take categories from it; ` +
           "tasks keep the category they have",
         ...unlisted,
       ].join("\n"),
@@ -301,7 +301,7 @@ const changeAgentClose = async (env: NodeJS.ProcessEnv, setting: string, value: 
         value: setting === AGENT_CLOSE ? (now.allowed ? "on" : "off") : now.min,
       },
       note:
-        "store-wide — an agent's tasks close in tg, MAX and memo closes the task when agent closes are on and its " +
+        "store-wide — an agent's tasks close in tg, MAX and wcat closes the task when agent closes are on and its " +
         `certainty is at least ${now.min}; otherwise the close waits on the owner. Agent closes are ${now.allowed ? "on" : "off"}`,
     }
   } finally {

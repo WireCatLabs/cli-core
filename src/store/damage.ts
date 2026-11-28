@@ -57,7 +57,7 @@ export const isDerivedTable = (table: string, searchIndexes: readonly string[]):
   table.startsWith("vector_index_") ||
   searchIndexes.some((index) => table === index || table.startsWith(`${index}_`))
 
-const WIRECAT_UNITS = ["memo-*", "mail-*", "tg-*", "max-*", "wirecat-*"]
+const WIRECAT_UNITS = ["wcat-*", "memo-*", "mail-*", "tg-*", "max-*", "wirecat-*"]
 
 const seen = (mark: DamageMark) => `\`${mark.command}\` found the store damaged at ${mark.at} (${mark.error})`
 
