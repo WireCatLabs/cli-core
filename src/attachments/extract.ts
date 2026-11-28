@@ -50,7 +50,6 @@ export const classify = (hint: FileHint): "image" | "unsupported" | undefined =>
 
 const ENGINE_FILES: Record<Engine, string> = {
   unpdf: "PDF",
-  mammoth: "Word",
   "word-extractor": "Word 97–2003",
   linkedom: "HTML",
   "defuddle/node": "HTML",

@@ -28,9 +28,8 @@ const without =
   }
 
 describe("reading the text layer of a file", () => {
-  it("refuses DOCX expansion before calling mammoth, including false declared sizes", async () => {
-    const extractRawText = vi.fn(async () => ({ value: "unexpected" }))
-    const load: LoadEngine = async () => ({ extractRawText })
+  it("refuses DOCX expansion before parsing it, including false declared sizes", async () => {
+    const load = vi.fn<LoadEngine>(async () => ({}))
     const bomb = zipSync({ "word/document.xml": new Uint8Array(1) })
     const bombView = new DataView(bomb.buffer, bomb.byteOffset, bomb.byteLength)
     for (let offset = 0; offset + 46 < bomb.length; offset++) {
@@ -44,7 +43,7 @@ describe("reading the text layer of a file", () => {
       if (view.getUint32(offset, true) === 0x02014b50) view.setUint32(offset + 24, 1, true)
     }
     expect(await extractText(forged, hint("forged.docx"), load)).toEqual({ status: "too-large" })
-    expect(extractRawText).not.toHaveBeenCalled()
+    expect(load).not.toHaveBeenCalled()
   })
   it("refuses a file over 10 GiB by default and follows the setting", () => {
     expect(tooLarge(10 * 1024 ** 3, {})).toBe(false)
@@ -52,12 +51,13 @@ describe("reading the text layer of a file", () => {
     expect(tooLarge(2 * 1024 ** 2, { MESSAGING_ATTACHMENT_MAX_MIB: "1" })).toBe(true)
   })
   it("reads a DOCX whose pictures unpack past the text budget", async () => {
-    const load: LoadEngine = async () => ({ extractRawText: async () => ({ value: "synthetic body" }) })
     const big = zipSync({
-      "word/document.xml": text("<w:document/>"),
+      "word/document.xml": text(
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>synthetic body</w:t></w:r></w:p></w:body></w:document>',
+      ),
       "word/media/image1.png": new Uint8Array(60 * 1024 * 1024),
     })
-    expect(await extractText(big, hint("pictures.docx"), load)).toMatchObject({ status: "extracted" })
+    expect(await extractText(big, hint("pictures.docx"), importEngine)).toMatchObject({ status: "extracted" })
   })
 
   it("extracts a long PDF and closes its document without a fixed page/time cutoff", async () => {
@@ -153,11 +153,9 @@ describe("reading the text layer of a file", () => {
     expect(await extractText(text("a\u0000b"), hint("a.log"), importEngine)).toMatchObject({ error: "binary" })
   })
 
-  it("**reads a Word document through mammoth**, and records its version", async () => {
-    const found = await extractText(docx(["Договор поставки", "invoice 7"]), hint("deal.docx"), importEngine)
-    expect(found.status).toBe("extracted")
-    expect(found).toMatchObject({ extractor: expect.stringMatching(/^docx:mammoth@\d+\.\d+\.\d+$/) })
-    expect(found.status === "extracted" && found.text).toContain("Договор поставки")
+  it("**reads a Word document with no package to load**, and records its reader", async () => {
+    const found = await extractText(docx(["Договор поставки", "invoice 7"]), hint("deal.docx"), without("unpdf"))
+    expect(found).toEqual({ status: "extracted", extractor: "docx:v1", text: "Договор поставки\n\ninvoice 7\n\n" })
   })
 
   it("marks a corrupt Word document unreadable, without the engine's message", async () => {
@@ -165,6 +163,7 @@ describe("reading the text layer of a file", () => {
     expect(await extractText(broken, hint("broken.docx"), importEngine)).toMatchObject({
       status: "unreadable",
       error: "unreadable",
+      extractor: "docx:v1",
     })
   })
 
@@ -188,10 +187,6 @@ describe("reading the text layer of a file", () => {
     expect(await extractText(pdf("x"), hint("a.pdf"), without("unpdf"))).toEqual({
       status: "engine-missing",
       engine: "unpdf",
-    })
-    expect(await extractText(docx(["x"]), hint("a.docx"), without("mammoth"))).toEqual({
-      status: "engine-missing",
-      engine: "mammoth",
     })
     expect(engineHint("unpdf", "tg")).toContain("ships with tg, could not be loaded — reinstall the tool")
     expect(engineHint("@napi-rs/canvas", "tg")).toContain("npm install -g @napi-rs/canvas")
@@ -220,12 +215,11 @@ it("honors a configured file budget for local text extraction", async () => {
 describe("engineStates", () => {
   it("says which reader is built in, which optional one is installed, and which would not load", () => {
     const resolve = (name: string) => {
-      if (name === "mammoth") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
+      if (name === "unpdf") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
       return `file:///node_modules/${name}/index.js`
     }
     expect(engineStates(resolve)).toEqual({
-      unpdf: "built in",
-      mammoth: "missing",
+      unpdf: "missing",
       "word-extractor": "built in",
       linkedom: "built in",
       "defuddle/node": "built in",

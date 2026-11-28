@@ -241,9 +241,9 @@ the re-key included, stay.
 
 **The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this
-version's package) — plain text, HTML, RTF, Word through `mammoth`, Word 97–2003 through `word-extractor`, a
+version's package) — plain text, HTML, RTF, Word 97–2003 through `word-extractor`, a
 PDF's text layer through `unpdf` (dependencies of this package, loaded on first use: `src/readers/pdf/`, picked by `src/readers/registry.ts`),
-ODF/OOXML/EPUB through the built-in readers (`src/attachments/documents.ts`) — or what an agent wrote back after reading a scan
+Word through the built-in reader (`src/readers/docx/`), ODF/OOXML/EPUB through the built-in readers (`src/attachments/documents.ts`) — or what an agent wrote back after reading a scan
 (`origin`: `extracted` or `agent`; an extraction never replaces an agent's text). Its words are in
 `attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; a voice note's transcript
 is its attachment's text with extractor `speech:<source>`. `content:` (file text) and `transcript:` compile to

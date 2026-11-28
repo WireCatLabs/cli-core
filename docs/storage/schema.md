@@ -996,7 +996,7 @@ A file of a message, an email or a meeting, with its extracted text.
 | `text` | text |  |  | the text extracted from the file |
 | `normalized_text` | text |  |  | the text folded for search: lower case, accents removed; filled by the indexer |
 | `extraction` | text |  |  | how the text was got: `text`, `ocr`, `agent`, `failed` |
-| `extractor` | text |  |  | What produced the attachment's text: `plain`, `docx:mammoth@1.13.0`, `pdf:unpdf@1.8.1`, an OCR engine, or an agent's own label. |
+| `extractor` | text |  |  | What produced the attachment's text: `plain`, `docx:v1`, `pdf:unpdf@1.8.1`, an OCR engine, or an agent's own label. |
 | `extraction_error` | text |  |  | Short reason code why no text came out (e.g. `no_text`), never a line of the file; NULL on success. |
 | `content_sha256` | text |  |  | Hex SHA-256 of the file bytes that were read, so an unchanged file is not read again. |
 | `extracted_at` | integer |  |  | When the attachment's text (or its error) was written (epoch ms). |

@@ -107,7 +107,7 @@
     "duration": "Length in seconds for audio and video.",
     "provider_ref": "Opaque JSON the messenger adapter needs to fetch the bytes later; meaningless outside that adapter.",
     "local_path": "Where `messages download` saved the file on this computer; NULL when it was never downloaded.",
-    "extractor": "What produced the attachment's text: `plain`, `docx:mammoth@1.13.0`, `pdf:unpdf@1.8.1`, an OCR engine, or an agent's own label.",
+    "extractor": "What produced the attachment's text: `plain`, `docx:v1`, `pdf:unpdf@1.8.1`, an OCR engine, or an agent's own label.",
     "extraction_error": "Short reason code why no text came out (e.g. `no_text`), never a line of the file; NULL on success.",
     "content_sha256": "Hex SHA-256 of the file bytes that were read, so an unchanged file is not read again.",
     "extracted_at": "When the attachment's text (or its error) was written (epoch ms)."

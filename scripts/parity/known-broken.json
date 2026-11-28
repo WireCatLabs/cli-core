@@ -22,5 +22,17 @@
     "pr": 3365,
     "until": "2026-12-03",
     "reason": "#3365 marks the session and mirrors commands as cli-core own; src/mcp.test.ts still pins session status and session list among this CLI own commands"
+  },
+  {
+    "repo": "drive-cli",
+    "pr": 3424,
+    "until": "2026-12-12",
+    "reason": "#3424 removes \"mammoth\" from Engine; src/google.ts ENGINE_LABEL still has a mammoth key, and drive can drop its mammoth dependency"
+  },
+  {
+    "repo": "cli-memo",
+    "pr": 3424,
+    "until": "2026-12-12",
+    "reason": "#3424 removes \"mammoth\" from Engine; src/notes/documents.test.ts still compares a loaded name with \"mammoth\" and expects engine-missing for a .docx"
   }
 ]

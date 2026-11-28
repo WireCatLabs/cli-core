@@ -127,7 +127,7 @@
     "doc": "The text of one attachment: read from the saved file (`origin` `extracted`) or written back by an agent that read a scan or a photo (`agent`). No foreign key: a build that predates this table deletes attachments in its purges, and a key would refuse that; triggers erase the text instead (NEED-393 A).",
     "cols": {
       "origin": "`extracted` or `agent`.",
-      "extractor": "`plain`, `docx:mammoth@1.13.0`, `pdf:unpdf@1.8.1`, or the agent's own label.",
+      "extractor": "`plain`, `docx:v1`, `pdf:unpdf@1.8.1`, or the agent's own label.",
       "bytes": "The file's size when it was read; a file of another size is read again.",
       "error": "Why no text came out — a reason code, never a line of the file."
     }
