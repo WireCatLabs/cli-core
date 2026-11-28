@@ -11,7 +11,7 @@ import type { Extraction, FileHint, LoadEngine } from "./types.js"
  * The packages that read formats. Reading documents is core, so the readers ship with this package (the owner's
  * decision of 2026-10-12); only the page renderer for OCR stays optional, a native binary.
  */
-export const BUILT_IN = ["unpdf", "mammoth", "word-extractor", "linkedom", "defuddle/node"] as const
+export const BUILT_IN = ["unpdf", "word-extractor", "linkedom", "defuddle/node"] as const
 export const ENGINES = [...BUILT_IN, "@napi-rs/canvas"] as const
 export type Engine = (typeof ENGINES)[number]
 
@@ -43,15 +43,19 @@ export const withEngine = async <T>(
 ): Promise<Extraction> => {
   let engine: T
   try {
-    const loaded = (await load(name)) as T & { default?: T }
-    engine = name === "mammoth" && loaded.default ? loaded.default : loaded
+    engine = (await load(name)) as T
   } catch (error) {
     if (isMissing(error, name)) return { status: "engine-missing", engine: name }
     throw error
   }
-  const extractor = `${name === "mammoth" ? "docx" : name === "word-extractor" ? "doc" : "pdf"}:${versionOf(name)}`
+  const extractor = `${name === "word-extractor" ? "doc" : "pdf"}:${versionOf(name)}`
+  return guarded(extractor, () => read(engine, extractor))
+}
+
+/** A reader's failure as a result: a limit is `too-large`, anything else but a cancel is `unreadable`. */
+export const guarded = async (extractor: string, read: () => Promise<Extraction>): Promise<Extraction> => {
   try {
-    return await read(engine, extractor)
+    return await read()
   } catch (error) {
     if (error instanceof ReaderLimit) return { status: "too-large" }
     if (isCliError(error) && error.code === "cancelled") throw error

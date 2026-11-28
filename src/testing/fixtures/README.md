@@ -89,3 +89,41 @@ one sheet "Synthetic Budget", a header row, a date, a percentage format and a fo
   sheet.getCell("D2").numFmt = "0%"
   sheet.getCell("B4").value = { formula: "B2+B3", result: 1200.3 }
   ```
+
+## `pond-lists.docx`
+
+A 6.8 KB Word document with invented text, for the Word reader test in `src/readers/docx/index.test.ts`: a heading, a
+bullet list with a nested item, a numbered list and a table with a header row and a Russian cell.
+
+- **Made with** LibreOffice 26.2 headless from this HTML, once:
+
+  ```sh
+  echo '<html><body><h1>Synthetic pond report</h1><p>Herons counted this week:</p><ul><li>Grey heron</li><li>Night heron<ul><li>Juvenile</li></ul></li></ul><ol><li>Fill the pond</li><li>Count the fish</li></ol><table border="1"><tr><th>Bird</th><th>Count</th></tr><tr><td>Heron</td><td>42</td></tr><tr><td>Цапля</td><td>7</td></tr></table><p>Closing line.</p></body></html>' > lists.html
+  soffice --headless --convert-to docx:"MS Word 2007 XML" lists.html
+  ```
+
+## `field-notes.docx`
+
+An 11 KB Word document with invented text, for the same test: two footnotes, a line break inside a paragraph and a
+table. pandoc writes it, so its parts differ from LibreOffice's.
+
+- **Made with** `pandoc -o field-notes.docx field-notes.md` (pandoc 3), once, from:
+
+  ```md
+  # Synthetic field notes
+
+  The heron returned to the pond[^1] before dawn.
+
+  A second paragraph with a line··
+  break and a tab-free ending.[^2]
+
+  | Season | Herons |
+  |--------|--------|
+  | Spring | 12     |
+  | Autumn | 42     |
+
+  [^1]: The north pond, near the willow.
+  [^2]: Counted by the synthetic observer.
+  ```
+
+  `··` stands for the two trailing spaces that make the line break.

@@ -108,7 +108,6 @@ describe("doctor", () => {
 
     expect(answer.readers).toEqual({
       unpdf: "built in",
-      mammoth: "built in",
       "word-extractor": "built in",
       linkedom: "built in",
       "defuddle/node": "built in",

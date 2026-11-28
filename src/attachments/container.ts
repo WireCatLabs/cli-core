@@ -142,7 +142,7 @@ export const readContainer = async (
   return result
 }
 
-const checkXml = (text: string) => {
+const checkXml = (text: string, maxNodes: number) => {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error("unsupported_xml")
   let depth = 0
   let nodes = 0
@@ -156,7 +156,7 @@ const checkXml = (text: string) => {
           ? "?>"
           : undefined
     if (skip) {
-      if (++nodes > 200_000) throw new ReaderLimit()
+      if (++nodes > maxNodes) throw new ReaderLimit()
       const end = text.indexOf(skip, index + 2)
       if (end < 0) throw new Error("invalid_xml")
       index = end + skip.length - 1
@@ -175,13 +175,13 @@ const checkXml = (text: string) => {
     const tag = text.slice(start, index + 1)
     if (tag.startsWith("</")) depth--
     else if (!/\/\s*>$/.test(tag)) depth++
-    if (++nodes > 200_000 || depth > 128) throw new ReaderLimit()
+    if (++nodes > maxNodes || depth > 128) throw new ReaderLimit()
     if (depth < 0) throw new Error("invalid_xml")
   }
   if (depth !== 0) throw new Error("invalid_xml")
 }
 
-export const xmlPart = (archive: Map<string, Uint8Array>, path: string): Document => {
+export const xmlPart = (archive: Map<string, Uint8Array>, path: string, maxNodes = 200_000): Document => {
   const bytes = archive.get(path)
   if (!bytes) throw new Error("missing_part")
   let text = decodeXml(bytes)
@@ -198,7 +198,7 @@ export const xmlPart = (archive: Map<string, Uint8Array>, path: string): Documen
     const doctype = /^<!DOCTYPE\s+html\s*>/i.exec(text.slice(start))
     if (doctype) text = text.slice(0, start) + text.slice(start + doctype[0].length)
   }
-  checkXml(text)
+  checkXml(text, maxNodes)
   const document = new DOMParser({
     onError: () => {
       throw new Error("invalid_xml")

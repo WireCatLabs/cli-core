@@ -404,7 +404,7 @@ describe("attachments extract", () => {
       expect.objectContaining({
         ref: "msg:chat/500/7/2",
         status: "extracted",
-        extractor: expect.stringMatching(/^docx:mammoth@/),
+        extractor: "docx:v1",
       }),
       {
         ref: "msg:chat/500/7/1",

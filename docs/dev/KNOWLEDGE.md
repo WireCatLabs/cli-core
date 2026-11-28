@@ -552,7 +552,7 @@ A chat's title is the one text a reason carries; it is cut to 60 characters.
 ## Document extraction
 
 `./documents` exposes `extractText`, `importEngine`, limits and extraction types. Markdown/TXT/CSV/TSV
-use UTF-8 text; HTML and RTF are read to their visible text. PDF, DOCX and DOC use `unpdf`, `mammoth` and `word-extractor`,
-dependencies of this package; XLSX, PPTX, ODT, ODS, ODP and EPUB use the bounded built-in readers. Spreadsheets (XLSX, ODS, CSV, TSV) read row by row under their header (`sheetText`). PDF results expose page spans. Missing engines,
+use UTF-8 text; HTML and RTF are read to their visible text. PDF and DOC use `unpdf` and `word-extractor`,
+dependencies of this package; DOCX, XLSX, PPTX, ODT, ODS, ODP and EPUB use the bounded built-in readers. Spreadsheets (XLSX, ODS, CSV, TSV) read row by row under their header (`sheetText`). PDF results expose page spans. Missing engines,
 unreadable files, scans requiring an agent, unsupported formats and oversized inputs are distinct.
 Legacy XLS/PPT and automatic OCR are not supported.
