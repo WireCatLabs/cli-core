@@ -5,7 +5,7 @@ import { accountRemoveCommand } from "../account-remove.js"
 import { accountRenameCommand } from "../account-rename.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
-import { accountSessionsCommand } from "./account-sessions-command.js"
+import { accountDevicesCommand } from "./account-devices-command.js"
 import { photoHelp, readProfilePhoto } from "./admin-commands.js"
 import { accountAnswer, renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -64,7 +64,7 @@ export const accountCommand = (messenger: Messenger): Command => {
           renderItem(this, context, hidePhone ? { ...changed, account: withoutPhone(changed.account) } : changed)
         }),
     )
-    .addCommand(accountSessionsCommand(messenger))
+    .addCommand(accountDevicesCommand(messenger))
   if (messenger.accountRemoval)
     account.addCommand(
       accountRemoveCommand(messenger.app, messenger.accountRemoval, {

@@ -58,7 +58,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
   })
 
   it.each([
-    ["account sessions end", "account.sessions.end"],
+    ["account devices end", "account.devices.end"],
     ["doctor reports create", "doctor.reports.create"],
     ["images models download", "images.models.download"],
     ["schedule run", "schedule.run"],

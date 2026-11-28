@@ -6097,7 +6097,7 @@ describe("the guard, account and mcp config commands", () => {
     await store.close()
   })
 
-  it("**account sessions list** shows where the account is logged in, and a messenger without it refuses", async () => {
+  it("**account devices list** shows where the account is logged in, and a messenger without it refuses", async () => {
     const env = sandbox()
     const devices: MessengerAdapter = {
       ...fake,
@@ -6107,15 +6107,15 @@ describe("the guard, account and mcp config commands", () => {
       ],
     }
 
-    const listed = await call(["account", "sessions", "list", "--json"], async () => devices, env)
-    const lines = await call(["account", "sessions", "list", "--jsonl"], async () => devices, env)
+    const listed = await call(["account", "devices", "list", "--json"], async () => devices, env)
+    const lines = await call(["account", "devices", "list", "--jsonl"], async () => devices, env)
 
     expect(json(listed.stdout).items.map((one: { current: boolean }) => one.current)).toEqual([true, false])
     expect(v.parse(listEnvelopeSchema(ENTITIES.account_session), json(listed.stdout)).items[0]).toMatchObject({
       last_active_at: null,
     })
     expect(jsonlData(lines.stdout)).toHaveLength(2)
-    expect((await call(["account", "sessions", "list"], async () => fake, env)).code).toBe(2)
+    expect((await call(["account", "devices", "list"], async () => fake, env)).code).toBe(2)
   })
 
   it("**chats inspect** answers what a link leads to, and refuses offline and without the method", async () => {
@@ -6312,7 +6312,7 @@ describe("every list in --json", () => {
       ["messages", "list", "7"],
       ["messages", "context", "7", "2"],
       ["messages", "scheduled", "7"],
-      ["account", "sessions", "list"],
+      ["account", "devices", "list"],
       ["models", "list", "kind:audio"],
       ["store", "status"],
       ["store", "jobs", "list"],

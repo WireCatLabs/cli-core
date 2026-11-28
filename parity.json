@@ -778,7 +778,7 @@
       "meaning": "newest conversation first, or alphabetical"
     },
     "--others": {
-      "meaning": "every session but this one",
+      "meaning": "every device but this one",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
     "--output": {
@@ -1226,6 +1226,29 @@
     "account": {
       "in": "all"
     },
+    "account devices": {
+      "in": "all"
+    },
+    "account devices end": {
+      "in": ["max", "tg"],
+      "options": {
+        "--others": "all",
+        "--yes": {
+          "in": [],
+          "planned": {
+            "max": "P2",
+            "tg": "P2",
+            "wa": "P2"
+          }
+        }
+      },
+      "planned": {
+        "wa": "WA-1: adopt Messenger.never; hide unsupported linked-device operations"
+      }
+    },
+    "account devices list": {
+      "in": "all"
+    },
     "account privacy": {
       "in": ["max"],
       "planned": {
@@ -1335,29 +1358,6 @@
         "tg": "account rename: set accountRemoval.signIn (WireCat Desktop account edit)",
         "wa": "account rename: set accountRemoval.signIn (WireCat Desktop account edit)"
       }
-    },
-    "account sessions": {
-      "in": "all"
-    },
-    "account sessions end": {
-      "in": ["max", "tg"],
-      "options": {
-        "--others": "all",
-        "--yes": {
-          "in": [],
-          "planned": {
-            "max": "P2",
-            "tg": "P2",
-            "wa": "P2"
-          }
-        }
-      },
-      "planned": {
-        "wa": "WA-1: adopt Messenger.never; hide unsupported linked-device operations"
-      }
-    },
-    "account sessions list": {
-      "in": "all"
     },
     "account show": {
       "in": "all",

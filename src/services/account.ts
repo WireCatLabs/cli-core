@@ -58,7 +58,7 @@ export const accountService = (deps: ServiceDeps): AccountService => {
     },
 
     endOtherSessions: async () => {
-      const end = capability(await online("account sessions end"), "endOtherSessions", "end other sessions")
+      const end = capability(await online("account devices end"), "endOtherSessions", "log out other devices")
       const operationId = newOperationId()
       const sessions = await guardedWrite(
         deps.guard,

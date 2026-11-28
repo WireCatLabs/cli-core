@@ -390,7 +390,7 @@ export const accountAnswer = (provider: string, { id, name, username, phone }: A
   ...(phone === undefined ? {} : { phone }),
 })
 
-/** Somewhere else the account is logged in, as `account sessions list` answers it. */
+/** Somewhere else the account is logged in, as `account devices list` answers it. */
 export const sessionAnswer = ({ current, client, device, location, lastActiveAt, createdAt }: AccountSession) => ({
   current,
   client,

@@ -13,8 +13,8 @@ type Need = readonly [method: keyof MessengerAdapter, what: string]
  */
 export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "account update": ["updateProfile", "change the profile"],
-  "account sessions list": ["sessions", "list the account's sessions"],
-  "account sessions end": ["endOtherSessions", "end other sessions"],
+  "account devices list": ["sessions", "list the account's devices"],
+  "account devices end": ["endOtherSessions", "log out other devices"],
   "chats events": ["chatEvents", "read who joined or left"],
   "chats inspect": ["inspect", "read a link"],
   "chats folders list": ["folders", "list its folders"],

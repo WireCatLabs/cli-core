@@ -2,10 +2,12 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { fakeAdapter } from "../../kit/fake.js"
 import { contractSeed } from "../../kit/seed.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { unknownPermissionIssues } from "../permission-keys.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { accountCommand } from "./account-command.js"
@@ -26,8 +28,8 @@ const argvOf = (root: string): Record<string, string[]> => {
   writeFileSync(book, "+34600000000, Ana\n")
   return {
     "account update": ["--first-name", "Ana"],
-    "account sessions list": [],
-    "account sessions end": ["--others"],
+    "account devices list": [],
+    "account devices end": ["--others"],
     "chats events": [chat],
     "chats inspect": ["https://example.test/join/x"],
     "chats folders list": [],
@@ -129,8 +131,8 @@ describe("a command whose one method the messenger lacks", () => {
 
   it("hides a command the messenger can never do, and still refuses it typed", async () => {
     const never: Partial<Messenger> = { never: ["endOtherSessions", "removeContact"] }
-    const shown = await cli("account sessions --help", {}, () => fakeAdapter(seed))
-    const help = await cli("account sessions --help", never, () => fakeAdapter(seed))
+    const shown = await cli("account devices --help", {}, () => fakeAdapter(seed))
+    const help = await cli("account devices --help", never, () => fakeAdapter(seed))
     const contacts = await cli("contacts --help", never, () => fakeAdapter(seed))
     const typed = await cli("contacts remove", never, () => fakeAdapter(seed))
 
@@ -145,9 +147,22 @@ describe("a command whose one method the messenger lacks", () => {
   it("hides a group whose every command it can never do, and still refuses one typed", async () => {
     const never: Partial<Messenger> = { never: ["sessions", "endOtherSessions"] }
     const account = await cli("account --help", never, () => fakeAdapter(seed))
-    const typed = await cli("account sessions list", never, () => fakeAdapter(seed))
+    const typed = await cli("account devices list", never, () => fakeAdapter(seed))
 
-    expect(account.stdout).not.toMatch(/^\s+sessions\b/m)
-    expect(typed).toMatchObject({ code: 2, connects: [], message: "this messenger cannot list the account's sessions" })
+    expect(account.stdout).not.toMatch(/^\s+devices\b/m)
+    expect(typed).toMatchObject({ code: 2, connects: [], message: "this messenger cannot list the account's devices" })
+  })
+
+  it("a saved account.sessions.end, the key before account devices, is refused and names the new key", () => {
+    const messenger = { app, provider: "chat", chatArgument: "a chat" } as Messenger
+    const program = new Command("chat").addCommand(accountCommand(messenger))
+    const settings = {
+      configPath: "/config.toml",
+      profile: "work",
+      permissions: { "account.sessions.end": "deny" as const },
+      permissionSources: {},
+    }
+    const [issue] = unknownPermissionIssues(program, settings, "chat")
+    expect(JSON.stringify(issue)).toContain("account.devices.end")
   })
 })

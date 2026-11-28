@@ -766,7 +766,7 @@ describe("the MCP server", () => {
         .map((one) => one.command)
         .sort(),
     ).toEqual([
-      "account sessions list",
+      "account devices list",
       "account show",
       "attachments check",
       "attachments jobs status",
@@ -4266,7 +4266,7 @@ describe("sending over MCP", () => {
     ])
   })
 
-  it("**changes the profile, and offers ending other sessions until account.sessions.end is denied**", async () => {
+  it("**changes the profile, and offers logging out other devices until account.devices.end is denied**", async () => {
     const changes: unknown[] = []
     const telegram = scripted({
       updateProfile: async (change) => {
@@ -4280,10 +4280,10 @@ describe("sending over MCP", () => {
     const tools = await client.availableCommands()
     await call("account update", { first_name: "New", description: "hi" })
 
-    expect(tools).toContain("account sessions end")
+    expect(tools).toContain("account devices end")
     expect(changes).toEqual([{ firstName: "New", description: "hi" }])
-    const denied = await connect(telegram, { config: levels({ "account.sessions.end": "deny" }) })
-    expect(await denied.client.availableCommands()).not.toContain("account sessions end")
+    const denied = await connect(telegram, { config: levels({ "account.devices.end": "deny" }) })
+    expect(await denied.client.availableCommands()).not.toContain("account devices end")
   })
 
   it("**shows a group's rules and moderates it** over MCP, planning what asks", async () => {
